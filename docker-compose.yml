@@ -1,0 +1,170 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "${DOCKER_LOG_MAX_SIZE:-10m}"
+    max-file: "${DOCKER_LOG_MAX_FILE:-5}"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: evolution-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-evolution}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-evolution}
+      BOT_DATABASE_USER: ${BOT_DATABASE_USER:-bot_api}
+      BOT_DATABASE_PASSWORD: ${BOT_DATABASE_PASSWORD:?BOT_DATABASE_PASSWORD is required}
+      BOT_REPORTS_DATABASE_USER: ${BOT_REPORTS_DATABASE_USER:-bot_reports_read}
+      BOT_REPORTS_DATABASE_PASSWORD: ${BOT_REPORTS_DATABASE_PASSWORD:?BOT_REPORTS_DATABASE_PASSWORD is required}
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: evolution-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - evolution_redis_data:/data
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: evolution-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?EVOLUTION_API_KEY is required}
+      SERVER_URL: ${EVOLUTION_SERVER_URL:-}
+      WA_BUSINESS_TOKEN_WEBHOOK: ${EVOLUTION_WA_BUSINESS_TOKEN_WEBHOOK:-}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER:-evolution}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-evolution}?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_exchange
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/6
+    ports:
+      - "${EVOLUTION_API_BIND_IP:-127.0.0.1}:${EVOLUTION_API_PORT:-8081}:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    logging: *default-logging
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:8080',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  bot_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bot_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      evolution-api:
+        condition: service_healthy
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: ${APP_PORT:-8080}
+      WEBHOOK_WORKER_THREADS: ${WEBHOOK_WORKER_THREADS:-4}
+      API_AUTH_ENABLED: ${API_AUTH_ENABLED:-1}
+      API_AUTH_TOKENS: ${API_AUTH_TOKENS:-}
+      API_REQUIRE_ADMIN_FOR_NUMBER: ${API_REQUIRE_ADMIN_FOR_NUMBER:-1}
+      EVOLUTION_BASE_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:?EVOLUTION_API_KEY is required}
+      EVOLUTION_WEBHOOK_API_KEYS: ${EVOLUTION_WEBHOOK_API_KEYS:-}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-}
+      EVOLUTION_SEND_PATH: ${EVOLUTION_SEND_PATH:-/message/sendText/{instance}}
+      EVOLUTION_LIST_PATH: ${EVOLUTION_LIST_PATH:-/message/sendList/{instance}}
+      EVOLUTION_BUTTONS_PATH: ${EVOLUTION_BUTTONS_PATH:-/message/sendButtons/{instance}}
+      EVOLUTION_TIMEOUT_SECONDS: ${EVOLUTION_TIMEOUT_SECONDS:-20}
+      META_CLOUD_ENABLED: ${META_CLOUD_ENABLED:-0}
+      META_CLOUD_API_VERSION: ${META_CLOUD_API_VERSION:-v23.0}
+      META_CLOUD_PHONE_NUMBER_ID: ${META_CLOUD_PHONE_NUMBER_ID:-}
+      META_CLOUD_ACCESS_TOKEN: ${META_CLOUD_ACCESS_TOKEN:-}
+      META_CLOUD_VERIFY_TOKEN: ${META_CLOUD_VERIFY_TOKEN:-}
+      BOT_VERIFY_TOKEN: ${BOT_VERIFY_TOKEN:-}
+      ACCESS_CONTROL_ENABLED: ${ACCESS_CONTROL_ENABLED:-1}
+      ACCESS_DATABASE_URL: postgresql://${BOT_DATABASE_USER:-bot_api}:${BOT_DATABASE_PASSWORD:?BOT_DATABASE_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-evolution}
+      ACCESS_DB_SCHEMA: ${ACCESS_DB_SCHEMA:-bot_access}
+      ACCESS_PUBLIC_ENABLED: ${ACCESS_PUBLIC_ENABLED:-0}
+      ACCESS_DATABASE_TIMEOUT_SECONDS: ${ACCESS_DATABASE_TIMEOUT_SECONDS:-3}
+      SECURITY_AUDIT_ENABLED: ${SECURITY_AUDIT_ENABLED:-1}
+      DENIED_REPLY_COOLDOWN_MINUTES: ${DENIED_REPLY_COOLDOWN_MINUTES:-360}
+      DENIED_UNREGISTERED_REPLY_COOLDOWN_MINUTES: ${DENIED_UNREGISTERED_REPLY_COOLDOWN_MINUTES:-720}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
+      REPORTS_RUNTIME_DATABASE_URL: postgresql://${BOT_REPORTS_DATABASE_USER:-bot_reports_read}:${BOT_REPORTS_DATABASE_PASSWORD:?BOT_REPORTS_DATABASE_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-evolution}
+      REPORTS_DATABASE_URL: postgresql://${POSTGRES_USER:-evolution}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-evolution}
+      REPORTS_DB_SCHEMA: ${REPORTS_DB_SCHEMA:-reports}
+    ports:
+      - "${BOT_API_BIND_IP:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    volumes:
+      - ./data:/workspace/bot_api/data:ro
+    logging: *default-logging
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  bot_api_gateway:
+    image: nginx:1.27-alpine
+    container_name: bot_api_gateway
+    restart: unless-stopped
+    depends_on:
+      bot_api:
+        condition: service_healthy
+    environment:
+      PUBLIC_WEBHOOK_RATE_LIMIT_RPM: ${PUBLIC_WEBHOOK_RATE_LIMIT_RPM:-60}
+      PUBLIC_META_WEBHOOK_RATE_LIMIT_RPM: ${PUBLIC_META_WEBHOOK_RATE_LIMIT_RPM:-300}
+      UPSTREAM_BOT_API_HOST: bot_api
+      UPSTREAM_BOT_API_PORT: 8080
+      UPSTREAM_META_HOST: ${UPSTREAM_META_HOST:-evolution-api}
+      UPSTREAM_META_PORT: ${UPSTREAM_META_PORT:-8080}
+    ports:
+      - "${PUBLIC_WEBHOOK_BIND_IP:-127.0.0.1}:${PUBLIC_WEBHOOK_PORT:-8090}:8080"
+    volumes:
+      - ./deploy/nginx/public-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+    logging: *default-logging
+
+volumes:
+  evolution_postgres_data:
+  evolution_redis_data:
+  evolution_instances:
+  evolution_store:

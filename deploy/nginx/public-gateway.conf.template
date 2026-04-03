@@ -1,0 +1,55 @@
+limit_req_zone $binary_remote_addr zone=webhook_limit:10m rate=${PUBLIC_WEBHOOK_RATE_LIMIT_RPM}r/m;
+limit_req_zone $binary_remote_addr zone=meta_webhook_limit:10m rate=${PUBLIC_META_WEBHOOK_RATE_LIMIT_RPM}r/m;
+
+server {
+    listen 8080;
+    server_name _;
+    client_max_body_size 2m;
+    proxy_http_version 1.1;
+    resolver 127.0.0.11 ipv6=off valid=30s;
+
+    location = /health {
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location = /webhook/evolution {
+        set $bot_api_upstream http://${UPSTREAM_BOT_API_HOST}:${UPSTREAM_BOT_API_PORT};
+        if ($request_method != POST) {
+            return 405;
+        }
+        limit_req zone=webhook_limit burst=20 nodelay;
+        proxy_pass $bot_api_upstream;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location = /webhook/meta {
+        set $meta_upstream http://${UPSTREAM_META_HOST}:${UPSTREAM_META_PORT};
+        if ($request_method !~ ^(GET|POST)$) {
+            return 405;
+        }
+        limit_req zone=meta_webhook_limit burst=100 nodelay;
+        proxy_pass $meta_upstream;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /api/ {
+        return 404;
+    }
+
+    location / {
+        return 404;
+    }
+}

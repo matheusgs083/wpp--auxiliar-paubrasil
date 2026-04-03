@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel Admin de Imports</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --panel: #fffaf2;
+      --ink: #1f2a24;
+      --muted: #5f6a64;
+      --line: #d8cdb9;
+      --accent: #0d6b4d;
+      --accent-2: #c66a2b;
+      --danger: #b33535;
+      --soft: #ece2d0;
+      --success: #286a3f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(198, 106, 43, 0.12), transparent 28%),
+        linear-gradient(180deg, #f9f5ed 0%, var(--bg) 100%);
+    }
+    .wrap {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+    .hero {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .eyebrow {
+      font: 700 12px/1 "Trebuchet MS", sans-serif;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    h1 {
+      margin: 0;
+      font: 700 38px/1.05 Georgia, "Times New Roman", serif;
+    }
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      max-width: 800px;
+    }
+    .toolbar, .panel, .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(31, 42, 36, 0.06);
+    }
+    .toolbar {
+      display: grid;
+      gap: 16px;
+      padding: 18px;
+      margin-bottom: 20px;
+    }
+    .toolbar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 13px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--ink);
+    }
+    input[type="file"] {
+      padding: 10px;
+      background: #fffef9;
+    }
+    .toolbar-actions, .card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font: 700 13px/1 "Trebuchet MS", sans-serif;
+      cursor: pointer;
+      transition: transform .15s ease, opacity .15s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .55; cursor: wait; transform: none; }
+    .primary { background: var(--accent); color: #fff; }
+    .secondary { background: var(--soft); color: var(--ink); }
+    .danger { background: var(--danger); color: #fff; }
+    .statusbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .status-ok { color: var(--success); }
+    .status-warn { color: var(--accent-2); }
+    .status-error { color: var(--danger); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .card {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+    .card h2 {
+      margin: 0;
+      font: 700 24px/1.1 Georgia, serif;
+    }
+    .meta {
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .meta strong { color: var(--ink); }
+    .hint {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .panel {
+      padding: 18px;
+      margin-bottom: 20px;
+    }
+    .panel h3 {
+      margin: 0 0 12px;
+      font: 700 24px/1.1 Georgia, serif;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 11px 10px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    pre {
+      margin: 0;
+      padding: 16px;
+      border-radius: 14px;
+      background: #1d241f;
+      color: #eef5f0;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 220px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="eyebrow">Admin Imports</div>
+      <h1>Painel de importacao da base</h1>
+      <p class="sub">
+        Use este painel para subir arquivos, validar a carga e importar
+        <strong>dSetores</strong>, <strong>dClientes</strong>,
+        <strong>Inadimplencia</strong>, <strong>Comodatos</strong>
+        e <strong>Giro</strong>.
+        Cada importacao substitui a base atual do dataset.
+      </p>
+    </section>
+
+    <section class="toolbar">
+      <div class="toolbar-grid">
+        <label id="apiTokenField">
+          Token da API
+          <input id="apiToken" type="password" placeholder="Informe o x-api-token">
+        </label>
+        <label>
+          Token admin
+          <input id="adminToken" type="password" placeholder="Informe o x-admin-token">
+        </label>
+      </div>
+      <div class="toolbar-actions">
+        <button class="primary" id="refreshBtn">Atualizar painel</button>
+        <button class="secondary" id="clearLogBtn">Limpar log</button>
+      </div>
+      <div class="statusbar">
+        <div class="status-pill" id="runningState">Sem importacao em andamento</div>
+        <div class="status-pill" id="lastJobState">Nenhuma execucao recente</div>
+        <div class="status-pill" id="authState">Aguardando tokens</div>
+      </div>
+      <div class="hint">
+        Se a autenticacao de API estiver desligada, o campo de token da API pode ficar vazio.
+      </div>
+    </section>
+
+    <section class="grid" id="datasetGrid"></section>
+
+    <section class="panel">
+      <h3>Historico recente</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Dataset</th>
+            <th>Lote</th>
+            <th>Linhas</th>
+            <th>Referencia</th>
+            <th>Importado em</th>
+            <th>Arquivo</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="6">Carregando historico...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h3>Log da operacao</h3>
+      <pre id="logPanel">Painel pronto. Clique em "Atualizar painel".</pre>
+    </section>
+  </div>
+
+  <script>
+    window.__apiAuthEnabled = __API_AUTH_ENABLED__;
+    const datasetsOrder = ["dsetores", "dclientes", "inadimplencia", "comodatos", "giro"];
+    const pollIntervalMs = 3000;
+
+    const state = {
+      status: null,
+      history: [],
+      busy: false,
+      pollTimer: null,
+      lastLoggedJobId: "",
+    };
+
+    const elements = {
+      apiTokenField: document.getElementById("apiTokenField"),
+      apiToken: document.getElementById("apiToken"),
+      adminToken: document.getElementById("adminToken"),
+      refreshBtn: document.getElementById("refreshBtn"),
+      clearLogBtn: document.getElementById("clearLogBtn"),
+      datasetGrid: document.getElementById("datasetGrid"),
+      historyBody: document.getElementById("historyBody"),
+      logPanel: document.getElementById("logPanel"),
+      runningState: document.getElementById("runningState"),
+      lastJobState: document.getElementById("lastJobState"),
+      authState: document.getElementById("authState"),
+    };
+
+    function loadTokens() {
+      elements.apiToken.value = sessionStorage.getItem("adminImportApiToken") || "";
+      elements.adminToken.value = sessionStorage.getItem("adminImportAdminToken") || "";
+      if (!window.__apiAuthEnabled) {
+        elements.apiTokenField.style.display = "none";
+      }
+      updateAuthState();
+    }
+
+    function saveTokens() {
+      sessionStorage.setItem("adminImportApiToken", elements.apiToken.value.trim());
+      sessionStorage.setItem("adminImportAdminToken", elements.adminToken.value.trim());
+      updateAuthState();
+    }
+
+    function updateAuthState() {
+      const adminReady = Boolean(elements.adminToken.value.trim());
+      const apiReady = !window.__apiAuthEnabled || Boolean(elements.apiToken.value.trim());
+      elements.authState.textContent = adminReady && apiReady
+        ? "Tokens carregados"
+        : "Aguardando tokens";
+    }
+
+    function setBusy(busy) {
+      state.busy = busy;
+      document.querySelectorAll("button").forEach((button) => {
+        if (button.id === "clearLogBtn") {
+          button.disabled = false;
+          return;
+        }
+        button.disabled = busy;
+      });
+    }
+
+    function buildHeaders(json = true) {
+      const headers = {};
+      if (json) headers["Content-Type"] = "application/json";
+      const apiToken = elements.apiToken.value.trim();
+      const adminToken = elements.adminToken.value.trim();
+      if (apiToken) headers["x-api-token"] = apiToken;
+      if (adminToken) headers["x-admin-token"] = adminToken;
+      return headers;
+    }
+
+    function appendLog(title, payload) {
+      const stamp = new Date().toLocaleString("pt-BR");
+      const content = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+      const block = `[${stamp}] ${title}\n${content}`;
+      elements.logPanel.textContent = `${block}\n\n${elements.logPanel.textContent}`.trim();
+    }
+
+    async function apiFetch(path, options = {}) {
+      const response = await fetch(path, options);
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = await response.text();
+      }
+      if (!response.ok) {
+        throw new Error(typeof payload === "string" ? payload : (payload.detail || "Falha na requisicao."));
+      }
+      return payload;
+    }
+
+    function queuePollIfNeeded() {
+      if (state.pollTimer) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+      }
+      if (state.status?.running) {
+        state.pollTimer = window.setTimeout(refreshPanel, pollIntervalMs);
+      }
+    }
+
+    function maybeLogLastJob() {
+      const lastJob = state.status?.last_job;
+      if (!lastJob || !lastJob.job_id) {
+        return;
+      }
+      if (lastJob.job_id === state.lastLoggedJobId) {
+        return;
+      }
+      state.lastLoggedJobId = lastJob.job_id;
+      const title = lastJob.status === "completed"
+        ? `Importacao concluida: ${lastJob.dataset}`
+        : `Importacao com falha: ${lastJob.dataset}`;
+      appendLog(title, lastJob);
+    }
+
+    function renderStatus() {
+      const items = (state.status?.items || [])
+        .slice()
+        .sort((a, b) => datasetsOrder.indexOf(a.dataset) - datasetsOrder.indexOf(b.dataset));
+
+      elements.runningState.textContent = state.status?.running
+        ? `Importacao em andamento: ${state.status.current_dataset || "-"}`
+        : "Sem importacao em andamento";
+
+      const lastJob = state.status?.last_job || null;
+      if (!lastJob || !lastJob.job_id) {
+        elements.lastJobState.textContent = "Nenhuma execucao recente";
+        elements.lastJobState.className = "status-pill";
+      } else if (lastJob.status === "completed") {
+        elements.lastJobState.textContent = `Ultimo job: ${lastJob.dataset} concluido`;
+        elements.lastJobState.className = "status-pill status-ok";
+      } else if (lastJob.status === "failed") {
+        elements.lastJobState.textContent = `Ultimo job: ${lastJob.dataset} com falha`;
+        elements.lastJobState.className = "status-pill status-error";
+      } else {
+        elements.lastJobState.textContent = `Ultimo job: ${lastJob.dataset} em andamento`;
+        elements.lastJobState.className = "status-pill status-warn";
+      }
+
+      elements.datasetGrid.innerHTML = items.map((item) => {
+        const last = item.last_import || {};
+        const importedAt = last.imported_at || "-";
+        const referenceDate = last.reference_date || "-";
+        const totalRows = last.total_rows ?? "-";
+        const batchId = last.batch_id ?? "-";
+        const multiple = item.upload_mode === "multiple";
+        const acceptedExtensions = item.accept_extensions || "";
+        const fileAccept = acceptedExtensions || "*/*";
+        return `
+          <article class="card">
+            <div>
+              <h2>${item.label}</h2>
+            </div>
+            <div class="meta">
+              <div><strong>Origem padrao:</strong> ${item.default_path}</div>
+              <div><strong>Origem ativa:</strong> ${item.active_source_path}</div>
+              <div><strong>Fonte em uso:</strong> ${item.using_uploaded_source ? "Upload do painel" : "Arquivo padrao"}</div>
+              <div><strong>Arquivo encontrado:</strong> ${item.source_exists ? "Sim" : "Nao"}</div>
+              <div><strong>Extensoes aceitas:</strong> ${acceptedExtensions || "-"}</div>
+              <div><strong>Lote atual:</strong> ${batchId}</div>
+              <div><strong>Linhas atuais:</strong> ${totalRows}</div>
+              <div><strong>Referencia:</strong> ${referenceDate}</div>
+              <div><strong>Importado em:</strong> ${importedAt}</div>
+            </div>
+            <label>
+              Arquivo${multiple ? "s" : ""} para upload
+              <input type="file" data-files="${item.dataset}" accept="${fileAccept}" ${multiple ? "multiple" : ""}>
+            </label>
+            <div class="hint">
+              ${multiple ? "Esse dataset aceita varios arquivos e substitui a pasta atual." : "Esse dataset aceita um unico arquivo e substitui o arquivo atual."}
+            </div>
+            <label>
+              Data de referencia opcional
+              <input type="date" data-ref="${item.dataset}">
+            </label>
+            <div class="card-actions">
+              <button class="secondary" data-action="upload" data-dataset="${item.dataset}">Enviar arquivo</button>
+              <button class="secondary" data-action="validate" data-dataset="${item.dataset}">Validar</button>
+              <button class="primary" data-action="import" data-dataset="${item.dataset}">Importar</button>
+            </div>
+          </article>
+        `;
+      }).join("");
+
+      document.querySelectorAll("[data-action]").forEach((button) => {
+        button.addEventListener("click", () => handleDatasetAction(button.dataset.dataset, button.dataset.action));
+      });
+    }
+
+    function renderHistory() {
+      const rows = state.history || [];
+      if (!rows.length) {
+        elements.historyBody.innerHTML = `<tr><td colspan="6">Sem historico disponivel.</td></tr>`;
+        return;
+      }
+      elements.historyBody.innerHTML = rows.map((item) => `
+        <tr>
+          <td>${item.label}</td>
+          <td>${item.batch_id}</td>
+          <td>${item.total_rows}</td>
+          <td>${item.reference_date || "-"}</td>
+          <td>${item.imported_at || "-"}</td>
+          <td>${item.source_file || "-"}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function refreshPanel() {
+      saveTokens();
+      setBusy(true);
+      try {
+        const [statusPayload, historyPayload] = await Promise.all([
+          apiFetch("/api/admin/imports/status", { headers: buildHeaders(false) }),
+          apiFetch("/api/admin/imports/history", { headers: buildHeaders(false) }),
+        ]);
+        state.status = statusPayload;
+        state.history = historyPayload.history || [];
+        renderStatus();
+        renderHistory();
+        maybeLogLastJob();
+      } catch (error) {
+        appendLog("Falha ao atualizar painel", error.message || String(error));
+      } finally {
+        setBusy(false);
+        queuePollIfNeeded();
+      }
+    }
+
+    async function handleUpload(dataset) {
+      const input = document.querySelector(`[data-files="${dataset}"]`);
+      const files = Array.from(input?.files || []);
+      if (!files.length) {
+        appendLog(`Upload de ${dataset}`, "Selecione pelo menos um arquivo.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("dataset", dataset);
+      files.forEach((file) => formData.append("files", file));
+
+      setBusy(true);
+      try {
+        const result = await apiFetch("/api/admin/imports/upload", {
+          method: "POST",
+          headers: buildHeaders(false),
+          body: formData,
+        });
+        input.value = "";
+        appendLog(`Upload concluido: ${dataset}`, result);
+        await refreshPanel();
+      } catch (error) {
+        appendLog(`Falha no upload de ${dataset}`, error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function handleValidate(dataset) {
+      const refInput = document.querySelector(`[data-ref="${dataset}"]`);
+      const payload = { dataset, reference_date: refInput?.value || null };
+      setBusy(true);
+      try {
+        const result = await apiFetch("/api/admin/imports/validate", {
+          method: "POST",
+          headers: buildHeaders(true),
+          body: JSON.stringify(payload),
+        });
+        appendLog(`Validacao de ${dataset}`, result);
+        await refreshPanel();
+      } catch (error) {
+        appendLog(`Falha na validacao de ${dataset}`, error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function handleImport(dataset) {
+      const refInput = document.querySelector(`[data-ref="${dataset}"]`);
+      const payload = { dataset, reference_date: refInput?.value || null };
+      setBusy(true);
+      try {
+        const result = await apiFetch("/api/admin/imports/run", {
+          method: "POST",
+          headers: buildHeaders(true),
+          body: JSON.stringify(payload),
+        });
+        appendLog(`Importacao iniciada: ${dataset}`, result);
+        await refreshPanel();
+      } catch (error) {
+        appendLog(`Falha ao iniciar importacao de ${dataset}`, error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function handleDatasetAction(dataset, action) {
+      saveTokens();
+      if (action === "upload") {
+        await handleUpload(dataset);
+        return;
+      }
+      if (action === "validate") {
+        await handleValidate(dataset);
+        return;
+      }
+      await handleImport(dataset);
+    }
+
+    elements.refreshBtn.addEventListener("click", refreshPanel);
+    elements.clearLogBtn.addEventListener("click", () => {
+      elements.logPanel.textContent = "Log limpo.";
+    });
+    elements.apiToken.addEventListener("change", saveTokens);
+    elements.adminToken.addEventListener("change", saveTokens);
+
+    loadTokens();
+    refreshPanel();
+  </script>
+</body>
+</html>

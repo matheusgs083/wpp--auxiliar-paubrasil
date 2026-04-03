@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Secrets: nunca versionar credenciais reais
+.env
+.env.*
+!.env.example
+!.env.vps.example
+
+# Dados e artefatos locais
+exports/
+data/
+resumos/
+.agents/
