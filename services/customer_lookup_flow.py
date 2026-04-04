@@ -44,6 +44,7 @@ from bot_api.services.comodatos_query_service import (
     ComodatosQueryService,
 )
 from bot_api.services.giro_query_service import (
+    GiroClientRecord,
     GiroFilialSummary,
     GiroManagementSummary,
     GiroQueryService,
@@ -61,6 +62,7 @@ from bot_api.services.inadimplencia_query_service import (
 MENU_SEARCH = "menu:buscar_cliente"
 MENU_INADIMPLENCIA = "menu:inadimplencia"
 MENU_COMODATOS = "menu:comodatos"
+MENU_GIRO = "menu:giro"
 MENU_VISIT_DAY = "menu:visitas_do_dia"
 MENU_FINANCEIRO = "menu:financeiro"
 MENU_GV_SUMMARY = "menu:gv_summary"
@@ -343,6 +345,8 @@ class CustomerLookupFlow:
                     return OutgoingMessage(text="Digite parte do nome do cliente para ver os titulos em aberto.")
                 if session.search_context == "comodato":
                     return OutgoingMessage(text="Digite parte do nome do cliente para ver os comodatos pendentes.")
+                if session.search_context == "giro":
+                    return OutgoingMessage(text="Digite parte do nome do cliente para ver os dados de giro.")
                 return OutgoingMessage(
                     text=(
                         "Digite parte do nome do cliente.\n"
@@ -383,6 +387,8 @@ class CustomerLookupFlow:
                     return OutgoingMessage(text="Digite o CPF ou CNPJ do cliente para consultar a inadimplencia.")
                 if session.search_context == "comodato":
                     return OutgoingMessage(text="Digite o CPF ou CNPJ do cliente para consultar os comodatos pendentes.")
+                if session.search_context == "giro":
+                    return OutgoingMessage(text="Digite o CPF ou CNPJ do cliente para consultar o giro.")
                 return OutgoingMessage(
                     text=(
                         "Digite o CPF ou CNPJ do cliente.\n"
@@ -447,6 +453,40 @@ class CustomerLookupFlow:
             session.updated_at = datetime.now(timezone.utc)
             self.sessions[incoming.sender] = session
             return self._build_search_menu(search_context="inadimplencia", decision=decision)
+
+        giro_numeric_shortcut = (
+            "5"
+            if not (self._can_use_gv_summary_menu(decision) or self._can_use_seller_summary_menu(decision))
+            else "8"
+        )
+        giro_numeric_aliases = {giro_numeric_shortcut}
+        if giro_numeric_shortcut == "5":
+            giro_numeric_aliases.add("8")
+        if normalized == MENU_GIRO or (
+            session.step == "idle"
+            and normalized in {*giro_numeric_aliases, "giro", "menu giro", "consultar giro"}
+        ):
+            readiness_error = self._ensure_search_context_ready("giro", decision=decision)
+            if readiness_error is not None:
+                self._reset_session(incoming.sender)
+                return readiness_error
+            session.step = "awaiting_search_mode"
+            session.search_context = "giro"
+            session.filial = ""
+            session.fantasia_query = ""
+            session.fantasia_results = ()
+            session.inadimplencia_client_summaries = ()
+            session.inadimplencia_total_available = 0
+            session.inadimplencia_list_context = ""
+            session.inadimplencia_page = 1
+            session.inadimplencia_page_size = INADIMPLENCIA_PAGE_SIZE
+            session.comodato_client_summaries = ()
+            session.selected_visit_day = ""
+            session.visit_day_options = ()
+            session.visit_seller_summaries = ()
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[incoming.sender] = session
+            return self._build_search_menu(search_context="giro", decision=decision)
 
         if normalized == MENU_FINANCEIRO or (
             session.step == "idle"
@@ -800,6 +840,27 @@ class CustomerLookupFlow:
                     records=list(session.fantasia_results),
                     invalid_selection=True,
                 )
+            if session.search_context == "giro":
+                records = self.giro_service.search_by_registration(
+                    filial=selected_record.filial,
+                    cod_pdv=selected_record.cod_pdv,
+                    allowed_sectors=self._allowed_sectors(decision),
+                    allowed_gv_vdes=self._allowed_gv_vdes(decision),
+                    limit=20,
+                )
+                return self._with_post_result_navigation(
+                    incoming.sender,
+                    session,
+                    self._build_giro_response(
+                        records,
+                        criteria=(
+                            f"nome fantasia contendo '{session.fantasia_query}'"
+                            f" | revenda {selected_record.filial} | NB {selected_record.cod_pdv}"
+                        ),
+                        scope_restricted=not self._has_unrestricted_lookup_access(decision),
+                    ),
+                    return_menu="search_results",
+                )
             return self._with_post_result_navigation(
                 incoming.sender,
                 session,
@@ -952,6 +1013,14 @@ class CustomerLookupFlow:
                 )
                 self._reset_session(incoming.sender)
                 return self._build_comodato_response(records, f"CPF/CNPJ {normalized_document}")
+            if session.search_context == "giro":
+                records = self._search_giro_by_document(decision, normalized_document)
+                self._reset_session(incoming.sender)
+                return self._build_giro_response(
+                    records,
+                    f"CPF/CNPJ {normalized_document}",
+                    scope_restricted=False,
+                )
             records = self.query_service.search_by_document(
                 document=normalized_document,
                 limit=20,
@@ -2573,7 +2642,12 @@ class CustomerLookupFlow:
         decision: AccessDecision | None = None,
     ) -> OutgoingMessage | None:
         if decision is not None:
-            area = "comodato" if search_context == "comodato" else search_context
+            area_map = {
+                "comodato": "comodato",
+                "inadimplencia": "inadimplencia",
+                "giro": "cliente",
+            }
+            area = area_map.get(search_context, search_context)
             area_decision = self._decision_for_area(decision, area)
             if not area_decision.allowed:
                 return self._build_area_access_denied_response(area)
@@ -2594,6 +2668,16 @@ class CustomerLookupFlow:
                 return OutgoingMessage(
                     text=(
                         "No momento, eu nao consegui acessar a base de comodatos.\n"
+                        "Tente novamente daqui a pouco."
+                    )
+                )
+            return None
+        if search_context == "giro":
+            status = self.giro_service.status()
+            if not status["ready"]:
+                return OutgoingMessage(
+                    text=(
+                        "No momento, eu nao consegui acessar a base de giro.\n"
                         "Tente novamente daqui a pouco."
                     )
                 )
@@ -2628,6 +2712,13 @@ class CustomerLookupFlow:
                         "Peca esse ajuste ao responsavel e tente novamente."
                     )
                 )
+            if search_context == "giro":
+                return OutgoingMessage(
+                    text=(
+                        "Seu numero ainda nao esta liberado com um escopo comercial para consultar o giro.\n"
+                        "Peca esse ajuste ao responsavel e tente novamente."
+                    )
+                )
             return OutgoingMessage(
                 text=(
                     "Seu numero ainda nao esta liberado com um escopo comercial para esse tipo de consulta.\n"
@@ -2641,11 +2732,13 @@ class CustomerLookupFlow:
         can_use_cliente = self._has_area_access(decision, "cliente")
         can_use_inadimplencia = self._has_area_access(decision, "inadimplencia")
         can_use_comodato = self._has_area_access(decision, "comodato")
+        can_use_giro = can_use_cliente
         can_use_visit_menu = self._can_use_visit_menu(decision) and can_use_cliente
         can_use_finance_menu = self._can_use_finance_menu(decision) and can_use_inadimplencia
         can_use_gv_summary_menu = self._can_use_gv_summary_menu(decision) and can_use_inadimplencia
         can_use_seller_summary_menu = self._can_use_seller_summary_menu(decision) and can_use_inadimplencia
         can_use_seller_risk_menu = self._can_use_seller_risk_menu(decision) and can_use_inadimplencia
+        giro_shortcut = "5" if not (can_use_gv_summary_menu or can_use_seller_summary_menu) else "8"
 
         options: list[InteractiveOption] = []
         if can_use_cliente:
@@ -2664,6 +2757,15 @@ class CustomerLookupFlow:
                     title="Inadimplencia",
                     description="Ver titulos em aberto",
                     shortcut="2",
+                )
+            )
+        if can_use_giro:
+            options.append(
+                InteractiveOption(
+                    option_id=MENU_GIRO,
+                    title="Giro",
+                    description="Consultar giro por cliente",
+                    shortcut=giro_shortcut,
                 )
             )
         footer = "Escolha como voce quer consultar."
@@ -2780,6 +2882,7 @@ class CustomerLookupFlow:
             "cliente": "o cliente",
             "inadimplencia": "a inadimplencia",
             "comodato": "os comodatos pendentes",
+            "giro": "o giro",
         }
         context_label = context_label_map.get(search_context, "a consulta")
         registration_title = "Filial e codigo" if search_context == "cliente" else "Filial e NB"
@@ -2831,6 +2934,7 @@ class CustomerLookupFlow:
                 "cliente": "Buscar Cliente",
                 "inadimplencia": "Consultar Inadimplencia",
                 "comodato": "Consultar Comodatos",
+                "giro": "Consultar Giro",
             }.get(search_context, "Consultar"),
             text=text,
             footer=footer,
@@ -5233,6 +5337,37 @@ class CustomerLookupFlow:
                 limit=50,
             )
             return self._build_comodato_response(records, f"revenda {filial} e NB {cod_pdv}")
+        if search_context == "giro":
+            records = self.giro_service.search_by_registration(
+                filial=filial,
+                cod_pdv=cod_pdv,
+                allowed_sectors=self._allowed_sectors(decision),
+                allowed_gv_vdes=self._allowed_gv_vdes(decision),
+                limit=20,
+            )
+            if not records:
+                try:
+                    matching_base = self.query_service.search_by_registration(
+                        filial=filial,
+                        cod_pdv=cod_pdv,
+                        allowed_sectors=self._allowed_sectors(decision),
+                        allowed_gv_vdes=self._allowed_gv_vdes(decision),
+                    )
+                except RuntimeError:
+                    matching_base = []
+                if matching_base:
+                    return OutgoingMessage(
+                        text=(
+                            f"Encontrei o cadastro para revenda {filial} e NB {cod_pdv}, "
+                            "mas ele nao apareceu no ultimo relatorio de giro importado.\n"
+                            "Se quiser tentar outra busca, envie MENU."
+                        )
+                    )
+            return self._build_giro_response(
+                records,
+                f"revenda {filial} e NB {cod_pdv}",
+                scope_restricted=not self._has_unrestricted_lookup_access(decision),
+            )
 
         records = self.query_service.search_by_registration(
             filial=filial,
@@ -5241,6 +5376,38 @@ class CustomerLookupFlow:
             allowed_gv_vdes=self._allowed_gv_vdes(decision),
         )
         return self._build_search_response(records, f"revenda {filial} e Cod PDV {cod_pdv}")
+
+    def _search_giro_by_document(
+        self,
+        decision: AccessDecision,
+        normalized_document: str,
+    ) -> list[GiroClientRecord]:
+        _ = decision
+        client_records = self.query_service.search_by_document(
+            document=normalized_document,
+            limit=20,
+        )
+        unique_keys: set[tuple[str, str]] = set()
+        giro_records: list[GiroClientRecord] = []
+        for client in client_records:
+            filial = _normalize_filial(client.filial)
+            cod_pdv = _normalize_cod_pdv(client.cod_pdv)
+            if not filial or not cod_pdv:
+                continue
+            key = (filial, cod_pdv)
+            if key in unique_keys:
+                continue
+            unique_keys.add(key)
+            giro_records.extend(
+                self.giro_service.search_by_registration(
+                    filial=filial,
+                    cod_pdv=cod_pdv,
+                    allowed_sectors=None,
+                    allowed_gv_vdes=None,
+                    limit=5,
+                )
+            )
+        return sorted(giro_records, key=lambda item: (_sort_numeric_text(item.filial), _sort_numeric_text(item.cod_pdv)))
 
     def _build_inadimplencia_response(
         self,
@@ -5300,6 +5467,55 @@ class CustomerLookupFlow:
             lines.append(f"*Material:* {record.material or '-'}")
             lines.append(f"*Sub Tipo Material:* {record.sub_tipo_material or '-'}")
             lines.append(f"*Saldo:* {record.saldo or '0'}")
+
+        lines.append("")
+        lines.append("Se quiser fazer outra consulta, envie MENU.")
+        return OutgoingMessage(text="\n".join(lines))
+
+    def _build_giro_response(
+        self,
+        records: list[GiroClientRecord],
+        criteria: str,
+        scope_restricted: bool = True,
+    ) -> OutgoingMessage:
+        if not records:
+            scope_note = "dentro do acesso liberado para o seu numero" if scope_restricted else "no relatorio de giro importado"
+            return OutgoingMessage(
+                text=(
+                    f"Nao encontrei dados de giro para {criteria} {scope_note}.\n"
+                    "Se quiser tentar outra busca, envie MENU."
+                )
+            )
+
+        lines = [f"Encontrei {len(records)} registro(s) de giro para {criteria}."]
+        lines.append(f"*Planilha atualizada em:* {records[0].planilha_atualizada_em or '-'}")
+        for index, record in enumerate(records, start=1):
+            lines.append("")
+            lines.append(f"{index}. *Cliente:* {record.nome or '-'}")
+            lines.append(f"*NB:* {record.cod_pdv or '-'}")
+            lines.append(f"*Revenda:* {_format_filial_label(record.filial)}")
+            lines.append(f"*Setor:* {record.setor or '-'}")
+            lines.append(
+                "Litrinho: "
+                f"Total {record.total_litrinho} | "
+                f"Real {record.real_litrinho} | "
+                f"Gap {record.gap_litrinho} | "
+                f"Status {record.giro_litrinho}"
+            )
+            lines.append(
+                "Inteira: "
+                f"Total {record.total_inteira} | "
+                f"Real {record.real_inteira} | "
+                f"Gap {record.gap_inteira} | "
+                f"Status {record.giro_inteira}"
+            )
+            lines.append(
+                "Litrao: "
+                f"Total {record.total_litrao} | "
+                f"Real {record.real_litrao} | "
+                f"Gap {record.gap_litrao} | "
+                f"Status {record.giro_litrao}"
+            )
 
         lines.append("")
         lines.append("Se quiser fazer outra consulta, envie MENU.")

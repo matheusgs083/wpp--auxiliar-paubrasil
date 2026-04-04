@@ -50,6 +50,31 @@ class GiroFilialSummary(GiroScopeSummary):
     filial: str
 
 
+@dataclass(frozen=True)
+class GiroClientRecord:
+    filial: str
+    cod_pdv: str
+    nome: str
+    setor: str
+    revenda: str
+    total_litrinho: str
+    real_litrinho: str
+    gap_litrinho: str
+    giro_litrinho: str
+    total_inteira: str
+    real_inteira: str
+    gap_inteira: str
+    giro_inteira: str
+    total_litrao: str
+    real_litrao: str
+    gap_litrao: str
+    giro_litrao: str
+    planilha_atualizada_em: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 class GiroQueryService:
     def __init__(self, database_url: str, schema: str, connect_timeout_seconds: float = 3.0) -> None:
         self.database_url = database_url.strip()
@@ -228,6 +253,65 @@ class GiroQueryService:
         self._filial_summary_cache[cache_key] = (now + 60.0, summaries)
         return list(summaries)
 
+    def search_by_registration(
+        self,
+        filial: str,
+        cod_pdv: str,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        limit: int = 50,
+    ) -> list[GiroClientRecord]:
+        normalized_filial = normalize_stored_scope_value(filial)
+        normalized_cod_pdv = normalize_stored_scope_value(cod_pdv)
+        if normalized_filial.isdigit():
+            normalized_filial = str(int(normalized_filial))
+        if normalized_cod_pdv.isdigit():
+            normalized_cod_pdv = str(int(normalized_cod_pdv))
+        if not normalized_filial:
+            raise ValueError("Revenda/filial invalida.")
+        if not normalized_cod_pdv:
+            raise ValueError("NB invalido.")
+
+        filters = [
+            sql.SQL("{} = %s").format(sql.Identifier("filial")),
+            sql.SQL("{} = %s").format(sql.Identifier("nb")),
+        ]
+        params: list[Any] = [normalized_filial, normalized_cod_pdv]
+        self._apply_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
+        params.append(max(1, min(limit, 100)))
+        query = sql.SQL(
+            """
+            SELECT
+                filial,
+                nb,
+                fantasia,
+                setor,
+                revenda,
+                total_litrinho,
+                real_litrinho,
+                gap_litrinho,
+                giro_litrinho,
+                total_inteira,
+                real_inteira,
+                gap_inteira,
+                giro_inteira,
+                total_litrao,
+                real_litrao,
+                gap_litrao,
+                giro_litrao,
+                reference_date,
+                batch_imported_at
+            FROM {schema}.giro_latest
+            WHERE {where}
+            ORDER BY filial, nb
+            LIMIT %s
+            """
+        ).format(
+            schema=sql.Identifier(self.schema),
+            where=sql.SQL(" AND ").join(filters),
+        )
+        return self._fetch_client_rows(query, params)
+
     def _execute_summary_query(
         self,
         *,
@@ -308,6 +392,17 @@ class GiroQueryService:
     def _cache_status(self, payload: dict[str, Any]) -> None:
         self._status_cache = dict(payload)
         self._status_cache_expires_at = monotonic() + (300.0 if payload.get("ready") else 10.0)
+
+    def _fetch_client_rows(self, query: sql.SQL, params: list[Any]) -> list[GiroClientRecord]:
+        status = self.status()
+        if not status["ready"]:
+            raise RuntimeError(status["last_error"] or "Base de giro indisponivel.")
+
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                rows = cur.fetchall()
+        return [_row_to_client_record(row) for row in rows]
 
 
 def _summary_select_sql() -> sql.SQL:
@@ -509,3 +604,26 @@ def _format_money(value: Any) -> str:
     except (InvalidOperation, ValueError):
         return raw
     return f"{amount:.2f}".replace(".", ",")
+
+
+def _row_to_client_record(row: dict[str, Any]) -> GiroClientRecord:
+    return GiroClientRecord(
+        filial=normalize_stored_scope_value(str(row.get("filial") or "")),
+        cod_pdv=normalize_stored_scope_value(str(row.get("nb") or "")),
+        nome=str(row.get("fantasia") or "").strip(),
+        setor=normalize_stored_scope_value(str(row.get("setor") or "")),
+        revenda=str(row.get("revenda") or "").strip(),
+        total_litrinho=_format_money(row.get("total_litrinho")),
+        real_litrinho=_format_money(row.get("real_litrinho")),
+        gap_litrinho=_format_money(row.get("gap_litrinho")),
+        giro_litrinho=str(row.get("giro_litrinho") or "-").strip() or "-",
+        total_inteira=_format_money(row.get("total_inteira")),
+        real_inteira=_format_money(row.get("real_inteira")),
+        gap_inteira=_format_money(row.get("gap_inteira")),
+        giro_inteira=str(row.get("giro_inteira") or "-").strip() or "-",
+        total_litrao=_format_money(row.get("total_litrao")),
+        real_litrao=_format_money(row.get("real_litrao")),
+        gap_litrao=_format_money(row.get("gap_litrao")),
+        giro_litrao=str(row.get("giro_litrao") or "-").strip() or "-",
+        planilha_atualizada_em=_format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
+    )
