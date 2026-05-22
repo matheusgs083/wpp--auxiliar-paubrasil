@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from bot_api.models import IncomingMessage, OutgoingMessage
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,7 @@ class EvolutionConfig:
     send_path: str
     list_path: str
     buttons_path: str
+    media_path: str
     timeout_seconds: float
 
 
@@ -38,6 +42,38 @@ class EvolutionClient:
         # Menus ficam sempre em texto para evitar falhas interativas na Evolution.
         if message.kind == "menu":
             self.send_text(number=number, text=self._menu_fallback_text(message))
+            return
+        if message.kind == "media" and message.media_url:
+            if message.text.strip():
+                self.send_text(number=number, text=message.text)
+            self._send_media_with_fallback(
+                number=number,
+                media_url=message.media_url,
+                media_type=message.media_type or "image",
+                caption=message.media_caption,
+                filename=message.media_filename,
+                data_url_fallback_suffix="Use a mensagem enviada acima como referencia.",
+            )
+            for attachment in message.extra_media:
+                self._send_media_with_fallback(
+                    number=number,
+                    media_url=attachment.media_url,
+                    media_type=attachment.media_type or "document",
+                    caption=attachment.media_caption,
+                    filename=attachment.media_filename,
+                )
+            return
+        if message.extra_media:
+            if message.text.strip():
+                self.send_text(number=number, text=message.text)
+            for attachment in message.extra_media:
+                self._send_media_with_fallback(
+                    number=number,
+                    media_url=attachment.media_url,
+                    media_type=attachment.media_type or "document",
+                    caption=attachment.media_caption,
+                    filename=attachment.media_filename,
+                )
             return
         self.send_text(number=number, text=message.text)
 
@@ -114,12 +150,72 @@ class EvolutionClient:
         }
         self._post_json(url, payload)
 
+    def send_media(
+        self,
+        *,
+        number: str,
+        media_url: str,
+        media_type: str = "image",
+        caption: str = "",
+        filename: str = "",
+    ) -> None:
+        if not self.enabled:
+            raise RuntimeError("EVOLUTION_BASE_URL e EVOLUTION_INSTANCE sao obrigatorios para envio.")
+
+        path = self.config.media_path.format(instance=self.config.instance)
+        url = f"{self.config.base_url}{path}"
+        normalized_media_type = str(media_type or "image").strip().lower() or "image"
+        media_filename = str(filename or "").strip() or _default_media_filename(normalized_media_type)
+        payload_variants = _media_payload_variants(
+            number=number,
+            media_url=media_url,
+            media_type=normalized_media_type,
+            caption=caption,
+            filename=media_filename,
+        )
+
+        last_error: str | None = None
+        with httpx.Client(timeout=self.config.timeout_seconds) as client:
+            for payload in payload_variants:
+                response = client.post(url, headers=self._headers(), content=json.dumps(payload, ensure_ascii=False))
+                if 200 <= response.status_code < 300:
+                    return
+                last_error = f"{response.status_code} {response.text}"
+
+        raise RuntimeError(f"Falha ao enviar midia para Evolution: {last_error}")
+
     def _post_json(self, url: str, payload: dict[str, Any]) -> None:
         with httpx.Client(timeout=self.config.timeout_seconds) as client:
             response = client.post(url, headers=self._headers(), content=json.dumps(payload, ensure_ascii=False))
         if 200 <= response.status_code < 300:
             return
         raise RuntimeError(f"Falha ao enviar payload interativo: {response.status_code} {response.text}")
+
+    def _send_media_with_fallback(
+        self,
+        *,
+        number: str,
+        media_url: str,
+        media_type: str,
+        caption: str,
+        filename: str,
+        data_url_fallback_suffix: str = "Tente novamente mais tarde.",
+    ) -> None:
+        try:
+            self.send_media(
+                number=number,
+                media_url=media_url,
+                media_type=media_type,
+                caption=caption,
+                filename=filename,
+            )
+        except RuntimeError as exc:
+            logger.warning("Falha ao enviar midia pela Evolution: %s", exc)
+            if str(media_url).startswith("data:"):
+                fallback_text = f"{caption or 'Midia'} nao pode ser enviada agora. {data_url_fallback_suffix}"
+            else:
+                fallback_text = f"{caption or 'Midia'}: {media_url}".strip()
+            self.send_text(number=number, text=fallback_text)
 
     def _menu_fallback_text(self, message: OutgoingMessage) -> str:
         lines = []
@@ -133,8 +229,11 @@ class EvolutionClient:
             shortcuts.append(shortcut)
             lines.append(f"{shortcut}. {option.title}{description}")
         if message.options:
-            choices = " ou ".join(shortcuts)
-            lines.append(f"Responda com {choices}.")
+            if len(message.options) == 1:
+                lines.append("Voce pode responder com o numero ou com o nome da opcao.")
+            else:
+                choices = " ou ".join(shortcuts)
+                lines.append(f"Voce pode responder com o numero ou com o nome da opcao. Atalhos: {choices}.")
         if message.footer:
             lines.append(message.footer)
         return "\n".join(lines)
@@ -226,3 +325,108 @@ def _normalize_sender(sender: str) -> str:
         if normalized.endswith(suffix):
             normalized = normalized[: -len(suffix)]
     return normalized
+
+
+def _default_media_filename(media_type: str) -> str:
+    normalized = str(media_type or "").strip().lower()
+    if normalized == "image":
+        return "image.png"
+    if normalized == "video":
+        return "video.mp4"
+    if normalized == "audio":
+        return "audio.ogg"
+    if normalized == "document":
+        return "document.pdf"
+    return "media.bin"
+
+
+def _media_payload_variants(
+    *,
+    number: str,
+    media_url: str,
+    media_type: str,
+    caption: str,
+    filename: str,
+) -> list[dict[str, Any]]:
+    normalized_media_type = str(media_type or "image").strip().lower() or "image"
+    media_value = str(media_url or "").strip()
+    mimetype, raw_base64 = _split_data_url(media_value)
+    mimetype = mimetype or _default_mimetype(normalized_media_type)
+
+    variants: list[dict[str, Any]] = []
+    if raw_base64:
+        variants.extend(
+            [
+                {
+                    "number": number,
+                    "mediatype": normalized_media_type,
+                    "mimetype": mimetype,
+                    "media": raw_base64,
+                    "caption": caption,
+                    "fileName": filename,
+                },
+                {
+                    "number": number,
+                    "mediaType": normalized_media_type,
+                    "mimetype": mimetype,
+                    "media": raw_base64,
+                    "caption": caption,
+                    "fileName": filename,
+                },
+                {
+                    "number": number,
+                    "mediaMessage": {
+                        "mediatype": normalized_media_type,
+                        "mimetype": mimetype,
+                        "media": raw_base64,
+                        "caption": caption,
+                        "fileName": filename,
+                    },
+                },
+            ]
+        )
+
+    variants.extend(
+        [
+            {
+                "number": number,
+                "mediatype": normalized_media_type,
+                "mimetype": mimetype,
+                "media": media_value,
+                "caption": caption,
+                "fileName": filename,
+            },
+            {
+                "number": number,
+                "mediaType": normalized_media_type,
+                "mimetype": mimetype,
+                "media": media_value,
+                "caption": caption,
+                "fileName": filename,
+            },
+        ]
+    )
+    return variants
+
+
+def _split_data_url(value: str) -> tuple[str, str]:
+    if not value.startswith("data:") or "," not in value:
+        return "", ""
+    header, payload = value.split(",", 1)
+    if ";base64" not in header.lower():
+        return "", ""
+    mimetype = header[5:].split(";", 1)[0].strip()
+    return mimetype, payload.strip()
+
+
+def _default_mimetype(media_type: str) -> str:
+    normalized = str(media_type or "").strip().lower()
+    if normalized == "image":
+        return "image/png"
+    if normalized == "video":
+        return "video/mp4"
+    if normalized == "audio":
+        return "audio/ogg"
+    if normalized == "document":
+        return "application/pdf"
+    return "application/octet-stream"

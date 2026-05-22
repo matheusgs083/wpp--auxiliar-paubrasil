@@ -368,7 +368,9 @@ def _normalize_schema(value: str) -> str:
 def _normalize_number(raw_number: str) -> str:
     digits = re.sub(r"\D+", "", str(raw_number or ""))
     if len(digits) in {10, 11} and not digits.startswith("55"):
-        return f"55{digits}"
+        digits = f"55{digits}"
+    if digits.startswith("55") and len(digits) == 13 and digits[4] == "9":
+        return f"{digits[:4]}{digits[5:]}"
     return digits
 
 

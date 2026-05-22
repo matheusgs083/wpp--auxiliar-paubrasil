@@ -10,7 +10,12 @@ from typing import Any
 from psycopg import sql
 from psycopg.rows import dict_row, tuple_row
 
-from bot_api.commercial_scope import normalize_stored_scope_value, partition_gv_scopes, partition_sector_scopes
+from bot_api.commercial_scope import (
+    normalize_stored_scope_value,
+    partition_filial_scopes,
+    partition_gv_scopes,
+    partition_sector_scopes,
+)
 from bot_api.db import get_connection_pool
 
 
@@ -51,6 +56,17 @@ class GiroFilialSummary(GiroScopeSummary):
 
 
 @dataclass(frozen=True)
+class GiroSellerSummary(GiroScopeSummary):
+    seller_code: str
+    manager_code: str
+
+
+@dataclass(frozen=True)
+class GiroVisitDaySummary(GiroScopeSummary):
+    visit_day: str
+
+
+@dataclass(frozen=True)
 class GiroClientRecord:
     filial: str
     cod_pdv: str
@@ -75,6 +91,24 @@ class GiroClientRecord:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class GiroZeroBaseRecord:
+    filial: str
+    cod_pdv: str
+    nome: str
+    setor: str
+    revenda: str
+    total_caixas: str
+    gap_caixas: str
+    gap_litrinho: str
+    gap_inteira: str
+    gap_litrao: str
+    planilha_atualizada_em: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 class GiroQueryService:
     def __init__(self, database_url: str, schema: str, connect_timeout_seconds: float = 3.0) -> None:
         self.database_url = database_url.strip()
@@ -88,9 +122,17 @@ class GiroQueryService:
             tuple[tuple[str, ...], tuple[str, ...]],
             tuple[float, list[GiroManagementSummary]],
         ] = {}
+        self._seller_summary_cache: dict[
+            tuple[tuple[str, ...], tuple[str, ...]],
+            tuple[float, list[GiroSellerSummary]],
+        ] = {}
         self._filial_summary_cache: dict[
             tuple[tuple[str, ...], tuple[str, ...]],
             tuple[float, list[GiroFilialSummary]],
+        ] = {}
+        self._visit_day_summary_cache: dict[
+            tuple[str, tuple[str, ...], tuple[str, ...]],
+            tuple[float, GiroVisitDaySummary],
         ] = {}
 
     def status(self) -> dict[str, Any]:
@@ -253,6 +295,129 @@ class GiroQueryService:
         self._filial_summary_cache[cache_key] = (now + 60.0, summaries)
         return list(summaries)
 
+    def list_summary_by_seller(
+        self,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+    ) -> list[GiroSellerSummary]:
+        normalized_sectors = _normalize_scope_values(allowed_sectors)
+        normalized_gv_vdes = _normalize_scope_values(allowed_gv_vdes)
+        cache_key = (tuple(normalized_sectors), tuple(normalized_gv_vdes))
+        now = monotonic()
+        cached_entry = self._seller_summary_cache.get(cache_key)
+        if cached_entry is not None and now < cached_entry[0]:
+            return list(cached_entry[1])
+
+        status = self.status()
+        if not status["ready"]:
+            raise RuntimeError(status["last_error"] or "Base de giro indisponivel.")
+
+        filters = [sql.SQL("BTRIM(COALESCE(filial_setor_key, '')) <> ''")]
+        params: list[Any] = []
+        self._apply_access_filter(filters, params, normalized_sectors, normalized_gv_vdes)
+        query = sql.SQL(
+            """
+            SELECT
+                filial_setor_key AS seller_code,
+                filial_gv_key AS manager_code,
+                {summary_select},
+                COALESCE(MAX(reference_date)::text, '') AS reference_date,
+                MAX(batch_imported_at) AS batch_imported_at
+            FROM {schema}.giro_latest g
+            WHERE {where}
+            GROUP BY filial_setor_key, filial_gv_key
+            ORDER BY filial_gv_key, filial_setor_key
+            """
+        ).format(
+            summary_select=_summary_select_sql("g"),
+            schema=sql.Identifier(self.schema),
+            where=sql.SQL(" AND ").join(filters),
+        )
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                rows = cur.fetchall()
+
+        summaries = [
+            GiroSellerSummary(
+                seller_code=normalize_stored_scope_value(str(row["seller_code"] or "")),
+                manager_code=normalize_stored_scope_value(str(row["manager_code"] or "")),
+                **_scope_summary_kwargs(row),
+            )
+            for row in rows
+            if normalize_stored_scope_value(str(row["seller_code"] or ""))
+        ]
+        self._seller_summary_cache[cache_key] = (now + 60.0, summaries)
+        return list(summaries)
+
+    def get_scope_summary_by_visit_day(
+        self,
+        visit_day: str,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+    ) -> GiroVisitDaySummary:
+        normalized_visit_day = _normalize_visit_day(visit_day)
+        normalized_visit_day_token = _normalize_visit_day_token(visit_day)
+        if not normalized_visit_day or not normalized_visit_day_token:
+            raise ValueError("Dia de visita obrigatorio.")
+
+        normalized_sectors = _normalize_scope_values(allowed_sectors)
+        normalized_gv_vdes = _normalize_scope_values(allowed_gv_vdes)
+        cache_key = (normalized_visit_day, tuple(normalized_sectors), tuple(normalized_gv_vdes))
+        now = monotonic()
+        cached_entry = self._visit_day_summary_cache.get(cache_key)
+        if cached_entry is not None and now < cached_entry[0]:
+            return cached_entry[1]
+
+        status = self.status()
+        if not status["ready"]:
+            raise RuntimeError(status["last_error"] or "Base de giro indisponivel.")
+
+        visit_filters = [
+            sql.SQL(
+                "("
+                "POSITION(%s IN UPPER(BTRIM(COALESCE(payload ->> 'Dia de Visita do VDE', '')))) > 0 "
+                "OR UPPER(BTRIM(COALESCE(payload ->> 'Dia de Visita do VDE', ''))) = %s"
+                ")"
+            ),
+        ]
+        visit_params: list[Any] = [normalized_visit_day_token, normalized_visit_day.upper()]
+        self._apply_access_filter(visit_filters, visit_params, normalized_sectors, normalized_gv_vdes)
+
+        query = sql.SQL(
+            """
+            WITH visit_base AS (
+                SELECT DISTINCT
+                    filial,
+                    cod_pdv
+                FROM {schema}.dclientes_latest
+                WHERE {visit_where}
+            )
+            SELECT
+                {summary_select},
+                COALESCE(MAX(g.reference_date)::text, '') AS reference_date,
+                MAX(g.batch_imported_at) AS batch_imported_at
+            FROM {schema}.giro_latest g
+            INNER JOIN visit_base base
+                ON base.filial = g.filial
+               AND base.cod_pdv = g.nb
+            """
+        ).format(
+            schema=sql.Identifier(self.schema),
+            visit_where=sql.SQL(" AND ").join(visit_filters),
+            summary_select=_summary_select_sql("g"),
+        )
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, visit_params)
+                row = cur.fetchone()
+        summary = GiroVisitDaySummary(
+            visit_day=normalized_visit_day,
+            **_scope_summary_kwargs(row or {}),
+        )
+        self._visit_day_summary_cache[cache_key] = (now + 60.0, summary)
+        return summary
+
     def search_by_registration(
         self,
         filial: str,
@@ -312,6 +477,120 @@ class GiroQueryService:
         )
         return self._fetch_client_rows(query, params)
 
+    def search_history_by_registration(
+        self,
+        filial: str,
+        cod_pdv: str,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        limit: int = 5,
+    ) -> list[GiroClientRecord]:
+        normalized_filial = normalize_stored_scope_value(filial)
+        normalized_cod_pdv = normalize_stored_scope_value(cod_pdv)
+        if normalized_filial.isdigit():
+            normalized_filial = str(int(normalized_filial))
+        if normalized_cod_pdv.isdigit():
+            normalized_cod_pdv = str(int(normalized_cod_pdv))
+        if not normalized_filial:
+            raise ValueError("Revenda/filial invalida.")
+        if not normalized_cod_pdv:
+            raise ValueError("NB invalido.")
+
+        filters = [
+            sql.SQL("{} = %s").format(sql.Identifier("filial")),
+            sql.SQL("{} = %s").format(sql.Identifier("nb")),
+        ]
+        params: list[Any] = [normalized_filial, normalized_cod_pdv]
+        self._apply_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
+        params.append(max(1, min(limit, 20)))
+        query = sql.SQL(
+            """
+            SELECT
+                g.filial,
+                g.nb,
+                g.fantasia,
+                g.setor,
+                g.revenda,
+                g.total_litrinho,
+                g.real_litrinho,
+                g.gap_litrinho,
+                g.giro_litrinho,
+                g.total_inteira,
+                g.real_inteira,
+                g.gap_inteira,
+                g.giro_inteira,
+                g.total_litrao,
+                g.real_litrao,
+                g.gap_litrao,
+                g.giro_litrao,
+                b.reference_date,
+                b.imported_at AS batch_imported_at
+            FROM {schema}.giro_snapshot g
+            JOIN {schema}.import_batches b ON b.id = g.batch_id
+            WHERE {where}
+            ORDER BY b.reference_date DESC NULLS LAST, b.imported_at DESC, g.batch_id DESC
+            LIMIT %s
+            """
+        ).format(
+            schema=sql.Identifier(self.schema),
+            where=sql.SQL(" AND ").join(filters),
+        )
+        return self._fetch_client_rows(query, params)
+
+    def list_giro_zero_base(
+        self,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        limit: int = 500,
+    ) -> list[GiroZeroBaseRecord]:
+        filters: list[sql.Composed] = []
+        params: list[Any] = []
+        self._apply_access_filter(filters, params, _normalize_scope_values(allowed_sectors), _normalize_scope_values(allowed_gv_vdes))
+        filters.append(
+            sql.SQL(
+                "("
+                "(COALESCE(total_litrinho, 0) + COALESCE(total_inteira, 0) + COALESCE(total_litrao, 0)) > 0 "
+                "AND ABS("
+                "(COALESCE(gap_litrinho, 0) + COALESCE(gap_inteira, 0) + COALESCE(gap_litrao, 0)) "
+                "- ((COALESCE(total_litrinho, 0) + COALESCE(total_inteira, 0) + COALESCE(total_litrao, 0)) * 2)"
+                ") < 0.0001"
+                ")"
+            )
+        )
+        params.append(max(1, min(limit, 5000)))
+        query = sql.SQL(
+            """
+            SELECT
+                filial,
+                nb,
+                fantasia,
+                setor,
+                revenda,
+                gap_litrinho,
+                gap_inteira,
+                gap_litrao,
+                (COALESCE(total_litrinho, 0) + COALESCE(total_inteira, 0) + COALESCE(total_litrao, 0)) AS total_caixas,
+                (COALESCE(gap_litrinho, 0) + COALESCE(gap_inteira, 0) + COALESCE(gap_litrao, 0)) AS gap_caixas,
+                reference_date,
+                batch_imported_at
+            FROM {schema}.giro_latest
+            WHERE {where}
+            ORDER BY filial, setor, nb
+            LIMIT %s
+            """
+        ).format(
+            schema=sql.Identifier(self.schema),
+            where=sql.SQL(" AND ").join(filters) if filters else sql.SQL("TRUE"),
+        )
+        status = self.status()
+        if not status["ready"]:
+            raise RuntimeError(status["last_error"] or "Base de giro indisponivel.")
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                rows = cur.fetchall()
+        return [_row_to_giro_zero_base_record(row) for row in rows]
+
     def _execute_summary_query(
         self,
         *,
@@ -331,11 +610,11 @@ class GiroQueryService:
                     {summary_select},
                     COALESCE(MAX(reference_date)::text, '') AS reference_date,
                     MAX(batch_imported_at) AS batch_imported_at
-                FROM {schema}.giro_latest
+                FROM {schema}.giro_latest g
                 WHERE {where}
                 """
             ).format(
-                summary_select=_summary_select_sql(),
+                summary_select=_summary_select_sql("g"),
                 schema=sql.Identifier(self.schema),
                 where=sql.SQL(" AND ").join(filters) if filters else sql.SQL("TRUE"),
             )
@@ -351,7 +630,7 @@ class GiroQueryService:
                 {summary_select},
                 COALESCE(MAX(reference_date)::text, '') AS reference_date,
                 MAX(batch_imported_at) AS batch_imported_at
-            FROM {schema}.giro_latest
+            FROM {schema}.giro_latest g
             WHERE {where}
             GROUP BY {group_by}
             ORDER BY {group_by}
@@ -359,7 +638,7 @@ class GiroQueryService:
         ).format(
             group_by=group_by,
             select_alias=sql.Identifier(str(select_alias or "scope_value")),
-            summary_select=_summary_select_sql(),
+            summary_select=_summary_select_sql("g"),
             schema=sql.Identifier(self.schema),
             where=sql.SQL(" AND ").join(filters) if filters else sql.SQL("TRUE"),
         )
@@ -405,37 +684,47 @@ class GiroQueryService:
         return [_row_to_client_record(row) for row in rows]
 
 
-def _summary_select_sql() -> sql.SQL:
+def _summary_select_sql(table_alias: str = "") -> sql.SQL:
+    qualifier = f"{table_alias}." if table_alias else ""
     return sql.SQL(
         """
-        COUNT(DISTINCT (filial, nb))::int AS client_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (
-            WHERE giro_litrinho IN ('NOK', 'ZERO')
-               OR giro_inteira IN ('NOK', 'ZERO')
-               OR giro_litrao IN ('NOK', 'ZERO')
+        COUNT(DISTINCT ({qualifier}filial, {qualifier}nb))::int AS client_count,
+        COUNT(DISTINCT ({qualifier}filial, {qualifier}nb)) FILTER (
+            WHERE {qualifier}giro_litrinho IN ('NOK', 'ZERO')
+               OR {qualifier}giro_inteira IN ('NOK', 'ZERO')
+               OR {qualifier}giro_litrao IN ('NOK', 'ZERO')
         )::int AS attention_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (
-            WHERE giro_litrinho = 'ZERO'
-               OR giro_inteira = 'ZERO'
-               OR giro_litrao = 'ZERO'
+        COUNT(DISTINCT ({qualifier}filial, {qualifier}nb)) FILTER (
+            WHERE {qualifier}giro_litrinho = 'ZERO'
+               OR {qualifier}giro_inteira = 'ZERO'
+               OR {qualifier}giro_litrao = 'ZERO'
         )::int AS zero_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_litrinho <> '-')::int AS litrinho_monitored_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_litrinho = 'OK')::int AS litrinho_ok_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_litrinho = 'NOK')::int AS litrinho_nok_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_litrinho = 'ZERO')::int AS litrinho_zero_count,
-        COALESCE(SUM(gap_litrinho) FILTER (WHERE giro_litrinho <> '-'), 0) AS litrinho_gap_total,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_inteira <> '-')::int AS inteira_monitored_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_inteira = 'OK')::int AS inteira_ok_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_inteira = 'NOK')::int AS inteira_nok_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_inteira = 'ZERO')::int AS inteira_zero_count,
-        COALESCE(SUM(gap_inteira) FILTER (WHERE giro_inteira <> '-'), 0) AS inteira_gap_total,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_litrao <> '-')::int AS litrao_monitored_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_litrao = 'OK')::int AS litrao_ok_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_litrao = 'NOK')::int AS litrao_nok_count,
-        COUNT(DISTINCT (filial, nb)) FILTER (WHERE giro_litrao = 'ZERO')::int AS litrao_zero_count,
-        COALESCE(SUM(gap_litrao) FILTER (WHERE giro_litrao <> '-'), 0) AS litrao_gap_total
+        COALESCE(SUM({qualifier}total_litrinho) FILTER (WHERE {qualifier}giro_litrinho <> '-'), 0)::int AS litrinho_monitored_count,
+        COALESCE(SUM({qualifier}total_litrinho) FILTER (WHERE {qualifier}giro_litrinho = 'OK'), 0)::int AS litrinho_ok_count,
+        COALESCE(SUM({qualifier}total_litrinho) FILTER (WHERE {qualifier}giro_litrinho = 'NOK'), 0)::int AS litrinho_nok_count,
+        COALESCE(SUM({qualifier}total_litrinho) FILTER (WHERE {qualifier}giro_litrinho = 'ZERO'), 0)::int AS litrinho_zero_count,
+        (
+            COALESCE(SUM({qualifier}total_litrinho) FILTER (WHERE {qualifier}giro_litrinho <> '-'), 0)
+            - COALESCE(SUM({qualifier}total_litrinho) FILTER (WHERE {qualifier}giro_litrinho = 'OK'), 0)
+        ) AS litrinho_gap_total,
+        COALESCE(SUM({qualifier}total_inteira) FILTER (WHERE {qualifier}giro_inteira <> '-'), 0)::int AS inteira_monitored_count,
+        COALESCE(SUM({qualifier}total_inteira) FILTER (WHERE {qualifier}giro_inteira = 'OK'), 0)::int AS inteira_ok_count,
+        COALESCE(SUM({qualifier}total_inteira) FILTER (WHERE {qualifier}giro_inteira = 'NOK'), 0)::int AS inteira_nok_count,
+        COALESCE(SUM({qualifier}total_inteira) FILTER (WHERE {qualifier}giro_inteira = 'ZERO'), 0)::int AS inteira_zero_count,
+        (
+            COALESCE(SUM({qualifier}total_inteira) FILTER (WHERE {qualifier}giro_inteira <> '-'), 0)
+            - COALESCE(SUM({qualifier}total_inteira) FILTER (WHERE {qualifier}giro_inteira = 'OK'), 0)
+        ) AS inteira_gap_total,
+        COALESCE(SUM({qualifier}total_litrao) FILTER (WHERE {qualifier}giro_litrao <> '-'), 0)::int AS litrao_monitored_count,
+        COALESCE(SUM({qualifier}total_litrao) FILTER (WHERE {qualifier}giro_litrao = 'OK'), 0)::int AS litrao_ok_count,
+        COALESCE(SUM({qualifier}total_litrao) FILTER (WHERE {qualifier}giro_litrao = 'NOK'), 0)::int AS litrao_nok_count,
+        COALESCE(SUM({qualifier}total_litrao) FILTER (WHERE {qualifier}giro_litrao = 'ZERO'), 0)::int AS litrao_zero_count,
+        (
+            COALESCE(SUM({qualifier}total_litrao) FILTER (WHERE {qualifier}giro_litrao <> '-'), 0)
+            - COALESCE(SUM({qualifier}total_litrao) FILTER (WHERE {qualifier}giro_litrao = 'OK'), 0)
+        ) AS litrao_gap_total
         """
-    )
+    ).format(qualifier=sql.SQL(qualifier))
 
 
 def _build_access_filter(
@@ -466,9 +755,13 @@ def _build_commercial_scope_filters(
     scope_filters: list[sql.Composed] = []
     params: list[Any] = []
 
+    filial_codes = partition_filial_scopes(allowed_sectors)
     sector_keys, _legacy_sector_codes = partition_sector_scopes(allowed_sectors)
     gv_keys, dc_keys, _legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
 
+    if filial_codes:
+        scope_filters.append(sql.SQL("{} = ANY(%s)").format(sql.Identifier("filial")))
+        params.append(filial_codes)
     if sector_keys:
         scope_filters.append(sql.SQL("{} = ANY(%s)").format(sql.Identifier("filial_setor_key")))
         params.append(sector_keys)
@@ -561,6 +854,33 @@ def _normalize_scope_values(values: list[str] | None) -> list[str]:
     return normalized
 
 
+def _normalize_visit_day(value: str) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
+def _normalize_visit_day_token(value: str) -> str:
+    normalized = _normalize_visit_day(value).upper()
+    if not normalized:
+        return ""
+    visit_day_map = {
+        "SEG/": "SEG/",
+        "SEGUNDA": "SEG/",
+        "TER/": "TER/",
+        "TERCA": "TER/",
+        "QUA/": "QUA/",
+        "QUARTA": "QUA/",
+        "QUI/": "QUI/",
+        "QUINTA": "QUI/",
+        "SEX/": "SEX/",
+        "SEXTA": "SEX/",
+        "SAB/": "SAB/",
+        "SABADO": "SAB/",
+        "DOM/": "DOM/",
+        "DOMINGO": "DOM/",
+    }
+    return visit_day_map.get(normalized, normalized)
+
+
 def _has_scope_values(values: list[str] | None) -> bool:
     return any(str(value or "").strip() for value in values or [])
 
@@ -625,5 +945,21 @@ def _row_to_client_record(row: dict[str, Any]) -> GiroClientRecord:
         real_litrao=_format_money(row.get("real_litrao")),
         gap_litrao=_format_money(row.get("gap_litrao")),
         giro_litrao=str(row.get("giro_litrao") or "-").strip() or "-",
+        planilha_atualizada_em=_format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
+    )
+
+
+def _row_to_giro_zero_base_record(row: dict[str, Any]) -> GiroZeroBaseRecord:
+    return GiroZeroBaseRecord(
+        filial=normalize_stored_scope_value(str(row.get("filial") or "")),
+        cod_pdv=normalize_stored_scope_value(str(row.get("nb") or "")),
+        nome=str(row.get("fantasia") or "").strip(),
+        setor=normalize_stored_scope_value(str(row.get("setor") or "")),
+        revenda=str(row.get("revenda") or "").strip(),
+        total_caixas=_format_money(row.get("total_caixas")),
+        gap_caixas=_format_money(row.get("gap_caixas")),
+        gap_litrinho=_format_money(row.get("gap_litrinho")),
+        gap_inteira=_format_money(row.get("gap_inteira")),
+        gap_litrao=_format_money(row.get("gap_litrao")),
         planilha_atualizada_em=_format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
     )

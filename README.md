@@ -134,6 +134,48 @@ Observacoes:
 - Em Docker, o compose injeta apenas as variaveis necessarias no `bot_api`.
 - Em Docker, o runtime usa `ACCESS_DATABASE_URL` para `bot_access` e `REPORTS_RUNTIME_DATABASE_URL` para leitura de `reports`.
 
+### PayIP
+
+A integracao PayIP fica em `integrations/payip_client.py` e a fachada para uso pelo bot fica em `services/payip_payments_service.py`.
+
+Configure no `.env`:
+
+```env
+PAYIP_BASE_URL=https://api.prod.payip.com.br
+PAYIP_CLIENT_ID=payip-auth-portal
+PAYIP_USERNAME=seu-email
+PAYIP_PASSWORD=sua-senha
+PAYIP_COMPANY_ID=bdfee22b-ac11-4355-909a-54bd348c87cc
+PAYIP_COMPANY_IDS=3:bdfee22b-ac11-4355-909a-54bd348c87cc,4:aa11f5fe-38dd-4bf5-86e3-71d874cdc24c
+PAYIP_COMPANY_TAX_IDS=3:20983885000101
+PAYIP_TOKEN_CACHE_FILE=exports/payip/tokens.json
+PAYIP_TIMEOUT_SECONDS=30
+PAYIP_MFA_CODE=
+```
+
+`PAYIP_COMPANY_IDS` segue o mesmo codigo de filial usado no bot: `3` para Patos e `4` para Sume hoje. Para novas revendas, adicione no mesmo formato `filial:companyId`.
+`PAYIP_COMPANY_TAX_IDS` usa o mesmo codigo de filial e informa o CNPJ da empresa para emissao de cobrancas.
+
+Mecanica adotada:
+- usa `access_token` cacheado enquanto estiver valido;
+- renova com `refresh_token` antes de expirar;
+- se o refresh falhar ou expirar, limpa o cache e exige novo bootstrap com MFA;
+- nao grava tokens em log.
+- o menu fica dentro de `Financeiro > Pagamentos PayIP` e e liberado para `financeiro` e `admin`;
+- a emissao de cobranca exige confirmacao textual `CONFIRMAR` antes de chamar `POST /v1/payments`;
+- na confirmacao da emissao, taxa e juros ficam com os padroes `R$ 3,92` e `10% ao dia`, mas podem ser alterados com `taxa 5,00`, `taxa 0`, `juros 8`, `juros 0` ou `vencimento 31/12/2026`;
+- a nota fiscal e opcional na emissao e pode ser informada antes de confirmar com `nf 147478` ou removida com `sem nf`.
+- o NB/identificador ERP tambem e opcional no payload de emissao; o bot ainda pode usar o NB para localizar o cliente, mas antes de confirmar voce pode alterar com `nb 16883` ou remover com `sem nb`.
+- apos emitir uma cobranca PIX, o bot usa o `emv` retornado pela PayIP para enviar o copia e cola e gerar o QR Code localmente quando a API nao enviar `linkImage`; nao depende do `GET /v1/payments/{id}` para montar o PIX.
+
+`PAYIP_MFA_CODE` deve ser usado apenas para iniciar uma sessao manualmente. Depois disso, o bot deve operar com `refresh_token` e cache.
+
+Bootstrap manual do cache:
+
+```powershell
+.\venv\Scripts\python.exe .\ops\payip_bootstrap_session.py --mfa-code 123456
+```
+
 ## 4) Rotas
 
 - `GET /health` (detalhado, apenas na API privada)

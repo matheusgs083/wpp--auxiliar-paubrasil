@@ -11,31 +11,31 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from bot_api.config import get_settings
-from bot_api.services.inadimplencia_import_service import InadimplenciaImportService
+from bot_api.services.documentacao_pendente_import_service import DocumentacaoPendenteImportService
 
 
 def main() -> None:
     args = _parse_args()
     settings = get_settings()
-    service = InadimplenciaImportService(
+    service = DocumentacaoPendenteImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
 
     try:
-        validation = service.validate_source(args.source_path)
+        validation = service.validate_source(args.file_path)
         print(json.dumps({"mode": "validate", **validation.to_dict()}, ensure_ascii=False, indent=2))
         validation.ensure_valid()
 
-        summary = service.summarize_source(args.source_path)
+        summary = service.summarize_source(args.file_path)
         print(json.dumps({"mode": "analyze", **summary.to_dict()}, ensure_ascii=False, indent=2))
 
         if not args.import_db:
             return
 
         batch_date = date.fromisoformat(args.reference_date) if args.reference_date else None
-        result = service.import_source(args.source_path, reference_date=batch_date)
+        result = service.import_source(args.file_path, reference_date=batch_date)
         print(json.dumps({"mode": "import", **result}, ensure_ascii=False, indent=2))
     except Exception as exc:
         print(json.dumps({"mode": "error", "detail": str(exc)}, ensure_ascii=False, indent=2))
@@ -44,24 +44,23 @@ def main() -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Analisa e importa os CSVs de inadimplencia para PostgreSQL, unificando todos os arquivos da pasta em um lote."
+        description="Analisa e importa o CSV de documentacao pendente para PostgreSQL."
     )
     parser.add_argument(
-        "source_path",
+        "file_path",
+        nargs="?",
         type=Path,
-        help=(
-            "Pasta ou arquivo CSV da inadimplencia. "
-            "Nao ha fallback para data/Inadimplencia porque essa pasta e apenas base de teste."
-        ),
+        default=Path("data/DocumentacaoPendente/documentacao_pendente.csv"),
+        help="Caminho do CSV de documentacao pendente.",
     )
     parser.add_argument(
         "--import-db",
         action="store_true",
-        help="Alem da analise, importa os arquivos para o banco configurado.",
+        help="Alem da analise, importa o CSV para o banco configurado.",
     )
     parser.add_argument(
         "--reference-date",
-        help="Data de referencia da carga no formato YYYY-MM-DD. Se omitida, usa a data mais recente dos arquivos.",
+        help="Data de referencia da carga no formato YYYY-MM-DD. Se omitida, usa a data de modificacao do arquivo.",
     )
     return parser.parse_args()
 

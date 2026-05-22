@@ -20,6 +20,12 @@ try:
         resolve_csv_files,
         validate_csv_source,
     )
+    from services.import_publication import (
+        activate_import_batch,
+        ensure_dataset_state_table,
+        prune_import_batches,
+        resolve_effective_import_batch_id,
+    )
 except ModuleNotFoundError:
     from bot_api.services.report_csv_validation import (
         INADIMPLENCIA_CSV_SPEC,
@@ -27,6 +33,12 @@ except ModuleNotFoundError:
         normalize_header_name,
         resolve_csv_files,
         validate_csv_source,
+    )
+    from bot_api.services.import_publication import (
+        activate_import_batch,
+        ensure_dataset_state_table,
+        prune_import_batches,
+        resolve_effective_import_batch_id,
     )
 
 
@@ -120,10 +132,11 @@ class InadimplenciaImportService:
 
         with self._connect() as conn:
             self._ensure_schema(conn)
-            self._replace_dataset_contents(conn, dataset_name="inadimplencia")
             batch_id = self._insert_batch(conn, str(source_path), batch_date, source_hash, summary.rows)
             self._insert_snapshot_rows(conn, files, batch_id)
+            activate_import_batch(conn, self.schema, "inadimplencia", batch_id)
             self._create_latest_view(conn)
+            prune_import_batches(conn, self.schema, "inadimplencia", keep_last=3)
             conn.commit()
 
         result = summary.to_dict()
@@ -134,7 +147,8 @@ class InadimplenciaImportService:
                 "source_hash": source_hash,
                 "schema": self.schema,
                 "files": [str(file_path) for file_path in files],
-                "replaced_previous_batches": True,
+                "replaced_previous_batches": False,
+                "published_as_active_batch": True,
             }
         )
         return result
@@ -145,10 +159,16 @@ class InadimplenciaImportService:
 
         with self._connect() as conn:
             self._ensure_schema(conn)
+            active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "inadimplencia", activate_if_missing=True)
             self._create_latest_view(conn)
             conn.commit()
 
-        return {"ok": True, "schema": self.schema, "view": f"{self.schema}.inadimplencia_latest"}
+        return {
+            "ok": True,
+            "schema": self.schema,
+            "view": f"{self.schema}.inadimplencia_latest",
+            "active_batch_id": active_batch_id,
+        }
 
     def _ensure_schema(self, conn: psycopg.Connection[Any]) -> None:
         with conn.cursor() as cur:
@@ -234,6 +254,7 @@ class InadimplenciaImportService:
                     sql.Identifier(self.schema)
                 )
             )
+            ensure_dataset_state_table(conn, self.schema)
 
     def _insert_batch(
         self,
@@ -324,17 +345,15 @@ class InadimplenciaImportService:
             cur.execute(query, (dataset_name,))
 
     def _create_latest_view(self, conn: psycopg.Connection[Any]) -> None:
-        drop_query = sql.SQL("DROP VIEW IF EXISTS {}.inadimplencia_latest").format(sql.Identifier(self.schema))
+        active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "inadimplencia", activate_if_missing=True)
+        where_clause = (
+            sql.SQL("s.batch_id = {}").format(sql.Literal(active_batch_id))
+            if active_batch_id is not None
+            else sql.SQL("FALSE")
+        )
         query = sql.SQL(
             """
             CREATE OR REPLACE VIEW {}.inadimplencia_latest AS
-            WITH latest_batch AS (
-                SELECT id
-                FROM {}.import_batches
-                WHERE dataset_name = 'inadimplencia'
-                ORDER BY imported_at DESC, id DESC
-                LIMIT 1
-            )
             SELECT
                 s.batch_id,
                 s.row_number,
@@ -357,16 +376,15 @@ class InadimplenciaImportService:
                 b.imported_at AS batch_imported_at
             FROM {}.inadimplencia_snapshot s
             JOIN {}.import_batches b ON b.id = s.batch_id
-            JOIN latest_batch lb ON lb.id = s.batch_id
+            WHERE {}
             """
         ).format(
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
-            sql.Identifier(self.schema),
+            where_clause,
         )
         with conn.cursor() as cur:
-            cur.execute(drop_query)
             cur.execute(query)
 
     def _connect(self) -> psycopg.Connection[Any]:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 DC_SCOPE_PREFIX = "dc:"
+FILIAL_SCOPE_PREFIX = "filial:"
 _COMPOSITE_SCOPE_RE = re.compile(r"^(\d+)_(\d+)$")
 
 
@@ -35,10 +36,22 @@ def normalize_dc_scope_input(value: str) -> str:
     return ""
 
 
+def normalize_filial_scope_input(value: str) -> str:
+    raw = str(value or "").strip().lower()
+    if raw.startswith(FILIAL_SCOPE_PREFIX):
+        raw = raw[len(FILIAL_SCOPE_PREFIX) :]
+    if split_scope_pair(raw):
+        return ""
+    code = normalize_numeric_code(raw)
+    return f"{FILIAL_SCOPE_PREFIX}{code}" if code else ""
+
+
 def normalize_stored_scope_value(value: str) -> str:
     raw = str(value or "").strip().lower()
     if not raw:
         return ""
+    if raw.startswith(FILIAL_SCOPE_PREFIX):
+        return normalize_filial_scope_input(raw)
     if raw.startswith(DC_SCOPE_PREFIX):
         return normalize_dc_scope_input(raw)
     return _normalize_pair_or_simple(raw)
@@ -75,6 +88,27 @@ def is_dc_scope(value: str) -> bool:
     return str(value or "").strip().lower().startswith(DC_SCOPE_PREFIX)
 
 
+def is_filial_scope(value: str) -> bool:
+    return str(value or "").strip().lower().startswith(FILIAL_SCOPE_PREFIX)
+
+
+def partition_filial_scopes(values: list[str] | tuple[str, ...] | None) -> list[str]:
+    filial_codes: list[str] = []
+    seen: set[str] = set()
+
+    for value in values or []:
+        raw = str(value or "").strip().lower()
+        if not is_filial_scope(raw):
+            continue
+        normalized = normalize_filial_scope_input(raw)
+        code = normalized[len(FILIAL_SCOPE_PREFIX) :] if normalized.startswith(FILIAL_SCOPE_PREFIX) else ""
+        if code and code not in seen:
+            seen.add(code)
+            filial_codes.append(code)
+
+    return filial_codes
+
+
 def partition_sector_scopes(values: list[str] | tuple[str, ...] | None) -> tuple[list[str], list[str]]:
     composite_keys: list[str] = []
     legacy_codes: list[str] = []
@@ -85,7 +119,7 @@ def partition_sector_scopes(values: list[str] | tuple[str, ...] | None) -> tuple
         raw = str(value or "").strip().lower()
         if not raw:
             continue
-        if is_dc_scope(raw):
+        if is_dc_scope(raw) or is_filial_scope(raw):
             continue
         if is_composite_scope(raw):
             normalized = normalize_sector_scope_input(raw)
@@ -164,6 +198,13 @@ def format_dc_scope(value: str) -> str:
     pair = split_scope_pair(value)
     if pair:
         return f"Filial {pair[0]} | DC {pair[1]}"
+    return str(value or "-").strip() or "-"
+
+
+def format_filial_scope(value: str) -> str:
+    normalized = normalize_filial_scope_input(value)
+    if normalized.startswith(FILIAL_SCOPE_PREFIX):
+        return f"Filial {normalized[len(FILIAL_SCOPE_PREFIX):]}"
     return str(value or "-").strip() or "-"
 
 

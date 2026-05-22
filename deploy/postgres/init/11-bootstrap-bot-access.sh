@@ -13,6 +13,31 @@ CREATE TABLE IF NOT EXISTS bot_access.users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS user_phone_equivalent_number_uidx
+  ON bot_access.users ((
+    CASE
+      WHEN LEFT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g'), 2) = '55'
+      THEN CASE
+        WHEN LENGTH(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g')) = 13
+          AND SUBSTRING(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g'), 5, 1) = '9'
+        THEN LEFT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g'), 4)
+          || SUBSTRING(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g'), 6)
+        ELSE REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g')
+      END
+      WHEN LENGTH(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g')) = 11
+      THEN CASE
+        WHEN SUBSTRING(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g'), 3, 1) = '9'
+        THEN '55'
+          || LEFT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g'), 2)
+          || SUBSTRING(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g'), 4)
+        ELSE '55' || REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g')
+      END
+      WHEN LENGTH(REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g')) = 10
+      THEN '55' || REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g')
+      ELSE REGEXP_REPLACE(COALESCE(phone_number, ''), '\D+', '', 'g')
+    END
+  ));
+
 CREATE TABLE IF NOT EXISTS bot_access.roles (
   id BIGSERIAL PRIMARY KEY,
   name VARCHAR(80) NOT NULL UNIQUE,

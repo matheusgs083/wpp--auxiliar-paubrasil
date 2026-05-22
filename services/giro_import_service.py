@@ -16,9 +16,25 @@ from psycopg.types.json import Jsonb
 
 from bot_api.commercial_scope import normalize_numeric_code
 from bot_api.services.dsetores_import_service import ensure_dsetores_schema
+from bot_api.services.import_publication import (
+    activate_import_batch,
+    ensure_dataset_state_table,
+    prune_import_batches,
+    resolve_effective_import_batch_id,
+)
 
 
 EXPECTED_EXTENSION_SET = {".xlsx", ".xlsm", ".xls"}
+FILIAL_LABELS = {
+    "1": "Sousa",
+    "2": "Itaporanga",
+    "3": "Patos",
+    "4": "Sume",
+    "5": "Guarabira",
+    "6": "Brumado",
+    "7": "Barra",
+    "8": "Cacule",
+}
 STATUS_OK = "OK"
 STATUS_NOK = "NOK"
 STATUS_ZERO = "ZERO"
@@ -211,11 +227,12 @@ class GiroImportService:
         with self._connect() as conn:
             ensure_dsetores_schema(conn, self.schema)
             self._ensure_schema(conn)
-            self._replace_dataset_contents(conn, dataset_name="giro")
             batch_id = self._insert_batch(conn, str(path), batch_date, file_hash, len(rows))
             self._insert_snapshot_rows(conn, rows, batch_id)
             self._hydrate_scope_columns(conn, batch_id)
+            activate_import_batch(conn, self.schema, "giro", batch_id)
             self._create_latest_view(conn)
+            prune_import_batches(conn, self.schema, "giro", keep_last=3)
             conn.commit()
 
         result = summary.to_dict()
@@ -226,10 +243,29 @@ class GiroImportService:
                 "file_hash": file_hash,
                 "schema": self.schema,
                 "sheet_name": sheet_name,
-                "replaced_previous_batches": True,
+                "replaced_previous_batches": False,
+                "published_as_active_batch": True,
             }
         )
         return result
+
+    def refresh_latest_view(self) -> dict[str, Any]:
+        if not self.database_url:
+            raise RuntimeError("REPORTS_DATABASE_URL nao configurada.")
+
+        with self._connect() as conn:
+            ensure_dsetores_schema(conn, self.schema)
+            self._ensure_schema(conn)
+            active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "giro", activate_if_missing=True)
+            self._create_latest_view(conn)
+            conn.commit()
+
+        return {
+            "ok": True,
+            "schema": self.schema,
+            "view": f"{self.schema}.giro_latest",
+            "active_batch_id": active_batch_id,
+        }
 
     def _ensure_schema(self, conn: psycopg.Connection[Any]) -> None:
         with conn.cursor() as cur:
@@ -293,6 +329,7 @@ class GiroImportService:
                     "CREATE INDEX IF NOT EXISTS giro_snapshot_batch_filial_dc_key_idx ON {}.giro_snapshot (batch_id, filial_dc_key)"
                 ).format(sql.Identifier(self.schema))
             )
+            ensure_dataset_state_table(conn, self.schema)
 
     def _insert_batch(
         self,
@@ -395,16 +432,15 @@ class GiroImportService:
             cur.execute(query, (batch_id,))
 
     def _create_latest_view(self, conn: psycopg.Connection[Any]) -> None:
+        active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "giro", activate_if_missing=True)
+        where_clause = (
+            sql.SQL("g.batch_id = {}").format(sql.Literal(active_batch_id))
+            if active_batch_id is not None
+            else sql.SQL("FALSE")
+        )
         query = sql.SQL(
             """
             CREATE OR REPLACE VIEW {}.giro_latest AS
-            WITH latest_batch AS (
-                SELECT id
-                FROM {}.import_batches
-                WHERE dataset_name = 'giro'
-                ORDER BY imported_at DESC, id DESC
-                LIMIT 1
-            )
             SELECT
                 g.batch_id,
                 g.row_number,
@@ -436,13 +472,13 @@ class GiroImportService:
                 b.imported_at AS batch_imported_at
             FROM {}.giro_snapshot g
             JOIN {}.import_batches b ON b.id = g.batch_id
-            JOIN latest_batch lb ON lb.id = g.batch_id
+            WHERE {}
             """
         ).format(
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
-            sql.Identifier(self.schema),
+            where_clause,
         )
         with conn.cursor() as cur:
             cur.execute(query)
@@ -468,7 +504,13 @@ def _load_giro_rows(source_path: Path) -> tuple[str, list[GiroFlatRow]]:
         workbook = load_workbook(path, data_only=True, read_only=True)
     worksheet = workbook[workbook.sheetnames[0]]
 
+    header_row = [str(value or "").strip() for value in next(worksheet.iter_rows(min_row=2, max_row=2, values_only=True))]
+    modern_layout_map = _resolve_modern_layout_map(header_row)
+    if modern_layout_map is not None:
+        return worksheet.title, _load_giro_rows_modern_layout(worksheet, modern_layout_map)
+
     current_revenda = ""
+    current_filial = ""
     for row_index, row_values in enumerate(worksheet.iter_rows(min_row=3, values_only=True), start=3):
         row = list(row_values)
         if len(row) < 24:
@@ -484,7 +526,10 @@ def _load_giro_rows(source_path: Path) -> tuple[str, list[GiroFlatRow]]:
             continue
 
         nb = normalize_numeric_code(row[3] or row[10] or row[17])
-        filial = normalize_numeric_code(row[4] or row[11] or row[18])
+        filial_candidate = normalize_numeric_code(row[4] or row[11] or row[18])
+        if filial_candidate:
+            current_filial = filial_candidate
+        filial = current_filial
         rows.append(
             GiroFlatRow(
                 revenda=current_revenda,
@@ -510,6 +555,93 @@ def _load_giro_rows(source_path: Path) -> tuple[str, list[GiroFlatRow]]:
     return worksheet.title, rows
 
 
+def _load_giro_rows_modern_layout(worksheet: Any, column_map: dict[str, int]) -> list[GiroFlatRow]:
+    rows: list[GiroFlatRow] = []
+    for row_index, row_values in enumerate(worksheet.iter_rows(min_row=3, values_only=True), start=3):
+        row = list(row_values)
+        required_length = max(column_map.values()) + 1
+        if len(row) < required_length:
+            row.extend([None] * (required_length - len(row)))
+
+        revenda = _clean_text(row[column_map["revenda"]])
+        nb = normalize_numeric_code(row[column_map["nb"]])
+        fantasia = _clean_text(row[column_map["fantasia"]])
+        setor = normalize_numeric_code(row[column_map["setor"]])
+        filial = normalize_numeric_code(row[column_map["filial"]]) or _filial_from_revenda(revenda)
+
+        if not revenda and not nb and not fantasia and not setor:
+            continue
+
+        rows.append(
+            GiroFlatRow(
+                revenda=revenda,
+                fantasia=fantasia,
+                setor=setor,
+                nb=nb,
+                filial=filial,
+                total_litrinho=_to_decimal(row[column_map["total_litrinho"]]),
+                real_litrinho=_to_decimal(row[column_map["real_litrinho"]]),
+                gap_litrinho=_to_decimal(row[column_map["gap_litrinho"]]),
+                giro_litrinho=_normalize_giro_status(row[column_map["giro_litrinho"]]),
+                total_inteira=_to_decimal(row[column_map["total_inteira"]]),
+                real_inteira=_to_decimal(row[column_map["real_inteira"]]),
+                gap_inteira=_to_decimal(row[column_map["gap_inteira"]]),
+                giro_inteira=_normalize_giro_status(row[column_map["giro_inteira"]]),
+                total_litrao=_to_decimal(row[column_map["total_litrao"]]),
+                real_litrao=_to_decimal(row[column_map["real_litrao"]]),
+                gap_litrao=_to_decimal(row[column_map["gap_litrao"]]),
+                giro_litrao=_normalize_giro_status(row[column_map["giro_litrao"]]),
+                source_row_number=row_index,
+            )
+        )
+    return rows
+
+
+def _resolve_modern_layout_map(header_row: list[str]) -> dict[str, int] | None:
+    normalized = [_normalize_lookup_text(value) for value in header_row]
+    if len(normalized) >= 5 and normalized[:5] == ["revenda", "fantasia", "setor", "nb", "filial"]:
+        return {
+            "revenda": 0,
+            "fantasia": 1,
+            "setor": 2,
+            "nb": 3,
+            "filial": 4,
+            "total_litrinho": 6,
+            "real_litrinho": 7,
+            "gap_litrinho": 8,
+            "giro_litrinho": 9,
+            "total_inteira": 13,
+            "real_inteira": 14,
+            "gap_inteira": 15,
+            "giro_inteira": 16,
+            "total_litrao": 20,
+            "real_litrao": 21,
+            "gap_litrao": 22,
+            "giro_litrao": 23,
+        }
+    if len(normalized) >= 5 and normalized[:4] == ["revenda", "nb", "fantasia", "setor"]:
+        return {
+            "revenda": 0,
+            "nb": 1,
+            "fantasia": 2,
+            "setor": 3,
+            "filial": 4,
+            "total_litrinho": 6,
+            "real_litrinho": 7,
+            "gap_litrinho": 8,
+            "giro_litrinho": 9,
+            "total_inteira": 11,
+            "real_inteira": 12,
+            "gap_inteira": 13,
+            "giro_inteira": 14,
+            "total_litrao": 16,
+            "real_litrao": 17,
+            "gap_litrao": 18,
+            "giro_litrao": 19,
+        }
+    return None
+
+
 def _normalize_schema(schema: str) -> str:
     normalized = str(schema or "").strip()
     return normalized or "reports"
@@ -517,6 +649,18 @@ def _normalize_schema(schema: str) -> str:
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _filial_from_revenda(revenda: str) -> str:
+    normalized_revenda = _normalize_lookup_text(revenda)
+    for filial_code, filial_name in FILIAL_LABELS.items():
+        if _normalize_lookup_text(filial_name) == normalized_revenda:
+            return filial_code
+    return ""
+
+
+def _normalize_lookup_text(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").strip().lower() if ch.isalnum())
 
 
 def _to_decimal(value: Any) -> Decimal:

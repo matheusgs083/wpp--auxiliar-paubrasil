@@ -15,6 +15,7 @@ from psycopg.rows import dict_row, tuple_row
 
 from bot_api.commercial_scope import (
     normalize_stored_scope_value,
+    partition_filial_scopes,
     partition_gv_scopes,
     partition_sector_scopes,
     split_scope_pair,
@@ -148,6 +149,26 @@ class InadimplenciaFinanceManagementSummary:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class InadimplenciaFinanceSellerSummary:
+    seller_code: str
+    manager_code: str
+    client_count: int
+    total_pendente: str
+    due_in_two_days_count: int
+    due_in_two_days_total: str
+    due_tomorrow_count: int
+    due_tomorrow_total: str
+    due_today_count: int
+    due_today_total: str
+    overdue_count: int
+    overdue_total: str
+    planilha_atualizada_em: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 class InadimplenciaQueryService:
     def __init__(self, database_url: str, schema: str, connect_timeout_seconds: float = 3.0) -> None:
         self.database_url = database_url.strip()
@@ -169,6 +190,10 @@ class InadimplenciaQueryService:
         self._finance_management_summary_cache: dict[
             tuple[tuple[str, ...], tuple[str, ...]],
             tuple[float, list[InadimplenciaFinanceManagementSummary]],
+        ] = {}
+        self._finance_seller_summary_cache: dict[
+            tuple[tuple[str, ...], tuple[str, ...]],
+            tuple[float, list[InadimplenciaFinanceSellerSummary]],
         ] = {}
         self._latest_batch_id_cache: dict[str, tuple[float, int | None]] = {}
         self._visit_risk_summary_cache: dict[
@@ -616,6 +641,93 @@ class InadimplenciaQueryService:
         self._finance_management_summary_cache[cache_key] = (now + 60.0, summaries)
         return list(summaries)
 
+    def list_finance_summary_by_seller(
+        self,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+    ) -> list[InadimplenciaFinanceSellerSummary]:
+        normalized_sectors = _normalize_scope_values(allowed_sectors)
+        normalized_gv_vdes = _normalize_scope_values(allowed_gv_vdes)
+        cache_key = (tuple(normalized_sectors), tuple(normalized_gv_vdes))
+        now = monotonic()
+        cached_entry = self._finance_seller_summary_cache.get(cache_key)
+        if cached_entry is not None and now < cached_entry[0]:
+            return list(cached_entry[1])
+
+        status = self.status()
+        if not status["ready"]:
+            raise RuntimeError(status["last_error"] or "Base de inadimplencia indisponivel.")
+
+        filters: list[sql.Composed] = [
+            sql.SQL("BTRIM(COALESCE(d.filial_setor_key, '')) <> ''"),
+        ]
+        params: list[Any] = []
+        self._apply_access_filter(filters, params, normalized_sectors, normalized_gv_vdes)
+        days_sql = _days_to_due_sql("i.dias")
+        valor_pendente_sql = _money_to_numeric_sql("i.valor_pendente")
+        query = sql.SQL(
+            """
+            SELECT
+                d.filial_setor_key AS seller_code,
+                d.filial_gv_key AS manager_code,
+                COUNT(DISTINCT (i.unb, i.cliente))::int AS client_count,
+                COALESCE(SUM({valor_pendente_sql}), 0) AS total_pendente,
+                COUNT(DISTINCT (i.unb, i.cliente)) FILTER (WHERE {days_sql} = 2)::int AS due_in_two_days_count,
+                COALESCE(SUM({valor_pendente_sql}) FILTER (WHERE {days_sql} = 2), 0) AS due_in_two_days_total,
+                COUNT(DISTINCT (i.unb, i.cliente)) FILTER (WHERE {days_sql} = 1)::int AS due_tomorrow_count,
+                COALESCE(SUM({valor_pendente_sql}) FILTER (WHERE {days_sql} = 1), 0) AS due_tomorrow_total,
+                COUNT(DISTINCT (i.unb, i.cliente)) FILTER (WHERE {days_sql} = 0)::int AS due_today_count,
+                COALESCE(SUM({valor_pendente_sql}) FILTER (WHERE {days_sql} = 0), 0) AS due_today_total,
+                COUNT(DISTINCT (i.unb, i.cliente)) FILTER (WHERE {days_sql} < 0)::int AS overdue_count,
+                COALESCE(SUM({valor_pendente_sql}) FILTER (WHERE {days_sql} < 0), 0) AS overdue_total,
+                COALESCE(MAX(b.reference_date)::text, '') AS reference_date,
+                MAX(i.batch_imported_at) AS batch_imported_at
+            FROM {schema}.inadimplencia_latest i
+            JOIN {schema}.dclientes_latest d
+              ON d.filial = i.unb
+             AND d.cod_pdv = i.cliente
+            LEFT JOIN {schema}.import_batches b ON b.id = i.batch_id
+            WHERE {where}
+            GROUP BY d.filial_setor_key, d.filial_gv_key
+            ORDER BY d.filial_gv_key, d.filial_setor_key
+            """
+        ).format(
+            schema=sql.Identifier(self.schema),
+            valor_pendente_sql=valor_pendente_sql,
+            days_sql=days_sql,
+            where=sql.SQL(" AND ").join(filters),
+        )
+
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                rows = cur.fetchall()
+
+        summaries = [
+            InadimplenciaFinanceSellerSummary(
+                seller_code=normalize_stored_scope_value(str(row["seller_code"] or "")),
+                manager_code=normalize_stored_scope_value(str(row["manager_code"] or "")),
+                client_count=int(row["client_count"] or 0),
+                total_pendente=_format_money(row["total_pendente"]),
+                due_in_two_days_count=int(row["due_in_two_days_count"] or 0),
+                due_in_two_days_total=_format_money(row["due_in_two_days_total"]),
+                due_tomorrow_count=int(row["due_tomorrow_count"] or 0),
+                due_tomorrow_total=_format_money(row["due_tomorrow_total"]),
+                due_today_count=int(row["due_today_count"] or 0),
+                due_today_total=_format_money(row["due_today_total"]),
+                overdue_count=int(row["overdue_count"] or 0),
+                overdue_total=_format_money(row["overdue_total"]),
+                planilha_atualizada_em=_format_reference_date(
+                    row.get("reference_date"),
+                    row.get("batch_imported_at"),
+                ),
+            )
+            for row in rows
+            if normalize_stored_scope_value(str(row["seller_code"] or ""))
+        ]
+        self._finance_seller_summary_cache[cache_key] = (now + 60.0, summaries)
+        return list(summaries)
+
     def search_by_registration(
         self,
         filial: str,
@@ -876,10 +988,14 @@ class InadimplenciaQueryService:
         normalized_manager_code = normalize_stored_scope_value(manager_code or "")
 
         days_sql = _days_to_due_sql("i.dias")
-        filters = [
-            sql.SQL("BTRIM(COALESCE(d.payload ->> 'Dia de Visita do VDE', '')) = %s"),
-        ]
-        params: list[Any] = [normalized_visit_day]
+        filters: list[sql.Composed] = []
+        params: list[Any] = []
+        _append_visit_day_filter(
+            filters=filters,
+            params=params,
+            visit_day=visit_day,
+            field_sql=sql.SQL("UPPER(BTRIM(COALESCE(d.payload ->> 'Dia de Visita do VDE', '')))"),
+        )
         if normalized_seller_code:
             _append_scope_value_filter(
                 filters=filters,
@@ -1471,6 +1587,28 @@ def _normalize_exact_visit_day_values(
     return normalized_values
 
 
+def _append_visit_day_filter(
+    *,
+    filters: list[sql.Composed],
+    params: list[Any],
+    visit_day: str,
+    field_sql: sql.SQL,
+) -> None:
+    normalized_visit_day = _normalize_visit_day(visit_day)
+    normalized_visit_day_token = _normalize_visit_day_token(visit_day)
+    if not normalized_visit_day or not normalized_visit_day_token:
+        raise ValueError("Dia de visita obrigatorio.")
+    filters.append(
+        sql.SQL(
+            "("
+            "POSITION(%s IN {field_sql}) > 0 "
+            "OR {field_sql} = %s"
+            ")"
+        ).format(field_sql=field_sql)
+    )
+    params.extend([normalized_visit_day_token, normalized_visit_day.upper()])
+
+
 def _normalize_search_text(value: str) -> str:
     lowered = str(value or "").strip().lower()
     normalized = "".join(
@@ -1508,9 +1646,13 @@ def _build_commercial_scope_filters(
     scope_filters: list[sql.Composed] = []
     params: list[Any] = []
 
+    filial_codes = partition_filial_scopes(allowed_sectors)
     sector_keys, _legacy_sector_codes = partition_sector_scopes(allowed_sectors)
     gv_keys, dc_keys, _legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
 
+    if filial_codes:
+        scope_filters.append(sql.SQL("{} = ANY(%s)").format(_code_field_sql("d.filial")))
+        params.append(filial_codes)
     if sector_keys:
         scope_filters.append(sql.SQL("{} = ANY(%s)").format(_code_field_sql("d.filial_setor_key")))
         params.append(sector_keys)

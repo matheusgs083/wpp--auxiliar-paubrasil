@@ -9,6 +9,7 @@ from typing import Any
 
 from bot_api.commercial_scope import (
     normalize_dc_scope_input,
+    normalize_filial_scope_input,
     normalize_gv_scope_input,
     normalize_sector_scope_input,
     normalize_stored_scope_value,
@@ -24,7 +25,7 @@ ROLE_VENDEDOR = "vendedor"
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     ROLE_ADMIN: ("*",),
-    ROLE_FINANCEIRO: ("inadimplencia", "comodato", "cliente", "conhecimento"),
+    ROLE_FINANCEIRO: ("inadimplencia", "comodato", "cliente", "conhecimento", "payip"),
     ROLE_GERENTE_VENDAS: ("inadimplencia", "comodato", "cliente", "conhecimento"),
     ROLE_DIRETOR_COMERCIAL: ("inadimplencia", "comodato", "cliente", "conhecimento"),
     ROLE_VENDEDOR: ("inadimplencia", "comodato", "cliente"),
@@ -80,6 +81,12 @@ class AccessControl:
             self._normalize_existing_sector_codes()
             self._normalize_existing_gv_vde_codes()
             self._migrate_legacy_role_names()
+            self._merge_equivalent_phone_numbers()
+            try:
+                self._ensure_equivalent_phone_number_index()
+            except Exception as exc:
+                if not _is_optional_ddl_permission_error(exc):
+                    raise
             self._initialized = True
             self._last_error = ""
             self.seed_defaults()
@@ -103,8 +110,9 @@ class AccessControl:
 
     def authorize(self, phone_number: str, area: str) -> AccessDecision:
         normalized_number = _normalize_number(phone_number)
+        comparable_number = _comparable_number(normalized_number)
         normalized_area = _normalize_name(area, fallback="conhecimento")
-        cache_key = (normalized_number, normalized_area)
+        cache_key = (comparable_number, normalized_area)
         cached_entry = self._authorization_cache.get(cache_key)
         if cached_entry is not None and monotonic() < cached_entry[0]:
             return cached_entry[1]
@@ -171,7 +179,7 @@ class AccessControl:
             )
             with self._connect(row_factory=dict_row) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(query, (normalized_number,))
+                    cur.execute(query, (comparable_number,))
                     row = cur.fetchone()
             if not row:
                 decision = AccessDecision(
@@ -187,7 +195,7 @@ class AccessControl:
                     allowed=False,
                     reason="user_inactive",
                     area=normalized_area,
-                    normalized_number=normalized_number,
+                    normalized_number=str(row["phone_number"] or normalized_number),
                     roles=tuple(row["roles"]),
                     sectors=tuple(row["sectors"]),
                     gv_vdes=tuple(row["gv_vdes"]),
@@ -204,7 +212,7 @@ class AccessControl:
                     allowed=True,
                     reason="authorized",
                     area=normalized_area,
-                    normalized_number=normalized_number,
+                    normalized_number=str(row["phone_number"] or normalized_number),
                     roles=roles,
                     sectors=sectors,
                     gv_vdes=gv_vdes,
@@ -215,7 +223,7 @@ class AccessControl:
                 allowed=False,
                 reason="area_not_allowed",
                 area=normalized_area,
-                normalized_number=normalized_number,
+                normalized_number=str(row["phone_number"] or normalized_number),
                 roles=roles,
                 sectors=sectors,
                 gv_vdes=gv_vdes,
@@ -246,9 +254,21 @@ class AccessControl:
             for role_name, permissions in DEFAULT_ROLE_PERMISSIONS.items():
                 existing = existing_roles.get(role_name)
                 if existing and existing.get("permissions"):
-                    skipped_roles.append(role_name)
-                    continue
-                created = self.upsert_role(role_name=role_name, permissions=list(permissions))
+                    existing_permissions = {
+                        str(permission)
+                        for permission in existing.get("permissions", [])
+                        if str(permission).strip()
+                    }
+                    target_permissions = existing_permissions | set(permissions)
+                    if target_permissions == existing_permissions:
+                        skipped_roles.append(role_name)
+                        continue
+                    created = self.upsert_role(
+                        role_name=role_name,
+                        permissions=sorted(target_permissions),
+                    )
+                else:
+                    created = self.upsert_role(role_name=role_name, permissions=list(permissions))
                 if created["created"]:
                     created_roles.append(role_name)
                 else:
@@ -304,6 +324,7 @@ class AccessControl:
         if not self._ensure_ready():
             raise RuntimeError(self._last_error or "RBAC indisponivel.")
         normalized_number = _normalize_number(phone_number)
+        comparable_number = _comparable_number(normalized_number)
         if not normalized_number:
             raise ValueError("Numero invalido.")
         sql, dict_row = _psycopg_sql()
@@ -336,7 +357,7 @@ class AccessControl:
         )
         with self._connect(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (normalized_number,))
+                cur.execute(query, (comparable_number,))
                 row = cur.fetchone()
         return _canonicalize_user_row(dict(row)) if row else None
 
@@ -394,6 +415,7 @@ class AccessControl:
         if not self._ensure_ready():
             raise RuntimeError(self._last_error or "RBAC indisponivel.")
         normalized_number = _normalize_number(phone_number)
+        comparable_number = _comparable_number(normalized_number)
         if not normalized_number:
             raise ValueError("Numero invalido.")
         normalized_roles = [
@@ -409,7 +431,11 @@ class AccessControl:
             sectors=sectors or [],
             gv_vdes=gv_vdes or [],
         )
-        normalized_sectors = _normalize_sector_scope_list(sectors)
+        normalized_sectors = (
+            _normalize_finance_filial_scope_list(sectors)
+            if target_role == ROLE_FINANCEIRO
+            else _normalize_sector_scope_list(sectors)
+        )
         normalized_gv_vdes = _normalize_gv_scope_list(gv_vdes, role_name=target_role)
         self._validate_user_scope_policy(
             roles=normalized_roles,
@@ -419,7 +445,7 @@ class AccessControl:
         sql, dict_row = _psycopg_sql()
         existing_user_query = sql.SQL(
             """
-            SELECT id
+            SELECT id, phone_number
             FROM {}.users
             WHERE {} = %s
             ORDER BY CASE WHEN phone_number = %s THEN 0 ELSE 1 END, id
@@ -463,12 +489,18 @@ class AccessControl:
 
         with self._connect(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
-                cur.execute(existing_user_query, (normalized_number, normalized_number))
+                cur.execute(existing_user_query, (comparable_number, normalized_number))
                 existing_user = cur.fetchone()
+                stored_number = _preferred_storage_number(
+                    [
+                        str(existing_user["phone_number"] or "") if existing_user else "",
+                        normalized_number,
+                    ]
+                ) or normalized_number
                 if existing_user:
-                    cur.execute(update_query, (normalized_number, (name or "").strip() or None, is_active, existing_user["id"]))
+                    cur.execute(update_query, (stored_number, (name or "").strip() or None, is_active, existing_user["id"]))
                 else:
-                    cur.execute(insert_query, (normalized_number, (name or "").strip() or None, is_active))
+                    cur.execute(insert_query, (stored_number, (name or "").strip() or None, is_active))
                 user = cur.fetchone()
                 cur.execute(delete_roles_query, (user["id"],))
                 cur.execute(delete_sectors_query, (user["id"],))
@@ -492,6 +524,52 @@ class AccessControl:
             "roles": normalized_roles,
             "sectors": normalized_sectors,
             "gv_vdes": normalized_gv_vdes,
+        }
+
+    def delete_user(self, phone_number: str) -> dict[str, Any]:
+        if not self._ensure_ready():
+            raise RuntimeError(self._last_error or "RBAC indisponivel.")
+        normalized_number = _normalize_number(phone_number)
+        comparable_number = _comparable_number(normalized_number)
+        if not normalized_number:
+            raise ValueError("Numero invalido.")
+
+        sql, dict_row = _psycopg_sql()
+        select_query = sql.SQL(
+            """
+            SELECT id
+            FROM {}.users
+            WHERE {} = %s
+            ORDER BY CASE WHEN phone_number = %s THEN 0 ELSE 1 END, id
+            LIMIT 1
+            """
+        ).format(sql.Identifier(self.schema), _normalized_number_sql("phone_number"))
+        delete_query = sql.SQL(
+            """
+            DELETE FROM {}.users
+            WHERE id = %s
+            RETURNING phone_number
+            """
+        ).format(sql.Identifier(self.schema))
+
+        existing_user = self.get_user(normalized_number)
+        if not existing_user:
+            raise ValueError("Usuario nao encontrado.")
+
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(select_query, (comparable_number, normalized_number))
+                row = cur.fetchone()
+                if not row:
+                    raise ValueError("Usuario nao encontrado.")
+                cur.execute(delete_query, (row["id"],))
+                deleted_row = cur.fetchone()
+            conn.commit()
+
+        self._clear_authorization_cache()
+        return {
+            **existing_user,
+            "deleted": bool(deleted_row),
         }
 
     def _validate_scope_input_formats(
@@ -519,6 +597,11 @@ class AccessControl:
             if invalid:
                 raise ValueError("Para Diretor Comercial, use somente chaves filial-DC, por exemplo: 1-1.")
             return
+        if role_name == ROLE_FINANCEIRO:
+            invalid = [value for value in sector_values if not normalize_filial_scope_input(value)]
+            if invalid:
+                raise ValueError("Para Financeiro, use somente filiais, por exemplo: 3 ou 3,4.")
+            return
 
     def _validate_user_scope_policy(
         self,
@@ -539,8 +622,12 @@ class AccessControl:
                 raise ValueError("Admin nao deve ter setor nem GV vinculado.")
             return
         if role_name == ROLE_FINANCEIRO:
-            if sectors or gv_vdes:
-                raise ValueError("Financeiro nao deve ter setor nem GV vinculado.")
+            if gv_vdes:
+                raise ValueError("Financeiro nao deve ter GV vinculado.")
+            if not sectors:
+                raise ValueError("Para Financeiro, informe ao menos uma filial.")
+            if any(not normalize_filial_scope_input(value) for value in sectors):
+                raise ValueError("Financeiro aceita somente filiais.")
             return
         if role_name == ROLE_GERENTE_VENDAS:
             if sectors:
@@ -741,6 +828,103 @@ class AccessControl:
                     cur.execute(update_query, (ROLE_GERENTE_VENDAS, legacy_role["id"]))
             conn.commit()
 
+    def _merge_equivalent_phone_numbers(self) -> None:
+        sql, dict_row = _psycopg_sql()
+        select_query = sql.SQL(
+            """
+            SELECT id, phone_number, name, is_active, created_at, updated_at
+            FROM {}.users
+            ORDER BY id
+            """
+        ).format(sql.Identifier(self.schema))
+        update_user_query = sql.SQL(
+            """
+            UPDATE {}.users
+            SET phone_number = %s,
+                name = %s,
+                is_active = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """
+        ).format(sql.Identifier(self.schema))
+        merge_roles_query = sql.SQL(
+            """
+            INSERT INTO {}.user_roles (user_id, role_id)
+            SELECT %s, role_id
+            FROM {}.user_roles
+            WHERE user_id = %s
+            ON CONFLICT DO NOTHING
+            """
+        ).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
+        merge_sectors_query = sql.SQL(
+            """
+            INSERT INTO {}.user_sectors (user_id, sector_code)
+            SELECT %s, sector_code
+            FROM {}.user_sectors
+            WHERE user_id = %s
+            ON CONFLICT DO NOTHING
+            """
+        ).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
+        merge_gv_vdes_query = sql.SQL(
+            """
+            INSERT INTO {}.user_gv_vdes (user_id, gv_vde_code)
+            SELECT %s, gv_vde_code
+            FROM {}.user_gv_vdes
+            WHERE user_id = %s
+            ON CONFLICT DO NOTHING
+            """
+        ).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
+        delete_users_query = sql.SQL("DELETE FROM {}.users WHERE id = ANY(%s)").format(sql.Identifier(self.schema))
+
+        grouped_rows: dict[str, list[dict[str, Any]]] = {}
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(select_query)
+                rows = [dict(row) for row in cur.fetchall()]
+                for row in rows:
+                    comparable_number = _comparable_number(str(row["phone_number"] or ""))
+                    if not comparable_number:
+                        continue
+                    grouped_rows.setdefault(comparable_number, []).append(row)
+
+                for duplicate_rows in grouped_rows.values():
+                    if len(duplicate_rows) < 2:
+                        continue
+                    keeper = min(duplicate_rows, key=lambda item: int(item["id"]))
+                    duplicates = [row for row in duplicate_rows if int(row["id"]) != int(keeper["id"])]
+                    preferred_phone = _preferred_storage_number(
+                        [str(row["phone_number"] or "") for row in duplicate_rows]
+                    ) or str(keeper["phone_number"] or "")
+                    preferred_name = _preferred_user_name(duplicate_rows)
+                    merged_is_active = any(bool(row["is_active"]) for row in duplicate_rows)
+                    cur.execute(
+                        update_user_query,
+                        (preferred_phone, preferred_name, merged_is_active, keeper["id"]),
+                    )
+                    duplicate_ids = [int(row["id"]) for row in duplicates]
+                    for duplicate_id in duplicate_ids:
+                        cur.execute(merge_roles_query, (keeper["id"], duplicate_id))
+                        cur.execute(merge_sectors_query, (keeper["id"], duplicate_id))
+                        cur.execute(merge_gv_vdes_query, (keeper["id"], duplicate_id))
+                    cur.execute(delete_users_query, (duplicate_ids,))
+            conn.commit()
+
+    def _ensure_equivalent_phone_number_index(self) -> None:
+        sql, _ = _psycopg_sql()
+        index_query = sql.SQL(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS user_phone_equivalent_number_uidx
+            ON {}.users (({}))
+            """
+        ).format(
+            sql.Identifier(self.schema),
+            _normalized_number_sql("phone_number"),
+        )
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(index_query)
+            conn.commit()
+
     def _ensure_ready(self) -> bool:
         if self._initialized:
             return True
@@ -786,6 +970,17 @@ class AccessControl:
                     )
                     """
                 ).format(sql.Identifier(self.schema))
+            )
+            cur.execute(
+                sql.SQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS user_phone_equivalent_number_uidx
+                    ON {}.users (({}))
+                    """
+                ).format(
+                    sql.Identifier(self.schema),
+                    _normalized_number_sql("phone_number"),
+                )
             )
             cur.execute(
                 sql.SQL(
@@ -900,18 +1095,56 @@ def _normalize_number(raw_number: str) -> str:
     return digits
 
 
+def _comparable_number(raw_number: str) -> str:
+    normalized = _normalize_number(raw_number)
+    if normalized.startswith("55") and len(normalized) == 13 and normalized[4] == "9":
+        return f"{normalized[:4]}{normalized[5:]}"
+    return normalized
+
+
+def _preferred_storage_number(values: list[str] | tuple[str, ...]) -> str:
+    normalized_values: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = _normalize_number(str(value or ""))
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        normalized_values.append(normalized)
+    if not normalized_values:
+        return ""
+    return max(normalized_values, key=lambda item: (len(item), item))
+
+
+def _preferred_user_name(rows: list[dict[str, Any]]) -> str | None:
+    named_values = [" ".join(str(row.get("name") or "").split()) for row in rows]
+    named_values = [value for value in named_values if value]
+    return named_values[0] if named_values else None
+
+
 def _normalized_number_sql(field_name: str) -> Any:
     sql, _ = _psycopg_sql()
     field = sql.SQL(field_name)
+    digits = sql.SQL("REGEXP_REPLACE(COALESCE({field}, ''), '\\D+', '', 'g')").format(field=field)
     return sql.SQL(
         "CASE "
-        "WHEN LEFT(REGEXP_REPLACE(COALESCE({field}, ''), '\\D+', '', 'g'), 2) = '55' "
-        "THEN REGEXP_REPLACE(COALESCE({field}, ''), '\\D+', '', 'g') "
-        "WHEN LENGTH(REGEXP_REPLACE(COALESCE({field}, ''), '\\D+', '', 'g')) IN (10, 11) "
-        "THEN '55' || REGEXP_REPLACE(COALESCE({field}, ''), '\\D+', '', 'g') "
-        "ELSE REGEXP_REPLACE(COALESCE({field}, ''), '\\D+', '', 'g') "
+        "WHEN LEFT({digits}, 2) = '55' "
+        "THEN CASE "
+        "  WHEN LENGTH({digits}) = 13 AND SUBSTRING({digits}, 5, 1) = '9' "
+        "  THEN LEFT({digits}, 4) || SUBSTRING({digits}, 6) "
+        "  ELSE {digits} "
+        "END "
+        "WHEN LENGTH({digits}) = 11 "
+        "THEN CASE "
+        "  WHEN SUBSTRING({digits}, 3, 1) = '9' "
+        "  THEN '55' || LEFT({digits}, 2) || SUBSTRING({digits}, 4) "
+        "  ELSE '55' || {digits} "
+        "END "
+        "WHEN LENGTH({digits}) = 10 "
+        "THEN '55' || {digits} "
+        "ELSE {digits} "
         "END"
-    ).format(field=field)
+    ).format(digits=digits)
 
 
 def _normalize_name(value: str, fallback: str = "") -> str:
@@ -978,6 +1211,18 @@ def _normalize_sector_scope_list(values: list[str] | None) -> list[str]:
     return normalized_values
 
 
+def _normalize_finance_filial_scope_list(values: list[str] | None) -> list[str]:
+    normalized_values: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        normalized = normalize_filial_scope_input(str(value or ""))
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        normalized_values.append(normalized)
+    return normalized_values
+
+
 def _normalize_gv_scope_list(values: list[str] | None, *, role_name: str) -> list[str]:
     normalized_values: list[str] = []
     seen: set[str] = set()
@@ -1001,6 +1246,11 @@ def _format_bootstrap_error(exc: Exception, *, schema: str, context: str) -> str
             f"Deixe o schema bootstrapado antes do startup. Erro original: {message}"
         )
     return message
+
+
+def _is_optional_ddl_permission_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "must be owner of table" in message or "permission denied" in message
 
 
 def _psycopg() -> tuple[Any, Any]:

@@ -11,6 +11,7 @@ __pycache__/
 .env.*
 !.env.example
 !.env.vps.example
+venv/
 
 # Dados e artefatos locais
 exports/

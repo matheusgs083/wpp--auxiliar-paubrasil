@@ -15,6 +15,7 @@ from psycopg.rows import dict_row, tuple_row
 
 from bot_api.commercial_scope import (
     normalize_stored_scope_value,
+    partition_filial_scopes,
     partition_gv_scopes,
     partition_sector_scopes,
 )
@@ -172,7 +173,7 @@ class ComodatosQueryService:
         ]
         params: list[Any] = [normalized_filial, normalized_cod_pdv]
         self._apply_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
-        params.append(max(1, min(limit, 200)))
+        params.append(max(1, min(limit, 1000)))
         query = self._base_select(where=sql.SQL(" AND ").join(filters))
         return self._fetch(query, params)
 
@@ -404,6 +405,61 @@ class ComodatosQueryService:
         self._scope_summary_cache[cache_key] = (now + 60.0, summary)
         return summary
 
+    def pending_comodato_keys_for_clients(self, pairs: list[tuple[str, str]]) -> set[tuple[str, str, str]]:
+        normalized_pairs: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for filial, cod_pdv in pairs:
+            normalized_filial = _normalize_code_value(filial)
+            normalized_cod_pdv = _normalize_code_value(cod_pdv)
+            if not normalized_filial or not normalized_cod_pdv:
+                continue
+            key = (normalized_filial, normalized_cod_pdv)
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized_pairs.append(key)
+        if not normalized_pairs:
+            return set()
+
+        status = self.status()
+        if not status["ready"]:
+            raise RuntimeError(status["last_error"] or "Base de comodatos indisponivel.")
+
+        values_sql = sql.SQL(", ").join(sql.SQL("(%s, %s)") for _ in normalized_pairs)
+        params: list[Any] = []
+        for filial, cod_pdv in normalized_pairs:
+            params.extend([filial, cod_pdv])
+        query = sql.SQL(
+            """
+            WITH requested(unb, cliente) AS (
+                VALUES {values_sql}
+            )
+            SELECT c.unb, c.cliente, c.nro_comodato
+            FROM {schema}.comodatos_latest c
+            JOIN requested r
+              ON r.unb = c.unb
+             AND r.cliente = c.cliente
+            """
+        ).format(
+            schema=sql.Identifier(self.schema),
+            values_sql=values_sql,
+        )
+
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                rows = cur.fetchall()
+
+        return {
+            (
+                _normalize_code_value(str(row["unb"] or "")),
+                _normalize_code_value(str(row["cliente"] or "")),
+                _normalize_code_value(str(row["nro_comodato"] or "")),
+            )
+            for row in rows
+            if _normalize_code_value(str(row["nro_comodato"] or ""))
+        }
+
     def _apply_access_filter(
         self,
         filters: list[sql.Composed],
@@ -583,9 +639,13 @@ def _build_commercial_scope_filters(
     scope_filters: list[sql.Composed] = []
     params: list[Any] = []
 
+    filial_codes = partition_filial_scopes(allowed_sectors)
     sector_keys, _legacy_sector_codes = partition_sector_scopes(allowed_sectors)
     gv_keys, dc_keys, _legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
 
+    if filial_codes:
+        scope_filters.append(sql.SQL("{} = ANY(%s)").format(_code_field_sql("d.filial")))
+        params.append(filial_codes)
     if sector_keys:
         scope_filters.append(sql.SQL("{} = ANY(%s)").format(_code_field_sql("d.filial_setor_key")))
         params.append(sector_keys)

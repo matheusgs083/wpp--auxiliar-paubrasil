@@ -3,576 +3,3492 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Painel Admin de Imports</title>
+  <title>Central Pau Brasil - Importação e Acessos</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f3efe6;
-      --panel: #fffaf2;
-      --ink: #1f2a24;
-      --muted: #5f6a64;
-      --line: #d8cdb9;
-      --accent: #0d6b4d;
-      --accent-2: #c66a2b;
-      --danger: #b33535;
-      --soft: #ece2d0;
-      --success: #286a3f;
+      --brand-900: #0a1f44;
+      --brand-700: #123b8f;
+      --brand-500: #2563eb;
+      --ink-900: #0f172a;
+      --ink-700: #334155;
+      --ink-500: #64748b;
+      --surface: #ffffff;
+      --surface-soft: #f7fbff;
+      --canvas: #f3f7ff;
+      --line: rgba(15, 23, 42, 0.1);
+      --glass-bg: rgba(255,255,255,0.84);
+      --glass-line: rgba(255,255,255,0.75);
+      --glass-highlight: rgba(255,255,255,0.58);
+      --glass-depth: rgba(15, 23, 42, 0.15);
+      --clay-shadow-outer: 12px 12px 24px rgba(15, 23, 42, 0.14);
+      --clay-shadow-inner: inset -6px -6px 12px rgba(255,255,255,0.7), inset 6px 6px 12px rgba(15, 23, 42, 0.06);
+      --hero-grad-a: var(--brand-900);
+      --hero-grad-b: var(--brand-700);
+      --log-bg: #07142b;
+      --log-fg: #e5eeff;
+      --soft-panel: #eef4ff;
+    }
+    body[data-theme="dark"] {
+      --brand-900: #07152f;
+      --brand-700: #0f2c63;
+      --brand-500: #60a5fa;
+      --ink-900: #e2e8f0;
+      --ink-700: #cbd5e1;
+      --ink-500: #94a3b8;
+      --surface: #0b1220;
+      --surface-soft: #111b31;
+      --canvas: #060d1b;
+      --line: rgba(148, 163, 184, 0.22);
+      --glass-bg: rgba(10, 16, 29, 0.86);
+      --glass-line: rgba(148, 163, 184, 0.2);
+      --glass-highlight: rgba(147, 197, 253, 0.08);
+      --glass-depth: rgba(2, 8, 23, 0.65);
+      --clay-shadow-outer: 12px 12px 28px rgba(2, 8, 23, 0.62);
+      --clay-shadow-inner: inset -6px -6px 14px rgba(147, 197, 253, 0.08), inset 6px 6px 14px rgba(2, 8, 23, 0.55);
+      --hero-grad-a: #091731;
+      --hero-grad-b: #173f89;
+      --log-bg: #020817;
+      --log-fg: #dbeafe;
+      --soft-panel: #0f172a;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
-      color: var(--ink);
+      font-family: "Inter", system-ui, -apple-system, Segoe UI, sans-serif;
+      color: var(--ink-700);
+      line-height: 1.55;
+      letter-spacing: 0.01em;
       background:
-        radial-gradient(circle at top right, rgba(198, 106, 43, 0.12), transparent 28%),
-        linear-gradient(180deg, #f9f5ed 0%, var(--bg) 100%);
+        radial-gradient(circle at 12% -12%, rgba(37, 99, 235, 0.25), transparent 34%),
+        radial-gradient(circle at 90% 0%, rgba(59, 130, 246, 0.18), transparent 26%),
+        var(--canvas);
+      min-height: 100vh;
     }
-    .wrap {
-      max-width: 1220px;
+    .skip-link {
+      position: fixed;
+      left: 12px;
+      top: -42px;
+      z-index: 2000;
+      background: #111827;
+      color: #fff;
+      padding: 0.55rem 0.85rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: top 0.2s ease;
+    }
+    .skip-link:focus-visible { top: 12px; }
+    .text-gradient {
+      background: linear-gradient(120deg, #dbeafe, #ffffff 52%, #bfdbfe);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+      }
+    }
+    .layout {
+      width: min(1450px, calc(100% - 2rem));
       margin: 0 auto;
-      padding: 28px 20px 48px;
+      padding: 1.1rem 0 2rem;
     }
     .hero {
-      display: grid;
-      gap: 12px;
-      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+      border-radius: 20px;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 0.9rem;
+      color: #f8fbff;
+      background: linear-gradient(130deg, var(--brand-900), var(--brand-700));
+      box-shadow: 0 20px 42px rgba(10, 31, 68, 0.2);
+      border: 1px solid rgba(255,255,255,0.16);
+      animation: panelIn 420ms ease;
     }
-    .eyebrow {
-      font: 700 12px/1 "Trebuchet MS", sans-serif;
-      letter-spacing: 0.16em;
+    .hero-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.95rem;
+      margin-bottom: 0.55rem;
+    }
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.28);
+      display: grid;
+      place-items: center;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      flex-shrink: 0;
+    }
+    .brand-logo svg {
+      width: 28px;
+      height: 28px;
+      display: block;
+      fill: rgba(234, 241, 255, 0.95);
+    }
+    .brand-initial {
+      font-size: 1.55rem;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: -0.05em;
+      color: #f8fbff;
+      text-shadow: 0 2px 10px rgba(2, 8, 23, 0.28);
+      font-family: "Inter", system-ui, sans-serif;
+    }
+    .brand-copy {
+      display: grid;
+      gap: 0.1rem;
+      line-height: 1.1;
+    }
+    .brand-name {
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--accent);
+      color: #eaf1ff;
     }
-    h1 {
-      margin: 0;
-      font: 700 38px/1.05 Georgia, "Times New Roman", serif;
+    .brand-tag {
+      font-size: 0.78rem;
+      color: #bfd4ff;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: lowercase;
     }
-    .sub {
-      margin: 0;
-      color: var(--muted);
-      max-width: 800px;
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -70px;
+      top: -70px;
+      width: 250px;
+      height: 250px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.28), transparent);
+      pointer-events: none;
     }
-    .toolbar, .panel, .card {
-      background: var(--panel);
+    .hero-title { margin: 0; font-weight: 800; letter-spacing: -0.018em; line-height: 1.2; }
+    .hero-subtitle { margin: 0.35rem 0 0; opacity: 0.92; max-width: 64ch; font-weight: 500; }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(160px, 1fr));
+      gap: 0.7rem;
+      margin-bottom: 0.85rem;
+    }
+    .metric {
+      border-radius: 12px;
+      border: 1px solid var(--glass-line);
+      background: linear-gradient(145deg, var(--glass-highlight), var(--glass-bg));
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: var(--clay-shadow-outer), var(--clay-shadow-inner);
+      padding: 0.75rem;
+      transition: transform 0.22s ease, box-shadow 0.22s ease;
+    }
+    .metric:hover { transform: translateY(-2px); }
+    .metric .k {
+      font-size: 0.75rem;
+      color: var(--ink-700);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 700;
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+    .metric .v { font-size: 1.12rem; font-weight: 800; color: var(--ink-900); }
+    .usage-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 0.7rem;
+    }
+    .usage-bars {
+      display: grid;
+      gap: 0.42rem;
+    }
+    .usage-bar-row {
+      display: grid;
+      grid-template-columns: 86px 1fr 78px;
+      align-items: center;
+      gap: 0.55rem;
+      font-size: 0.79rem;
+    }
+    .usage-bar-label {
+      color: var(--ink-500);
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .usage-bar-track {
+      height: 10px;
+      border-radius: 999px;
       border: 1px solid var(--line);
-      border-radius: 18px;
-      box-shadow: 0 18px 40px rgba(31, 42, 36, 0.06);
+      background: linear-gradient(90deg, rgba(37,99,235,0.08), rgba(59,130,246,0.14));
+      overflow: hidden;
     }
-    .toolbar {
-      display: grid;
-      gap: 16px;
-      padding: 18px;
-      margin-bottom: 20px;
+    .usage-bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+      min-width: 2px;
     }
-    .toolbar-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 14px;
+    .usage-bar-value {
+      text-align: right;
+      font-weight: 700;
+      color: var(--ink-900);
     }
-    label {
-      display: grid;
-      gap: 6px;
-      font-size: 14px;
-      color: var(--muted);
+    .usage-kpi-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.79rem;
+      color: var(--ink-500);
+      margin-top: 0.12rem;
     }
-    input {
-      width: 100%;
+    .usage-card {
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 12px 13px;
-      font-size: 14px;
-      background: #fff;
-      color: var(--ink);
+      padding: 0.75rem;
+      background: linear-gradient(150deg, var(--glass-highlight), var(--glass-bg));
+      box-shadow: 10px 10px 22px rgba(15, 23, 42, 0.12), inset -4px -4px 10px rgba(255,255,255,0.35);
     }
-    input[type="file"] {
-      padding: 10px;
-      background: #fffef9;
+    .usage-card .title {
+      font-size: 0.75rem;
+      color: var(--ink-500);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.18rem;
     }
-    .toolbar-actions, .card-actions {
+    .usage-card .value {
+      font-size: 1.12rem;
+      font-weight: 800;
+      color: var(--ink-900);
+      line-height: 1.1;
+    }
+    .ops-bar {
+      position: sticky;
+      top: 8px;
+      z-index: 1020;
+      border-radius: 14px;
+      border: 1px solid var(--glass-line);
+      background: linear-gradient(145deg, var(--glass-highlight), var(--glass-bg));
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14), var(--clay-shadow-inner);
+      padding: 0.8rem;
+      margin-bottom: 0.9rem;
+      animation: panelIn 460ms ease;
+    }
+    .panel-card {
+      border-radius: 14px;
+      border: 1px solid var(--glass-line);
+      background: linear-gradient(150deg, var(--glass-highlight), var(--glass-bg));
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: var(--clay-shadow-outer), var(--clay-shadow-inner);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .panel-card:hover { transform: translateY(-1px); }
+    .table-scroll {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 420px;
+    }
+    .table-scroll thead th {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: var(--surface-soft);
+    }
+    .allowed-users-container {
+      margin: 0 0.55rem 0.22rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow-x: auto;
+      overflow-y: auto;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .allowed-users-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .dataset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 0.9rem;
+    }
+    .dataset-card {
+      border: 1px solid var(--glass-line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: linear-gradient(150deg, var(--glass-highlight), var(--glass-bg));
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 10px 10px 22px rgba(15, 23, 42, 0.12), inset -4px -4px 10px rgba(255,255,255,0.35);
+    }
+    .recolha-operation {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: linear-gradient(150deg, rgba(255,255,255,0.58), var(--glass-bg));
+    }
+    .recolha-operation + .recolha-operation { margin-top: 0.85rem; }
+    .recolha-operation-head {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 0.55rem;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, var(--surface-soft), var(--surface));
     }
-    button {
-      border: 0;
-      border-radius: 999px;
-      padding: 11px 16px;
-      font: 700 13px/1 "Trebuchet MS", sans-serif;
-      cursor: pointer;
-      transition: transform .15s ease, opacity .15s ease;
+    .recolha-table {
+      min-width: 1180px;
     }
-    button:hover { transform: translateY(-1px); }
-    button:disabled { opacity: .55; cursor: wait; transform: none; }
-    .primary { background: var(--accent); color: #fff; }
-    .secondary { background: var(--soft); color: var(--ink); }
-    .danger { background: var(--danger); color: #fff; }
-    .statusbar {
+    .recolha-table .form-control,
+    .recolha-table .form-select {
+      min-width: 105px;
+      font-size: 0.82rem;
+    }
+    .recolha-table .recolha-motivo {
+      min-width: 170px;
+    }
+    .recolha-dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.75rem;
+      margin: 0.8rem 0;
+    }
+    .recolha-dashboard-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0.8rem;
+      background: linear-gradient(145deg, var(--surface), var(--surface-soft));
+    }
+    .recolha-dashboard-card .label {
+      display: block;
+      color: var(--ink-500);
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .recolha-dashboard-card .value {
+      display: block;
+      color: var(--ink-900);
+      font-size: 1.55rem;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+    .recolha-dashboard-card .sub {
+      color: var(--ink-500);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .recolha-insights {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr);
+      gap: 0.85rem;
+      margin-bottom: 0.85rem;
+    }
+    @media (max-width: 900px) {
+      .recolha-insights { grid-template-columns: 1fr; }
+    }
+    .recolha-insight-box {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0.8rem;
+      background: rgba(255,255,255,0.35);
+    }
+    .recolha-insight-row {
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      font-size: 14px;
-      color: var(--muted);
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.38rem 0;
+      border-bottom: 1px solid var(--line);
     }
-    .status-pill {
+    .recolha-insight-row:last-child { border-bottom: 0; }
+    .dataset-head {
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, var(--surface-soft), var(--surface));
+      padding: 0.75rem;
+    }
+    .dataset-body { padding: 0.8rem; display: grid; gap: 0.7rem; }
+    .dataset-meta {
+      display: grid;
+      gap: 0.28rem;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+    .dataset-meta .label {
+      color: var(--ink-500);
+      font-weight: 600;
+      margin-right: 0.35rem;
+    }
+    .dataset-meta .value {
+      color: var(--ink-900);
+      font-weight: 700;
+    }
+    .file-list {
+      display: grid;
+      gap: 0.22rem;
+      font-size: 0.78rem;
+      color: var(--ink-500);
+      margin-top: -0.25rem;
+    }
+    .validation-panel {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 0.55rem 0.65rem;
+      background: rgba(37, 99, 235, 0.06);
+      font-size: 0.84rem;
+      line-height: 1.4;
+    }
+    .validation-panel.ok {
+      border-color: rgba(16,185,129,0.4);
+      background: rgba(16,185,129,0.09);
+    }
+    .validation-panel.warn {
+      border-color: rgba(245,158,11,0.45);
+      background: rgba(245,158,11,0.12);
+    }
+    .validation-panel.err {
+      border-color: rgba(239,68,68,0.5);
+      background: rgba(239,68,68,0.12);
+    }
+    .validation-title {
+      font-weight: 700;
+      color: var(--ink-900);
+      margin-bottom: 0.18rem;
+    }
+    .source-box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.5rem 0.6rem;
+      background: var(--soft-panel);
+    }
+    .source-path {
+      word-break: break-all;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.76rem;
+      opacity: 0.92;
+    }
+    .form-label {
+      color: var(--ink-900);
+      font-weight: 600 !important;
+      letter-spacing: 0.01em;
+    }
+    .form-text {
+      font-size: 0.8rem;
+      line-height: 1.45;
+      color: var(--ink-500);
+    }
+    .btn {
+      border-radius: 12px;
+      box-shadow: 6px 6px 14px rgba(15, 23, 42, 0.12), inset -1px -1px 1px rgba(255,255,255,0.35);
+      border-width: 1px;
+      transition: transform 0.18s ease, box-shadow 0.22s ease, filter 0.18s ease;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      filter: saturate(1.08);
+    }
+    .btn:active {
+      transform: translateY(0);
+      box-shadow: 2px 2px 8px rgba(15, 23, 42, 0.16), inset -1px -1px 1px rgba(255,255,255,0.25);
+    }
+    .form-control,
+    .form-select {
+      border-radius: 11px;
+      border: 1px solid var(--glass-line);
+      background: linear-gradient(145deg, rgba(255,255,255,0.78), rgba(255,255,255,0.48));
+      box-shadow: inset 2px 2px 6px rgba(15, 23, 42, 0.06), inset -2px -2px 6px rgba(255,255,255,0.6);
+    }
+    .pill {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 9px 12px;
+      gap: 0.35rem;
+      padding: 0.43rem 0.74rem;
       border-radius: 999px;
-      background: #fff;
       border: 1px solid var(--line);
+      background: var(--surface);
+      font-size: 0.82rem;
+      font-weight: 600;
     }
-    .status-ok { color: var(--success); }
-    .status-warn { color: var(--accent-2); }
-    .status-error { color: var(--danger); }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-    .card {
-      padding: 18px;
-      display: grid;
-      gap: 14px;
-    }
-    .card h2 {
+    .pill.ok { color: #047857; background: #ecfdf5; border-color: rgba(16,185,129,0.35); }
+    .pill.warn { color: #92400e; background: #fffbeb; border-color: rgba(245,158,11,0.45); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    pre#logPanel {
       margin: 0;
-      font: 700 24px/1.1 Georgia, serif;
-    }
-    .meta {
-      display: grid;
-      gap: 6px;
-      font-size: 14px;
-      color: var(--muted);
-    }
-    .meta strong { color: var(--ink); }
-    .hint {
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .panel {
-      padding: 18px;
-      margin-bottom: 20px;
-    }
-    .panel h3 {
-      margin: 0 0 12px;
-      font: 700 24px/1.1 Georgia, serif;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
-    th, td {
-      text-align: left;
-      padding: 11px 10px;
-      border-bottom: 1px solid var(--line);
-      vertical-align: top;
-    }
-    th {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-    }
-    pre {
-      margin: 0;
-      padding: 16px;
-      border-radius: 14px;
-      background: #1d241f;
-      color: #eef5f0;
-      overflow: auto;
+      padding: 0.9rem;
+      border-radius: 11px;
+      background: var(--log-bg);
+      color: var(--log-fg);
+      height: 420px;
+      max-height: 420px;
+      overflow-y: auto;
       white-space: pre-wrap;
-      word-break: break-word;
-      min-height: 220px;
+      font-size: 0.82rem;
+    }
+    .focus-ring:focus-visible,
+    .form-control:focus-visible,
+    .form-select:focus-visible,
+    .btn:focus-visible {
+      outline: 2px solid rgba(59, 130, 246, 0.65);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+    }
+    .table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    .table tbody td {
+      background: linear-gradient(90deg, rgba(30, 58, 138, 0.04), rgba(59, 130, 246, 0.02));
+    }
+    .table th {
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      background: linear-gradient(90deg, rgba(30, 58, 138, 0.35), rgba(59, 130, 246, 0.28));
+      border-bottom: 2px solid rgba(59, 130, 246, 0.35);
+      color: var(--ink-900);
+    }
+    .table thead tr {
+      background: linear-gradient(90deg, rgba(30, 58, 138, 0.35), rgba(59, 130, 246, 0.28));
+    }
+    .table td {
+      font-size: 0.9rem;
+      color: var(--ink-900);
+    }
+    .broadcast-preview-scroll {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      max-height: 260px;
+    }
+    .broadcast-preview-table {
+      table-layout: fixed;
+      min-width: 760px;
+    }
+    .broadcast-preview-table th,
+    .broadcast-preview-table td {
+      vertical-align: middle;
+    }
+    .broadcast-preview-table th {
+      padding-top: 0.42rem;
+      padding-bottom: 0.42rem;
+    }
+    .broadcast-preview-table td {
+      padding-top: 0.46rem;
+      padding-bottom: 0.46rem;
+    }
+    .broadcast-select-col { width: 138px; }
+    .broadcast-name-col { width: auto; }
+    .broadcast-role-col { width: 140px; }
+    .broadcast-phone-col { width: 235px; }
+    .broadcast-select-cell {
+      width: 138px;
+      white-space: nowrap;
+    }
+    .broadcast-select-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      white-space: nowrap;
+    }
+    .broadcast-recipient-check,
+    #broadcastSelectAll {
+      width: 1.05rem;
+      height: 1.05rem;
+      margin-top: 0;
+      cursor: pointer;
+    }
+    .table tbody tr:hover {
+      background: rgba(59, 130, 246, 0.08);
+    }
+    .skeleton {
+      position: relative;
+      overflow: hidden;
+      border-radius: 10px;
+      background: linear-gradient(90deg, rgba(148, 163, 184, 0.2) 20%, rgba(226, 232, 240, 0.36) 50%, rgba(148, 163, 184, 0.2) 80%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s linear infinite;
+    }
+    .skeleton-line { height: 14px; margin-bottom: 8px; }
+    .skeleton-line:last-child { margin-bottom: 0; width: 72%; }
+    .dataset-card.is-loading .dataset-body { opacity: 0.75; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    @keyframes panelIn {
+      from { transform: translateY(8px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    body[data-theme="dark"] .hero {
+      box-shadow: 0 20px 42px rgba(2, 8, 23, 0.6);
+      background: linear-gradient(130deg, var(--hero-grad-a), var(--hero-grad-b));
+    }
+    body[data-theme="dark"] .table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    body[data-theme="dark"] .table tbody td {
+      background: linear-gradient(90deg, rgba(51, 65, 85, 0.08), rgba(71, 85, 105, 0.04));
+    }
+    body[data-theme="dark"] .table th {
+      background: linear-gradient(90deg, rgba(51, 65, 85, 0.7), rgba(71, 85, 105, 0.6));
+      border-bottom: 2px solid rgba(148, 163, 184, 0.4);
+      color: #e2e8f0;
+    }
+    body[data-theme="dark"] .table thead tr {
+      background: linear-gradient(90deg, rgba(51, 65, 85, 0.7), rgba(71, 85, 105, 0.6));
+    }
+    body[data-theme="dark"] .panel-card,
+    body[data-theme="dark"] .dataset-card,
+    body[data-theme="dark"] .metric {
+      box-shadow: 0 12px 26px rgba(2, 8, 23, 0.45);
+    }
+    body[data-theme="dark"] .form-control,
+    body[data-theme="dark"] .form-select {
+      background: linear-gradient(145deg, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.62));
+      box-shadow: inset 2px 2px 7px rgba(2, 8, 23, 0.6), inset -2px -2px 7px rgba(96, 165, 250, 0.08);
+    }
+    body[data-theme="dark"] .btn {
+      box-shadow: 6px 6px 16px rgba(2, 8, 23, 0.55), inset -1px -1px 1px rgba(147, 197, 253, 0.14);
+    }
+    body[data-theme="dark"] .skip-link {
+      background: #1d4ed8;
+      color: #dbeafe;
+    }
+    body[data-theme="dark"] .table,
+    body[data-theme="dark"] .table thead,
+    body[data-theme="dark"] .table tbody,
+    body[data-theme="dark"] .table th,
+    body[data-theme="dark"] .table td {
+      color: var(--ink-700);
+      border-color: var(--line);
+      background-color: transparent;
+    }
+    body[data-theme="dark"] .badge.text-bg-light {
+      color: #dbeafe !important;
+      background-color: #1e293b !important;
+      border-color: #334155 !important;
+    }
+    body[data-theme="dark"] .bg-light-subtle {
+      background-color: var(--soft-panel) !important;
+      border-color: var(--line) !important;
+    }
+    body[data-theme="dark"] .form-control,
+    body[data-theme="dark"] .form-select {
+      background-color: #0f172a;
+      color: #e2e8f0;
+      border-color: #334155;
+    }
+    body[data-theme="dark"] .form-control::placeholder {
+      color: #94a3b8;
+    }
+    body[data-theme="dark"] .form-text {
+      color: #a8b4c5;
+    }
+    body[data-theme="dark"] .text-secondary,
+    body[data-theme="dark"] .small.text-secondary {
+      color: #94a3b8 !important;
+    }
+    body[data-theme="dark"] .table tbody tr:hover {
+      background: rgba(96, 165, 250, 0.12);
+    }
+    body[data-theme="dark"] .pill {
+      color: #cbd5e1;
+      background: linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(17, 27, 49, 0.72));
+      border-color: rgba(148, 163, 184, 0.24);
+      box-shadow: inset 0 1px 0 rgba(147, 197, 253, 0.08);
+    }
+    body[data-theme="dark"] .pill.ok {
+      color: #8af0c5;
+      background: linear-gradient(145deg, rgba(5, 46, 22, 0.68), rgba(6, 78, 59, 0.42));
+      border-color: rgba(52, 211, 153, 0.42);
+    }
+    body[data-theme="dark"] .pill.warn {
+      color: #f8d28b;
+      background: linear-gradient(145deg, rgba(69, 26, 3, 0.72), rgba(120, 53, 15, 0.42));
+      border-color: rgba(251, 191, 36, 0.42);
+    }
+    body[data-theme="dark"] .recolha-operation {
+      background: linear-gradient(150deg, rgba(8, 14, 28, 0.96), rgba(15, 23, 42, 0.88));
+      border-color: rgba(96, 165, 250, 0.18);
+      box-shadow: 0 14px 28px rgba(2, 8, 23, 0.42);
+    }
+    body[data-theme="dark"] .recolha-operation-head {
+      background: linear-gradient(180deg, rgba(17, 27, 49, 0.94), rgba(11, 18, 32, 0.92));
+      border-bottom-color: rgba(148, 163, 184, 0.2);
+    }
+    body[data-theme="dark"] .recolha-dashboard-card,
+    body[data-theme="dark"] .recolha-insight-box {
+      background: linear-gradient(145deg, rgba(11, 18, 32, 0.96), rgba(17, 27, 49, 0.84));
+      border-color: rgba(96, 165, 250, 0.18);
+      box-shadow: inset 0 1px 0 rgba(147, 197, 253, 0.06);
+    }
+    body[data-theme="dark"] .recolha-insight-row {
+      border-bottom-color: rgba(148, 163, 184, 0.18);
+    }
+    body[data-theme="dark"] .recolha-table tbody td {
+      background: rgba(8, 14, 28, 0.34);
+    }
+    body[data-theme="dark"] .recolha-table tbody tr:nth-child(even) td {
+      background: rgba(15, 23, 42, 0.52);
+    }
+    body[data-theme="dark"] .recolha-table tbody tr:hover td {
+      background: rgba(37, 99, 235, 0.16);
+    }
+    body[data-theme="dark"] .badge.text-bg-success {
+      color: #b7f7d7 !important;
+      background-color: rgba(6, 78, 59, 0.72) !important;
+      border: 1px solid rgba(52, 211, 153, 0.38);
+    }
+    body[data-theme="dark"] .badge.text-bg-primary {
+      color: #dbeafe !important;
+      background-color: rgba(29, 78, 216, 0.72) !important;
+      border: 1px solid rgba(96, 165, 250, 0.38);
+    }
+    body[data-theme="dark"] .badge.text-bg-secondary {
+      color: #cbd5e1 !important;
+      background-color: rgba(51, 65, 85, 0.72) !important;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+    }
+    body[data-theme="dark"] .badge.text-bg-warning {
+      color: #fde68a !important;
+      background-color: rgba(120, 53, 15, 0.76) !important;
+      border: 1px solid rgba(251, 191, 36, 0.36);
+    }
+    body[data-theme="dark"] .skeleton {
+      background: linear-gradient(90deg, rgba(51, 65, 85, 0.5) 20%, rgba(71, 85, 105, 0.7) 50%, rgba(51, 65, 85, 0.5) 80%);
+      background-size: 200% 100%;
+    }
+    body[data-theme="dark"] .dataset-meta .label { color: #9fb0c8; }
+    body[data-theme="dark"] .dataset-meta .value { color: #e5edf9; }
+    body[data-theme="dark"] .file-list { color: #9fb0c8; }
+    body[data-theme="dark"] .usage-card { box-shadow: 0 12px 26px rgba(2, 8, 23, 0.45); }
+    body[data-theme="dark"] .usage-bar-track { background: linear-gradient(90deg, rgba(30,64,175,0.22), rgba(59,130,246,0.34)); }
+    body[data-theme="dark"] .usage-bar-fill { background: linear-gradient(90deg, #60a5fa, #93c5fd); }
+    body[data-theme="dark"] .usage-bar-label { color: #a8b4c5; }
+    body[data-theme="dark"] .usage-bar-value { color: #dbeafe; }
+    body[data-theme="dark"] .usage-kpi-line { color: #9fb0c8; }
+    body[data-theme="dark"] .validation-panel { background: rgba(59,130,246,0.15); border-color: rgba(96,165,250,0.32); }
+    body[data-theme="dark"] .validation-panel.ok { background: rgba(16,185,129,0.18); }
+    body[data-theme="dark"] .validation-panel.warn { background: rgba(245,158,11,0.2); }
+    body[data-theme="dark"] .validation-panel.err { background: rgba(239,68,68,0.2); }
+    body[data-theme="dark"] .validation-title { color: #e5edf9; }
+    body[data-theme="dark"] .source-box { background: rgba(15, 23, 42, 0.55); }
+    @media (max-width: 1200px) { .metric-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); } }
+    @media (max-width: 768px) {
+      .layout { width: calc(100% - 1rem); }
+      .ops-bar { position: static; }
+      .metric-grid { grid-template-columns: 1fr; }
+      .usage-metric-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      .usage-bar-row { grid-template-columns: 64px 1fr 56px; }
+      .hero { padding: 1rem; }
+      .brand-logo {
+        width: 50px;
+        height: 50px;
+      }
+      .brand-name { font-size: 0.92rem; }
+      .table-scroll { max-height: 340px; }
+      pre#logPanel { height: 340px; max-height: 340px; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <a href="#mainContent" class="skip-link">Pular para conteúdo principal</a>
+  <main class="layout" id="mainContent" aria-live="polite">
     <section class="hero">
-      <div class="eyebrow">Admin Imports</div>
-      <h1>Painel de importacao da base</h1>
-      <p class="sub">
-        Use este painel para subir arquivos, validar a carga e importar
-        <strong>dSetores</strong>, <strong>dClientes</strong>,
-        <strong>Inadimplencia</strong>, <strong>Comodatos</strong>
-        e <strong>Giro</strong>.
-        Cada importacao substitui a base atual do dataset.
-      </p>
+      <div class="hero-brand">
+        <div class="brand-logo" aria-hidden="true">
+          <span class="brand-initial">P</span>
+        </div>
+        <div class="brand-copy">
+          <span class="brand-name">Pau Brasil</span>
+          <span class="brand-tag">distribuidora ambev</span>
+        </div>
+      </div>
+      <h1 class="hero-title h3"><span class="text-gradient">Central de Administração</span></h1>
+      <p class="hero-subtitle">Painel oficial da Pau Brasil para gerenciar importações, validar relatórios e controlar acessos sem fricção.</p>
     </section>
 
-    <section class="toolbar">
-      <div class="toolbar-grid">
-        <label id="apiTokenField">
-          Token da API
-          <input id="apiToken" type="password" placeholder="Informe o x-api-token">
-        </label>
-        <label>
-          Token admin
-          <input id="adminToken" type="password" placeholder="Informe o x-admin-token">
-        </label>
+    <section class="metric-grid">
+      <article class="metric"><span class="k">Bases</span><span class="v" id="metricDatasets">5</span></article>
+      <article class="metric"><span class="k">Usuarios RBAC</span><span class="v" id="metricUsers">0</span></article>
+      <article class="metric"><span class="k">Status</span><span class="v" id="metricRunning">Ocioso</span></article>
+      <article class="metric"><span class="k">Última Atualização</span><span class="v" id="metricLastSync">--:--</span></article>
+    </section>
+
+    <section class="ops-bar">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3 d-none" id="apiTokenField">
+          <label class="form-label small fw-semibold mb-1">Token API <span class="text-secondary fw-normal">(opcional)</span></label>
+          <input id="apiToken" type="password" class="form-control" placeholder="opcional no painel admin" aria-label="Token da Web API" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="col-md-3 d-none" id="adminTokenField">
+          <label class="form-label small fw-semibold mb-1">Token Admin/Financeiro</label>
+          <input id="adminToken" type="password" class="form-control" placeholder="admin ou financeiro" aria-label="Token administrativo ou financeiro" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold mb-1">Buscar Usuario</label>
+          <input id="accessUsersFilter" type="text" class="form-control" placeholder="Nome, número, perfil..." aria-label="Filtro de usuários permitidos">
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+          <button class="btn btn-primary w-100" id="refreshBtn" aria-label="Sincronizar dados do painel"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+          <button class="btn btn-outline-secondary" id="themeToggle" title="Alternar tema" aria-label="Alternar entre tema claro e escuro"><i class="bi bi-moon-stars"></i></button>
+          <button class="btn btn-outline-secondary" id="clearLogBtn" aria-label="Limpar log operacional" title="Limpar log"><i class="bi bi-eraser"></i></button>
+          <button class="btn btn-outline-secondary" id="logoutBtn" aria-label="Sair do painel" title="Sair"><i class="bi bi-box-arrow-right"></i></button>
+        </div>
       </div>
-      <div class="toolbar-actions">
-        <button class="primary" id="refreshBtn">Atualizar painel</button>
-        <button class="secondary" id="clearLogBtn">Limpar log</button>
-      </div>
-      <div class="statusbar">
-        <div class="status-pill" id="runningState">Sem importacao em andamento</div>
-        <div class="status-pill" id="lastJobState">Nenhuma execucao recente</div>
-        <div class="status-pill" id="authState">Aguardando tokens</div>
-      </div>
-      <div class="hint">
-        Se a autenticacao de API estiver desligada, o campo de token da API pode ficar vazio.
+      <div class="d-flex flex-wrap gap-2 mt-3" aria-live="polite">
+        <span class="pill" id="runningState" role="status">Nenhuma importação ativa</span>
+        <span class="pill" id="lastJobState" role="status">Sem execução recente</span>
+        <span class="pill" id="authState" role="status">Aguardando token</span>
       </div>
     </section>
 
-    <section class="grid" id="datasetGrid"></section>
-
-    <section class="panel">
-      <h3>Historico recente</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Dataset</th>
-            <th>Lote</th>
-            <th>Linhas</th>
-            <th>Referencia</th>
-            <th>Importado em</th>
-            <th>Arquivo</th>
-          </tr>
-        </thead>
-        <tbody id="historyBody">
-          <tr><td colspan="6">Carregando historico...</td></tr>
-        </tbody>
-      </table>
+    <section class="panel-card p-2 mb-3">
+      <ul class="nav nav-pills nav-fill gap-2" id="adminTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="operationsTab" data-bs-toggle="tab" data-bs-target="#operationsPane" type="button" role="tab" aria-controls="operationsPane" aria-selected="true">
+            <i class="bi bi-sliders me-1"></i>Operação
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="usageEvolutionTab" data-bs-toggle="tab" data-bs-target="#usageEvolutionPane" type="button" role="tab" aria-controls="usageEvolutionPane" aria-selected="false">
+            <i class="bi bi-whatsapp me-1"></i>Uso Evolution
+          </button>
+        </li>
+      </ul>
     </section>
 
-    <section class="panel">
-      <h3>Log da operacao</h3>
-      <pre id="logPanel">Painel pronto. Clique em "Atualizar painel".</pre>
-    </section>
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="operationsPane" role="tabpanel" aria-labelledby="operationsTab" tabindex="0">
+        <section class="row g-3 mb-3">
+          <div class="col-xl-6">
+            <article class="panel-card h-100" id="accessEditorCard">
+              <header class="px-3 pt-3 pb-2 border-bottom d-flex justify-content-between align-items-center">
+                <h2 class="h6 mb-0 fw-bold"><i class="bi bi-person-gear me-2 text-primary"></i>Acessos RBAC</h2>
+                <span class="badge text-bg-primary rounded-pill" id="accessUserCount">Carregando...</span>
+              </header>
+              <div class="p-3">
+                <div class="row g-2">
+                  <div class="col-sm-6">
+                    <label class="form-label small fw-semibold mb-1">Número</label>
+                    <input id="accessPhone" type="text" class="form-control" placeholder="5583999999999">
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label small fw-semibold mb-1">Nome</label>
+                    <input id="accessName" type="text" class="form-control" placeholder="Nome do usuário">
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label small fw-semibold mb-1">Perfil</label>
+                    <select id="accessRole" class="form-select"></select>
+                  </div>
+                  <div class="col-sm-6 d-flex align-items-end">
+                    <div class="form-check form-switch ms-1 mb-2">
+                      <input class="form-check-input" type="checkbox" id="accessActive" checked>
+                      <label class="form-check-label ms-2" for="accessActive">Ativo</label>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small fw-semibold mb-1">Escopo Comercial</label>
+                    <input id="accessScope" type="text" class="form-control" placeholder="Ex.: 3-400, 3-401">
+                    <div class="form-text" id="accessScopeHint">Escolha o perfil para ver o formato.</div>
+                  </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <button class="btn btn-success" id="saveAccessBtn"><i class="bi bi-check2-circle me-1"></i>Salvar</button>
+                  <button class="btn btn-outline-secondary" id="resetAccessBtn">Limpar</button>
+                </div>
+                <div class="form-text fw-semibold text-primary mt-2" id="accessModeHint">Modo: novo cadastro.</div>
+                <div class="mt-3 p-2 border rounded bg-light-subtle">
+                  <label class="form-label small fw-semibold mb-1">Cadastro em lote</label>
+                  <div class="form-text small mb-2">Formato: <code>numero;nome;perfil;escopo;status</code></div>
+                  <textarea id="accessBulk" class="form-control mono" rows="4" placeholder="5583999999999;Jose Silva;VENDEDOR;3-400;ativo"></textarea>
+                  <div class="form-text small mt-1">Perfis: VENDEDOR, GERENTE_VENDAS, DIRETOR_COMERCIAL, FINANCEIRO, ADMIN</div>
+                  <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-primary btn-sm" id="saveAccessBulkBtn">Importar Lote</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="resetAccessBulkBtn">Limpar Lote</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="col-xl-6">
+            <article class="panel-card h-100 allowed-users-card" id="allowedUsersCard">
+              <header class="px-3 pt-3 pb-3 border-bottom">
+                <h2 class="h6 mb-0 fw-bold"><i class="bi bi-people-fill me-2 text-primary"></i>Usuarios liberados</h2>
+              </header>
+              <div class="table-scroll allowed-users-container" id="allowedUsersContainer">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead>
+                    <tr class="text-uppercase small text-secondary">
+                      <th class="ps-3" scope="col">Número</th>
+                      <th scope="col">Nome</th>
+                      <th scope="col">Perfil</th>
+                      <th scope="col">Escopo</th>
+                      <th scope="col">Status</th>
+                      <th class="text-end pe-3" scope="col">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="accessUsersBody">
+                    <tr><td colspan="6" class="text-center py-4 text-secondary">Carregando usuários...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3" id="broadcastPanel">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <h2 class="h6 fw-bold mb-0"><i class="bi bi-send-check me-2 text-primary"></i>Disparo por filial</h2>
+            <span class="pill" id="broadcastStatus">Aguardando dados</span>
+          </div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="broadcastFilial">Filial</label>
+              <select id="broadcastFilial" class="form-select">
+                <option value="">Carregando...</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="broadcastAudience">Perfil</label>
+              <select id="broadcastAudience" class="form-select">
+                <option value="vendedor">Vendedores (RN)</option>
+                <option value="gerente_vendas">GVs</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="broadcastAction">Mensagem</label>
+              <select id="broadcastAction" class="form-select">
+                <option value="">Carregando...</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="broadcastDay">Dia</label>
+              <select id="broadcastDay" class="form-select">
+                <option value="hoje">Hoje</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="broadcastTargetMode">Destino</label>
+              <select id="broadcastTargetMode" class="form-select">
+                <option value="filial">Todos da filial</option>
+                <option value="specific">Numero especifico</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-none" id="broadcastTargetNumberWrap">
+              <label class="form-label small fw-semibold mb-1" for="broadcastTargetNumber">Numero para teste</label>
+              <input id="broadcastTargetNumber" class="form-control" placeholder="+55 83 99999-9999">
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-primary" id="broadcastPreviewBtn"><i class="bi bi-people me-1"></i>Prévia</button>
+              <button class="btn btn-success" id="broadcastRunBtn" disabled><i class="bi bi-send me-1"></i>Disparar</button>
+              <button class="btn btn-outline-secondary" id="broadcastRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Status</button>
+            </div>
+          </div>
+          <div class="form-text mt-2" id="broadcastSummary">Escolha uma filial e uma mensagem para ver os destinatários.</div>
+          <div class="table-scroll mt-3 broadcast-preview-scroll">
+            <table class="table table-sm table-hover align-middle mb-0 broadcast-preview-table">
+              <colgroup>
+                <col class="broadcast-select-col">
+                <col class="broadcast-name-col">
+                <col class="broadcast-role-col">
+                <col class="broadcast-phone-col">
+              </colgroup>
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th class="ps-3 broadcast-select-cell" scope="col">
+                    <label class="broadcast-select-label mb-0">
+                      <input class="form-check-input" type="checkbox" id="broadcastSelectAll" disabled>
+                      Todos
+                    </label>
+                  </th>
+                  <th scope="col">Nome</th>
+                  <th scope="col">Perfil</th>
+                  <th scope="col">Número</th>
+                </tr>
+              </thead>
+              <tbody id="broadcastRecipientsBody">
+                <tr><td colspan="4" class="text-center py-3 text-secondary">Sem prévia carregada</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Recolhas por operação</h2>
+              <div class="form-text">Atualização financeira separada por revenda/filial. O vendedor acompanha o status atual pelo comando <span class="mono">RECOLHAS</span>.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="recolhasCount">Aguardando dados</span>
+              <button class="btn btn-outline-primary btn-sm" id="recolhasRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar recolhas/baixas</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="recolhasStartDate">Período inicial</label>
+              <input type="date" class="form-control form-control-sm" id="recolhasStartDate">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="recolhasEndDate">Período final</label>
+              <input type="date" class="form-control form-control-sm" id="recolhasEndDate">
+            </div>
+            <div class="col-md-6 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-secondary btn-sm" id="recolhasPeriodClearBtn"><i class="bi bi-x-circle me-1"></i>Limpar período</button>
+              <span class="form-text align-self-center" id="recolhasPeriodLabel">Dashboard considerando todas as solicitações visíveis.</span>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-6 col-lg-5">
+              <label class="form-label small fw-semibold mb-1" for="recolhasImportFile">Importar CSV de recolhas</label>
+              <input type="file" class="form-control form-control-sm" id="recolhasImportFile" accept=".csv,text/csv">
+              <div class="form-text">Admin substitui tudo. Token financeiro substitui apenas as filiais liberadas.</div>
+            </div>
+            <div class="col-md-6 col-lg-4 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-primary btn-sm" id="recolhasImportBtn"><i class="bi bi-upload me-1"></i>Importar CSV</button>
+            </div>
+          </div>
+          <div class="recolha-dashboard-grid" id="recolhasDashboardCards"></div>
+          <div class="recolha-insights">
+            <div class="recolha-insight-box">
+              <div class="small fw-bold text-uppercase text-secondary mb-2">Principais motivos de não recolha</div>
+              <div id="recolhasReasonList" class="small"></div>
+            </div>
+            <div class="recolha-insight-box">
+              <div class="small fw-bold text-uppercase text-secondary mb-2">Resumo por operação</div>
+              <div id="recolhasOperationSummary" class="small"></div>
+            </div>
+          </div>
+          <div id="recolhasContainer">
+            <div class="text-center py-3 text-secondary">Informe o token admin ou financeiro e clique em Atualizar.</div>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <h2 class="h6 fw-bold mb-3"><i class="bi bi-database-up me-2 text-primary"></i>Carga de dados</h2>
+          <div class="dataset-grid" id="datasetGrid"></div>
+        </section>
+
+        <section class="row g-3">
+          <div class="col-xl-8">
+            <article class="panel-card h-100">
+              <header class="px-3 pt-3 pb-2 border-bottom">
+                <h2 class="h6 mb-0 fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>Histórico de importações</h2>
+              </header>
+              <div class="table-scroll">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead>
+                    <tr class="text-uppercase small text-secondary">
+                      <th class="ps-3" scope="col">Dataset</th>
+                      <th scope="col">Lote</th>
+                      <th scope="col">Linhas</th>
+                      <th scope="col">Ref. Data</th>
+                      <th scope="col">Criado em</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyBody">
+                    <tr><td colspan="5" class="text-center py-4 text-secondary">Carregando historico...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+          <div class="col-xl-4">
+            <article class="panel-card p-3 h-100" style="background:#07142b;border-color:#0f2d5e;">
+              <h2 class="h6 mb-2 fw-bold text-light"><i class="bi bi-terminal me-2 text-info"></i>Log Operacional</h2>
+              <pre id="logPanel" class="mono" role="log" aria-live="polite">Painel pronto. Clique em Atualizar.</pre>
+            </article>
+          </div>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="usageEvolutionPane" role="tabpanel" aria-labelledby="usageEvolutionTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <h2 class="h6 fw-bold mb-0"><i class="bi bi-whatsapp me-2 text-primary"></i>Uso do Bot no Evolution</h2>
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+              <div>
+                <label class="form-label small fw-semibold mb-1" for="usageWindow">Janela</label>
+                <select id="usageWindow" class="form-select form-select-sm" aria-label="Janela de analise de uso">
+                  <option value="1">1 dia</option>
+                  <option value="7" selected>7 dias</option>
+                  <option value="15">15 dias</option>
+                  <option value="30">30 dias</option>
+                </select>
+              </div>
+              <button class="btn btn-outline-primary btn-sm" id="usageRefreshBtn"><i class="bi bi-bar-chart-line me-1"></i>Atualizar uso</button>
+              <button class="btn btn-outline-success btn-sm" id="usageExportReportBtn"><i class="bi bi-download me-1"></i>Exportar relatório</button>
+            </div>
+          </div>
+
+          <div class="usage-metric-grid mb-3">
+            <article class="usage-card"><div class="title">Mensagens</div><div class="value" id="usageMetricMessages">--</div></article>
+            <article class="usage-card"><div class="title">Números Únicos</div><div class="value" id="usageMetricUnique">--</div></article>
+            <article class="usage-card"><div class="title">Processadas</div><div class="value" id="usageMetricProcessed">--</div></article>
+            <article class="usage-card"><div class="title">Bloqueios RBAC</div><div class="value" id="usageMetricBlocked">--</div></article>
+            <article class="usage-card"><div class="title">Erros Totais</div><div class="value" id="usageMetricErrors">--</div></article>
+            <article class="usage-card"><div class="title">Negativas Enviadas</div><div class="value" id="usageMetricDeniedSent">--</div></article>
+            <article class="usage-card"><div class="title">Negativas Suprimidas</div><div class="value" id="usageMetricDeniedSuppressed">--</div></article>
+            <article class="usage-card"><div class="title">Eventos Totais</div><div class="value" id="usageMetricEvents">--</div></article>
+          </div>
+
+          <div class="row g-3 mb-1">
+            <div class="col-xl-7">
+              <div class="border rounded-3 p-3 h-100">
+                <h3 class="h6 fw-bold mb-2"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Mensagens por Dia (queue accepted)</h3>
+                <div class="usage-bars" id="usageDailyBars">
+                  <div class="small text-secondary">Carregando serie diaria...</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-xl-5">
+              <div class="border rounded-3 p-3 h-100">
+                <h3 class="h6 fw-bold mb-2"><i class="bi bi-telephone-fill me-2 text-primary"></i>Top Usuarios</h3>
+                <div class="table-scroll" style="max-height: 250px;">
+                  <table class="table table-sm table-hover align-middle mb-0">
+                    <thead>
+                      <tr class="text-uppercase small text-secondary">
+                        <th scope="col">Usuario</th>
+                        <th scope="col" class="text-end">Msgs</th>
+                        <th scope="col" class="text-end">Ok</th>
+                        <th scope="col" class="text-end">Bloq</th>
+                      </tr>
+                    </thead>
+                    <tbody id="usageTopNumbersBody">
+                      <tr><td colspan="4" class="text-center py-3 text-secondary">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-xl-6">
+              <div class="border rounded-3 p-3 h-100">
+                <h3 class="h6 fw-bold mb-2"><i class="bi bi-diagram-3 me-2 text-primary"></i>Distribuição de Eventos</h3>
+                <div class="table-scroll" style="max-height: 240px;">
+                  <table class="table table-sm table-hover align-middle mb-0">
+                    <thead>
+                      <tr class="text-uppercase small text-secondary">
+                        <th scope="col">Evento</th>
+                        <th scope="col">Decisao</th>
+                        <th scope="col" class="text-end">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="usageBreakdownBody">
+                      <tr><td colspan="3" class="text-center py-3 text-secondary">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="col-xl-6">
+              <div class="border rounded-3 p-3 h-100">
+                <h3 class="h6 fw-bold mb-2"><i class="bi bi-activity me-2 text-primary"></i>Eventos Recentes (Evolution)</h3>
+                <div class="table-scroll" style="max-height: 240px;">
+                  <table class="table table-sm table-hover align-middle mb-0">
+                    <thead>
+                      <tr class="text-uppercase small text-secondary">
+                        <th scope="col">Horario</th>
+                        <th scope="col">Evento</th>
+                        <th scope="col">Decisao</th>
+                        <th scope="col">Número</th>
+                        <th scope="col">Motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody id="usageRecentBody">
+                      <tr><td colspan="5" class="text-center py-3 text-secondary">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <h5 class="modal-title fw-bold" id="confirmModalTitle">Confirmar acao</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <p class="mb-0" id="confirmModalText">Deseja continuar?</p>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="confirmModalCancel">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="confirmModalOk">Confirmar</button>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    window.__apiAuthEnabled = __API_AUTH_ENABLED__;
-    const datasetsOrder = ["dsetores", "dclientes", "inadimplencia", "comodatos", "giro"];
-    const pollIntervalMs = 3000;
-
-    const state = {
-      status: null,
-      history: [],
-      busy: false,
-      pollTimer: null,
-      lastLoggedJobId: "",
+    const CONFIG = {
+      api: "",
+      endpoints: {
+        panel: {
+          session: "/api/admin/panel/session",
+          logout: "/api/admin/panel/logout"
+        },
+        access: {
+          list: "/api/admin/access/users",
+          save: "/api/admin/access/users",
+          importBulk: "/api/admin/access/users/bulk",
+          roles: "/api/admin/access/roles"
+        },
+        import: {
+          status: "/api/admin/imports/status",
+          history: "/api/admin/imports/history",
+          validate: "/api/admin/imports/validate",
+          run: "/api/admin/imports/run",
+          upload: "/api/admin/imports/upload"
+        },
+        usage: {
+          evolution: "/api/admin/usage/evolution",
+          evolutionReport: "/api/admin/usage/evolution/report"
+        },
+        broadcast: {
+          options: "/api/admin/broadcast/options",
+          preview: "/api/admin/broadcast/preview",
+          run: "/api/admin/broadcast/run",
+          status: "/api/admin/broadcast/status"
+        },
+        recolhas: {
+          list: "/api/admin/recolhas",
+          update: "/api/admin/recolhas",
+          bulk: "/api/admin/recolhas/bulk",
+          importCsv: "/api/admin/recolhas/import",
+          delete: "/api/admin/recolhas"
+        }
+      },
+      roles: {
+        VENDEDOR: "Vendedor",
+        GERENTE_VENDAS: "Gerente de Vendas (GV)",
+        DIRETOR_COMERCIAL: "Diretor Comercial (DC)",
+        FINANCEIRO: "Financeiro",
+        ADMIN: "Administrador / TI"
+      },
+      datasets: [
+        { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2" },
+        { id: "dClientes", name: "Carteira de Clientes", icon: "bi-person-badge" },
+        { id: "Inadimplencia", name: "Inadimplencia Vencimento", icon: "bi-graph-down-arrow" },
+        { id: "Comodatos", name: "Equipamentos em Comodato", icon: "bi-box-seam" },
+        { id: "Giro", name: "Giro de Vasilhame", icon: "bi-arrow-repeat" },
+        { id: "DocumentacaoPendente", name: "Documentacao Pendente", icon: "bi-file-earmark-check" },
+        { id: "PrazoLimite", name: "Prazo e Limite", icon: "bi-cash-stack" }
+      ]
     };
 
-    const elements = {
-      apiTokenField: document.getElementById("apiTokenField"),
+    const state = {
+      logs: [], history: [], status: null,
+      tokens: { api: "", admin: "" },
+      panel: { mode: "", isAdmin: false, filiais: [], canBroadcast: true },
+      accessUsers: [], accessEditing: null, lastSyncAt: null,
+      evolutionUsage: null,
+      broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
+      recolhas: { total: 0, operations: [] },
+      recolhasFilter: { start: "", end: "" },
+      datasetValidation: {},
+      datasetBusy: {}
+    };
+
+    const DATASET_MAP = {
+      dSetores: "dsetores",
+      dClientes: "dclientes",
+      Inadimplencia: "inadimplencia",
+      Comodatos: "comodatos",
+      Giro: "giro",
+      DocumentacaoPendente: "documentacao_pendente",
+      PrazoLimite: "prazo_limite"
+    };
+    const DATASET_UPLOAD_META = {
+      dSetores: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
+      dClientes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
+      Inadimplencia: { accept: ".csv", mode: "multiple", label: "CSV do Dataset(s)", emptyHint: "Selecione um ou mais arquivos CSV." },
+      Comodatos: { accept: ".csv", mode: "multiple", label: "CSV do Dataset(s)", emptyHint: "Selecione um ou mais arquivos CSV." },
+      Giro: { accept: ".xlsx,.xlsm,.xls", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm ou .xls)." },
+      DocumentacaoPendente: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
+      PrazoLimite: { accept: ".xlsx,.xlsm,.xls,.csv", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm, .xls) ou CSV." }
+    };
+    const DATASET_TIMEOUTS = {
+      dClientes: { validateMs: 600000, importMs: 900000 },
+      default: { validateMs: 180000, importMs: 300000 }
+    };
+
+    const E = {
+      main: document.getElementById("mainContent"),
+      log: document.getElementById("logPanel"),
       apiToken: document.getElementById("apiToken"),
+      apiTokenField: document.getElementById("apiTokenField"),
       adminToken: document.getElementById("adminToken"),
-      refreshBtn: document.getElementById("refreshBtn"),
-      clearLogBtn: document.getElementById("clearLogBtn"),
-      datasetGrid: document.getElementById("datasetGrid"),
-      historyBody: document.getElementById("historyBody"),
-      logPanel: document.getElementById("logPanel"),
+      accessUsersFilter: document.getElementById("accessUsersFilter"),
+      themeToggle: document.getElementById("themeToggle"),
+      logoutBtn: document.getElementById("logoutBtn"),
       runningState: document.getElementById("runningState"),
       lastJobState: document.getElementById("lastJobState"),
       authState: document.getElementById("authState"),
+      grid: document.getElementById("datasetGrid"),
+      historyTable: document.getElementById("historyBody"),
+      accessRole: document.getElementById("accessRole"),
+      accessScopeHint: document.getElementById("accessScopeHint"),
+      accessModeHint: document.getElementById("accessModeHint"),
+      accessUsersTable: document.getElementById("accessUsersBody"),
+      accessUserCount: document.getElementById("accessUserCount"),
+      accessBulk: document.getElementById("accessBulk"),
+      metricDatasets: document.getElementById("metricDatasets"),
+      metricUsers: document.getElementById("metricUsers"),
+      metricRunning: document.getElementById("metricRunning"),
+      metricLastSync: document.getElementById("metricLastSync"),
+      usageWindow: document.getElementById("usageWindow"),
+      usageExportReportBtn: document.getElementById("usageExportReportBtn"),
+      usageDailyBars: document.getElementById("usageDailyBars"),
+      usageTopNumbersBody: document.getElementById("usageTopNumbersBody"),
+      usageBreakdownBody: document.getElementById("usageBreakdownBody"),
+      usageRecentBody: document.getElementById("usageRecentBody"),
+      usageMetricMessages: document.getElementById("usageMetricMessages"),
+      usageMetricUnique: document.getElementById("usageMetricUnique"),
+      usageMetricProcessed: document.getElementById("usageMetricProcessed"),
+      usageMetricBlocked: document.getElementById("usageMetricBlocked"),
+      usageMetricErrors: document.getElementById("usageMetricErrors"),
+      usageMetricDeniedSent: document.getElementById("usageMetricDeniedSent"),
+      usageMetricDeniedSuppressed: document.getElementById("usageMetricDeniedSuppressed"),
+      usageMetricEvents: document.getElementById("usageMetricEvents"),
+      accessEditorCard: document.getElementById("accessEditorCard"),
+      allowedUsersCard: document.getElementById("allowedUsersCard"),
+      allowedUsersContainer: document.getElementById("allowedUsersContainer"),
+      usageEvolutionTab: document.getElementById("usageEvolutionTab"),
+      broadcastPanel: document.getElementById("broadcastPanel"),
+      broadcastFilial: document.getElementById("broadcastFilial"),
+      broadcastAudience: document.getElementById("broadcastAudience"),
+      broadcastAction: document.getElementById("broadcastAction"),
+      broadcastDay: document.getElementById("broadcastDay"),
+      broadcastTargetMode: document.getElementById("broadcastTargetMode"),
+      broadcastTargetNumber: document.getElementById("broadcastTargetNumber"),
+      broadcastTargetNumberWrap: document.getElementById("broadcastTargetNumberWrap"),
+      broadcastPreviewBtn: document.getElementById("broadcastPreviewBtn"),
+      broadcastRunBtn: document.getElementById("broadcastRunBtn"),
+      broadcastRefreshBtn: document.getElementById("broadcastRefreshBtn"),
+      broadcastStatus: document.getElementById("broadcastStatus"),
+      broadcastSummary: document.getElementById("broadcastSummary"),
+      broadcastRecipientsBody: document.getElementById("broadcastRecipientsBody"),
+      broadcastSelectAll: document.getElementById("broadcastSelectAll"),
+      recolhasContainer: document.getElementById("recolhasContainer"),
+      recolhasCount: document.getElementById("recolhasCount"),
+      recolhasRefreshBtn: document.getElementById("recolhasRefreshBtn"),
+      recolhasStartDate: document.getElementById("recolhasStartDate"),
+      recolhasEndDate: document.getElementById("recolhasEndDate"),
+      recolhasPeriodClearBtn: document.getElementById("recolhasPeriodClearBtn"),
+      recolhasPeriodLabel: document.getElementById("recolhasPeriodLabel"),
+      recolhasImportFile: document.getElementById("recolhasImportFile"),
+      recolhasImportBtn: document.getElementById("recolhasImportBtn"),
+      recolhasDashboardCards: document.getElementById("recolhasDashboardCards"),
+      recolhasReasonList: document.getElementById("recolhasReasonList"),
+      recolhasOperationSummary: document.getElementById("recolhasOperationSummary"),
+      confirmModalText: document.getElementById("confirmModalText"),
+      confirmModalOk: document.getElementById("confirmModalOk"),
+      confirmModalCancel: document.getElementById("confirmModalCancel")
     };
 
-    function loadTokens() {
-      elements.apiToken.value = sessionStorage.getItem("adminImportApiToken") || "";
-      elements.adminToken.value = sessionStorage.getItem("adminImportAdminToken") || "";
-      if (!window.__apiAuthEnabled) {
-        elements.apiTokenField.style.display = "none";
+    const confirmModalInstance = document.getElementById("confirmModal")
+      ? new bootstrap.Modal(document.getElementById("confirmModal"), { backdrop: "static", keyboard: true })
+      : null;
+    let allowedUsersCardResizeObserver = null;
+
+    function init() {
+      applyTheme(localStorage.getItem("bot_admin_theme") || "dark");
+
+      localStorage.removeItem("bot_api_token");
+      localStorage.removeItem("bot_admin_token");
+
+      updateTokens();
+      buildGrid();
+      buildRolesOption();
+      updateScopeHint();
+      updateMetrics();
+      renderEvolutionUsage();
+      renderRecolhas();
+      setupAllowedUsersCardSizing();
+
+      document.getElementById("refreshBtn").addEventListener("click", syncAll);
+      E.themeToggle.addEventListener("click", toggleTheme);
+      if (E.logoutBtn) E.logoutBtn.addEventListener("click", logoutPanel);
+      document.getElementById("clearLogBtn").addEventListener("click", () => { state.logs = []; renderLogs(); });
+      document.getElementById("saveAccessBtn").addEventListener("click", saveAccess);
+      document.getElementById("resetAccessBtn").addEventListener("click", resetAccessForm);
+      document.getElementById("saveAccessBulkBtn").addEventListener("click", saveBulkAccess);
+      document.getElementById("resetAccessBulkBtn").addEventListener("click", () => { E.accessBulk.value = ""; });
+      document.getElementById("usageRefreshBtn").addEventListener("click", () => syncEvolutionUsage({ silent: false }));
+      if (E.usageExportReportBtn) {
+        E.usageExportReportBtn.addEventListener("click", exportEvolutionAverageReport);
       }
-      updateAuthState();
-    }
+      if (E.broadcastPreviewBtn) E.broadcastPreviewBtn.addEventListener("click", previewBroadcast);
+      if (E.broadcastRunBtn) E.broadcastRunBtn.addEventListener("click", runBroadcast);
+      if (E.broadcastRefreshBtn) E.broadcastRefreshBtn.addEventListener("click", () => syncBroadcastStatus({ silent: false }));
+      if (E.broadcastFilial) E.broadcastFilial.addEventListener("change", resetBroadcastPreview);
+      if (E.broadcastAudience) E.broadcastAudience.addEventListener("change", () => { renderBroadcastOptions(); resetBroadcastPreview(); });
+      if (E.broadcastAction) E.broadcastAction.addEventListener("change", () => { syncBroadcastDayState(); resetBroadcastPreview(); });
+      if (E.broadcastDay) E.broadcastDay.addEventListener("change", resetBroadcastPreview);
+      if (E.broadcastTargetMode) E.broadcastTargetMode.addEventListener("change", () => { syncBroadcastTargetModeState(); resetBroadcastPreview(); });
+      if (E.broadcastTargetNumber) E.broadcastTargetNumber.addEventListener("input", resetBroadcastPreview);
+      if (E.broadcastSelectAll) E.broadcastSelectAll.addEventListener("change", toggleBroadcastSelectAll);
+      if (E.recolhasRefreshBtn) E.recolhasRefreshBtn.addEventListener("click", () => syncRecolhas({ silent: false }));
+      if (E.recolhasStartDate) E.recolhasStartDate.addEventListener("change", updateRecolhasPeriodFilter);
+      if (E.recolhasEndDate) E.recolhasEndDate.addEventListener("change", updateRecolhasPeriodFilter);
+      if (E.recolhasPeriodClearBtn) E.recolhasPeriodClearBtn.addEventListener("click", clearRecolhasPeriodFilter);
+      if (E.recolhasImportBtn) E.recolhasImportBtn.addEventListener("click", importRecolhasCsv);
+      E.accessRole.addEventListener("change", updateScopeHint);
+      E.accessUsersFilter.addEventListener("input", renderAccess);
+      if (E.usageWindow) {
+        E.usageWindow.addEventListener("change", () => {
+          if (hasPanelAuth()) syncEvolutionUsage({ silent: false });
+        });
+      }
 
-    function saveTokens() {
-      sessionStorage.setItem("adminImportApiToken", elements.apiToken.value.trim());
-      sessionStorage.setItem("adminImportAdminToken", elements.adminToken.value.trim());
-      updateAuthState();
-    }
-
-    function updateAuthState() {
-      const adminReady = Boolean(elements.adminToken.value.trim());
-      const apiReady = !window.__apiAuthEnabled || Boolean(elements.apiToken.value.trim());
-      elements.authState.textContent = adminReady && apiReady
-        ? "Tokens carregados"
-        : "Aguardando tokens";
-    }
-
-    function setBusy(busy) {
-      state.busy = busy;
-      document.querySelectorAll("button").forEach((button) => {
-        if (button.id === "clearLogBtn") {
-          button.disabled = false;
-          return;
+      document.addEventListener("keydown", (evt) => {
+        if (evt.key === "/" && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
+          evt.preventDefault();
+          E.accessUsersFilter.focus();
         }
-        button.disabled = busy;
+        if (evt.altKey && evt.key.toLowerCase() === "r") {
+          evt.preventDefault();
+          syncAll();
+        }
       });
+
+      syncAll();
     }
 
-    function buildHeaders(json = true) {
-      const headers = {};
-      if (json) headers["Content-Type"] = "application/json";
-      const apiToken = elements.apiToken.value.trim();
-      const adminToken = elements.adminToken.value.trim();
-      if (apiToken) headers["x-api-token"] = apiToken;
-      if (adminToken) headers["x-admin-token"] = adminToken;
-      return headers;
+    function syncAllowedUsersCardSizing() {
+      if (!E.accessEditorCard || !E.allowedUsersCard || !E.allowedUsersContainer) return;
+
+      E.allowedUsersCard.style.height = "";
+      E.allowedUsersContainer.style.maxHeight = "";
+
+      const leftRect = E.accessEditorCard.getBoundingClientRect();
+      const targetHeight = Math.max(0, Math.floor(leftRect.height));
+      if (!targetHeight) return;
+
+      E.allowedUsersCard.style.height = `${targetHeight}px`;
+
+      const header = E.allowedUsersCard.querySelector("header");
+      const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+      const verticalPadding = 8;
+      const maxTableHeight = Math.max(140, targetHeight - headerHeight - verticalPadding);
+      E.allowedUsersContainer.style.maxHeight = `${maxTableHeight}px`;
     }
 
-    function appendLog(title, payload) {
-      const stamp = new Date().toLocaleString("pt-BR");
-      const content = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
-      const block = `[${stamp}] ${title}\n${content}`;
-      elements.logPanel.textContent = `${block}\n\n${elements.logPanel.textContent}`.trim();
+    function setupAllowedUsersCardSizing() {
+      syncAllowedUsersCardSizing();
+      requestAnimationFrame(() => syncAllowedUsersCardSizing());
+
+      if (allowedUsersCardResizeObserver) {
+        allowedUsersCardResizeObserver.disconnect();
+        allowedUsersCardResizeObserver = null;
+      }
+
+      if (typeof ResizeObserver !== "undefined" && E.accessEditorCard) {
+        allowedUsersCardResizeObserver = new ResizeObserver(() => syncAllowedUsersCardSizing());
+        allowedUsersCardResizeObserver.observe(E.accessEditorCard);
+      }
+
+      window.addEventListener("resize", syncAllowedUsersCardSizing);
     }
 
-    async function apiFetch(path, options = {}) {
-      const response = await fetch(path, options);
-      let payload = null;
+    function applyTheme(theme) {
+      const normalized = theme === "dark" ? "dark" : "light";
+      document.body.setAttribute("data-theme", normalized);
+      localStorage.setItem("bot_admin_theme", normalized);
+      if (!E.themeToggle) return;
+      E.themeToggle.innerHTML = normalized === "dark"
+        ? '<i class="bi bi-sun"></i>'
+        : '<i class="bi bi-moon-stars"></i>';
+      E.themeToggle.classList.toggle("btn-outline-light", normalized === "dark");
+      E.themeToggle.classList.toggle("btn-outline-secondary", normalized !== "dark");
+    }
+
+    function toggleTheme() {
+      const current = document.body.getAttribute("data-theme") === "dark" ? "dark" : "light";
+      applyTheme(current === "dark" ? "light" : "dark");
+    }
+
+    function setSyncState(syncing) {
+      const btn = document.getElementById("refreshBtn");
+      btn.disabled = syncing;
+      btn.innerHTML = syncing ? '<span class="spinner-border spinner-border-sm me-1"></span>Atualizando' : '<i class="bi bi-arrow-repeat me-1"></i>Atualizar';
+      if (E.main) E.main.setAttribute("aria-busy", syncing ? "true" : "false");
+      if (syncing) showSkeletonLoading();
+    }
+
+    function showSkeletonLoading() {
+      E.historyTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="5" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
+      E.accessUsersTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="6" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
+      if (E.recolhasContainer) {
+        E.recolhasContainer.innerHTML = '<div class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>';
+      }
+      CONFIG.datasets.forEach(ds => {
+        const card = document.getElementById(`card-${ds.id}`);
+        if (card) card.classList.add("is-loading");
+      });
+      renderEvolutionUsageLoading();
+    }
+
+    function updateMetrics() {
+      E.metricDatasets.textContent = String(CONFIG.datasets.length);
+      E.metricUsers.textContent = String(state.accessUsers.length);
+      const running = Boolean(state.status && state.status.running);
+      E.metricRunning.textContent = running ? "Rodando" : "Ocioso";
+      E.metricLastSync.textContent = state.lastSyncAt ? state.lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--";
+    }
+
+    function toApiDataset(dsId) {
+      return DATASET_MAP[dsId] || String(dsId || "").toLowerCase();
+    }
+
+    function fromApiDataset(dsName) {
+      const name = String(dsName || "").toLowerCase();
+      const found = Object.entries(DATASET_MAP).find(([, apiName]) => apiName === name);
+      return found ? found[0] : dsName;
+    }
+
+    function datasetTimeouts(dsId) {
+      return DATASET_TIMEOUTS[dsId] || DATASET_TIMEOUTS.default;
+    }
+
+    function roleToApi(roleUi) {
+      const role = normalizeTextForSearch(roleUi).replace(/\s+/g, "_");
+      if (role === "vendedor" || role === "rn") return "vendedor";
+      if (role === "gerente_vendas" || role === "gerente_de_vendas" || role === "gv") return "gerente_vendas";
+      if (role === "diretor_comercial" || role === "dc") return "diretor_comercial";
+      if (role === "financeiro" || role === "fin") return "financeiro";
+      return "admin";
+    }
+
+    function roleFromApi(user) {
+      if (user.role) return String(user.role).toUpperCase();
+      const roles = Array.isArray(user.roles) ? user.roles : [];
+      const primary = String(roles[0] || "vendedor").toLowerCase();
+      if (primary === "vendedor") return "VENDEDOR";
+      if (primary === "gerente_vendas") return "GERENTE_VENDAS";
+      if (primary === "diretor_comercial") return "DIRETOR_COMERCIAL";
+      if (primary === "financeiro") return "FINANCEIRO";
+      return "ADMIN";
+    }
+
+    function normalizeScopeTokenForApi(token) {
+      return String(token || "").trim().replace(/-/g, "_");
+    }
+
+    function normalizeScopeTokenForUi(token) {
+      return String(token || "").trim().replace(/_/g, "-");
+    }
+
+    function normalizePhoneDigits(value) {
+      return String(value || "").replace(/\D/g, "");
+    }
+
+    function comparablePhoneDigits(value) {
+      const digits = normalizePhoneDigits(value);
+      if (digits.startsWith("55") && digits.length === 13 && digits.charAt(4) === "9") {
+        return `${digits.slice(0, 4)}${digits.slice(5)}`;
+      }
+      return digits;
+    }
+
+    function formatPhoneForUi(value) {
+      const digits = normalizePhoneDigits(value);
+      if (!digits) return "-";
+      if (digits.startsWith("55")) {
+        const local = digits.slice(2);
+        if (local.length === 11) return `+55 (${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+        if (local.length === 10) return `+55 (${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+      }
+      if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+      if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+      return digits;
+    }
+
+    function normalizeTextForSearch(value) {
+      return String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim()
+        .toLowerCase();
+    }
+
+    function normalizeStatusText(value) {
+      return normalizeTextForSearch(value).replace(/\s+/g, "");
+    }
+
+    function normalizeUserForUi(user) {
+      const role = roleFromApi(user);
+      const sectors = Array.isArray(user.sectors) ? user.sectors : [];
+      const gvVdes = Array.isArray(user.gv_vdes) ? user.gv_vdes : [];
+      const fallbackScope = (role === "VENDEDOR" || role === "FINANCEIRO") ? sectors : gvVdes;
+      const rawPhone = user.whatsapp_phone_number || user.phone_number || "";
+      return {
+        phone: rawPhone,
+        phone_display: formatPhoneForUi(rawPhone),
+        phone_comparable: comparablePhoneDigits(rawPhone),
+        name: user.display_name || user.name || "",
+        role,
+        scope: Array.isArray(user.commercial_scope) && user.commercial_scope.length
+          ? user.commercial_scope
+          : fallbackScope.map(normalizeScopeTokenForUi),
+        active: user.is_active !== false
+      };
+    }
+
+    function buildRolesOption() {
+      E.accessRole.innerHTML = Object.entries(CONFIG.roles).map(([k,v]) => `<option value="${escapeHtml(k)}">${escapeHtml(v)}</option>`).join("");
+    }
+
+    function updateScopeHint() {
+      const role = E.accessRole.value;
+      if (role === "VENDEDOR") E.accessScopeHint.innerHTML = 'Vendedor aceita uma ou mais chaves filial-setor. Ex.: <span class="mono">3-400, 3-401</span>.';
+      else if (role === "GERENTE_VENDAS") E.accessScopeHint.innerHTML = 'Gerente de Vendas aceita uma ou mais chaves filial-GV. Ex.: <span class="mono">3-4, 4-5</span>.';
+      else if (role === "DIRETOR_COMERCIAL") E.accessScopeHint.innerHTML = 'Diretor Comercial aceita uma ou mais chaves filial-DC. Ex.: <span class="mono">3-1, 4-2</span>.';
+      else if (role === "FINANCEIRO") E.accessScopeHint.innerHTML = 'Financeiro aceita uma ou mais filiais. Ex.: <span class="mono">3, 4</span>.';
+      else E.accessScopeHint.textContent = "Admin tem acesso total e nao usa escopo.";
+    }
+
+    function hasPanelAuth() {
+      return Boolean(state.tokens.admin || (state.panel && state.panel.mode));
+    }
+
+    function updateTokens() {
+      const api = E.apiToken.value.trim();
+      const admin = E.adminToken.value.trim();
+      state.tokens.api = api;
+      state.tokens.admin = admin;
+      localStorage.removeItem("bot_api_token");
+      localStorage.removeItem("bot_admin_token");
+      if (admin) { E.authState.textContent = "Token informado"; E.authState.className = "pill warn"; }
+      else if (state.panel && state.panel.mode) { E.authState.textContent = "Sessao ativa"; E.authState.className = "pill ok"; }
+      else { E.authState.textContent = "Validando sessao"; E.authState.className = "pill warn"; }
+    }
+
+    async function logoutPanel() {
       try {
-        payload = await response.json();
-      } catch {
-        payload = await response.text();
+        await fetch(CONFIG.endpoints.panel.logout, { method: "POST", credentials: "same-origin" });
+      } catch (_) {
+        // Mesmo com falha de rede, sair da tela evita manter o painel aberto.
       }
-      if (!response.ok) {
-        throw new Error(typeof payload === "string" ? payload : (payload.detail || "Falha na requisicao."));
-      }
-      return payload;
+      window.location.assign("/admin/login");
     }
 
-    function queuePollIfNeeded() {
-      if (state.pollTimer) {
-        clearTimeout(state.pollTimer);
-        state.pollTimer = null;
+    function addLog(msg, type = "info") {
+      const ts = new Date().toISOString().split("T")[1].substring(0, 8);
+      const prefix = type === "err" ? "[ERR]" : type === "ok" ? "[OK]" : type === "warn" ? "[WRN]" : "[INF]";
+      state.logs.push(`[${ts}] ${prefix} ${msg}`);
+      if (state.logs.length > 400) state.logs.shift();
+      renderLogs();
+    }
+
+    function renderLogs() {
+      E.log.textContent = state.logs.length ? state.logs.join("\n") : "Sem logs.";
+      E.log.scrollTop = E.log.scrollHeight;
+    }
+
+    async function req(path, opts = {}) {
+      const timeoutMs = Number(opts.timeoutMs || 45000);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      if (!opts.headers) opts.headers = {};
+      if (state.tokens.api) opts.headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) opts.headers["x-admin-token"] = state.tokens.admin;
+
+      const fetchOpts = { ...opts, credentials: "same-origin", signal: controller.signal };
+      delete fetchOpts.timeoutMs;
+
+      let res;
+      try {
+        res = await fetch(CONFIG.api + path, fetchOpts);
+      } catch (err) {
+        if (err && err.name === "AbortError") {
+          throw new Error("Tempo de resposta excedido. Tente novamente.");
+        }
+        if (err && String(err.message || "").toLowerCase().includes("failed to fetch")) {
+          throw new Error("Não consegui falar com a API do painel. Se você abriu o admin pelo gateway, atualize a página e tente novamente.");
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
       }
-      if (state.status?.running) {
-        state.pollTimer = window.setTimeout(refreshPanel, pollIntervalMs);
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (res.status === 401 && !state.tokens.admin) {
+          window.location.assign("/admin/login");
+        }
+        throw new Error(data && data.detail ? data.detail : `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    async function syncPanelSession() {
+      const payload = await req(CONFIG.endpoints.panel.session, { timeoutMs: 20000 });
+      state.panel = {
+        mode: payload && payload.mode ? String(payload.mode) : "admin",
+        isAdmin: Boolean(payload && payload.is_admin),
+        filiais: Array.isArray(payload && payload.filiais) ? payload.filiais.map(String) : [],
+        canBroadcast: payload && Object.prototype.hasOwnProperty.call(payload, "can_broadcast")
+          ? Boolean(payload.can_broadcast)
+          : true
+      };
+      applyPanelPermissions();
+      return state.panel;
+    }
+
+    function applyPanelPermissions() {
+      const isFinance = state.panel && state.panel.mode === "financeiro" && !state.panel.isAdmin;
+      const adminOnlyDisplay = isFinance ? "none" : "";
+      const broadcastDisplay = state.panel && state.panel.canBroadcast === false ? "none" : "";
+      if (E.accessEditorCard) E.accessEditorCard.style.display = adminOnlyDisplay;
+      if (E.allowedUsersCard) E.allowedUsersCard.style.display = adminOnlyDisplay;
+      if (E.broadcastPanel) E.broadcastPanel.style.display = broadcastDisplay;
+      if (E.usageEvolutionTab && E.usageEvolutionTab.parentElement) {
+        E.usageEvolutionTab.parentElement.style.display = adminOnlyDisplay;
+      }
+      if (isFinance) {
+        const activeUsagePane = document.getElementById("usageEvolutionPane");
+        if (activeUsagePane && activeUsagePane.classList.contains("active")) {
+          const operationsTab = document.getElementById("operationsTab");
+          if (operationsTab && window.bootstrap) bootstrap.Tab.getOrCreateInstance(operationsTab).show();
+        }
+        const filiais = state.panel.filiais && state.panel.filiais.length ? state.panel.filiais.join(", ") : "-";
+        E.authState.textContent = `Financeiro: filial ${filiais}`;
+        E.authState.className = "pill ok";
+      } else if (state.panel && state.panel.isAdmin) {
+        E.authState.textContent = "Admin: acesso total";
+        E.authState.className = "pill ok";
+      }
+      syncAllowedUsersCardSizing();
+    }
+
+    function getUsageWindowDays() {
+      const raw = Number(E.usageWindow && E.usageWindow.value ? E.usageWindow.value : 7);
+      if (!Number.isFinite(raw)) return 7;
+      return Math.max(1, Math.min(30, Math.trunc(raw)));
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatNumber(value) {
+      const n = Number(value || 0);
+      return Number.isFinite(n) ? n.toLocaleString("pt-BR") : "0";
+    }
+
+    function formatDate(value) {
+      const text = String(value || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+        const parts = text.split("-");
+        return `${parts[2]}/${parts[1]}`;
+      }
+      const dt = new Date(text);
+      if (Number.isNaN(dt.getTime())) return "--/--";
+      return dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    }
+
+    function formatDateTime(value) {
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return "-";
+      return dt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function setUsageMetric(element, value) {
+      if (!element) return;
+      element.textContent = value;
+    }
+
+    function renderEvolutionUsageLoading() {
+      setUsageMetric(E.usageMetricMessages, "--");
+      setUsageMetric(E.usageMetricUnique, "--");
+      setUsageMetric(E.usageMetricProcessed, "--");
+      setUsageMetric(E.usageMetricBlocked, "--");
+      setUsageMetric(E.usageMetricErrors, "--");
+      setUsageMetric(E.usageMetricDeniedSent, "--");
+      setUsageMetric(E.usageMetricDeniedSuppressed, "--");
+      setUsageMetric(E.usageMetricEvents, "--");
+      if (E.usageDailyBars) {
+        E.usageDailyBars.innerHTML = '<div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div>';
+      }
+      if (E.usageTopNumbersBody) {
+        E.usageTopNumbersBody.innerHTML = '<tr><td colspan="4" class="py-3"><div class="skeleton skeleton-line"></div></td></tr>';
+      }
+      if (E.usageBreakdownBody) {
+        E.usageBreakdownBody.innerHTML = '<tr><td colspan="3" class="py-3"><div class="skeleton skeleton-line"></div></td></tr>';
+      }
+      if (E.usageRecentBody) {
+        E.usageRecentBody.innerHTML = '<tr><td colspan="5" class="py-3"><div class="skeleton skeleton-line"></div></td></tr>';
       }
     }
 
-    function maybeLogLastJob() {
-      const lastJob = state.status?.last_job;
-      if (!lastJob || !lastJob.job_id) {
+    function renderEvolutionUsage() {
+      const payload = state.evolutionUsage && typeof state.evolutionUsage === "object" ? state.evolutionUsage : null;
+      const summary = payload && payload.summary && typeof payload.summary === "object" ? payload.summary : null;
+
+      if (!summary) {
+        setUsageMetric(E.usageMetricMessages, "--");
+        setUsageMetric(E.usageMetricUnique, "--");
+        setUsageMetric(E.usageMetricProcessed, "--");
+        setUsageMetric(E.usageMetricBlocked, "--");
+        setUsageMetric(E.usageMetricErrors, "--");
+        setUsageMetric(E.usageMetricDeniedSent, "--");
+        setUsageMetric(E.usageMetricDeniedSuppressed, "--");
+        setUsageMetric(E.usageMetricEvents, "--");
+        if (E.usageDailyBars) E.usageDailyBars.innerHTML = '<div class="small text-secondary">Sem dados de uso disponiveis para o Evolution.</div>';
+        if (E.usageTopNumbersBody) E.usageTopNumbersBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Sem dados</td></tr>';
+        if (E.usageBreakdownBody) E.usageBreakdownBody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-secondary">Sem dados</td></tr>';
+        if (E.usageRecentBody) E.usageRecentBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Sem dados</td></tr>';
         return;
       }
-      if (lastJob.job_id === state.lastLoggedJobId) {
-        return;
+
+      setUsageMetric(E.usageMetricMessages, formatNumber(summary.total_messages));
+      setUsageMetric(E.usageMetricUnique, formatNumber(summary.unique_numbers));
+      setUsageMetric(E.usageMetricProcessed, formatNumber(summary.processed_ok));
+      setUsageMetric(E.usageMetricBlocked, formatNumber(summary.blocked_rbac));
+      setUsageMetric(E.usageMetricErrors, formatNumber(summary.total_errors));
+      setUsageMetric(E.usageMetricDeniedSent, formatNumber(summary.denied_reply_sent));
+      setUsageMetric(E.usageMetricDeniedSuppressed, formatNumber(summary.denied_reply_suppressed));
+      setUsageMetric(E.usageMetricEvents, formatNumber(summary.total_events));
+
+      const daily = Array.isArray(payload.daily_messages) ? payload.daily_messages : [];
+      const maxMessages = daily.reduce((maxValue, item) => {
+        const current = Number(item && item.messages ? item.messages : 0);
+        return current > maxValue ? current : maxValue;
+      }, 0);
+
+      if (E.usageDailyBars) {
+        if (!daily.length) {
+          E.usageDailyBars.innerHTML = '<div class="small text-secondary">Sem volume registrado no periodo selecionado.</div>';
+        } else {
+          E.usageDailyBars.innerHTML = daily.map(item => {
+            const messages = Number(item && item.messages ? item.messages : 0);
+            const blocked = Number(item && item.blocked_rbac ? item.blocked_rbac : 0);
+            const uniqueNumbers = Number(item && item.unique_numbers ? item.unique_numbers : 0);
+            const ratio = maxMessages > 0 ? Math.round((messages / maxMessages) * 100) : 0;
+            const width = messages > 0 ? Math.max(2, ratio) : 0;
+            return `
+              <div class="usage-bar-row">
+                <span class="usage-bar-label">${escapeHtml(formatDate(item.date))}</span>
+                <div>
+                  <div class="usage-bar-track">
+                    <div class="usage-bar-fill" style="width:${width}%;"></div>
+                  </div>
+                  <div class="usage-kpi-line">
+                    <span>Unicos: ${formatNumber(uniqueNumbers)}</span>
+                    <span>Bloq: ${formatNumber(blocked)}</span>
+                  </div>
+                </div>
+                <span class="usage-bar-value">${formatNumber(messages)}</span>
+              </div>
+            `;
+          }).join("");
+        }
       }
-      state.lastLoggedJobId = lastJob.job_id;
-      const title = lastJob.status === "completed"
-        ? `Importacao concluida: ${lastJob.dataset}`
-        : `Importacao com falha: ${lastJob.dataset}`;
-      appendLog(title, lastJob);
+
+      const topNumbers = Array.isArray(payload.top_numbers) ? payload.top_numbers : [];
+      if (E.usageTopNumbersBody) {
+        if (!topNumbers.length) {
+          E.usageTopNumbersBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Sem numeros no periodo</td></tr>';
+        } else {
+          E.usageTopNumbersBody.innerHTML = topNumbers.map(item => {
+            const rawPhone = String(item.phone_number || "");
+            const phone = formatPhoneForUi(rawPhone);
+            const displayName = String(item.display_name || phone || "-");
+            const showPhone = phone && displayName !== phone;
+            return `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(displayName)}</strong>
+                  ${showPhone ? `<div class="small mono text-secondary">${escapeHtml(phone)}</div>` : ""}
+                </td>
+                <td class="text-end">${formatNumber(item.messages)}</td>
+                <td class="text-end">${formatNumber(item.processed_ok)}</td>
+                <td class="text-end">${formatNumber(item.blocked_rbac)}</td>
+              </tr>
+            `;
+          }).join("");
+        }
+      }
+
+      const breakdown = Array.isArray(payload.event_breakdown) ? payload.event_breakdown : [];
+      if (E.usageBreakdownBody) {
+        if (!breakdown.length) {
+          E.usageBreakdownBody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-secondary">Sem eventos no periodo</td></tr>';
+        } else {
+          E.usageBreakdownBody.innerHTML = breakdown.map(item => `
+            <tr>
+              <td><span class="mono">${escapeHtml(item.event_type || "-")}</span></td>
+              <td>${escapeHtml(item.decision || "-")}</td>
+              <td class="text-end">${formatNumber(item.total)}</td>
+            </tr>
+          `).join("");
+        }
+      }
+
+      const recent = Array.isArray(payload.recent_events) ? payload.recent_events : [];
+      if (E.usageRecentBody) {
+        if (!recent.length) {
+          E.usageRecentBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Sem eventos recentes</td></tr>';
+        } else {
+          E.usageRecentBody.innerHTML = recent.map(item => `
+            <tr>
+              <td>${escapeHtml(formatDateTime(item.created_at))}</td>
+              <td><span class="mono">${escapeHtml(item.event_type || "-")}</span></td>
+              <td>${escapeHtml(item.decision || "-")}</td>
+              <td><span class="mono">${escapeHtml(formatPhoneForUi(item.phone_number || "-"))}</span></td>
+              <td>${escapeHtml(item.reason || "-")}</td>
+            </tr>
+          `).join("");
+        }
+      }
     }
 
-    function renderStatus() {
-      const items = (state.status?.items || [])
-        .slice()
-        .sort((a, b) => datasetsOrder.indexOf(a.dataset) - datasetsOrder.indexOf(b.dataset));
-
-      elements.runningState.textContent = state.status?.running
-        ? `Importacao em andamento: ${state.status.current_dataset || "-"}`
-        : "Sem importacao em andamento";
-
-      const lastJob = state.status?.last_job || null;
-      if (!lastJob || !lastJob.job_id) {
-        elements.lastJobState.textContent = "Nenhuma execucao recente";
-        elements.lastJobState.className = "status-pill";
-      } else if (lastJob.status === "completed") {
-        elements.lastJobState.textContent = `Ultimo job: ${lastJob.dataset} concluido`;
-        elements.lastJobState.className = "status-pill status-ok";
-      } else if (lastJob.status === "failed") {
-        elements.lastJobState.textContent = `Ultimo job: ${lastJob.dataset} com falha`;
-        elements.lastJobState.className = "status-pill status-error";
-      } else {
-        elements.lastJobState.textContent = `Ultimo job: ${lastJob.dataset} em andamento`;
-        elements.lastJobState.className = "status-pill status-warn";
+    async function syncEvolutionUsage({ silent = true } = {}) {
+      if (state.panel && state.panel.mode === "financeiro" && !state.panel.isAdmin) {
+        state.evolutionUsage = null;
+        renderEvolutionUsage();
+        return false;
+      }
+      if (!hasPanelAuth()) {
+        if (!silent) addLog("Sessao do painel nao validada.", "warn");
+        return false;
       }
 
-      elements.datasetGrid.innerHTML = items.map((item) => {
-        const last = item.last_import || {};
-        const importedAt = last.imported_at || "-";
-        const referenceDate = last.reference_date || "-";
-        const totalRows = last.total_rows ?? "-";
-        const batchId = last.batch_id ?? "-";
-        const multiple = item.upload_mode === "multiple";
-        const acceptedExtensions = item.accept_extensions || "";
-        const fileAccept = acceptedExtensions || "*/*";
+      const days = getUsageWindowDays();
+      try {
+        const payload = await req(`${CONFIG.endpoints.usage.evolution}?days=${days}`, { timeoutMs: 30000 });
+        state.evolutionUsage = payload && typeof payload === "object" ? payload : null;
+        renderEvolutionUsage();
+        if (!silent) addLog(`Dashboard de uso do Evolution atualizado (${days} dia(s)).`, "ok");
+        return true;
+      } catch (err) {
+        if (state.evolutionUsage === null) renderEvolutionUsage();
+        if (!silent) addLog(`Falha ao consultar uso do Evolution: ${err.message}`, "warn");
+        return false;
+      }
+    }
+
+    async function exportEvolutionAverageReport() {
+      updateTokens();
+      if (state.panel && state.panel.mode === "financeiro" && !state.panel.isAdmin) {
+        addLog("Uso Evolution fica disponivel apenas para admin.", "warn");
+        return;
+      }
+      if (!hasPanelAuth()) {
+        addLog("Sessao do painel nao validada.", "warn");
+        return;
+      }
+
+      const btn = E.usageExportReportBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exportando';
+      }
+
+      const days = getUsageWindowDays();
+      const limit = 5000;
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+
+      try {
+        const response = await fetch(
+          `${CONFIG.api}${CONFIG.endpoints.usage.evolutionReport}?days=${days}&limit=${limit}`,
+          { method: "GET", headers, credentials: "same-origin" }
+        );
+
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"([^\"]+)\"/i);
+        const filename = matchedName && matchedName[1]
+          ? matchedName[1]
+          : `relatorio_media_msg_por_dia_${days}d.csv`;
+
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog(`Relatório exportado com sucesso (${days} dia(s)).`, "ok");
+      } catch (err) {
+        addLog(`Falha ao exportar relatório: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    function resetBroadcastPreview() {
+      state.broadcast.preview = null;
+      if (E.broadcastRunBtn) E.broadcastRunBtn.disabled = true;
+      if (E.broadcastSummary) E.broadcastSummary.textContent = "Clique em Previa para carregar os destinatarios.";
+      if (E.broadcastRecipientsBody) {
+        E.broadcastRecipientsBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Sem previa carregada</td></tr>';
+      }
+      if (E.broadcastSelectAll) {
+        E.broadcastSelectAll.checked = false;
+        E.broadcastSelectAll.indeterminate = false;
+        E.broadcastSelectAll.disabled = true;
+      }
+    }
+
+    function broadcastRecipientChecks() {
+      return E.broadcastRecipientsBody
+        ? Array.from(E.broadcastRecipientsBody.querySelectorAll(".broadcast-recipient-check"))
+        : [];
+    }
+
+    function selectedBroadcastNumbers() {
+      return broadcastRecipientChecks()
+        .filter(item => item.checked)
+        .map(item => item.value)
+        .filter(Boolean);
+    }
+
+    function updateBroadcastSummaryFromSelection() {
+      const preview = state.broadcast.preview;
+      const recipients = preview && Array.isArray(preview.recipients) ? preview.recipients : [];
+      const selectedCount = selectedBroadcastNumbers().length;
+      const total = recipients.length;
+
+      if (E.broadcastSelectAll) {
+        E.broadcastSelectAll.disabled = total === 0;
+        E.broadcastSelectAll.checked = total > 0 && selectedCount === total;
+        E.broadcastSelectAll.indeterminate = selectedCount > 0 && selectedCount < total;
+      }
+      if (E.broadcastRunBtn) E.broadcastRunBtn.disabled = selectedCount === 0;
+
+      if (!E.broadcastSummary || !preview) return;
+      const dayText = preview.supports_day ? ` Dia: ${preview.day_label || "-"}.` : "";
+      const audienceLabel = preview.target_audience_label || "Vendedores (RN)";
+      const targetText = preview.target_mode === "specific"
+        ? ` Destino: numero especifico ${formatPhoneForUi(preview.target_number || "")}.`
+        : ` Destino: ${audienceLabel} da filial ${preview.filial || "-"}.`;
+      E.broadcastSummary.textContent = `${formatNumber(selectedCount)} de ${formatNumber(total)} destinatario(s) selecionado(s) para ${preview.action_label || "-"}.${dayText}${targetText} Atalho: ${preview.shortcut || "-"}.`;
+    }
+
+    function toggleBroadcastSelectAll() {
+      const checked = Boolean(E.broadcastSelectAll && E.broadcastSelectAll.checked);
+      for (const item of broadcastRecipientChecks()) item.checked = checked;
+      updateBroadcastSummaryFromSelection();
+    }
+
+    function selectedBroadcastAction() {
+      const actionId = E.broadcastAction ? E.broadcastAction.value : "";
+      const actions = Array.isArray(state.broadcast.actions) ? state.broadcast.actions : [];
+      return actions.find(item => item.id === actionId) || null;
+    }
+
+    function syncBroadcastDayState() {
+      const action = selectedBroadcastAction();
+      const supportsDay = !action || Boolean(action.supports_day);
+      if (E.broadcastDay) {
+        E.broadcastDay.disabled = !supportsDay;
+        if (!supportsDay) E.broadcastDay.value = "hoje";
+      }
+    }
+
+    function syncBroadcastTargetModeState() {
+      const mode = E.broadcastTargetMode ? E.broadcastTargetMode.value : "filial";
+      const isSpecific = mode === "specific";
+      if (E.broadcastTargetNumberWrap) E.broadcastTargetNumberWrap.classList.toggle("d-none", !isSpecific);
+      if (E.broadcastTargetNumber) E.broadcastTargetNumber.disabled = !isSpecific;
+    }
+
+    function renderBroadcastStatus(status) {
+      const payload = status && typeof status === "object" ? status : {};
+      if (!E.broadcastStatus) return;
+      if (payload.running) {
+        const sent = Number(payload.sent || 0);
+        const total = Number(payload.total || 0);
+        const failed = Number(payload.failed || 0);
+        const skipped = Number(payload.skipped || 0);
+        E.broadcastStatus.textContent = `Disparo em andamento: ${sent}/${total} enviados, ${failed} erro(s), ${skipped} ignorado(s)`;
+        E.broadcastStatus.className = "pill warn";
+        return;
+      }
+      const lastJob = payload.last_job && typeof payload.last_job === "object" ? payload.last_job : null;
+      if (lastJob && lastJob.job_id) {
+        E.broadcastStatus.textContent = `Ultimo disparo: ${lastJob.sent || 0}/${lastJob.total || 0} enviados`;
+        E.broadcastStatus.className = Number(lastJob.failed || 0) > 0 ? "pill warn" : "pill ok";
+        return;
+      }
+      E.broadcastStatus.textContent = "Nenhum disparo em andamento";
+      E.broadcastStatus.className = "pill";
+    }
+
+    function renderBroadcastOptions() {
+      if (E.broadcastAction) {
+        const selectedAction = E.broadcastAction.value;
+        const actions = Array.isArray(state.broadcast.actions) ? state.broadcast.actions : [];
+        E.broadcastAction.innerHTML = actions.length
+          ? actions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("")
+          : '<option value="">Sem mensagens disponiveis</option>';
+        if (selectedAction && actions.some(item => item.id === selectedAction)) E.broadcastAction.value = selectedAction;
+      }
+
+      if (E.broadcastDay) {
+        const selectedDay = E.broadcastDay.value || "hoje";
+        const days = Array.isArray(state.broadcast.days) && state.broadcast.days.length
+          ? state.broadcast.days
+          : [{ id: "hoje", label: "Hoje" }];
+        E.broadcastDay.innerHTML = days.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("");
+        if (selectedDay && days.some(item => item.id === selectedDay)) E.broadcastDay.value = selectedDay;
+      }
+
+      if (E.broadcastTargetMode) {
+        const selectedMode = E.broadcastTargetMode.value || "filial";
+        const modes = Array.isArray(state.broadcast.targetModes) && state.broadcast.targetModes.length
+          ? state.broadcast.targetModes
+          : [{ id: "filial", label: "Todos da filial" }, { id: "specific", label: "Numero especifico" }];
+        E.broadcastTargetMode.innerHTML = modes.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("");
+        if (selectedMode && modes.some(item => item.id === selectedMode)) E.broadcastTargetMode.value = selectedMode;
+      }
+
+      if (E.broadcastAudience) {
+        const selectedAudience = E.broadcastAudience.value || "vendedor";
+        const audiences = Array.isArray(state.broadcast.targetAudiences) && state.broadcast.targetAudiences.length
+          ? state.broadcast.targetAudiences
+          : [{ id: "vendedor", label: "Vendedores (RN)" }, { id: "gerente_vendas", label: "GVs" }];
+        E.broadcastAudience.innerHTML = audiences.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("");
+        if (selectedAudience && audiences.some(item => item.id === selectedAudience)) E.broadcastAudience.value = selectedAudience;
+      }
+
+      if (E.broadcastFilial) {
+        const selectedFilial = E.broadcastFilial.value;
+        const selectedAudience = E.broadcastAudience ? E.broadcastAudience.value || "vendedor" : "vendedor";
+        const filiais = (Array.isArray(state.broadcast.filiais) ? state.broadcast.filiais : [])
+          .map(item => ({ ...item, audience_total: Number(item[selectedAudience] || 0) }))
+          .filter(item => item.audience_total > 0);
+        E.broadcastFilial.innerHTML = filiais.length
+          ? filiais.map(item => `<option value="${escapeHtml(item.filial)}">Filial ${escapeHtml(item.filial)} (${formatNumber(item.audience_total)})</option>`).join("")
+          : '<option value="">Sem filiais cadastradas</option>';
+        if (selectedFilial && filiais.some(item => String(item.filial) === selectedFilial)) E.broadcastFilial.value = selectedFilial;
+      }
+
+      syncBroadcastDayState();
+      syncBroadcastTargetModeState();
+      renderBroadcastStatus(state.broadcast.status);
+      if (!state.broadcast.preview) resetBroadcastPreview();
+    }
+
+    async function syncBroadcastOptions({ silent = true } = {}) {
+      if (!hasPanelAuth()) return false;
+      try {
+        const payload = await req(CONFIG.endpoints.broadcast.options, { timeoutMs: 30000 });
+        state.broadcast.actions = Array.isArray(payload.actions) ? payload.actions : [];
+        state.broadcast.days = Array.isArray(payload.days) ? payload.days : [];
+        state.broadcast.targetModes = Array.isArray(payload.target_modes) ? payload.target_modes : [];
+        state.broadcast.targetAudiences = Array.isArray(payload.target_audiences) ? payload.target_audiences : [];
+        state.broadcast.filiais = Array.isArray(payload.filiais) ? payload.filiais : [];
+        state.broadcast.status = payload.status || null;
+        renderBroadcastOptions();
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao carregar opcoes de disparo: ${err.message}`, "warn");
+        renderBroadcastOptions();
+        return false;
+      }
+    }
+
+    async function syncBroadcastStatus({ silent = true } = {}) {
+      if (!hasPanelAuth()) return false;
+      try {
+        const payload = await req(CONFIG.endpoints.broadcast.status, { timeoutMs: 30000 });
+        state.broadcast.status = payload || null;
+        renderBroadcastStatus(state.broadcast.status);
+        if (!silent) addLog("Status do disparo atualizado.", "ok");
+        return Boolean(payload && payload.running);
+      } catch (err) {
+        if (!silent) addLog(`Falha ao consultar status do disparo: ${err.message}`, "warn");
+        return false;
+      }
+    }
+
+    function currentBroadcastRequest() {
+      return {
+        filial: E.broadcastFilial ? E.broadcastFilial.value : "",
+        action: E.broadcastAction ? E.broadcastAction.value : "",
+        day: E.broadcastDay ? E.broadcastDay.value : "hoje",
+        target_mode: E.broadcastTargetMode ? E.broadcastTargetMode.value : "filial",
+        target_audience: E.broadcastAudience ? E.broadcastAudience.value : "vendedor",
+        target_number: E.broadcastTargetNumber ? E.broadcastTargetNumber.value : ""
+      };
+    }
+
+    function renderBroadcastPreview(payload) {
+      state.broadcast.preview = payload && typeof payload === "object" ? payload : null;
+      const recipients = state.broadcast.preview && Array.isArray(state.broadcast.preview.recipients)
+        ? state.broadcast.preview.recipients
+        : [];
+      if (!E.broadcastRecipientsBody) return;
+      if (!recipients.length) {
+        E.broadcastRecipientsBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Nenhum destinatario encontrado</td></tr>';
+        updateBroadcastSummaryFromSelection();
+        return;
+      }
+      E.broadcastRecipientsBody.innerHTML = recipients.map(item => `
+        <tr>
+          <td class="ps-3 broadcast-select-cell">
+            <input class="form-check-input broadcast-recipient-check" type="checkbox" value="${escapeHtml(item.phone_number || "")}" checked aria-label="Selecionar ${escapeHtml(item.name || item.phone_number || "destinatario")}">
+          </td>
+          <td><strong>${escapeHtml(item.name || "-")}</strong></td>
+          <td><span class="badge text-bg-light border">${escapeHtml(item.role || "-")}</span></td>
+          <td><span class="mono">${escapeHtml(formatPhoneForUi(item.phone_number || ""))}</span></td>
+        </tr>
+      `).join("");
+      for (const item of broadcastRecipientChecks()) {
+        item.addEventListener("change", updateBroadcastSummaryFromSelection);
+      }
+      updateBroadcastSummaryFromSelection();
+    }
+
+    async function previewBroadcast() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const payload = currentBroadcastRequest();
+      if (!payload.filial || !payload.action) { addLog("Escolha a filial e a mensagem do disparo.", "warn"); return; }
+      if (payload.target_mode === "specific" && !payload.target_number.trim()) {
+        addLog("Informe o numero especifico para teste.", "warn");
+        return;
+      }
+      const btn = E.broadcastPreviewBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Carregando';
+      }
+      try {
+        const result = await req(CONFIG.endpoints.broadcast.preview, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 30000
+        });
+        renderBroadcastPreview(result);
+        addLog(`Previa carregada: ${result.total || 0} destinatario(s).`, "ok");
+      } catch (err) {
+        resetBroadcastPreview();
+        addLog(`Falha ao carregar previa do disparo: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function runBroadcast() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const payload = currentBroadcastRequest();
+      const preview = state.broadcast.preview;
+      const checkedNumbers = selectedBroadcastNumbers();
+      const targetChanged = preview && preview.target_mode === "specific"
+        ? comparablePhoneDigits(preview.target_number || "") !== comparablePhoneDigits(payload.target_number || "")
+        : false;
+      if (
+        !preview
+        || preview.filial !== payload.filial
+        || preview.action !== payload.action
+        || preview.day !== payload.day
+        || preview.target_mode !== payload.target_mode
+        || preview.target_audience !== payload.target_audience
+        || targetChanged
+      ) {
+        addLog("Carregue a previa antes de disparar.", "warn");
+        return;
+      }
+      const total = checkedNumbers.length;
+      if (total <= 0) { addLog("Selecione ao menos um destinatario para disparar.", "warn"); return; }
+      payload.selected_numbers = checkedNumbers;
+      const targetLabel = preview.target_mode === "specific"
+        ? `o numero ${formatPhoneForUi(preview.target_number || "")}`
+        : `${total} destinatario(s) selecionado(s) da filial ${preview.filial}`;
+      const dayLabel = preview.supports_day ? ` (${preview.day_label})` : "";
+      const confirmed = await askConfirmation(`Disparar "${preview.action_label}${dayLabel}" para ${targetLabel}?`);
+      if (!confirmed) return;
+
+      const btn = E.broadcastRunBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enfileirando';
+      }
+      try {
+        const result = await req(CONFIG.endpoints.broadcast.run, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 60000
+        });
+        state.broadcast.status = {
+          running: true,
+          current_job_id: result.job_id,
+          current_filial: result.filial,
+          current_action: result.action,
+          total: result.total,
+          sent: 0,
+          failed: 0,
+          skipped: 0
+        };
+        renderBroadcastStatus(state.broadcast.status);
+        addLog(`Disparo iniciado: ${result.total || 0} destinatario(s).`, "ok");
+        pollBroadcastStatus();
+      } catch (err) {
+        addLog(`Falha ao iniciar disparo: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function pollBroadcastStatus() {
+      if (state.broadcast.polling) return;
+      state.broadcast.polling = true;
+      try {
+        let keepPolling = true;
+        while (keepPolling) {
+          await new Promise(resolve => setTimeout(resolve, 2500));
+          keepPolling = await syncBroadcastStatus({ silent: true });
+        }
+        await syncBroadcastOptions({ silent: true });
+      } finally {
+        state.broadcast.polling = false;
+      }
+    }
+
+    function cleanDisplayText(value) {
+      return String(value || "")
+        .replace(/Ã£/g, "ã")
+        .replace(/Ã§/g, "ç")
+        .replace(/Ã¡/g, "á")
+        .replace(/Ã©/g, "é")
+        .replace(/Ã­/g, "í")
+        .replace(/Ã³/g, "ó")
+        .replace(/Ãº/g, "ú");
+    }
+
+    function normalizeRecolhaStatus(value) {
+      const normalized = normalizeTextForSearch(cleanDisplayText(value)).replace(/\s+/g, " ");
+      if (normalized === "recolhido") return "Recolhido";
+      if (normalized === "nao recolhido") return "Não Recolhido";
+      if (normalized === "ok" || normalized === "lancado") return "Ok";
+      if (normalized === "nok" || normalized === "nao" || normalized === "nao lancado") return "Nok";
+      return cleanDisplayText(value || "");
+    }
+
+    function recolhaStatusBadge(status) {
+      const normalized = normalizeRecolhaStatus(status);
+      if (normalized === "Recolhido") return '<span class="badge text-bg-success">Recolhido</span>';
+      if (normalized === "Ok") return '<span class="badge text-bg-primary">Lançado</span>';
+      if (normalized === "Nok") return '<span class="badge text-bg-secondary">Aberta</span>';
+      return '<span class="badge text-bg-warning">Não recolhido</span>';
+    }
+
+    const RECOLHA_STATUS_OPTIONS = ["Nao Recolhido", "Recolhido"];
+    const RECOLHA_MOTIVO_OPTIONS = [
+      "",
+      "Recolhido no prazo",
+      "Baixa confirmada no sistema",
+      "Recolha parcial",
+      "Cliente fechado",
+      "Cliente ausente",
+      "Cliente recusou",
+      "Endereco nao localizado",
+      "Material nao localizado",
+      "Sem motorista",
+      "Sem rota",
+      "Nao quis",
+      "Outro"
+    ];
+
+    function renderOptions(options, selectedValue, emptyLabel = "") {
+      const selected = cleanDisplayText(selectedValue || "").trim();
+      const normalizedSelected = normalizeTextForSearch(selected);
+      const seen = new Set();
+      const rows = [];
+      for (const option of options) {
+        const value = cleanDisplayText(option || "").trim();
+        const key = normalizeTextForSearch(value);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const label = value || emptyLabel || "-";
+        rows.push(`<option value="${escapeHtml(value)}" ${key === normalizedSelected ? "selected" : ""}>${escapeHtml(label)}</option>`);
+      }
+      if (selected && !seen.has(normalizedSelected)) {
+        rows.push(`<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`);
+      }
+      return rows.join("");
+    }
+
+    function recolhaBaixaBadge(record) {
+      const validation = record && record.baixa_validacao ? record.baixa_validacao : {};
+      const status = cleanDisplayText(validation.status || "");
+      const label = cleanDisplayText(validation.label || "Nao validado");
+      if (status === "baixado") return `<span class="badge text-bg-success">${escapeHtml(label)}</span>`;
+      if (status === "pendente") return `<span class="badge text-bg-danger">${escapeHtml(label)}</span>`;
+      if (status === "erro") return `<span class="badge text-bg-warning">${escapeHtml(label)}</span>`;
+      return `<span class="badge text-bg-secondary">${escapeHtml(label)}</span>`;
+    }
+
+    function recolhaBucket(record) {
+      const status = normalizeRecolhaStatus(record.status_caixa_noturno || "");
+      const lancado = normalizeRecolhaStatus(record.lancado_faturista || "");
+      if (status === "Recolhido") return "recolhidas";
+      if (status === "Não Recolhido") return "nao_recolhidas";
+      if (lancado === "Ok") return "lancadas";
+      return "abertas";
+    }
+
+    function flattenRecolhaOperations(operations) {
+      const rows = [];
+      for (const operation of Array.isArray(operations) ? operations : []) {
+        const records = Array.isArray(operation.records) ? operation.records : [];
+        for (const record of records) {
+          rows.push({ ...record, _operation: cleanDisplayText(operation.revenda || record.revenda || "Sem operação") });
+        }
+      }
+      return rows;
+    }
+
+    function parseRecolhaCreatedAt(record) {
+      const iso = String(record.criado_em_iso || "").trim();
+      if (iso) {
+        const parsedIso = new Date(iso);
+        if (!Number.isNaN(parsedIso.getTime())) return parsedIso;
+      }
+      const raw = String(record.criado_em || "").trim();
+      const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+      if (match) {
+        const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]), Number(match[4] || 0), Number(match[5] || 0));
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+      return null;
+    }
+
+    function recolhaRecordInPeriod(record) {
+      const createdAt = parseRecolhaCreatedAt(record);
+      const start = state.recolhasFilter.start ? new Date(`${state.recolhasFilter.start}T00:00:00`) : null;
+      const end = state.recolhasFilter.end ? new Date(`${state.recolhasFilter.end}T23:59:59.999`) : null;
+      if ((start || end) && !createdAt) return false;
+      if (start && createdAt < start) return false;
+      if (end && createdAt > end) return false;
+      return true;
+    }
+
+    function filteredRecolhaRecords() {
+      const payload = state.recolhas && typeof state.recolhas === "object" ? state.recolhas : { operations: [] };
+      return flattenRecolhaOperations(payload.operations).filter(recolhaRecordInPeriod);
+    }
+
+    function groupRecolhasByOperation(records) {
+      const grouped = new Map();
+      for (const record of records) {
+        const revenda = cleanDisplayText(record._operation || record.revenda || "Sem operação");
+        if (!grouped.has(revenda)) {
+          grouped.set(revenda, { revenda, total: 0, abertas: 0, lancadas: 0, recolhidas: 0, nao_recolhidas: 0, records: [] });
+        }
+        const bucket = grouped.get(revenda);
+        bucket.total += 1;
+        bucket[recolhaBucket(record)] += 1;
+        bucket.records.push(record);
+      }
+      return Array.from(grouped.values()).sort((a, b) => String(a.revenda).localeCompare(String(b.revenda)));
+    }
+
+    function updateRecolhasPeriodFilter() {
+      state.recolhasFilter.start = E.recolhasStartDate ? E.recolhasStartDate.value : "";
+      state.recolhasFilter.end = E.recolhasEndDate ? E.recolhasEndDate.value : "";
+      renderRecolhas();
+    }
+
+    function clearRecolhasPeriodFilter() {
+      if (E.recolhasStartDate) E.recolhasStartDate.value = "";
+      if (E.recolhasEndDate) E.recolhasEndDate.value = "";
+      state.recolhasFilter = { start: "", end: "" };
+      renderRecolhas();
+    }
+
+    function renderRecolhasDashboard(records, operations) {
+      const totals = { total: records.length, abertas: 0, lancadas: 0, recolhidas: 0, nao_recolhidas: 0 };
+      const reasons = new Map();
+      for (const record of records) {
+        const bucket = recolhaBucket(record);
+        totals[bucket] += 1;
+        if (bucket === "nao_recolhidas") {
+          const reason = cleanDisplayText(record.motivo_caixa_noturno || "").trim() || "Sem motivo informado";
+          reasons.set(reason, (reasons.get(reason) || 0) + 1);
+        }
+      }
+      const pending = totals.total - totals.recolhidas;
+      const recolhidasPct = totals.total ? Math.round((totals.recolhidas / totals.total) * 100) : 0;
+      if (E.recolhasDashboardCards) {
+        E.recolhasDashboardCards.innerHTML = [
+          ["Total", totals.total, "solicitações no período"],
+          ["Pendentes", pending, "não finalizadas"],
+          ["Abertas", totals.abertas, "aguardando faturista"],
+          ["Lançadas", totals.lancadas, "aguardando caixa"],
+          ["Recolhidas", totals.recolhidas, `${recolhidasPct}% do período`],
+          ["Não recolhidas", totals.nao_recolhidas, "com pendência no caixa"]
+        ].map(([label, value, sub]) => `
+          <article class="recolha-dashboard-card">
+            <span class="label">${escapeHtml(label)}</span>
+            <span class="value">${formatNumber(value)}</span>
+            <span class="sub">${escapeHtml(sub)}</span>
+          </article>
+        `).join("");
+      }
+      if (E.recolhasReasonList) {
+        const reasonRows = Array.from(reasons.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+        E.recolhasReasonList.innerHTML = reasonRows.length
+          ? reasonRows.map(([reason, total]) => `<div class="recolha-insight-row"><span>${escapeHtml(reason)}</span><strong>${formatNumber(total)}</strong></div>`).join("")
+          : '<div class="text-secondary">Sem motivos registrados no período.</div>';
+      }
+      if (E.recolhasOperationSummary) {
+        E.recolhasOperationSummary.innerHTML = operations.length
+          ? operations.map(operation => `
+            <div class="recolha-insight-row">
+              <span>${escapeHtml(cleanDisplayText(operation.revenda || "-"))}</span>
+              <strong>${formatNumber(operation.recolhidas || 0)}/${formatNumber(operation.total || 0)} recolhidas</strong>
+            </div>
+          `).join("")
+          : '<div class="text-secondary">Sem operações no período.</div>';
+      }
+      if (E.recolhasPeriodLabel) {
+        const start = state.recolhasFilter.start ? formatDate(state.recolhasFilter.start) : "inicio";
+        const end = state.recolhasFilter.end ? formatDate(state.recolhasFilter.end) : "hoje";
+        E.recolhasPeriodLabel.textContent = state.recolhasFilter.start || state.recolhasFilter.end
+          ? `Dashboard filtrado de ${start} até ${end}.`
+          : "Dashboard considerando todas as solicitações visíveis.";
+      }
+    }
+
+    function renderRecolhas() {
+      const payload = state.recolhas && typeof state.recolhas === "object" ? state.recolhas : { total: 0, operations: [] };
+      const allRecords = flattenRecolhaOperations(payload.operations);
+      const filteredRecords = allRecords.filter(recolhaRecordInPeriod);
+      const operations = groupRecolhasByOperation(filteredRecords);
+      if (E.recolhasCount) {
+        E.recolhasCount.textContent = `${formatNumber(filteredRecords.length)} de ${formatNumber(allRecords.length)} solicitação(ões)`;
+        E.recolhasCount.className = filteredRecords.length > 0 ? "pill ok" : "pill";
+      }
+      renderRecolhasDashboard(filteredRecords, operations);
+      if (!E.recolhasContainer) return;
+      if (!operations.length) {
+        E.recolhasContainer.innerHTML = '<div class="text-center py-3 text-secondary">Nenhuma solicitação de recolha encontrada no período.</div>';
+        return;
+      }
+      E.recolhasContainer.innerHTML = operations.map(operation => {
+        const records = Array.isArray(operation.records) ? operation.records : [];
+        const revenda = cleanDisplayText(operation.revenda || "Sem operação");
+        const rows = records.length ? records.map(record => renderRecolhaRow(record)).join("") : '<tr><td colspan="13" class="text-center py-3 text-secondary">Sem solicitações nessa operação</td></tr>';
         return `
-          <article class="card">
-            <div>
-              <h2>${item.label}</h2>
-            </div>
-            <div class="meta">
-              <div><strong>Origem padrao:</strong> ${item.default_path}</div>
-              <div><strong>Origem ativa:</strong> ${item.active_source_path}</div>
-              <div><strong>Fonte em uso:</strong> ${item.using_uploaded_source ? "Upload do painel" : "Arquivo padrao"}</div>
-              <div><strong>Arquivo encontrado:</strong> ${item.source_exists ? "Sim" : "Nao"}</div>
-              <div><strong>Extensoes aceitas:</strong> ${acceptedExtensions || "-"}</div>
-              <div><strong>Lote atual:</strong> ${batchId}</div>
-              <div><strong>Linhas atuais:</strong> ${totalRows}</div>
-              <div><strong>Referencia:</strong> ${referenceDate}</div>
-              <div><strong>Importado em:</strong> ${importedAt}</div>
-            </div>
-            <label>
-              Arquivo${multiple ? "s" : ""} para upload
-              <input type="file" data-files="${item.dataset}" accept="${fileAccept}" ${multiple ? "multiple" : ""}>
-            </label>
-            <div class="hint">
-              ${multiple ? "Esse dataset aceita varios arquivos e substitui a pasta atual." : "Esse dataset aceita um unico arquivo e substitui o arquivo atual."}
-            </div>
-            <label>
-              Data de referencia opcional
-              <input type="date" data-ref="${item.dataset}">
-            </label>
-            <div class="card-actions">
-              <button class="secondary" data-action="upload" data-dataset="${item.dataset}">Enviar arquivo</button>
-              <button class="secondary" data-action="validate" data-dataset="${item.dataset}">Validar</button>
-              <button class="primary" data-action="import" data-dataset="${item.dataset}">Importar</button>
+          <article class="recolha-operation">
+            <header class="recolha-operation-head">
+              <div>
+                <h3 class="h6 fw-bold mb-1">Operação ${escapeHtml(revenda)}</h3>
+                <div class="small text-secondary">Tabela própria da filial/revenda para acompanhamento financeiro.</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <span class="pill">Total ${formatNumber(operation.total || records.length)}</span>
+                <span class="pill">Abertas ${formatNumber(operation.abertas || 0)}</span>
+                <span class="pill">Lançadas ${formatNumber(operation.lancadas || 0)}</span>
+                <span class="pill ok">Recolhidas ${formatNumber(operation.recolhidas || 0)}</span>
+                <span class="pill warn">Não recolhidas ${formatNumber(operation.nao_recolhidas || 0)}</span>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <select class="form-select form-select-sm recolha-bulk-status" style="width: 150px;">
+                  ${renderOptions(RECOLHA_STATUS_OPTIONS, "Recolhido")}
+                </select>
+                <select class="form-select form-select-sm recolha-bulk-motivo" style="width: 220px;">
+                  ${renderOptions(RECOLHA_MOTIVO_OPTIONS, "", "Sem motivo")}
+                </select>
+                <button class="btn btn-outline-primary btn-sm" onclick="bulkUpdateRecolhas(this)">
+                  <i class="bi bi-check2-square me-1"></i>Fechar selecionadas
+                </button>
+              </div>
+            </header>
+            <div class="table-scroll" style="max-height: 380px;">
+              <table class="table table-sm table-hover align-middle mb-0 recolha-table">
+                <thead>
+                  <tr class="text-uppercase small text-secondary">
+                    <th class="ps-3"><input class="form-check-input recolha-select-all" type="checkbox" onchange="toggleRecolhaOperationSelection(this)"></th>
+                    <th>Cliente</th>
+                    <th>Solicitação</th>
+                    <th>Pedido</th>
+                    <th>Faturista</th>
+                    <th>Motorista</th>
+                    <th>Placa</th>
+                    <th>Mapa</th>
+                    <th>Caixa</th>
+                    <th>Motivo</th>
+                    <th>Status</th>
+                    <th>Baixa base</th>
+                    <th class="text-end pe-3">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
             </div>
           </article>
         `;
       }).join("");
+    }
 
-      document.querySelectorAll("[data-action]").forEach((button) => {
-        button.addEventListener("click", () => handleDatasetAction(button.dataset.dataset, button.dataset.action));
+    function renderRecolhaRow(record) {
+      const id = String(record.id || "");
+      const safeId = escapeHtml(id);
+      const lancado = normalizeRecolhaStatus(record.lancado_faturista || "Nok") === "Ok" ? "Ok" : "Nok";
+      const status = normalizeRecolhaStatus(record.status_caixa_noturno || "Nao Recolhido");
+      const statusValue = status === "Recolhido" ? "Recolhido" : "Nao Recolhido";
+      const requesterName = cleanDisplayText(record.solicitante_nome || record.solicitante || "-");
+      return `
+        <tr data-recolha-id="${safeId}">
+          <td class="ps-3"><input class="form-check-input recolha-select" type="checkbox" value="${safeId}"></td>
+          <td>
+            <strong>NB ${escapeHtml(record.nb || "-")}</strong>
+            <div class="small text-secondary">Setor ${escapeHtml(record.setor || "-")} | RN ${escapeHtml(record.rn || "-")}</div>
+            <div class="small text-secondary">${escapeHtml(cleanDisplayText(record.cidade || "-"))}</div>
+          </td>
+          <td>
+            <div>${escapeHtml(record.criado_em || "-")}</div>
+            <div class="small text-secondary">Solicitante: ${escapeHtml(requesterName)}</div>
+          </td>
+          <td>
+            <div>${escapeHtml(cleanDisplayText(record.comodato || "-"))}</div>
+            ${record.obs ? `<div class="small text-secondary">OBS.: ${escapeHtml(cleanDisplayText(record.obs))}</div>` : ""}
+            <div class="small mono text-secondary">ID ${escapeHtml(id || "-")}</div>
+          </td>
+          <td>
+            <select class="form-select form-select-sm recolha-lancado">
+              <option value="Nok" ${lancado === "Nok" ? "selected" : ""}>Nok</option>
+              <option value="Ok" ${lancado === "Ok" ? "selected" : ""}>Ok</option>
+            </select>
+          </td>
+          <td><input class="form-control form-control-sm recolha-motorista" value="${escapeHtml(cleanDisplayText(record.motorista_faturista || ""))}" placeholder="Motorista"></td>
+          <td><input class="form-control form-control-sm recolha-placa" value="${escapeHtml(cleanDisplayText(record.placa_faturista || ""))}" placeholder="Placa"></td>
+          <td><input class="form-control form-control-sm recolha-mapa" value="${escapeHtml(cleanDisplayText(record.mapa_faturista || ""))}" placeholder="Mapa"></td>
+          <td>
+            <select class="form-select form-select-sm recolha-status">
+              ${renderOptions(RECOLHA_STATUS_OPTIONS, statusValue)}
+            </select>
+          </td>
+          <td>
+            <select class="form-select form-select-sm recolha-motivo">
+              ${renderOptions(RECOLHA_MOTIVO_OPTIONS, record.motivo_caixa_noturno || "", "Sem motivo")}
+            </select>
+          </td>
+          <td>${recolhaStatusBadge(statusValue === "Recolhido" ? "Recolhido" : lancado)}</td>
+          <td>${recolhaBaixaBadge(record)}</td>
+          <td class="text-end pe-3">
+            <div class="d-flex gap-1 justify-content-end">
+              <button class="btn btn-primary btn-sm recolha-save-btn" onclick="saveRecolhaRow('${safeId}')"><i class="bi bi-check2 me-1"></i>Salvar</button>
+              <button class="btn btn-outline-danger btn-sm recolha-delete-btn" onclick="deleteRecolhaRow('${safeId}')"><i class="bi bi-trash3"></i></button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
+    function toggleRecolhaOperationSelection(source) {
+      const article = source ? source.closest(".recolha-operation") : null;
+      if (!article) return;
+      for (const checkbox of article.querySelectorAll(".recolha-select")) {
+        checkbox.checked = Boolean(source.checked);
+      }
+    }
+
+    async function bulkUpdateRecolhas(source) {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      if (!state.panel || !state.panel.mode) {
+        try { await syncPanelSession(); }
+        catch (err) { addLog(`Falha ao validar token: ${err.message}`, "err"); return; }
+      }
+      const article = source ? source.closest(".recolha-operation") : null;
+      if (!article) return;
+      const ids = Array.from(article.querySelectorAll(".recolha-select:checked")).map(item => item.value).filter(Boolean);
+      if (!ids.length) {
+        addLog("Selecione pelo menos uma recolha para fechar em lote.", "warn");
+        return;
+      }
+      const payload = {
+        ids,
+        status_caixa_noturno: article.querySelector(".recolha-bulk-status")?.value || "Recolhido",
+        motivo_caixa_noturno: article.querySelector(".recolha-bulk-motivo")?.value || ""
+      };
+      const previousLabel = source ? source.innerHTML : "";
+      if (source) {
+        source.disabled = true;
+        source.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Fechando';
+      }
+      try {
+        const result = await req(CONFIG.endpoints.recolhas.bulk, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 60000
+        });
+        const errors = Array.isArray(result.errors) ? result.errors.length : 0;
+        addLog(`Fechamento em lote: ${formatNumber(result.updated || 0)} atualizada(s), ${formatNumber(errors)} erro(s).`, errors ? "warn" : "ok");
+        await syncRecolhas({ silent: true });
+      } catch (err) {
+        addLog(`Falha no fechamento em lote: ${err.message}`, "err");
+      } finally {
+        if (source) {
+          source.disabled = false;
+          source.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function syncRecolhas({ silent = true } = {}) {
+      updateTokens();
+      if (!hasPanelAuth()) {
+        if (!silent) addLog("Sessao do painel nao validada.", "warn");
+        return false;
+      }
+      try {
+        if (!state.panel || !state.panel.mode) await syncPanelSession();
+        const payload = await req(CONFIG.endpoints.recolhas.list, { timeoutMs: 30000 });
+        state.recolhas = payload && typeof payload === "object"
+          ? { total: Number(payload.total || 0), operations: Array.isArray(payload.operations) ? payload.operations : [] }
+          : { total: 0, operations: [] };
+        renderRecolhas();
+        if (!silent) addLog("Recolhas atualizadas.", "ok");
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao carregar recolhas: ${err.message}`, "err");
+        renderRecolhas();
+        return false;
+      }
+    }
+
+    async function importRecolhasCsv() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      if (!state.panel || !state.panel.mode) {
+        try { await syncPanelSession(); }
+        catch (err) { addLog(`Falha ao validar token: ${err.message}`, "err"); return; }
+      }
+      const file = E.recolhasImportFile && E.recolhasImportFile.files ? E.recolhasImportFile.files[0] : null;
+      if (!file) {
+        addLog("Selecione um CSV de recolhas para importar.", "warn");
+        return;
+      }
+      if (!String(file.name || "").toLowerCase().endsWith(".csv")) {
+        addLog("O arquivo de recolhas deve ser CSV.", "warn");
+        return;
+      }
+      const scopeText = state.panel && state.panel.isAdmin
+        ? "todas as recolhas atuais"
+        : "as recolhas das filiais liberadas para este token";
+      const confirmed = await askConfirmation(`Importar ${file.name}? Isso vai substituir ${scopeText} pelo conteudo do CSV.`);
+      if (!confirmed) return;
+
+      const btn = E.recolhasImportBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      const formData = new FormData();
+      formData.append("file", file);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Importando';
+      }
+      try {
+        const payload = await req(CONFIG.endpoints.recolhas.importCsv, {
+          method: "POST",
+          body: formData,
+          timeoutMs: 120000
+        });
+        if (E.recolhasImportFile) E.recolhasImportFile.value = "";
+        addLog(
+          `CSV de recolhas importado: ${formatNumber(payload.imported || 0)} linha(s), ` +
+          `${formatNumber(payload.skipped || 0)} fora do escopo, ${formatNumber(payload.preserved || 0)} preservada(s).`,
+          "ok"
+        );
+        await syncRecolhas({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao importar CSV de recolhas: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function saveRecolhaRow(id) {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      if (!state.panel || !state.panel.mode) {
+        try { await syncPanelSession(); }
+        catch (err) { addLog(`Falha ao validar token: ${err.message}`, "err"); return; }
+      }
+      const row = document.querySelector(`tr[data-recolha-id="${CSS.escape(id)}"]`);
+      if (!row) return;
+      const btn = row.querySelector(".recolha-save-btn");
+      const previousLabel = btn ? btn.innerHTML : "";
+      const payload = {
+        lancado_faturista: row.querySelector(".recolha-lancado")?.value || "Nok",
+        motorista_faturista: row.querySelector(".recolha-motorista")?.value || "",
+        placa_faturista: row.querySelector(".recolha-placa")?.value || "",
+        mapa_faturista: row.querySelector(".recolha-mapa")?.value || "",
+        status_caixa_noturno: row.querySelector(".recolha-status")?.value || "Não Recolhido",
+        motivo_caixa_noturno: row.querySelector(".recolha-motivo")?.value || ""
+      };
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvando';
+      }
+      try {
+        await req(`${CONFIG.endpoints.recolhas.update}/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 30000
+        });
+        addLog(`Recolha ${id.substring(0, 8)} atualizada.`, "ok");
+        await syncRecolhas({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao salvar recolha: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function deleteRecolhaRow(id) {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      if (!state.panel || !state.panel.mode) {
+        try { await syncPanelSession(); }
+        catch (err) { addLog(`Falha ao validar token: ${err.message}`, "err"); return; }
+      }
+      const confirmed = await askConfirmation(`Apagar a solicitação de recolha ${id.substring(0, 8)}? Essa ação remove a linha do CSV.`);
+      if (!confirmed) return;
+      const row = document.querySelector(`tr[data-recolha-id="${CSS.escape(id)}"]`);
+      const btn = row ? row.querySelector(".recolha-delete-btn") : null;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      }
+      try {
+        await req(`${CONFIG.endpoints.recolhas.delete}/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          timeoutMs: 30000
+        });
+        addLog(`Recolha ${id.substring(0, 8)} apagada.`, "ok");
+        await syncRecolhas({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao apagar recolha: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function syncAll() {
+      updateTokens();
+      setSyncState(true);
+      addLog("Atualizando painel...", "info");
+      try {
+        await syncPanelSession();
+        const isAdmin = state.panel && state.panel.isAdmin;
+        const [statusPayload, historyPayload, usersPayload, recolhasPayload] = await Promise.all([
+          req(CONFIG.endpoints.import.status, { timeoutMs: 30000 }),
+          req(CONFIG.endpoints.import.history, { timeoutMs: 30000 }),
+          isAdmin ? req(CONFIG.endpoints.access.list, { timeoutMs: 30000 }) : Promise.resolve({ users: [] }),
+          req(CONFIG.endpoints.recolhas.list, { timeoutMs: 30000 })
+        ]);
+        state.status = statusPayload || {};
+        state.history = (historyPayload && historyPayload.history) ? historyPayload.history : [];
+        state.accessUsers = (usersPayload && usersPayload.users) ? usersPayload.users : [];
+        state.recolhas = recolhasPayload && typeof recolhasPayload === "object"
+          ? { total: Number(recolhasPayload.total || 0), operations: Array.isArray(recolhasPayload.operations) ? recolhasPayload.operations : [] }
+          : { total: 0, operations: [] };
+        state.lastSyncAt = new Date();
+        renderHistory();
+        renderGridPanels();
+        renderAccess();
+        renderRecolhas();
+        updateGeneralState();
+        updateMetrics();
+        if (isAdmin) {
+          await syncEvolutionUsage({ silent: true });
+        } else {
+          renderEvolutionUsage();
+        }
+        await syncBroadcastOptions({ silent: true });
+        addLog("Atualização concluída.", "ok");
+      } catch (err) {
+        addLog(`Falha ao atualizar: ${err.message}`, "err");
+        renderHistory();
+        renderGridPanels();
+        renderAccess();
+        renderRecolhas();
+        updateGeneralState();
+        updateMetrics();
+        renderEvolutionUsage();
+        renderBroadcastOptions();
+      } finally {
+        setSyncState(false);
+      }
+    }
+
+    function updateGeneralState() {
+      const running = Boolean(state.status && state.status.running);
+      if (running) { E.runningState.textContent = "Importacao em andamento"; E.runningState.className = "pill warn"; }
+      else { E.runningState.textContent = "Nenhuma importação ativa"; E.runningState.className = "pill ok"; }
+      if (state.status && state.status.last_job && state.status.last_job.finished_at) {
+        E.lastJobState.textContent = `Ultima carga: ${new Date(state.status.last_job.finished_at).toLocaleString()}`;
+      } else if (state.history.length > 0) {
+        E.lastJobState.textContent = `Ultima carga: ${new Date(state.history[0].imported_at).toLocaleString()}`;
+      } else {
+        E.lastJobState.textContent = "Sem execução recente";
+      }
+      E.lastJobState.className = "pill";
+    }
+
+    function getDatasetStatus(dsId) {
+      const apiDs = toApiDataset(dsId);
+      const statusItems = state.status && Array.isArray(state.status.items) ? state.status.items : [];
+      const statusItem = statusItems.find(item => item.dataset === apiDs);
+      return {
+        import: statusItem && statusItem.last_import ? {
+          batch_id: statusItem.last_import.batch_id,
+          total_processed_rows: statusItem.last_import.total_rows,
+          reference_date: statusItem.last_import.reference_date,
+          status: (state.status.running && state.status.current_dataset === apiDs) ? "in_progress" : "completed"
+        } : null,
+        statusItem: statusItem || null
+      };
+    }
+
+    function buildGrid() {
+      E.grid.innerHTML = CONFIG.datasets.map(ds => `
+        <article class="dataset-card" id="card-${ds.id}">
+          <header class="dataset-head d-flex justify-content-between align-items-center">
+            <h3 class="h6 mb-0 fw-bold"><i class="bi ${ds.icon} text-primary me-2"></i>${ds.name}</h3>
+            <div id="stat-${ds.id}"></div>
+          </header>
+          <div class="dataset-body">
+            <div class="small text-secondary d-grid gap-1" id="meta-${ds.id}">Sem dados ainda.</div>
+            <label class="form-label small fw-semibold mb-1">${(DATASET_UPLOAD_META[ds.id] || {}).label || "Arquivo(s) do Dataset"}
+              <input
+                type="file"
+                class="form-control form-control-sm"
+                id="file-${ds.id}"
+                accept="${(DATASET_UPLOAD_META[ds.id] || {}).accept || ".csv"}"
+                ${(DATASET_UPLOAD_META[ds.id] || {}).mode === "multiple" ? "multiple" : ""}
+              >
+            </label>
+            <div class="form-text" id="filehint-${ds.id}">${(DATASET_UPLOAD_META[ds.id] || {}).emptyHint || "Selecione o arquivo do dataset."}</div>
+            <div class="file-list" id="filelist-${ds.id}"></div>
+            <div id="datewrapper-${ds.id}">
+              <label class="form-label small fw-semibold mb-1">Data de Referencia
+                <input type="date" class="form-control form-control-sm" id="date-${ds.id}">
+              </label>
+              <div class="form-text">Opcional. Se informar, essa data será gravada no lote importado.</div>
+            </div>
+            <div id="val-${ds.id}"></div>
+            <div class="d-grid gap-2" id="btns-${ds.id}"></div>
+          </div>
+        </article>
+      `).join("");
+
+      CONFIG.datasets.forEach(ds => {
+        const inp = document.getElementById(`file-${ds.id}`);
+        const hint = document.getElementById(`filehint-${ds.id}`);
+        const list = document.getElementById(`filelist-${ds.id}`);
+        const meta = DATASET_UPLOAD_META[ds.id] || {};
+        if (!inp || !hint) return;
+        inp.addEventListener("change", () => {
+          const total = inp.files ? inp.files.length : 0;
+          hint.textContent = total > 0
+            ? `${total} arquivo(s) selecionado(s).`
+            : (meta.emptyHint || "Selecione o arquivo do dataset.");
+          if (!list) return;
+          if (!total) {
+            list.innerHTML = "";
+            return;
+          }
+          const names = Array.from(inp.files).slice(0, 3).map(f => `<span>• ${escapeHtml(f.name)}</span>`);
+          if (total > 3) names.push(`<span>• +${total - 3} arquivo(s)</span>`);
+          list.innerHTML = names.join("");
+        });
+      });
+
+      CONFIG.datasets.forEach(ds => {
+        const fileInput = document.getElementById(`file-${ds.id}`);
+        if (!fileInput) return;
+        fileInput.addEventListener("change", (e) => {
+          const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+          if (!file) return;
+          const m = file.name.match(/(\d{2})[-_](\d{2})[-_](\d{4})/);
+          if (m) {
+            const dateInput = document.getElementById(`date-${ds.id}`);
+            if (dateInput && !dateInput.value) {
+              dateInput.value = `${m[3]}-${m[2]}-${m[1]}`;
+            }
+          }
+        });
+      });
+    }
+
+    function renderGridPanels() {
+      CONFIG.datasets.forEach(ds => {
+        const s = getDatasetStatus(ds.id);
+        const st = document.getElementById(`stat-${ds.id}`);
+        const meta = document.getElementById(`meta-${ds.id}`);
+        const valBox = document.getElementById(`val-${ds.id}`);
+        const btns = document.getElementById(`btns-${ds.id}`);
+        const card = document.getElementById(`card-${ds.id}`);
+        if (card) card.classList.remove("is-loading");
+
+        let statusUi = "<span class='badge text-bg-secondary'>Sem historico</span>";
+        let metaHtml = "<div class='dataset-meta'><div><span class='label'>Estado:</span><span class='value'>Aguardando primeira importação</span></div></div>";
+        let valHtml = "";
+        const isBusy = state.datasetBusy[ds.id] === true;
+        let buttonsHtml = `<button class="btn btn-outline-primary btn-sm" ${isBusy ? "disabled" : ""} onclick="validateCSV('${ds.id}')"><i class="bi bi-check2-circle me-1"></i>${isBusy ? "Processando" : "Validar"}</button><button class="btn btn-primary btn-sm" ${isBusy ? "disabled" : ""} onclick="startImport('${ds.id}')"><i class="bi bi-cloud-arrow-up me-1"></i>${isBusy ? "Aguarde" : "Importar"}</button>`;
+
+        if (s.import) {
+          const l = s.import;
+          const map = { completed:["text-bg-success","Importado"], failed:["text-bg-danger","Falhou"], in_progress:["text-bg-warning","Importando"] };
+          const x = map[l.status] || ["text-bg-secondary", l.status || "Status"];
+          statusUi = `<span class="badge ${escapeHtml(x[0])}">${escapeHtml(x[1])}</span>`;
+          metaHtml = `<div class="dataset-meta"><div><span class="label">Lote:</span><span class="value">${escapeHtml(String(l.batch_id || "").split("-")[0])}...</span></div><div><span class="label">Linhas:</span><span class="value">${escapeHtml(l.total_processed_rows || 0)}</span></div><div><span class="label">Referencia:</span><span class="value">${escapeHtml(l.reference_date || "N/A")}</span></div></div>`;
+        }
+
+        if (s.statusItem) {
+          const source = s.statusItem.using_uploaded_source
+            ? "Upload ativo"
+            : (s.statusItem.requires_upload ? "Upload obrigatório" : "Arquivo padrão");
+          valHtml += `<div class="source-box"><div class="small text-secondary">Fonte: <strong>${escapeHtml(source)}</strong></div><div class="source-path">${escapeHtml(s.statusItem.active_source_path || "-")}</div></div>`;
+        }
+
+        const v = state.datasetValidation[ds.id];
+        if (v) {
+          const validationKind = v.kind === "ok" || v.kind === "err" || v.kind === "warn" ? v.kind : "warn";
+          valHtml = `<div class="validation-panel ${validationKind}"><div class="validation-title">${escapeHtml(v.title)}</div><div>${escapeHtml(v.message)}</div></div>${valHtml}`;
+        }
+
+        st.innerHTML = statusUi;
+        meta.innerHTML = metaHtml;
+        valBox.innerHTML = valHtml;
+        btns.innerHTML = buttonsHtml;
       });
     }
 
     function renderHistory() {
-      const rows = state.history || [];
-      if (!rows.length) {
-        elements.historyBody.innerHTML = `<tr><td colspan="6">Sem historico disponivel.</td></tr>`;
+      if (!state.history.length) {
+        E.historyTable.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-secondary">Sem histórico de importação</td></tr>';
         return;
       }
-      elements.historyBody.innerHTML = rows.map((item) => `
-        <tr>
-          <td>${item.label}</td>
-          <td>${item.batch_id}</td>
-          <td>${item.total_rows}</td>
-          <td>${item.reference_date || "-"}</td>
-          <td>${item.imported_at || "-"}</td>
-          <td>${item.source_file || "-"}</td>
-        </tr>
-      `).join("");
+      E.historyTable.innerHTML = state.history.map(h => {
+        const importedAt = new Date(h.imported_at || h.created_at);
+        const importedText = Number.isNaN(importedAt.getTime()) ? "-" : importedAt.toLocaleString();
+        return `<tr><td class="ps-3"><strong>${escapeHtml(fromApiDataset(h.dataset || h.dataset_type || "-"))}</strong></td><td><span class="mono">${escapeHtml(String(h.batch_id || "").substring(0,8))}</span></td><td>${escapeHtml(h.total_rows || h.total_processed_rows || 0)}</td><td>${escapeHtml(h.reference_date || "--")}</td><td>${escapeHtml(importedText)}</td></tr>`;
+      }).join("");
     }
 
-    async function refreshPanel() {
-      saveTokens();
-      setBusy(true);
+    async function validateCSV(dsId) {
+      const input = document.getElementById(`file-${dsId}`);
+      const apiDataset = toApiDataset(dsId);
+      const di = document.getElementById(`date-${dsId}`);
+      const refDate = di ? di.value : null;
+      const timeouts = datasetTimeouts(dsId);
+
       try {
-        const [statusPayload, historyPayload] = await Promise.all([
-          apiFetch("/api/admin/imports/status", { headers: buildHeaders(false) }),
-          apiFetch("/api/admin/imports/history", { headers: buildHeaders(false) }),
-        ]);
-        state.status = statusPayload;
-        state.history = historyPayload.history || [];
-        renderStatus();
-        renderHistory();
-        maybeLogLastJob();
-      } catch (error) {
-        appendLog("Falha ao atualizar painel", error.message || String(error));
+        state.datasetBusy[dsId] = true;
+        renderGridPanels();
+        if (input && input.files.length) {
+          const formData = new FormData();
+          formData.append("dataset", apiDataset);
+          const totalFiles = input.files.length;
+          for (const f of Array.from(input.files)) {
+            formData.append("files", f);
+          }
+          const payload = await req(CONFIG.endpoints.import.upload, {
+            method: "POST",
+            headers: {},
+            body: formData,
+            timeoutMs: timeouts.validateMs
+          });
+          input.value = "";
+          const hint = document.getElementById(`filehint-${dsId}`);
+          const list = document.getElementById(`filelist-${dsId}`);
+          const meta = DATASET_UPLOAD_META[dsId] || {};
+          if (hint) hint.textContent = meta.emptyHint || "Selecione o arquivo do dataset.";
+          if (list) list.innerHTML = "";
+          state.datasetValidation[dsId] = buildValidationMessage(dsId, payload, `Validação concluída com ${totalFiles} arquivo(s).`);
+          addLog(`Upload e validacao do dataset ${dsId} concluido com ${totalFiles} arquivo(s).`, "ok");
+        } else {
+          const payload = await req(CONFIG.endpoints.import.validate, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dataset: apiDataset, reference_date: refDate || null }),
+            timeoutMs: timeouts.validateMs
+          });
+          state.datasetValidation[dsId] = buildValidationMessage(dsId, payload, "Validação concluída sem envio de arquivo.");
+          addLog(`Validação executada para ${dsId}.`, "ok");
+        }
+        setTimeout(syncAll, 1200);
+      } catch (err) {
+        state.datasetValidation[dsId] = {
+          kind: "err",
+          title: "Falha na validacao",
+          message: err.message || "Não foi possível validar o dataset."
+        };
+        addLog(`Erro ao validar ${dsId}: ${err.message}`, "err");
       } finally {
-        setBusy(false);
-        queuePollIfNeeded();
+        state.datasetBusy[dsId] = false;
+        renderGridPanels();
       }
     }
 
-    async function handleUpload(dataset) {
-      const input = document.querySelector(`[data-files="${dataset}"]`);
-      const files = Array.from(input?.files || []);
-      if (!files.length) {
-        appendLog(`Upload de ${dataset}`, "Selecione pelo menos um arquivo.");
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("dataset", dataset);
-      files.forEach((file) => formData.append("files", file));
-
-      setBusy(true);
+    async function startImport(dsId) {
+      const apiDataset = toApiDataset(dsId);
+      const confirmed = await askConfirmation(`Efetivar importação do dataset ${dsId}?`);
+      if (!confirmed) return;
+      const di = document.getElementById(`date-${dsId}`);
+      const refDate = di ? di.value : null;
       try {
-        const result = await apiFetch("/api/admin/imports/upload", {
+        state.datasetBusy[dsId] = true;
+        renderGridPanels();
+        const runPayload = await req(CONFIG.endpoints.import.run, {
           method: "POST",
-          headers: buildHeaders(false),
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dataset: apiDataset, reference_date: refDate || null }),
+          timeoutMs: 60000
         });
-        input.value = "";
-        appendLog(`Upload concluido: ${dataset}`, result);
-        await refreshPanel();
-      } catch (error) {
-        appendLog(`Falha no upload de ${dataset}`, error.message || String(error));
+
+        const jobId = String(runPayload && runPayload.job_id ? runPayload.job_id : "");
+        state.datasetValidation[dsId] = {
+          kind: "warn",
+          title: "Importacao iniciada",
+          message: "Processo disparado com sucesso. Aguardando conclusao..."
+        };
+        addLog("Importacao disparada.", "ok");
+
+        const jobResult = await waitForImportCompletion({ dsId, apiDataset, jobId });
+        if (jobResult.status === "completed") {
+          state.datasetValidation[dsId] = {
+            kind: "ok",
+            title: "Importacao concluida",
+            message: "Processo finalizado com sucesso."
+          };
+          addLog(`Importacao concluida para ${dsId}.`, "ok");
+        } else if (jobResult.status === "failed") {
+          state.datasetValidation[dsId] = {
+            kind: "err",
+            title: "Importacao falhou",
+            message: jobResult.error || "A execução terminou com falha."
+          };
+          addLog(`Falha na importação de ${dsId}: ${jobResult.error || "erro não informado"}`, "err");
+        } else {
+          state.datasetValidation[dsId] = {
+            kind: "warn",
+            title: "Importacao em processamento",
+            message: "Ainda executando no servidor. Clique em Atualizar para acompanhar."
+          };
+          addLog(`Importacao de ${dsId} ainda em processamento.`, "warn");
+        }
+
+        await syncAll();
+      } catch (err) {
+        state.datasetValidation[dsId] = {
+          kind: "err",
+          title: "Falha na importação",
+          message: err.message || "Não foi possível iniciar a importação."
+        };
+        addLog(`Erro na importação: ${err.message}`, "err");
       } finally {
-        setBusy(false);
+        state.datasetBusy[dsId] = false;
+        renderGridPanels();
       }
     }
 
-    async function handleValidate(dataset) {
-      const refInput = document.querySelector(`[data-ref="${dataset}"]`);
-      const payload = { dataset, reference_date: refInput?.value || null };
-      setBusy(true);
+    async function waitForImportCompletion({ dsId, apiDataset, jobId }) {
+      const timeoutAt = Date.now() + datasetTimeouts(dsId).importMs;
+      while (Date.now() < timeoutAt) {
+        const status = await req(CONFIG.endpoints.import.status, { timeoutMs: 30000 });
+        const running = Boolean(status && status.running);
+        const currentDataset = String(status && status.current_dataset ? status.current_dataset : "");
+        const lastJob = status && status.last_job ? status.last_job : null;
+
+        if (running && currentDataset === apiDataset) {
+          state.datasetValidation[dsId] = {
+            kind: "warn",
+            title: "Importacao em andamento",
+            message: "Processando dados..."
+          };
+          renderGridPanels();
+        }
+
+        if (lastJob) {
+          const sameJob = jobId ? String(lastJob.job_id || "") === jobId : String(lastJob.dataset || "") === apiDataset;
+          if (sameJob && String(lastJob.status || "") === "completed") {
+            return { status: "completed" };
+          }
+          if (sameJob && String(lastJob.status || "") === "failed") {
+            return { status: "failed", error: String(lastJob.error || "") };
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      return { status: "timeout" };
+    }
+
+    function buildValidationMessage(dsId, payload, fallbackMessage) {
+      const data = payload && typeof payload === "object" ? payload : {};
+      const errors = Number(data.errors || data.error_count || data.invalid_rows || 0);
+      const warnings = Number(data.warnings || data.warning_count || 0);
+      const checked = Number(data.total_rows || data.checked_rows || data.validated_rows || 0);
+
+      let kind = "ok";
+      let title = "Validação aprovada";
+      if (errors > 0) {
+        kind = "err";
+        title = "Validação com erros";
+      } else if (warnings > 0) {
+        kind = "warn";
+        title = "Validação com alertas";
+      }
+
+      const parts = [];
+      if (checked > 0) parts.push(`${checked} linhas verificadas`);
+      if (warnings > 0) parts.push(`${warnings} alerta(s)`);
+      if (errors > 0) parts.push(`${errors} erro(s)`);
+      if (!parts.length) parts.push(fallbackMessage);
+
+      return { kind, title, message: parts.join(" • ") };
+    }
+
+    function resetAccessForm() {
+      state.accessEditing = null;
+      document.getElementById("accessPhone").value = "";
+      document.getElementById("accessName").value = "";
+      document.getElementById("accessScope").value = "";
+      document.getElementById("accessActive").checked = true;
+      E.accessRole.selectedIndex = 0;
+      updateScopeHint();
+      E.accessModeHint.textContent = "Modo atual: novo cadastro.";
+      E.accessUserCount.textContent = `${state.accessUsers.length} usuários`;
+    }
+
+    function editAccess(phone) {
+      const u = state.accessUsers.find(x => (x.whatsapp_phone_number || x.phone_number) === phone);
+      if (!u) return;
+      const n = normalizeUserForUi(u);
+      state.accessEditing = u;
+      document.getElementById("accessPhone").value = n.phone_display === "-" ? "" : n.phone_display;
+      document.getElementById("accessName").value = n.name;
+      E.accessRole.value = n.role;
+      document.getElementById("accessScope").value = n.scope.join(", ");
+      document.getElementById("accessActive").checked = n.active;
+      updateScopeHint();
+      E.accessModeHint.innerHTML = `Editando <strong>${escapeHtml(n.phone_display)}</strong>.`;
+    }
+
+    async function deleteAccess(phone) {
+      const u = state.accessUsers.find(x => (x.whatsapp_phone_number || x.phone_number) === phone);
+      if (!u) return;
+      const confirmed = await askConfirmation(`Deseja deletar o usuário ${u.name || phone}? Esta ação não pode ser desfeita.`);
+      if (!confirmed) return;
       try {
-        const result = await apiFetch("/api/admin/imports/validate", {
-          method: "POST",
-          headers: buildHeaders(true),
-          body: JSON.stringify(payload),
+        await req(`${CONFIG.endpoints.access.save}/${phone}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" }
         });
-        appendLog(`Validacao de ${dataset}`, result);
-        await refreshPanel();
-      } catch (error) {
-        appendLog(`Falha na validacao de ${dataset}`, error.message || String(error));
-      } finally {
-        setBusy(false);
+        addLog(`Usuario ${formatPhoneForUi(phone)} deletado com sucesso.`, "ok");
+        await syncAll();
+      } catch (err) {
+        addLog(`Falha ao deletar usuário: ${err.message}`, "err");
       }
     }
 
-    async function handleImport(dataset) {
-      const refInput = document.querySelector(`[data-ref="${dataset}"]`);
-      const payload = { dataset, reference_date: refInput?.value || null };
-      setBusy(true);
+    async function saveAccess() {
+      const phone = document.getElementById("accessPhone").value.trim().replace(/\D/g, "");
+      const name = document.getElementById("accessName").value.trim();
+      const role = E.accessRole.value;
+      const scopeRaw = document.getElementById("accessScope").value.trim();
+      const active = document.getElementById("accessActive").checked;
+      if (!phone || phone.length < 10) { addLog("Número inválido.", "warn"); return; }
+      const scopes = scopeRaw ? scopeRaw.split(/[,;\n]+/).map(s => normalizeScopeTokenForApi(s)).filter(Boolean) : [];
+      const roleApi = roleToApi(role);
+      const payload = {
+        phone_number: phone,
+        name: name || null,
+        is_active: active,
+        roles: [roleApi],
+        sectors: (roleApi === "vendedor" || roleApi === "financeiro") ? scopes : [],
+        gv_vdes: (roleApi === "gerente_vendas" || roleApi === "diretor_comercial") ? scopes : []
+      };
       try {
-        const result = await apiFetch("/api/admin/imports/run", {
-          method: "POST",
-          headers: buildHeaders(true),
-          body: JSON.stringify(payload),
-        });
-        appendLog(`Importacao iniciada: ${dataset}`, result);
-        await refreshPanel();
-      } catch (error) {
-        appendLog(`Falha ao iniciar importacao de ${dataset}`, error.message || String(error));
-      } finally {
-        setBusy(false);
+        await req(CONFIG.endpoints.access.save, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        addLog(`Acesso salvo: ${formatPhoneForUi(phone)}.`, "ok");
+        resetAccessForm();
+        await syncAll();
+      } catch (err) {
+        addLog(`Falha ao salvar acesso: ${err.message}`, "err");
       }
     }
 
-    async function handleDatasetAction(dataset, action) {
-      saveTokens();
-      if (action === "upload") {
-        await handleUpload(dataset);
+    async function saveBulkAccess() {
+      const txt = E.accessBulk.value.trim();
+      if (!txt) { addLog("Use o formato: numero;nome;perfil;escopo;status", "warn"); return; }
+      try {
+        const users = txt.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map((line, idx) => {
+          const parts = line.split(";").map(x => x.trim());
+          if (parts.length < 3) throw new Error(`Linha ${idx + 1} invalida. Use: numero;nome;perfil;escopo;status (Exemplo: 5583999999999;Nome;VENDEDOR;3-400;ativo)`);
+          const phone = String(parts[0] || "").replace(/\D/g, "");
+          if (!phone) throw new Error(`Linha ${idx + 1}: numero invalido`);
+          const name = parts[1] || null;
+          if (!name) throw new Error(`Linha ${idx + 1}: nome e obrigatorio`);
+          const roleApi = roleToApi(parts[2]);
+          const scopes = parts[3] ? parts[3].split(/[,]+/).map(s => normalizeScopeTokenForApi(s)).filter(Boolean) : [];
+          const statusTxt = normalizeStatusText(parts[4] || "ativo");
+          const isActive = !["0", "inativo", "nao", "false"].includes(statusTxt);
+          return {
+            phone_number: phone,
+            name: name,
+            is_active: isActive,
+            roles: [roleApi],
+            sectors: (roleApi === "vendedor" || roleApi === "financeiro") ? scopes : [],
+            gv_vdes: (roleApi === "gerente_vendas" || roleApi === "diretor_comercial") ? scopes : []
+          };
+        });
+
+        await req(CONFIG.endpoints.access.importBulk, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ continue_on_error: true, users: users })
+        });
+        addLog("Lote RBAC importado.", "ok");
+        E.accessBulk.value = "";
+        await syncAll();
+      } catch (err) {
+        addLog(`Falha no lote: ${err.message}`, "err");
+      }
+    }
+
+    function renderAccess() {
+      const filter = normalizeTextForSearch(E.accessUsersFilter.value || "");
+      const users = state.accessUsers.map(normalizeUserForUi).filter(u => {
+        if (!filter) return true;
+        const phone = normalizeTextForSearch(u.phone || "");
+        const phoneDisplay = normalizeTextForSearch(u.phone_display || "");
+        const phoneComparable = normalizeTextForSearch(u.phone_comparable || "");
+        const name = normalizeTextForSearch(u.name || "");
+        const role = normalizeTextForSearch(u.role || "");
+        const scope = normalizeTextForSearch(Array.isArray(u.scope) ? u.scope.join(",") : "");
+        return phone.includes(filter) || phoneDisplay.includes(filter) || phoneComparable.includes(filter) || name.includes(filter) || role.includes(filter) || scope.includes(filter);
+      });
+      E.accessUserCount.textContent = `${users.length} usuários`;
+      if (!users.length) {
+        E.accessUsersTable.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-secondary">Nenhum usuário encontrado</td></tr>';
+        syncAllowedUsersCardSizing();
         return;
       }
-      if (action === "validate") {
-        await handleValidate(dataset);
-        return;
-      }
-      await handleImport(dataset);
+      E.accessUsersTable.innerHTML = users.map(u => {
+        const rawPhone = u.phone || "-";
+        const displayPhone = u.phone_display || "-";
+        const rawPhoneAction = encodeURIComponent(rawPhone);
+        const statusClass = u.active ? "badge text-bg-success" : "badge text-bg-danger";
+        const statusText = u.active ? "Ativo" : "Bloqueado";
+        const scope = Array.isArray(u.scope) && u.scope.length ? u.scope.join(", ") : "-";
+        return `<tr><td class="ps-3"><strong class="mono">${escapeHtml(displayPhone)}</strong></td><td>${escapeHtml(u.name || "-")}</td><td><span class="badge text-bg-light border">${escapeHtml(u.role || "-")}</span></td><td><span class="mono small">${escapeHtml(scope)}</span></td><td><span class="${statusClass}">${escapeHtml(statusText)}</span></td><td class="text-end pe-3"><div class="d-flex gap-1 justify-content-end"><button class="btn btn-outline-primary btn-sm" onclick="editAccess(decodeURIComponent('${rawPhoneAction}'))"><i class="bi bi-pencil-square me-1"></i>Editar</button><button class="btn btn-outline-danger btn-sm" onclick="deleteAccess(decodeURIComponent('${rawPhoneAction}'))"><i class="bi bi-trash3 me-1"></i>Apagar</button></div></td></tr>`;
+      }).join("");
+      syncAllowedUsersCardSizing();
     }
 
-    elements.refreshBtn.addEventListener("click", refreshPanel);
-    elements.clearLogBtn.addEventListener("click", () => {
-      elements.logPanel.textContent = "Log limpo.";
-    });
-    elements.apiToken.addEventListener("change", saveTokens);
-    elements.adminToken.addEventListener("change", saveTokens);
+    function askConfirmation(message) {
+      if (!confirmModalInstance || !E.confirmModalOk || !E.confirmModalCancel || !E.confirmModalText) {
+        return Promise.resolve(window.confirm(message));
+      }
+      E.confirmModalText.textContent = message;
+      return new Promise(resolve => {
+        const onOk = () => {
+          cleanup();
+          resolve(true);
+          confirmModalInstance.hide();
+        };
+        const onCancel = () => {
+          cleanup();
+          resolve(false);
+        };
+        const onHidden = () => {
+          cleanup();
+          resolve(false);
+        };
+        const cleanup = () => {
+          E.confirmModalOk.removeEventListener("click", onOk);
+          E.confirmModalCancel.removeEventListener("click", onCancel);
+          document.getElementById("confirmModal").removeEventListener("hidden.bs.modal", onHidden);
+        };
 
-    loadTokens();
-    refreshPanel();
+        E.confirmModalOk.addEventListener("click", onOk);
+        E.confirmModalCancel.addEventListener("click", onCancel);
+        document.getElementById("confirmModal").addEventListener("hidden.bs.modal", onHidden, { once: true });
+        confirmModalInstance.show();
+      });
+    }
+
+    init();
   </script>
 </body>
 </html>

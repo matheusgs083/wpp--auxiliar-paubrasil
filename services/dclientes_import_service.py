@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import time
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
@@ -19,12 +20,24 @@ try:
         normalize_header_name,
         validate_csv_source,
     )
+    from services.import_publication import (
+        activate_import_batch,
+        ensure_dataset_state_table,
+        prune_import_batches,
+        resolve_effective_import_batch_id,
+    )
 except ModuleNotFoundError:
     from bot_api.services.report_csv_validation import (
         DCLIENTES_CSV_SPEC,
         build_required_indexes,
         normalize_header_name,
         validate_csv_source,
+    )
+    from bot_api.services.import_publication import (
+        activate_import_batch,
+        ensure_dataset_state_table,
+        prune_import_batches,
+        resolve_effective_import_batch_id,
     )
 
 from bot_api.services.dsetores_import_service import ensure_dsetores_schema
@@ -49,6 +62,8 @@ _ACCENTED_SQL_SOURCE = (
     "\u00e7\u00f1"
 )
 _ACCENTED_SQL_TARGET = "aaaaaeeeeiiiiooooouuuucn"
+_DEADLOCK_RETRY_ATTEMPTS = 3
+_DEADLOCK_RETRY_BASE_SECONDS = 0.35
 
 
 @dataclass(frozen=True)
@@ -80,8 +95,9 @@ class DClientesImportService:
     def validate_csv(self, file_path: Path):
         return validate_csv_source(file_path, DCLIENTES_CSV_SPEC)
 
-    def summarize_csv(self, file_path: Path) -> DClientesSummary:
-        self.validate_csv(file_path).ensure_valid()
+    def summarize_csv(self, file_path: Path, *, validate: bool = True) -> DClientesSummary:
+        if validate:
+            self.validate_csv(file_path).ensure_valid()
 
         rows = 0
         filiais = Counter()
@@ -128,26 +144,45 @@ class DClientesImportService:
             top_setor_vde=setor_counter.most_common(20),
         )
 
-    def import_csv(self, file_path: Path, reference_date: date | None = None) -> dict[str, Any]:
+    def import_csv(
+        self,
+        file_path: Path,
+        reference_date: date | None = None,
+        summary: DClientesSummary | dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         if not self.database_url:
             raise RuntimeError("REPORTS_DATABASE_URL nao configurada.")
         if not file_path.exists():
             raise FileNotFoundError(f"Arquivo nao encontrado: {file_path}")
 
-        summary = self.summarize_csv(file_path)
+        if summary is None:
+            summary = self.summarize_csv(file_path)
+            summary_payload = summary.to_dict()
+            total_rows = summary.rows
+        elif isinstance(summary, DClientesSummary):
+            summary_payload = summary.to_dict()
+            total_rows = summary.rows
+        else:
+            summary_payload = dict(summary)
+            total_rows = int(summary_payload.get("rows") or summary_payload.get("total_rows") or 0)
         batch_date = reference_date or datetime.fromtimestamp(file_path.stat().st_mtime).date()
         file_hash = _sha256(file_path)
 
-        with self._connect() as conn:
-            self._ensure_schema(conn)
-            self._replace_dataset_contents(conn, dataset_name="dclientes")
-            batch_id = self._insert_batch(conn, file_path, batch_date, file_hash, summary.rows)
-            self._insert_snapshot_rows(conn, file_path, batch_id)
-            self._hydrate_scope_columns(conn, batch_id=batch_id)
-            self._create_latest_view(conn)
-            conn.commit()
+        batch_id = self._run_with_deadlock_retry(
+            operation_name="carga dclientes",
+            callback=lambda: self._run_snapshot_stage(
+                file_path=file_path,
+                batch_date=batch_date,
+                file_hash=file_hash,
+                total_rows=total_rows,
+            ),
+        )
+        self._run_with_deadlock_retry(
+            operation_name="publicacao dclientes",
+            callback=lambda: self._run_publish_stage(batch_id=batch_id),
+        )
 
-        result = summary.to_dict()
+        result = summary_payload
         result.update(
             {
                 "batch_id": batch_id,
@@ -155,9 +190,40 @@ class DClientesImportService:
                 "file_hash": file_hash,
                 "schema": self.schema,
                 "normalized_codes": True,
+                "replaced_previous_batches": False,
+                "published_as_active_batch": True,
             }
         )
         return result
+
+    def _run_snapshot_stage(self, *, file_path: Path, batch_date: date, file_hash: str, total_rows: int) -> int:
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            batch_id = self._insert_batch(conn, file_path, batch_date, file_hash, total_rows)
+            self._insert_snapshot_rows(conn, file_path, batch_id)
+            self._hydrate_scope_columns(conn, batch_id=batch_id)
+            conn.commit()
+            return batch_id
+
+    def _run_publish_stage(self, *, batch_id: int) -> None:
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            activate_import_batch(conn, self.schema, "dclientes", batch_id)
+            self._create_latest_view(conn)
+            prune_import_batches(conn, self.schema, "dclientes", keep_last=3)
+            conn.commit()
+
+    def _run_with_deadlock_retry(self, *, operation_name: str, callback: Any) -> Any:
+        max_attempts = max(1, int(_DEADLOCK_RETRY_ATTEMPTS))
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return callback()
+            except psycopg.errors.DeadlockDetected as exc:
+                if attempt >= max_attempts:
+                    raise RuntimeError(
+                        f"Falha na {operation_name} apos {max_attempts} tentativa(s) por deadlock."
+                    ) from exc
+                time.sleep(_DEADLOCK_RETRY_BASE_SECONDS * attempt)
 
     def refresh_latest_view(self) -> dict[str, Any]:
         if not self.database_url:
@@ -165,11 +231,19 @@ class DClientesImportService:
 
         with self._connect() as conn:
             self._ensure_schema(conn)
-            self._hydrate_scope_columns(conn)
+            active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "dclientes", activate_if_missing=True)
+            if active_batch_id is not None:
+                self._hydrate_scope_columns(conn, batch_id=active_batch_id)
             self._create_latest_view(conn)
             conn.commit()
 
-        return {"ok": True, "schema": self.schema, "view": f"{self.schema}.dclientes_latest", "normalized_codes": True}
+        return {
+            "ok": True,
+            "schema": self.schema,
+            "view": f"{self.schema}.dclientes_latest",
+            "normalized_codes": True,
+            "active_batch_id": active_batch_id,
+        }
 
     def _ensure_schema(self, conn: psycopg.Connection[Any]) -> None:
         with conn.cursor() as cur:
@@ -427,6 +501,7 @@ class DClientesImportService:
                     sql.Identifier(self.schema)
                 )
             )
+            ensure_dataset_state_table(conn, self.schema)
         ensure_dsetores_schema(conn, self.schema)
 
     def _insert_batch(
@@ -450,82 +525,45 @@ class DClientesImportService:
         return int(row["id"])
 
     def _insert_snapshot_rows(self, conn: psycopg.Connection[Any], file_path: Path, batch_id: int) -> None:
-        with file_path.open("r", encoding="cp1252", newline="") as fp:
-            reader = csv.reader(fp, delimiter=";")
-            header = next(reader)
-            indexes = _required_indexes(header)
+        copy_query = sql.SQL(
+            """
+            COPY {}.dclientes_snapshot (
+                batch_id,
+                row_number,
+                empresa,
+                filial,
+                cod_pdv,
+                documento,
+                nome_fantasia,
+                razao_social,
+                status_pdv,
+                setor_vde,
+                area_vde,
+                gv_vde,
+                setor_vdi,
+                area_vdi,
+                gv_vdi,
+                payload
+            )
+            FROM STDIN
+            """
+        ).format(sql.Identifier(self.schema))
 
-            query = sql.SQL(
-                """
-                INSERT INTO {}.dclientes_snapshot (
-                    batch_id,
-                    row_number,
-                    empresa,
-                    filial,
-                    cod_pdv,
-                    documento,
-                    nome_fantasia,
-                    razao_social,
-                    status_pdv,
-                    setor_vde,
-                    area_vde,
-                    gv_vde,
-                    setor_vdi,
-                    area_vdi,
-                    gv_vdi,
-                    payload
-                )
-                VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                )
-                """
-            ).format(sql.Identifier(self.schema))
-
-            payload_batch: list[tuple[Any, ...]] = []
-            with conn.cursor() as cur:
-                for row_number, row in enumerate(reader, start=1):
-                    if not row or not any(str(value or "").strip() for value in row):
-                        continue
-                    record = _row_to_record(header, row)
-                    payload_batch.append(
-                        (
-                            batch_id,
-                            row_number,
-                            row[indexes["Empresa"]].strip(),
-                            _normalize_code_value(row[indexes["Filial"]]),
-                            _normalize_code_value(row[indexes["Cod PDV"]]),
-                            row[indexes["Documento"]].strip(),
-                            row[indexes["Nome Fantasia"]].strip(),
-                            row[indexes["Razao Social"]].strip(),
-                            row[indexes["Status do PDV"]].strip(),
-                            _normalize_code_value(row[indexes["Setor VDE"]]),
-                            _normalize_code_value(row[indexes["Area VDE"]]),
-                            _normalize_code_value(row[indexes["GV VDE"]]),
-                            _normalize_code_value(row[indexes["Setor VDI"]]),
-                            _normalize_code_value(row[indexes["Area VDI"]]),
-                            _normalize_code_value(row[indexes["GV VDI"]]),
-                            Jsonb(record),
-                        )
-                    )
-                    if len(payload_batch) >= 1000:
-                        cur.executemany(query, payload_batch)
-                        payload_batch.clear()
-
-                if payload_batch:
-                    cur.executemany(query, payload_batch)
+        with conn.cursor() as cur:
+            with cur.copy(copy_query) as copy:
+                for payload_row in _iter_dclientes_snapshot_rows(file_path=file_path, batch_id=batch_id):
+                    copy.write_row(payload_row)
 
     def _create_latest_view(self, conn: psycopg.Connection[Any]) -> None:
-        drop_query = sql.SQL("DROP VIEW IF EXISTS {}.dclientes_latest").format(sql.Identifier(self.schema))
+        active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "dclientes", activate_if_missing=True)
+        where_clause = (
+            sql.SQL("s.batch_id = {}").format(sql.Literal(active_batch_id))
+            if active_batch_id is not None
+            else sql.SQL("FALSE")
+        )
         query = sql.SQL(
             """
             CREATE OR REPLACE VIEW {}.dclientes_latest AS
-            WITH latest_batch AS (
-                SELECT id
-                FROM {}.import_batches
-                WHERE dataset_name = 'dclientes'
-                ORDER BY imported_at DESC, id DESC
-                LIMIT 1
-            )
             SELECT
                 s.batch_id,
                 s.row_number,
@@ -556,16 +594,15 @@ class DClientesImportService:
                 b.imported_at AS batch_imported_at
             FROM {}.dclientes_snapshot s
             JOIN {}.import_batches b ON b.id = s.batch_id
-            JOIN latest_batch lb ON lb.id = s.batch_id
+            WHERE {}
             """
         ).format(
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
-            sql.Identifier(self.schema),
+            where_clause,
         )
         with conn.cursor() as cur:
-            cur.execute(drop_query)
             cur.execute(query)
 
     def _hydrate_scope_columns(self, conn: psycopg.Connection[Any], batch_id: int | None = None) -> None:
@@ -649,6 +686,37 @@ def _row_to_record(header: list[str], row: list[str]) -> dict[str, str]:
             key = f"{key}__{repeated_counter[key]}"
         record[key] = _normalize_record_value(raw_name, value)
     return record
+
+
+def _iter_dclientes_snapshot_rows(*, file_path: Path, batch_id: int) -> Any:
+    with file_path.open("r", encoding="cp1252", newline="") as fp:
+        reader = csv.reader(fp, delimiter=";")
+        header = next(reader)
+        indexes = _required_indexes(header)
+        next_row_number = 1
+        for row in reader:
+            if not row or not any(str(value or "").strip() for value in row):
+                continue
+            record = _row_to_record(header, row)
+            yield (
+                batch_id,
+                next_row_number,
+                row[indexes["Empresa"]].strip(),
+                _normalize_code_value(row[indexes["Filial"]]),
+                _normalize_code_value(row[indexes["Cod PDV"]]),
+                row[indexes["Documento"]].strip(),
+                row[indexes["Nome Fantasia"]].strip(),
+                row[indexes["Razao Social"]].strip(),
+                row[indexes["Status do PDV"]].strip(),
+                _normalize_code_value(row[indexes["Setor VDE"]]),
+                _normalize_code_value(row[indexes["Area VDE"]]),
+                _normalize_code_value(row[indexes["GV VDE"]]),
+                _normalize_code_value(row[indexes["Setor VDI"]]),
+                _normalize_code_value(row[indexes["Area VDI"]]),
+                _normalize_code_value(row[indexes["GV VDI"]]),
+                Jsonb(record),
+            )
+            next_row_number += 1
 
 
 def _normalize_schema(value: str) -> str:

@@ -19,11 +19,23 @@ try:
         build_required_indexes,
         validate_csv_source,
     )
+    from services.import_publication import (
+        activate_import_batch,
+        ensure_dataset_state_table,
+        prune_import_batches,
+        resolve_effective_import_batch_id,
+    )
 except ModuleNotFoundError:
     from bot_api.services.report_csv_validation import (
         DSETORES_CSV_SPEC,
         build_required_indexes,
         validate_csv_source,
+    )
+    from bot_api.services.import_publication import (
+        activate_import_batch,
+        ensure_dataset_state_table,
+        prune_import_batches,
+        resolve_effective_import_batch_id,
     )
 
 from bot_api.commercial_scope import normalize_numeric_code
@@ -108,10 +120,11 @@ class DSetoresImportService:
 
         with self._connect() as conn:
             ensure_dsetores_schema(conn, self.schema)
-            self._replace_dataset_contents(conn, dataset_name="dsetores")
             batch_id = self._insert_batch(conn, str(source_path), batch_date, source_hash, summary.rows)
             self._insert_snapshot_rows(conn, files, batch_id)
+            activate_import_batch(conn, self.schema, "dsetores", batch_id)
             self._create_latest_view(conn)
+            prune_import_batches(conn, self.schema, "dsetores", keep_last=3)
             conn.commit()
 
         result = summary.to_dict()
@@ -122,7 +135,8 @@ class DSetoresImportService:
                 "source_hash": source_hash,
                 "schema": self.schema,
                 "files": [str(file_path) for file_path in files],
-                "replaced_previous_batches": True,
+                "replaced_previous_batches": False,
+                "published_as_active_batch": True,
             }
         )
         return result
@@ -133,10 +147,16 @@ class DSetoresImportService:
 
         with self._connect() as conn:
             ensure_dsetores_schema(conn, self.schema)
+            active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "dsetores", activate_if_missing=True)
             self._create_latest_view(conn)
             conn.commit()
 
-        return {"ok": True, "schema": self.schema, "view": f"{self.schema}.dsetores_latest"}
+        return {
+            "ok": True,
+            "schema": self.schema,
+            "view": f"{self.schema}.dsetores_latest",
+            "active_batch_id": active_batch_id,
+        }
 
     def _insert_batch(
         self,
@@ -207,16 +227,15 @@ class DSetoresImportService:
                         cur.executemany(query, payload_batch)
 
     def _create_latest_view(self, conn: psycopg.Connection[Any]) -> None:
+        active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "dsetores", activate_if_missing=True)
+        where_clause = (
+            sql.SQL("s.batch_id = {}").format(sql.Literal(active_batch_id))
+            if active_batch_id is not None
+            else sql.SQL("FALSE")
+        )
         query = sql.SQL(
             """
             CREATE OR REPLACE VIEW {}.dsetores_latest AS
-            WITH latest_batch AS (
-                SELECT id
-                FROM {}.import_batches
-                WHERE dataset_name = 'dsetores'
-                ORDER BY imported_at DESC, id DESC
-                LIMIT 1
-            )
             SELECT
                 s.batch_id,
                 s.row_number,
@@ -235,13 +254,13 @@ class DSetoresImportService:
                 b.imported_at AS batch_imported_at
             FROM {}.dsetores_snapshot s
             JOIN {}.import_batches b ON b.id = s.batch_id
-            JOIN latest_batch lb ON lb.id = s.batch_id
+            WHERE {}
             """
         ).format(
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
-            sql.Identifier(self.schema),
+            where_clause,
         )
         with conn.cursor() as cur:
             cur.execute(query)
@@ -322,17 +341,17 @@ def ensure_dsetores_schema(conn: psycopg.Connection[Any], schema: str) -> None:
                 sql.Identifier(normalized_schema)
             )
         )
+        ensure_dataset_state_table(conn, normalized_schema)
+        active_batch_id = resolve_effective_import_batch_id(conn, normalized_schema, "dsetores", activate_if_missing=True)
+        where_clause = (
+            sql.SQL("s.batch_id = {}").format(sql.Literal(active_batch_id))
+            if active_batch_id is not None
+            else sql.SQL("FALSE")
+        )
         cur.execute(
             sql.SQL(
                 """
                 CREATE OR REPLACE VIEW {}.dsetores_latest AS
-                WITH latest_batch AS (
-                    SELECT id
-                    FROM {}.import_batches
-                    WHERE dataset_name = 'dsetores'
-                    ORDER BY imported_at DESC, id DESC
-                    LIMIT 1
-                )
                 SELECT
                     s.batch_id,
                     s.row_number,
@@ -351,13 +370,13 @@ def ensure_dsetores_schema(conn: psycopg.Connection[Any], schema: str) -> None:
                     b.imported_at AS batch_imported_at
                 FROM {}.dsetores_snapshot s
                 JOIN {}.import_batches b ON b.id = s.batch_id
-                JOIN latest_batch lb ON lb.id = s.batch_id
+                WHERE {}
                 """
             ).format(
                 sql.Identifier(normalized_schema),
                 sql.Identifier(normalized_schema),
                 sql.Identifier(normalized_schema),
-                sql.Identifier(normalized_schema),
+                where_clause,
             )
         )
 

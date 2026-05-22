@@ -19,16 +19,19 @@ class Settings:
     evolution_base_url: str
     evolution_api_key: str
     evolution_webhook_api_keys: tuple[str, ...]
+    evolution_webhook_allow_api_key_fallback: bool
     evolution_instance: str
     evolution_send_path: str
     evolution_list_path: str
     evolution_buttons_path: str
+    evolution_media_path: str
     evolution_timeout_seconds: float
     meta_cloud_enabled: bool
     meta_cloud_api_version: str
     meta_cloud_phone_number_id: str
     meta_cloud_access_token: str
     meta_cloud_verify_token: str
+    meta_cloud_app_secret: str
     verify_token: str
     access_control_enabled: bool
     access_database_url: str
@@ -39,9 +42,22 @@ class Settings:
     denied_reply_cooldown_minutes: int
     denied_unregistered_reply_cooldown_minutes: int
     admin_api_token: str
+    finance_panel_tokens: tuple[tuple[str, tuple[str, ...]], ...]
+    admin_upload_max_file_size_mb: int
+    admin_upload_max_file_count: int
     reports_database_url: str
     reports_runtime_database_url: str
     reports_db_schema: str
+    payip_base_url: str
+    payip_client_id: str
+    payip_username: str
+    payip_password: str
+    payip_company_id: str
+    payip_company_ids: tuple[tuple[str, str], ...]
+    payip_company_tax_ids: tuple[tuple[str, str], ...]
+    payip_token_cache_file: str
+    payip_timeout_seconds: float
+    payip_mfa_code: str
 
 
 def _strip_wrapping_quotes(value: str) -> str:
@@ -96,6 +112,51 @@ def _parse_csv_tokens(value: str | None) -> tuple[str, ...]:
     return tuple(item for item in tokens if item)
 
 
+def _parse_key_value_pairs(value: str | None) -> tuple[tuple[str, str], ...]:
+    if value is None:
+        return ()
+    pairs: list[tuple[str, str]] = []
+    for item in value.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        separator = ":" if ":" in token else "=" if "=" in token else ""
+        if not separator:
+            continue
+        key, pair_value = token.split(separator, 1)
+        key = key.strip()
+        pair_value = pair_value.strip()
+        if key and pair_value:
+            pairs.append((key, pair_value))
+    return tuple(pairs)
+
+
+def _parse_finance_panel_tokens(value: str | None) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    if value is None:
+        return ()
+    mappings: list[tuple[str, tuple[str, ...]]] = []
+    for item in value.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        separator = ":" if ":" in token else "=" if "=" in token else ""
+        if not separator:
+            continue
+        raw_token, raw_filiais = token.split(separator, 1)
+        panel_token = raw_token.strip()
+        filial_codes = []
+        seen: set[str] = set()
+        for raw_code in raw_filiais.replace(";", "|").split("|"):
+            digits = "".join(char for char in str(raw_code or "") if char.isdigit())
+            normalized = digits.lstrip("0") or ("0" if digits else "")
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                filial_codes.append(normalized)
+        if panel_token and filial_codes:
+            mappings.append((panel_token, tuple(filial_codes)))
+    return tuple(mappings)
+
+
 def get_settings() -> Settings:
     _load_dotenv()
     return Settings(
@@ -108,16 +169,22 @@ def get_settings() -> Settings:
         evolution_base_url=os.getenv("EVOLUTION_BASE_URL", "").rstrip("/"),
         evolution_api_key=os.getenv("EVOLUTION_API_KEY", ""),
         evolution_webhook_api_keys=_parse_csv_tokens(os.getenv("EVOLUTION_WEBHOOK_API_KEYS", "")),
+        evolution_webhook_allow_api_key_fallback=_parse_bool(
+            os.getenv("EVOLUTION_WEBHOOK_ALLOW_API_KEY_FALLBACK", "0"),
+            default=False,
+        ),
         evolution_instance=os.getenv("EVOLUTION_INSTANCE", ""),
         evolution_send_path=os.getenv("EVOLUTION_SEND_PATH", "/message/sendText/{instance}"),
         evolution_list_path=os.getenv("EVOLUTION_LIST_PATH", "/message/sendList/{instance}"),
         evolution_buttons_path=os.getenv("EVOLUTION_BUTTONS_PATH", "/message/sendButtons/{instance}"),
+        evolution_media_path=os.getenv("EVOLUTION_MEDIA_PATH", "/message/sendMedia/{instance}"),
         evolution_timeout_seconds=float(os.getenv("EVOLUTION_TIMEOUT_SECONDS", "20")),
         meta_cloud_enabled=_parse_bool(os.getenv("META_CLOUD_ENABLED", "0"), default=False),
         meta_cloud_api_version=os.getenv("META_CLOUD_API_VERSION", "v23.0").strip() or "v23.0",
         meta_cloud_phone_number_id=os.getenv("META_CLOUD_PHONE_NUMBER_ID", "").strip(),
         meta_cloud_access_token=os.getenv("META_CLOUD_ACCESS_TOKEN", "").strip(),
         meta_cloud_verify_token=os.getenv("META_CLOUD_VERIFY_TOKEN", "").strip(),
+        meta_cloud_app_secret=os.getenv("META_CLOUD_APP_SECRET", "").strip(),
         verify_token=os.getenv("BOT_VERIFY_TOKEN", ""),
         access_control_enabled=_parse_bool(os.getenv("ACCESS_CONTROL_ENABLED", "1"), default=True),
         access_database_url=os.getenv("ACCESS_DATABASE_URL", "").strip(),
@@ -131,6 +198,9 @@ def get_settings() -> Settings:
             int(os.getenv("DENIED_UNREGISTERED_REPLY_COOLDOWN_MINUTES", "720")),
         ),
         admin_api_token=os.getenv("ADMIN_API_TOKEN", "").strip(),
+        finance_panel_tokens=_parse_finance_panel_tokens(os.getenv("FINANCE_PANEL_TOKENS", "")),
+        admin_upload_max_file_size_mb=max(0, int(os.getenv("ADMIN_UPLOAD_MAX_FILE_SIZE_MB", "0"))),
+        admin_upload_max_file_count=max(1, int(os.getenv("ADMIN_UPLOAD_MAX_FILE_COUNT", "20"))),
         reports_database_url=(os.getenv("REPORTS_DATABASE_URL", "").strip() or os.getenv("ACCESS_DATABASE_URL", "").strip()),
         reports_runtime_database_url=(
             os.getenv("REPORTS_RUNTIME_DATABASE_URL", "").strip()
@@ -138,4 +208,44 @@ def get_settings() -> Settings:
             or os.getenv("ACCESS_DATABASE_URL", "").strip()
         ),
         reports_db_schema=os.getenv("REPORTS_DB_SCHEMA", "reports").strip() or "reports",
+        payip_base_url=(
+            os.getenv("PAYIP_BASE_URL", "").strip()
+            or os.getenv("PAYMENTS_API_BASE_URL", "").strip()
+        ).rstrip("/"),
+        payip_client_id=(
+            os.getenv("PAYIP_CLIENT_ID", "").strip()
+            or os.getenv("PAYMENTS_API_CLIENT_ID", "payip-auth-portal").strip()
+            or "payip-auth-portal"
+        ),
+        payip_username=(
+            os.getenv("PAYIP_USERNAME", "").strip()
+            or os.getenv("PAYMENTS_API_USERNAME", "").strip()
+            or os.getenv("email", "").strip()
+        ),
+        payip_password=(
+            os.getenv("PAYIP_PASSWORD", "").strip()
+            or os.getenv("PAYMENTS_API_PASSWORD", "").strip()
+            or os.getenv("senha", "").strip()
+        ),
+        payip_company_id=(
+            os.getenv("PAYIP_COMPANY_ID", "").strip()
+            or os.getenv("PAYMENTS_API_COMPANY_ID", "").strip()
+        ),
+        payip_company_ids=_parse_key_value_pairs(
+            os.getenv("PAYIP_COMPANY_IDS", "").strip()
+            or os.getenv("PAYMENTS_API_COMPANY_IDS", "").strip()
+        ),
+        payip_company_tax_ids=_parse_key_value_pairs(
+            os.getenv("PAYIP_COMPANY_TAX_IDS", "").strip()
+            or os.getenv("PAYMENTS_API_COMPANY_TAX_IDS", "").strip()
+        ),
+        payip_token_cache_file=(
+            os.getenv("PAYIP_TOKEN_CACHE_FILE", "").strip()
+            or str(PROJECT_ROOT / "exports" / "payip" / "tokens.json")
+        ),
+        payip_timeout_seconds=float(os.getenv("PAYIP_TIMEOUT_SECONDS", "30")),
+        payip_mfa_code=(
+            os.getenv("PAYIP_MFA_CODE", "").strip()
+            or os.getenv("PAYMENTS_API_TOTP", "").strip()
+        ),
     )

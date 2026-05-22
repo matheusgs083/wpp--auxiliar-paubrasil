@@ -16,6 +16,7 @@ from psycopg.rows import dict_row, tuple_row
 from bot_api.commercial_scope import (
     normalize_numeric_code,
     normalize_stored_scope_value,
+    partition_filial_scopes,
     partition_gv_scopes,
     partition_sector_scopes,
     split_scope_pair,
@@ -303,13 +304,20 @@ class DClientesQueryService:
     def search_by_document(
         self,
         document: str,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
         limit: int = 20,
     ) -> list[DClienteRecord]:
         normalized_document = _normalize_document(document)
         if not normalized_document:
             raise ValueError("Informe um CPF ou CNPJ valido.")
 
-        params: list[Any] = [normalized_document, max(1, min(limit, 50))]
+        filters = [
+            sql.SQL("REGEXP_REPLACE(COALESCE(documento, ''), '[^0-9]', '', 'g') = %s"),
+        ]
+        params: list[Any] = [normalized_document]
+        self._apply_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
+        params.append(max(1, min(limit, 50)))
         base_query = sql.SQL(
             """
             SELECT
@@ -323,11 +331,14 @@ class DClientesQueryService:
                 payload ->> 'Cidade' AS cidade_payload,
                 batch_imported_at
             FROM {schema}.dclientes_latest
-            WHERE REGEXP_REPLACE(COALESCE(documento, ''), '[^0-9]', '', 'g') = %s
+            WHERE {where}
             ORDER BY filial, cod_pdv
             LIMIT %s
             """
-        ).format(schema=sql.Identifier(self.schema))
+        ).format(
+            schema=sql.Identifier(self.schema),
+            where=sql.SQL(" AND ").join(filters),
+        )
         query = self._details_query_from_base(base_query, order_by=sql.SQL("base.filial, base.cod_pdv"))
         return self._fetch(query, params)
 
@@ -378,16 +389,11 @@ class DClientesQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 200,
     ) -> list[DClienteRecord]:
-        normalized_visit_day = _normalize_visit_day(visit_day)
-        if not normalized_visit_day:
-            raise ValueError("Dia de visita obrigatorio.")
-
-        filters = [
-            sql.SQL("BTRIM(COALESCE(payload ->> 'Dia de Visita do VDE', '')) = %s"),
-        ]
-        params: list[Any] = [normalized_visit_day]
+        filters: list[sql.Composed] = []
+        params: list[Any] = []
+        _append_visit_day_filter(filters=filters, params=params, visit_day=visit_day)
         self._apply_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
-        params.append(max(1, min(limit, 200)))
+        params.append(max(1, min(limit, 10000)))
         query = sql.SQL(
             """
             SELECT
@@ -414,15 +420,11 @@ class DClientesQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 100,
     ) -> list[VisitSellerSummary]:
-        normalized_visit_day = _normalize_visit_day(visit_day)
-        if not normalized_visit_day:
-            raise ValueError("Dia de visita obrigatorio.")
-
         access_filter, access_params = self._build_access_filter(allowed_sectors, allowed_gv_vdes)
         seller_present_filter = sql.SQL("{} <> ''").format(_code_field_sql("filial_setor_key"))
 
         seller_filters = [seller_present_filter]
-        visit_filters = [seller_present_filter]
+        visit_filters: list[sql.Composed] = [seller_present_filter]
         seller_params: list[Any] = []
         visit_params: list[Any] = []
         if access_filter is not None:
@@ -430,10 +432,9 @@ class DClientesQueryService:
             seller_params.extend(access_params)
             visit_filters.append(access_filter)
             visit_params.extend(access_params)
-        visit_filters.append(sql.SQL("BTRIM(COALESCE(payload ->> 'Dia de Visita do VDE', '')) = %s"))
-        visit_params.append(normalized_visit_day)
+        _append_visit_day_filter(filters=visit_filters, params=visit_params, visit_day=visit_day)
 
-        params = seller_params + visit_params + [max(1, min(limit, 200))]
+        params = seller_params + visit_params + [max(1, min(limit, 1000))]
         query = sql.SQL(
             """
             WITH sellers AS (
@@ -516,18 +517,14 @@ class DClientesQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 200,
     ) -> list[DClienteRecord]:
-        normalized_visit_day = _normalize_visit_day(visit_day)
         normalized_seller_code = normalize_stored_scope_value(seller_code)
         normalized_manager_code = normalize_stored_scope_value(manager_code)
-        if not normalized_visit_day:
-            raise ValueError("Dia de visita obrigatorio.")
         if not normalized_seller_code:
             raise ValueError("Setor do vendedor obrigatorio.")
 
-        filters = [
-            sql.SQL("BTRIM(COALESCE(payload ->> 'Dia de Visita do VDE', '')) = %s"),
-        ]
-        params: list[Any] = [normalized_visit_day]
+        filters: list[sql.Composed] = []
+        params: list[Any] = []
+        _append_visit_day_filter(filters=filters, params=params, visit_day=visit_day)
         _append_scope_value_filter(
             filters=filters,
             params=params,
@@ -1207,6 +1204,70 @@ def _normalize_visit_day(value: str) -> str:
     return " ".join(str(value or "").strip().split())
 
 
+def _normalize_visit_day_token(value: str) -> str:
+    normalized = _normalize_visit_day(value).upper()
+    if not normalized:
+        return ""
+    visit_day_map = {
+        "SEGUNDA": "SEG/",
+        "SEG/": "SEG/",
+        "TERCA": "TER/",
+        "TER/": "TER/",
+        "QUARTA": "QUA/",
+        "QUA/": "QUA/",
+        "QUINTA": "QUI/",
+        "QUI/": "QUI/",
+        "SEXTA": "SEX/",
+        "SEX/": "SEX/",
+        "SABADO": "SAB/",
+        "SAB/": "SAB/",
+        "DOMINGO": "DOM/",
+        "DOM/": "DOM/",
+    }
+    return visit_day_map.get(normalized, normalized)
+
+
+def _normalize_visit_day_label(value: str) -> str:
+    token = _normalize_visit_day_token(value)
+    if not token:
+        return ""
+    visit_day_map = {
+        "SEG/": "SEGUNDA",
+        "TER/": "TERCA",
+        "QUA/": "QUARTA",
+        "QUI/": "QUINTA",
+        "SEX/": "SEXTA",
+        "SAB/": "SABADO",
+        "DOM/": "DOMINGO",
+    }
+    return visit_day_map.get(token, _normalize_visit_day(value).upper())
+
+
+def _append_visit_day_filter(
+    *,
+    filters: list[sql.Composed],
+    params: list[Any],
+    visit_day: str,
+) -> None:
+    normalized_visit_day = _normalize_visit_day(visit_day)
+    normalized_visit_day_token = _normalize_visit_day_token(visit_day)
+    normalized_visit_day_label = _normalize_visit_day_label(visit_day)
+    if not normalized_visit_day or not normalized_visit_day_token:
+        raise ValueError("Dia de visita obrigatorio.")
+
+    visit_day_sql = sql.SQL("UPPER(BTRIM(COALESCE(payload ->> 'Dia de Visita do VDE', '')))")
+    filters.append(
+        sql.SQL(
+            "("
+            "POSITION(%s IN {visit_day_sql}) > 0 "
+            "OR {visit_day_sql} = %s "
+            "OR {visit_day_sql} = %s"
+            ")"
+        ).format(visit_day_sql=visit_day_sql)
+    )
+    params.extend([normalized_visit_day_token, normalized_visit_day.upper(), normalized_visit_day_label])
+
+
 def _normalize_document(value: str) -> str:
     digits = "".join(char for char in str(value or "") if char.isdigit())
     if len(digits) not in {11, 14}:
@@ -1251,9 +1312,13 @@ def _build_commercial_scope_filters(
     scope_filters: list[sql.Composed] = []
     params: list[Any] = []
 
+    filial_codes = partition_filial_scopes(allowed_sectors)
     sector_keys, _legacy_sector_codes = partition_sector_scopes(allowed_sectors)
     gv_keys, dc_keys, _legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
 
+    if filial_codes:
+        scope_filters.append(sql.SQL("{} = ANY(%s)").format(_code_field_sql("filial")))
+        params.append(filial_codes)
     if sector_keys:
         scope_filters.append(sql.SQL("{} = ANY(%s)").format(_code_field_sql("filial_setor_key")))
         params.append(sector_keys)
