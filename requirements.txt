@@ -9,3 +9,4 @@ qrcode[pil]>=7.4,<9
 psycopg[binary]>=3.2,<4
 psycopg-pool>=3.2,<4
 PyYAML>=6.0,<7
+reportlab>=4.2,<5

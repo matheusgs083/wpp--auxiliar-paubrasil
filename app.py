@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import csv
 import hashlib
@@ -14,10 +15,12 @@ import time
 import unicodedata
 from uuid import uuid4
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import shutil
-from threading import Lock
+from threading import Event, Lock, RLock, Thread
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg import sql
@@ -38,10 +41,17 @@ from bot_api.models import IncomingMessage
 from bot_api.security.access_control import AccessControl
 from bot_api.security.security_monitor import SecurityMonitor
 from bot_api.services.customer_lookup_flow import CustomerLookupFlow, FILIAL_LABELS
+from bot_api.services.admin_import_job_service import AdminImportJobService, AdminImportLockBusy
 from bot_api.services.comodatos_import_service import ComodatosImportService
 from bot_api.services.comodatos_query_service import ComodatosQueryService
+from bot_api.services.critica_operacao_import_service import CriticaOperacaoImportService
+from bot_api.services.critica_rn_import_service import CriticaRnImportService
+from bot_api.services.critica_rn_query_service import CriticaRnQueryService
 from bot_api.services.dclientes_import_service import DClientesImportService
 from bot_api.services.dclientes_query_service import DClientesQueryService
+from bot_api.services.doperacoes_import_service import DOperacoesImportService
+from bot_api.services.dprecos_import_service import DPrecosImportService
+from bot_api.services.dprodutos_import_service import DProdutosImportService
 from bot_api.services.dsetores_import_service import DSetoresImportService
 from bot_api.services.giro_import_service import GiroImportService
 from bot_api.services.giro_query_service import GiroQueryService
@@ -52,10 +62,16 @@ from bot_api.services.documentacao_pendente_query_service import DocumentacaoPen
 from bot_api.services.payip_payments_service import build_payip_payments_service
 from bot_api.services.prazo_limite_import_service import PrazoLimiteImportService
 from bot_api.services.prazo_limite_query_service import PrazoLimiteQueryService
+from bot_api.services.produto_cestas_import_service import ProdutoCestasImportService
 from bot_api.services.recolha_request_service import RecolhaRequestService
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+admin_import_job_service = AdminImportJobService(
+    database_url=settings.reports_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
 dclientes_query_service = DClientesQueryService(
     database_url=settings.reports_runtime_database_url,
     schema=settings.reports_db_schema,
@@ -76,6 +92,16 @@ giro_query_service = GiroQueryService(
     schema=settings.reports_db_schema,
     connect_timeout_seconds=settings.access_database_timeout_seconds,
 )
+critica_rn_query_service = CriticaRnQueryService(
+    database_url=settings.reports_runtime_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
+critica_rn_pdf_prebuild_service = CriticaRnQueryService(
+    database_url=settings.reports_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
 documentacao_pendente_query_service = DocumentacaoPendenteQueryService(
     database_url=settings.reports_runtime_database_url,
     schema=settings.reports_db_schema,
@@ -87,6 +113,26 @@ prazo_limite_query_service = PrazoLimiteQueryService(
     connect_timeout_seconds=settings.access_database_timeout_seconds,
 )
 dsetores_import_service = DSetoresImportService(
+    database_url=settings.reports_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
+dprecos_import_service = DPrecosImportService(
+    database_url=settings.reports_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
+doperacoes_import_service = DOperacoesImportService(
+    database_url=settings.reports_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
+dprodutos_import_service = DProdutosImportService(
+    database_url=settings.reports_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
+produto_cestas_import_service = ProdutoCestasImportService(
     database_url=settings.reports_database_url,
     schema=settings.reports_db_schema,
     connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -111,6 +157,22 @@ giro_import_service = GiroImportService(
     schema=settings.reports_db_schema,
     connect_timeout_seconds=settings.access_database_timeout_seconds,
 )
+critica_rn_import_service = CriticaRnImportService(
+    database_url=settings.reports_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
+critica_operacao_import_services = {
+    filial_code: CriticaOperacaoImportService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        dataset_name=f"critica_op_{filial_code}",
+        expected_filial=filial_code,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    for filial_code in sorted(FILIAL_LABELS, key=int)
+}
+critica_operacao_admin_service = critica_operacao_import_services[sorted(FILIAL_LABELS, key=int)[0]]
 documentacao_pendente_import_service = DocumentacaoPendenteImportService(
     database_url=settings.reports_database_url,
     schema=settings.reports_db_schema,
@@ -177,6 +239,7 @@ lookup_flow = CustomerLookupFlow(
     inadimplencia_service=inadimplencia_query_service,
     comodatos_service=comodatos_query_service,
     giro_service=giro_query_service,
+    critica_rn_service=critica_rn_query_service,
     documentacao_pendente_service=documentacao_pendente_query_service,
     prazo_limite_service=prazo_limite_query_service,
     payip_payments_service=payip_payments_service,
@@ -233,6 +296,48 @@ ADMIN_IMPORT_DATASETS: dict[str, dict[str, Any]] = {
         "summarize_method": "summarize_csv",
         "import_method": "import_csv",
     },
+    "dprecos": {
+        "label": "DPrecos",
+        "default_path": PROJECT_ROOT / "data" / "dPrecos" / "DPrecos.xlsx",
+        "service": dprecos_import_service,
+        "upload_mode": "single",
+        "accept_extensions": ".xlsx,.xlsm,.csv",
+        "validate_method": "validate_source",
+        "summarize_method": "summarize_source",
+        "import_method": "import_source",
+    },
+    "doperacoes": {
+        "label": "dOperacoes",
+        "default_path": PROJECT_ROOT / "data" / "dOperacoes" / "dOperacoes.csv",
+        "service": doperacoes_import_service,
+        "upload_mode": "single",
+        "accept_extensions": ".csv",
+        "validate_method": "validate_source",
+        "summarize_method": "summarize_source",
+        "import_method": "import_source",
+    },
+    "dprodutos": {
+        "label": "dProdutos",
+        "default_path": PROJECT_ROOT / "data" / "dProdutos" / "01.11.CSV",
+        "allow_default_source": False,
+        "service": dprodutos_import_service,
+        "upload_mode": "single",
+        "accept_extensions": ".csv",
+        "validate_method": "validate_source",
+        "summarize_method": "summarize_source",
+        "import_method": "import_source",
+    },
+    "produto_cestas": {
+        "label": "Cesta de Produtos",
+        "default_path": PROJECT_ROOT / "data" / "dProdutos" / "Cesta de Produtos.xlsx",
+        "allow_default_source": False,
+        "service": produto_cestas_import_service,
+        "upload_mode": "single",
+        "accept_extensions": ".xlsx,.xlsm,.csv",
+        "validate_method": "validate_source",
+        "summarize_method": "summarize_source",
+        "import_method": "import_source",
+    },
     "dclientes": {
         "label": "dClientes",
         "default_path": PROJECT_ROOT / "data" / "dClientes" / "dClientes.csv",
@@ -274,6 +379,31 @@ ADMIN_IMPORT_DATASETS: dict[str, dict[str, Any]] = {
         "summarize_method": "summarize_workbook",
         "import_method": "import_workbook",
     },
+    **{
+        f"critica_op_{filial_code}": {
+            "label": f"Critica Operacao {filial_code} - {FILIAL_LABELS[filial_code]}",
+            "default_path": PROJECT_ROOT / "data" / "Critica" / f"critica_operacao_{filial_code}.csv",
+            "allow_default_source": False,
+            "service": critica_operacao_import_services[filial_code],
+            "upload_mode": "single",
+            "accept_extensions": ".csv",
+            "validate_method": "validate_source",
+            "summarize_method": "summarize_source",
+            "import_method": "import_source",
+        }
+        for filial_code in sorted(FILIAL_LABELS, key=int)
+    },
+    "critica_rn": {
+        "label": "Critica RN",
+        "default_path": PROJECT_ROOT / "data" / "CriticaRN" / "critica_rn.xlsx",
+        "allow_default_source": False,
+        "service": critica_rn_import_service,
+        "upload_mode": "single",
+        "accept_extensions": ".xlsx,.xlsm,.csv",
+        "validate_method": "validate_source",
+        "summarize_method": "summarize_source",
+        "import_method": "import_source",
+    },
     "documentacao_pendente": {
         "label": "Documentacao Pendente",
         "default_path": PROJECT_ROOT / "data" / "DocumentacaoPendente" / "documentacao_pendente.csv",
@@ -295,17 +425,43 @@ ADMIN_IMPORT_DATASETS: dict[str, dict[str, Any]] = {
         "import_method": "import_source",
     },
 }
-admin_import_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="admin-import")
+ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS = {"critica_rn", "dclientes", "doperacoes", "dprecos", "dsetores"}
+ADMIN_IMPORT_MAX_WORKERS = 3
+ADMIN_IMPORT_HISTORY_RETENTION_DAYS = 3
+admin_import_executor = ThreadPoolExecutor(max_workers=ADMIN_IMPORT_MAX_WORKERS, thread_name_prefix="admin-import")
 admin_import_lock = Lock()
+admin_import_maintenance_lock = Lock()
 admin_import_state: dict[str, Any] = {
     "running": False,
     "current_job_id": "",
     "current_dataset": "",
     "started_at": "",
     "reference_date": "",
+    "current_jobs": {},
     "last_job": {},
 }
+critica_pdf_prebuild_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="critica-pdf-prebuild")
+critica_pdf_prebuild_lock = Lock()
+critica_pdf_prebuild_state: dict[str, Any] = {
+    "running": False,
+    "pending": False,
+    "current_job_id": "",
+    "current_reason": "",
+    "queued_at": "",
+    "started_at": "",
+    "finished_at": "",
+    "last_result": {},
+    "last_error": "",
+}
 ADMIN_BROADCAST_ACTIONS: dict[str, dict[str, Any]] = {
+    "rota_dia": {
+        "label": "Rota do dia",
+        "description": "Envia os clientes da rota do dia para cada usuario.",
+        "shortcut": "rota hoje",
+        "shortcut_template": "rota {day}",
+        "area": "cliente",
+        "supports_day": True,
+    },
     "inad_hoje": {
         "label": "Inad por dia",
         "description": "Executa o atalho de risco/cobranca da rota escolhida para cada usuario.",
@@ -382,6 +538,17 @@ admin_broadcast_state: dict[str, Any] = {
     "failed": 0,
     "skipped": 0,
     "last_job": {},
+}
+daily_route_broadcast_lock = RLock()
+daily_route_broadcast_stop_event = Event()
+daily_route_broadcast_thread: Thread | None = None
+daily_route_broadcast_status: dict[str, Any] = {
+    "enabled": bool(settings.daily_route_broadcast_enabled),
+    "running": False,
+    "last_checked_at": "",
+    "last_run_date": "",
+    "last_run": {},
+    "last_error": "",
 }
 
 class DeniedReplyThrottle:
@@ -1002,10 +1169,163 @@ def _serialize_admin_import_value(value: Any) -> Any:
     return value
 
 
-def _run_admin_import_validation(dataset: str) -> dict[str, Any]:
+def _clear_critica_runtime_cache() -> None:
+    try:
+        critica_rn_query_service.clear_cache()
+    except Exception:
+        logger.exception("Falha ao limpar cache runtime da critica RN")
+
+
+def _prebuild_critica_pdf_reports() -> dict[str, Any]:
+    try:
+        return critica_rn_pdf_prebuild_service.warm_pdf_reports()
+    except Exception as exc:
+        logger.exception("Falha ao pre-gerar PDFs da critica RN")
+        return {"ok": False, "error": str(exc)}
+
+
+def _new_critica_pdf_prebuild_job_id() -> str:
+    return f"critica-pdf-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
+
+
+def _snapshot_critica_pdf_prebuild_state() -> dict[str, Any]:
+    with critica_pdf_prebuild_lock:
+        return _serialize_admin_import_value(dict(critica_pdf_prebuild_state))
+
+
+def _critica_pdf_prebuild_worker(job_id: str, reason: str) -> None:
+    current_job_id = job_id
+    current_reason = reason
+    while True:
+        started_at = datetime.now(timezone.utc).isoformat()
+        with critica_pdf_prebuild_lock:
+            critica_pdf_prebuild_state["running"] = True
+            critica_pdf_prebuild_state["current_job_id"] = current_job_id
+            critica_pdf_prebuild_state["current_reason"] = current_reason
+            critica_pdf_prebuild_state["started_at"] = started_at
+            critica_pdf_prebuild_state["finished_at"] = ""
+            critica_pdf_prebuild_state["last_error"] = ""
+
+        result = _prebuild_critica_pdf_reports()
+        finished_at = datetime.now(timezone.utc).isoformat()
+        error = ""
+        if not result.get("ok"):
+            error = str(result.get("error") or "; ".join(result.get("errors") or []) or "Falha ao pre-gerar PDFs.")
+
+        with critica_pdf_prebuild_lock:
+            critica_pdf_prebuild_state["finished_at"] = finished_at
+            critica_pdf_prebuild_state["last_result"] = _serialize_admin_import_value(result)
+            critica_pdf_prebuild_state["last_error"] = error
+            if critica_pdf_prebuild_state.get("pending"):
+                current_job_id = _new_critica_pdf_prebuild_job_id()
+                current_reason = str(critica_pdf_prebuild_state.get("current_reason") or current_reason)
+                critica_pdf_prebuild_state["pending"] = False
+                critica_pdf_prebuild_state["current_job_id"] = current_job_id
+                continue
+            critica_pdf_prebuild_state["running"] = False
+            critica_pdf_prebuild_state["current_job_id"] = ""
+            critica_pdf_prebuild_state["current_reason"] = ""
+            return
+
+
+def _queue_critica_pdf_prebuild(reason: str) -> dict[str, Any]:
+    queued_at = datetime.now(timezone.utc).isoformat()
+    clean_reason = str(reason or "import").strip() or "import"
+    with critica_pdf_prebuild_lock:
+        if critica_pdf_prebuild_state.get("running"):
+            critica_pdf_prebuild_state["pending"] = True
+            critica_pdf_prebuild_state["queued_at"] = queued_at
+            critica_pdf_prebuild_state["current_reason"] = clean_reason
+            return {
+                "ok": True,
+                "queued": True,
+                "running": True,
+                "pending": True,
+                "reason": clean_reason,
+                "message": "Pre-geracao de PDFs ja estava em andamento; nova rodada marcada para o final.",
+            }
+        job_id = _new_critica_pdf_prebuild_job_id()
+        critica_pdf_prebuild_state["running"] = True
+        critica_pdf_prebuild_state["pending"] = False
+        critica_pdf_prebuild_state["current_job_id"] = job_id
+        critica_pdf_prebuild_state["current_reason"] = clean_reason
+        critica_pdf_prebuild_state["queued_at"] = queued_at
+        critica_pdf_prebuild_state["started_at"] = ""
+        critica_pdf_prebuild_state["finished_at"] = ""
+        critica_pdf_prebuild_state["last_error"] = ""
+
+    try:
+        critica_pdf_prebuild_executor.submit(_critica_pdf_prebuild_worker, job_id, clean_reason)
+    except Exception as exc:
+        with critica_pdf_prebuild_lock:
+            critica_pdf_prebuild_state["running"] = False
+            critica_pdf_prebuild_state["pending"] = False
+            critica_pdf_prebuild_state["current_job_id"] = ""
+            critica_pdf_prebuild_state["last_error"] = str(exc)
+        logger.exception("Falha ao enfileirar pre-geracao de PDFs da critica")
+        return {"ok": False, "queued": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "queued": True,
+        "running": False,
+        "pending": False,
+        "job_id": job_id,
+        "reason": clean_reason,
+    }
+
+
+def _new_admin_import_job_id(dataset: str, action: str) -> str:
+    clean_dataset = _normalize_admin_import_dataset(dataset)
+    clean_action = str(action or "job").strip().lower() or "job"
+    return f"{clean_action}-{clean_dataset}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
+
+
+def _admin_import_conflict_group(dataset: str) -> str:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    if normalized_dataset in ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS or normalized_dataset.startswith("critica_op_"):
+        return "critica_pipeline"
+    return normalized_dataset
+
+
+def _admin_import_lock_keys(dataset: str, action: str) -> list[str]:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    clean_action = str(action or "").strip().lower()
+    keys = [f"admin-source:{normalized_dataset}"]
+    if clean_action == "import":
+        keys.append(f"admin-import:{_admin_import_conflict_group(normalized_dataset)}")
+    return keys
+
+
+def _admin_import_actor(context: dict[str, Any] | None) -> str:
+    if not context:
+        return ""
+    mode = str(context.get("mode") or "").strip() or "admin"
+    if bool(context.get("is_admin")):
+        return "admin"
+    filiais = ",".join(str(filial).strip() for filial in context.get("filiais", ()) if str(filial).strip())
+    return f"{mode}:{filiais}" if filiais else mode
+
+
+def _active_admin_import_job(lock_keys: list[str]) -> dict[str, Any] | None:
+    try:
+        return admin_import_job_service.find_active_job(lock_keys)
+    except Exception as exc:
+        logger.warning("Falha ao consultar jobs administrativos ativos: %s", exc)
+        return None
+
+
+def _admin_import_busy_message(active_job: dict[str, Any] | None, *, fallback_dataset: str) -> str:
+    if active_job:
+        label = str(active_job.get("dataset_label") or active_job.get("dataset") or fallback_dataset)
+        action = "upload" if str(active_job.get("action") or "") == "upload" else "importacao"
+        return f"Ja existe {action} em andamento para {label}. Aguarde finalizar antes de continuar."
+    return f"Ja existe uma operacao administrativa em andamento para {fallback_dataset}."
+
+
+def _run_admin_import_validation(dataset: str, source_path_override: Path | None = None) -> dict[str, Any]:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
     config = ADMIN_IMPORT_DATASETS[normalized_dataset]
-    source_path = _resolve_admin_import_source_path(normalized_dataset)
+    source_path = source_path_override or _resolve_admin_import_source_path(normalized_dataset)
     service = config["service"]
     validation = getattr(service, str(config["validate_method"]))(source_path)
     if normalized_dataset == "dclientes":
@@ -1038,6 +1358,10 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
     if normalized_dataset == "dsetores":
         result = getattr(service, str(config["import_method"]))(source_path, reference_date=batch_date)
         refresh_result = dclientes_import_service.refresh_latest_view()
+        critica_refresh_result = critica_rn_import_service.refresh_latest_view()
+        critica_operacao_refresh_result = critica_operacao_admin_service.refresh_latest_view()
+        _clear_critica_runtime_cache()
+        prebuild_result = _queue_critica_pdf_prebuild(normalized_dataset)
         return {
             "dataset": normalized_dataset,
             "label": config["label"],
@@ -1046,7 +1370,12 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
             "validation": validation_payload["validation"],
             "summary": validation_payload["summary"],
             "import_result": _serialize_admin_import_value(result),
-            "post_actions": {"refresh_dclientes_view": _serialize_admin_import_value(refresh_result)},
+            "post_actions": {
+                "refresh_dclientes_view": _serialize_admin_import_value(refresh_result),
+                "refresh_critica_rn_view": _serialize_admin_import_value(critica_refresh_result),
+                "refresh_critica_operacao_view": _serialize_admin_import_value(critica_operacao_refresh_result),
+                "prebuild_critica_pdf_reports": _serialize_admin_import_value(prebuild_result),
+            },
         }
     if normalized_dataset == "dclientes":
         result = getattr(service, str(config["import_method"]))(
@@ -1056,7 +1385,23 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
         )
     else:
         result = getattr(service, str(config["import_method"]))(source_path, reference_date=batch_date)
-    return {
+    post_actions: dict[str, Any] = {}
+    if normalized_dataset == "dprecos":
+        post_actions["refresh_critica_rn_view"] = _serialize_admin_import_value(critica_rn_import_service.refresh_latest_view())
+        post_actions["refresh_critica_operacao_view"] = _serialize_admin_import_value(
+            critica_operacao_admin_service.refresh_latest_view()
+        )
+    if normalized_dataset in {
+        "critica_rn",
+        "dclientes",
+        "doperacoes",
+        "dprecos",
+    } or normalized_dataset.startswith("critica_op_"):
+        _clear_critica_runtime_cache()
+        post_actions["prebuild_critica_pdf_reports"] = _serialize_admin_import_value(
+            _queue_critica_pdf_prebuild(normalized_dataset)
+        )
+    response_payload = {
         "dataset": normalized_dataset,
         "label": config["label"],
         "default_path": str(source_path),
@@ -1065,17 +1410,23 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
         "summary": validation_payload["summary"],
         "import_result": _serialize_admin_import_value(result),
     }
+    if post_actions:
+        response_payload["post_actions"] = post_actions
+    return response_payload
 
 
 def _snapshot_admin_import_state() -> dict[str, Any]:
     with admin_import_lock:
+        current_jobs = dict(admin_import_state.get("current_jobs") or {})
+        first_job = next(iter(current_jobs.values()), {})
         return _serialize_admin_import_value(
             {
-                "running": bool(admin_import_state["running"]),
-                "current_job_id": str(admin_import_state["current_job_id"] or ""),
-                "current_dataset": str(admin_import_state["current_dataset"] or ""),
-                "started_at": str(admin_import_state["started_at"] or ""),
-                "reference_date": str(admin_import_state["reference_date"] or ""),
+                "running": bool(current_jobs),
+                "current_job_id": str(first_job.get("job_id") or ""),
+                "current_dataset": str(first_job.get("dataset") or ""),
+                "started_at": str(first_job.get("started_at") or ""),
+                "reference_date": str(first_job.get("reference_date") or ""),
+                "current_jobs": list(current_jobs.values()),
                 "last_job": dict(admin_import_state.get("last_job") or {}),
             }
         )
@@ -1101,13 +1452,25 @@ def _finish_admin_import_job(
     error: str,
 ) -> None:
     finished_at = datetime.now(timezone.utc).isoformat()
+    try:
+        admin_import_job_service.finish_job(
+            job_id=job_id,
+            status=status,
+            result=_serialize_admin_import_value(result) if result is not None else None,
+            error=error,
+        )
+    except Exception:
+        logger.exception("Falha ao atualizar job administrativo %s no banco.", job_id)
     with admin_import_lock:
-        if admin_import_state["current_job_id"] == job_id:
-            admin_import_state["running"] = False
-            admin_import_state["current_job_id"] = ""
-            admin_import_state["current_dataset"] = ""
-            admin_import_state["started_at"] = ""
-            admin_import_state["reference_date"] = ""
+        current_jobs = admin_import_state.setdefault("current_jobs", {})
+        if isinstance(current_jobs, dict):
+            current_jobs.pop(job_id, None)
+        first_job = next(iter((current_jobs or {}).values()), {}) if isinstance(current_jobs, dict) else {}
+        admin_import_state["running"] = bool(current_jobs)
+        admin_import_state["current_job_id"] = str(first_job.get("job_id") or "")
+        admin_import_state["current_dataset"] = str(first_job.get("dataset") or "")
+        admin_import_state["started_at"] = str(first_job.get("started_at") or "")
+        admin_import_state["reference_date"] = str(first_job.get("reference_date") or "")
         admin_import_state["last_job"] = {
             "job_id": job_id,
             "dataset": dataset,
@@ -1119,12 +1482,30 @@ def _finish_admin_import_job(
             "error": error,
             "result": _serialize_admin_import_value(result) if result is not None else None,
         }
+    _run_admin_import_maintenance(force_stale=False)
 
 
-def _admin_import_worker(job_id: str, dataset: str, reference_date: str) -> None:
-    started_at = _snapshot_admin_import_state().get("started_at", "")
+def _admin_import_worker(job_id: str, dataset: str, reference_date: str, started_at: str) -> None:
     try:
-        result = _run_admin_import(dataset, reference_date=reference_date or None)
+        try:
+            admin_import_job_service.start_job(job_id)
+        except Exception:
+            logger.exception("Falha ao marcar job administrativo %s como running.", job_id)
+        lock_keys = _admin_import_lock_keys(dataset, "import")
+        with admin_import_job_service.operation_lock(lock_keys):
+            result = _run_admin_import(dataset, reference_date=reference_date or None)
+    except AdminImportLockBusy as exc:
+        logger.warning("Importacao %s bloqueada por lock ativo: %s", job_id, exc.lock_key)
+        _finish_admin_import_job(
+            job_id=job_id,
+            dataset=dataset,
+            started_at=str(started_at),
+            reference_date=reference_date,
+            status="blocked",
+            result=None,
+            error=_admin_import_busy_message(None, fallback_dataset=dataset),
+        )
+        return
     except Exception as exc:
         logger.exception("Falha ao importar dataset %s pelo painel admin.", dataset)
         _finish_admin_import_job(
@@ -1149,21 +1530,55 @@ def _admin_import_worker(job_id: str, dataset: str, reference_date: str) -> None
     )
 
 
-def _queue_admin_import(dataset: str, reference_date: str | None = None) -> dict[str, Any]:
+def _queue_admin_import(
+    dataset: str,
+    reference_date: str | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
     clean_reference_date = str(reference_date or "").strip()
     started_at = datetime.now(timezone.utc).isoformat()
-    job_id = f"{normalized_dataset}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
+    job_id = _new_admin_import_job_id(normalized_dataset, "import")
+    lock_keys = _admin_import_lock_keys(normalized_dataset, "import")
+    active_job = _active_admin_import_job(lock_keys)
+    if active_job:
+        raise HTTPException(
+            status_code=409,
+            detail=_admin_import_busy_message(active_job, fallback_dataset=normalized_dataset),
+        )
 
     with admin_import_lock:
-        if admin_import_state["running"]:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Ja existe uma importacao em andamento para "
-                    f"{admin_import_state['current_dataset'] or 'outro dataset'}."
-                ),
+        try:
+            source_path = str(_resolve_admin_import_source_path(normalized_dataset))
+        except Exception:
+            source_path = ""
+        try:
+            admin_import_job_service.create_job(
+                job_id=job_id,
+                action="import",
+                dataset_name=normalized_dataset,
+                dataset_label=str(ADMIN_IMPORT_DATASETS[normalized_dataset]["label"]),
+                lock_keys=lock_keys,
+                reference_date=date.fromisoformat(clean_reference_date) if clean_reference_date else None,
+                source_path=source_path,
+                created_by=_admin_import_actor(context),
             )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.exception("Falha ao criar job administrativo de importacao.")
+            raise HTTPException(status_code=503, detail="Nao foi possivel registrar a importacao no banco.") from exc
+        current_jobs = admin_import_state.setdefault("current_jobs", {})
+        if not isinstance(current_jobs, dict):
+            current_jobs = {}
+            admin_import_state["current_jobs"] = current_jobs
+        current_jobs[job_id] = {
+            "job_id": job_id,
+            "dataset": normalized_dataset,
+            "label": ADMIN_IMPORT_DATASETS[normalized_dataset]["label"],
+            "started_at": started_at,
+            "reference_date": clean_reference_date,
+        }
         admin_import_state["running"] = True
         admin_import_state["current_job_id"] = job_id
         admin_import_state["current_dataset"] = normalized_dataset
@@ -1171,14 +1586,22 @@ def _queue_admin_import(dataset: str, reference_date: str | None = None) -> dict
         admin_import_state["reference_date"] = clean_reference_date
 
     try:
-        admin_import_executor.submit(_admin_import_worker, job_id, normalized_dataset, clean_reference_date)
+        admin_import_executor.submit(_admin_import_worker, job_id, normalized_dataset, clean_reference_date, started_at)
     except Exception:
         with admin_import_lock:
-            admin_import_state["running"] = False
-            admin_import_state["current_job_id"] = ""
-            admin_import_state["current_dataset"] = ""
-            admin_import_state["started_at"] = ""
-            admin_import_state["reference_date"] = ""
+            current_jobs = admin_import_state.setdefault("current_jobs", {})
+            if isinstance(current_jobs, dict):
+                current_jobs.pop(job_id, None)
+            first_job = next(iter((current_jobs or {}).values()), {}) if isinstance(current_jobs, dict) else {}
+            admin_import_state["running"] = bool(current_jobs)
+            admin_import_state["current_job_id"] = str(first_job.get("job_id") or "")
+            admin_import_state["current_dataset"] = str(first_job.get("dataset") or "")
+            admin_import_state["started_at"] = str(first_job.get("started_at") or "")
+            admin_import_state["reference_date"] = str(first_job.get("reference_date") or "")
+        try:
+            admin_import_job_service.finish_job(job_id=job_id, status="failed", error="Falha ao enviar job para fila.")
+        except Exception:
+            logger.exception("Falha ao marcar job administrativo %s como failed.", job_id)
         raise
 
     return {
@@ -1208,12 +1631,202 @@ def _sanitize_uploaded_filename(dataset: str, filename: str) -> str:
 
 
 def _dataset_runtime_upload_path(dataset: str) -> Path:
+    active_path = _active_admin_upload_source_path(dataset)
+    if active_path is not None:
+        return active_path
+    return _legacy_dataset_runtime_upload_path(dataset)
+
+
+def _dataset_runtime_root(dataset: str) -> Path:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    return ADMIN_IMPORT_RUNTIME_ROOT / normalized_dataset
+
+
+def _legacy_dataset_runtime_upload_path(dataset: str) -> Path:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
     default_path = Path(ADMIN_IMPORT_DATASETS[normalized_dataset]["default_path"])
-    runtime_dir = ADMIN_IMPORT_RUNTIME_ROOT / normalized_dataset
+    runtime_dir = _dataset_runtime_root(normalized_dataset)
     if ADMIN_IMPORT_DATASETS[normalized_dataset]["upload_mode"] == "single":
         return runtime_dir / default_path.name
     return runtime_dir
+
+
+def _dataset_active_upload_manifest_path(dataset: str) -> Path:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    return _dataset_runtime_root(normalized_dataset) / "active.json"
+
+
+def _dataset_upload_version_path(dataset: str, job_id: str) -> Path:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    default_path = Path(ADMIN_IMPORT_DATASETS[normalized_dataset]["default_path"])
+    clean_job_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(job_id or "").strip()) or secrets.token_hex(8)
+    version_root = _dataset_runtime_root(normalized_dataset) / "versions" / clean_job_id
+    if ADMIN_IMPORT_DATASETS[normalized_dataset]["upload_mode"] == "single":
+        return version_root / default_path.name
+    return version_root
+
+
+def _read_admin_upload_manifest(dataset: str) -> dict[str, Any] | None:
+    manifest_path = _dataset_active_upload_manifest_path(dataset)
+    if not manifest_path.exists():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Manifesto de upload invalido para %s: %s", dataset, manifest_path)
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _active_admin_upload_source_path(dataset: str) -> Path | None:
+    payload = _read_admin_upload_manifest(dataset)
+    if not payload:
+        return None
+    source_path = Path(str(payload.get("source_path") or ""))
+    if source_path.exists():
+        return source_path
+    return None
+
+
+def _activate_admin_upload_version(
+    dataset: str,
+    *,
+    source_path: Path,
+    stored_files: list[dict[str, Any]],
+    job_id: str,
+) -> dict[str, Any]:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    manifest_path = _dataset_active_upload_manifest_path(normalized_dataset)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "dataset": normalized_dataset,
+        "job_id": str(job_id or ""),
+        "source_path": str(source_path),
+        "stored_files": _serialize_admin_import_value(stored_files),
+        "activated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    temp_path = manifest_path.with_name(f"{manifest_path.name}.tmp")
+    temp_path.write_text(json.dumps(manifest, ensure_ascii=True, sort_keys=True), encoding="utf-8")
+    temp_path.replace(manifest_path)
+    return manifest
+
+
+def _path_is_within(child: Path, parent: Path) -> bool:
+    try:
+        child_resolved = child.resolve()
+        parent_resolved = parent.resolve()
+    except OSError:
+        return False
+    return child_resolved == parent_resolved or parent_resolved in child_resolved.parents
+
+
+def _active_admin_upload_protected_paths() -> set[Path]:
+    protected: set[Path] = set()
+    for dataset_name in ADMIN_IMPORT_DATASETS:
+        active_path = _active_admin_upload_source_path(dataset_name)
+        if active_path is None:
+            continue
+        try:
+            resolved = active_path.resolve()
+        except OSError:
+            continue
+        protected.add(resolved)
+        for parent in resolved.parents:
+            if _path_is_within(parent, ADMIN_IMPORT_RUNTIME_ROOT):
+                protected.add(parent)
+            else:
+                break
+    return protected
+
+
+def _prune_admin_upload_versions(keep_days: int = ADMIN_IMPORT_HISTORY_RETENTION_DAYS) -> dict[str, Any]:
+    retention_days = max(int(keep_days), 1)
+    cutoff_timestamp = time.time() - (retention_days * 24 * 60 * 60)
+    root = ADMIN_IMPORT_RUNTIME_ROOT
+    if not root.exists():
+        return {"ok": True, "deleted": 0, "kept_active": 0, "retention_days": retention_days}
+    protected_paths = _active_admin_upload_protected_paths()
+    deleted = 0
+    kept_active = 0
+    errors: list[str] = []
+
+    for dataset_name in ADMIN_IMPORT_DATASETS:
+        versions_dir = _dataset_runtime_root(dataset_name) / "versions"
+        if not versions_dir.exists() or not versions_dir.is_dir():
+            continue
+        try:
+            candidates = list(versions_dir.iterdir())
+        except OSError as exc:
+            errors.append(f"{versions_dir}: {exc}")
+            continue
+        for candidate in candidates:
+            try:
+                candidate_resolved = candidate.resolve()
+            except OSError as exc:
+                errors.append(f"{candidate}: {exc}")
+                continue
+            if not _path_is_within(candidate_resolved, root):
+                errors.append(f"{candidate}: fora do diretorio de uploads")
+                continue
+            if candidate_resolved in protected_paths:
+                kept_active += 1
+                continue
+            try:
+                candidate_mtime = candidate.stat().st_mtime
+            except OSError as exc:
+                errors.append(f"{candidate}: {exc}")
+                continue
+            if candidate_mtime >= cutoff_timestamp:
+                continue
+            try:
+                if candidate.is_dir():
+                    shutil.rmtree(candidate)
+                else:
+                    candidate.unlink()
+                deleted += 1
+            except OSError as exc:
+                errors.append(f"{candidate}: {exc}")
+
+    return {
+        "ok": not errors,
+        "deleted": deleted,
+        "kept_active": kept_active,
+        "retention_days": retention_days,
+        "errors": errors[:10],
+    }
+
+
+def _run_admin_import_maintenance(*, force_stale: bool = False) -> dict[str, Any]:
+    if not admin_import_maintenance_lock.acquire(blocking=False):
+        return {"ok": True, "skipped": "maintenance_already_running"}
+    try:
+        stale_count = 0
+        if force_stale:
+            stale_count = admin_import_job_service.mark_active_jobs_stale()
+        deleted_jobs = admin_import_job_service.prune_old_jobs(keep_days=ADMIN_IMPORT_HISTORY_RETENTION_DAYS)
+        deleted_versions = _prune_admin_upload_versions(keep_days=ADMIN_IMPORT_HISTORY_RETENTION_DAYS)
+        if force_stale:
+            with admin_import_lock:
+                admin_import_state["running"] = False
+                admin_import_state["current_job_id"] = ""
+                admin_import_state["current_dataset"] = ""
+                admin_import_state["started_at"] = ""
+                admin_import_state["reference_date"] = ""
+                admin_import_state["current_jobs"] = {}
+        return {
+            "ok": True,
+            "stale_jobs": stale_count,
+            "deleted_jobs": deleted_jobs,
+            "upload_versions": deleted_versions,
+            "retention_days": ADMIN_IMPORT_HISTORY_RETENTION_DAYS,
+        }
+    except Exception as exc:
+        logger.exception("Falha na manutencao de imports administrativos")
+        return {"ok": False, "error": str(exc)}
+    finally:
+        admin_import_maintenance_lock.release()
 
 
 def _admin_import_allows_default_source(dataset: str) -> bool:
@@ -1240,6 +1853,8 @@ def _resolve_admin_import_source_path(dataset: str) -> Path:
 def _admin_import_source_status(dataset: str) -> dict[str, Any]:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
     runtime_path = _dataset_runtime_upload_path(normalized_dataset)
+    legacy_runtime_path = _legacy_dataset_runtime_upload_path(normalized_dataset)
+    manifest = _read_admin_upload_manifest(normalized_dataset) or {}
     default_path = Path(ADMIN_IMPORT_DATASETS[normalized_dataset]["default_path"])
     allow_default = _admin_import_allows_default_source(normalized_dataset)
     if runtime_path.exists():
@@ -1259,6 +1874,10 @@ def _admin_import_source_status(dataset: str) -> dict[str, Any]:
         "active_source_path": str(active_source_path),
         "source_exists": source_exists,
         "using_uploaded_source": using_uploaded_source,
+        "versioned_upload": bool(manifest),
+        "legacy_upload_path": str(legacy_runtime_path),
+        "active_upload_job_id": str(manifest.get("job_id") or ""),
+        "active_upload_activated_at": str(manifest.get("activated_at") or ""),
         "requires_upload": not allow_default,
     }
 
@@ -1280,11 +1899,15 @@ def _copy_upload_with_limit(upload: UploadFile, buffer: Any) -> int:
     return total_bytes
 
 
-def _replace_single_upload_source(dataset: str, files: list[UploadFile]) -> list[dict[str, Any]]:
+def _replace_single_upload_source(
+    dataset: str,
+    files: list[UploadFile],
+    target_path: Path | None = None,
+) -> list[dict[str, Any]]:
     if len(files) != 1:
         raise HTTPException(status_code=400, detail="Esse dataset aceita exatamente um arquivo por vez.")
 
-    target_path = _dataset_runtime_upload_path(dataset)
+    target_path = target_path or _legacy_dataset_runtime_upload_path(dataset)
     upload = files[0]
     _sanitize_uploaded_filename(dataset, upload.filename or "")
     temp_path = target_path.with_name(f"{target_path.name}.uploading")
@@ -1309,11 +1932,15 @@ def _replace_single_upload_source(dataset: str, files: list[UploadFile]) -> list
     ]
 
 
-def _replace_multiple_upload_source(dataset: str, files: list[UploadFile]) -> list[dict[str, Any]]:
+def _replace_multiple_upload_source(
+    dataset: str,
+    files: list[UploadFile],
+    target_dir: Path | None = None,
+) -> list[dict[str, Any]]:
     if not files:
         raise HTTPException(status_code=400, detail="Selecione pelo menos um arquivo para upload.")
 
-    target_dir = _dataset_runtime_upload_path(dataset)
+    target_dir = target_dir or _legacy_dataset_runtime_upload_path(dataset)
     temp_dir = target_dir.with_name(f"{target_dir.name}__uploading")
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
@@ -1353,30 +1980,116 @@ def _replace_multiple_upload_source(dataset: str, files: list[UploadFile]) -> li
         raise
 
 
-def _store_admin_import_uploads(dataset: str, files: list[UploadFile]) -> dict[str, Any]:
+def _close_admin_upload_files(files: list[UploadFile]) -> None:
+    for upload in files:
+        try:
+            upload.file.close()
+        except Exception:
+            pass
+
+
+def _store_admin_import_uploads(
+    dataset: str,
+    files: list[UploadFile],
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
     if len(files) > settings.admin_upload_max_file_count:
+        _close_admin_upload_files(files)
         raise HTTPException(
             status_code=413,
             detail=f"Upload permite no maximo {settings.admin_upload_max_file_count} arquivo(s) por requisicao.",
         )
-    upload_mode = ADMIN_IMPORT_DATASETS[normalized_dataset]["upload_mode"]
-    if upload_mode == "single":
-        stored_files = _replace_single_upload_source(normalized_dataset, files)
-    else:
-        stored_files = _replace_multiple_upload_source(normalized_dataset, files)
+    file_names = [str(upload.filename or "") for upload in files]
+    lock_keys = _admin_import_lock_keys(normalized_dataset, "upload")
+    active_job = _active_admin_import_job(lock_keys)
+    if active_job:
+        _close_admin_upload_files(files)
+        raise HTTPException(
+            status_code=409,
+            detail=_admin_import_busy_message(active_job, fallback_dataset=normalized_dataset),
+        )
 
-    validation_result = _run_admin_import_validation(normalized_dataset)
-    return {
-        "dataset": normalized_dataset,
-        "label": ADMIN_IMPORT_DATASETS[normalized_dataset]["label"],
-        "default_path": str(ADMIN_IMPORT_DATASETS[normalized_dataset]["default_path"]),
-        "active_source_path": str(_resolve_admin_import_source_path(normalized_dataset)),
-        "upload_mode": upload_mode,
-        "stored_files": stored_files,
-        "validation": validation_result["validation"],
-        "summary": validation_result["summary"],
-    }
+    job_id = _new_admin_import_job_id(normalized_dataset, "upload")
+    upload_mode = ADMIN_IMPORT_DATASETS[normalized_dataset]["upload_mode"]
+    version_source_path = _dataset_upload_version_path(normalized_dataset, job_id)
+    try:
+        admin_import_job_service.create_job(
+            job_id=job_id,
+            action="upload",
+            dataset_name=normalized_dataset,
+            dataset_label=str(ADMIN_IMPORT_DATASETS[normalized_dataset]["label"]),
+            lock_keys=lock_keys,
+            source_path=str(version_source_path),
+            file_names=file_names,
+            created_by=_admin_import_actor(context),
+            metadata={"upload_mode": upload_mode},
+        )
+        admin_import_job_service.start_job(job_id)
+        with admin_import_job_service.operation_lock(lock_keys):
+            if upload_mode == "single":
+                stored_files = _replace_single_upload_source(normalized_dataset, files, target_path=version_source_path)
+            else:
+                stored_files = _replace_multiple_upload_source(normalized_dataset, files, target_dir=version_source_path)
+
+            validation_result = _run_admin_import_validation(normalized_dataset, source_path_override=version_source_path)
+            validation_errors = int(validation_result["validation"].get("error_count") or 0)
+            if validation_errors:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A validacao encontrou erros. A versao enviada foi salva, mas nao foi ativada.",
+                )
+            active_manifest = _activate_admin_upload_version(
+                normalized_dataset,
+                source_path=version_source_path,
+                stored_files=stored_files,
+                job_id=job_id,
+            )
+            result = {
+                "job_id": job_id,
+                "dataset": normalized_dataset,
+                "label": ADMIN_IMPORT_DATASETS[normalized_dataset]["label"],
+                "default_path": str(ADMIN_IMPORT_DATASETS[normalized_dataset]["default_path"]),
+                "active_source_path": str(_resolve_admin_import_source_path(normalized_dataset)),
+                "upload_mode": upload_mode,
+                "stored_files": stored_files,
+                "active_upload": active_manifest,
+                "validation": validation_result["validation"],
+                "summary": validation_result["summary"],
+            }
+        admin_import_job_service.finish_job(
+            job_id=job_id,
+            status="completed",
+            result=_serialize_admin_import_value(result),
+            error="",
+        )
+        _run_admin_import_maintenance(force_stale=False)
+        return result
+    except AdminImportLockBusy as exc:
+        _close_admin_upload_files(files)
+        error = _admin_import_busy_message(None, fallback_dataset=normalized_dataset)
+        try:
+            admin_import_job_service.finish_job(job_id=job_id, status="blocked", error=error)
+            _run_admin_import_maintenance(force_stale=False)
+        except Exception:
+            logger.exception("Falha ao marcar upload administrativo %s como blocked.", job_id)
+        raise HTTPException(status_code=409, detail=error) from exc
+    except HTTPException as exc:
+        _close_admin_upload_files(files)
+        try:
+            admin_import_job_service.finish_job(job_id=job_id, status="failed", error=_format_admin_import_error(exc))
+            _run_admin_import_maintenance(force_stale=False)
+        except Exception:
+            logger.exception("Falha ao marcar upload administrativo %s como failed.", job_id)
+        raise
+    except Exception as exc:
+        _close_admin_upload_files(files)
+        try:
+            admin_import_job_service.finish_job(job_id=job_id, status="failed", error=_format_admin_import_error(exc))
+            _run_admin_import_maintenance(force_stale=False)
+        except Exception:
+            logger.exception("Falha ao marcar upload administrativo %s como failed.", job_id)
+        raise
 
 
 def _list_admin_import_status() -> dict[str, Any]:
@@ -1438,6 +2151,14 @@ def _list_admin_import_status() -> dict[str, Any]:
     state_snapshot = _snapshot_admin_import_state()
     state_snapshot["items"] = items
     state_snapshot["database_error"] = database_error
+    state_snapshot["critica_pdf_prebuild"] = _snapshot_critica_pdf_prebuild_state()
+    try:
+        state_snapshot["jobs"] = _serialize_admin_import_value(admin_import_job_service.list_recent_jobs(limit=10))
+        state_snapshot["jobs_error"] = ""
+    except Exception as exc:
+        logger.warning("Falha ao consultar jobs administrativos recentes: %s", exc)
+        state_snapshot["jobs"] = []
+        state_snapshot["jobs_error"] = str(exc)
     return state_snapshot
 
 
@@ -1449,13 +2170,14 @@ def _list_admin_import_history(limit: int = 20) -> dict[str, Any]:
         SELECT dataset_name, id, source_file, file_hash, reference_date, total_rows, imported_at
         FROM reports.import_batches
         WHERE dataset_name = ANY(%s)
+          AND imported_at >= NOW() - (%s::int * INTERVAL '1 day')
         ORDER BY imported_at DESC, id DESC
         LIMIT %s
     """
     try:
         with psycopg.connect(settings.reports_runtime_database_url, connect_timeout=int(settings.access_database_timeout_seconds)) as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (list(ADMIN_IMPORT_DATASETS.keys()), safe_limit))
+                cur.execute(query, (list(ADMIN_IMPORT_DATASETS.keys()), ADMIN_IMPORT_HISTORY_RETENTION_DAYS, safe_limit))
                 for dataset_name, batch_id, source_file, file_hash, reference_date, total_rows, imported_at in cur.fetchall():
                     history.append(
                         {
@@ -1472,7 +2194,20 @@ def _list_admin_import_history(limit: int = 20) -> dict[str, Any]:
     except Exception as exc:
         database_error = str(exc)
         logger.warning("Falha ao consultar historico de importacoes no banco: %s", exc)
-    return {"total": len(history), "history": history, "database_error": database_error}
+    jobs: list[dict[str, Any]] = []
+    jobs_error = ""
+    try:
+        jobs = _serialize_admin_import_value(admin_import_job_service.list_recent_jobs(limit=safe_limit))
+    except Exception as exc:
+        jobs_error = str(exc)
+        logger.warning("Falha ao consultar historico de jobs administrativos: %s", exc)
+    return {
+        "total": len(history),
+        "history": history,
+        "jobs": jobs,
+        "jobs_error": jobs_error,
+        "database_error": database_error,
+    }
 
 
 def _normalize_recolha_status(value: str | None) -> str:
@@ -1503,10 +2238,26 @@ def _extract_recolha_comodato_number(value: str) -> str:
     raw = str(value or "").strip()
     if not raw:
         return ""
-    match = re.search(r"\bcomodato\s+([A-Za-z0-9_.-]+)", raw, flags=re.IGNORECASE)
-    if not match:
-        return ""
-    return normalize_numeric_code(match.group(1))
+
+    labeled_match = re.search(
+        r"\b(?:comodato|pedido|numero|nro|num)\s*[:#-]?\s*([A-Za-z0-9_.-]*\d[A-Za-z0-9_.-]*)",
+        raw,
+        flags=re.IGNORECASE,
+    )
+    if labeled_match:
+        return normalize_numeric_code(labeled_match.group(1))
+
+    if re.fullmatch(r"[A-Za-z0-9_.-]*\d[A-Za-z0-9_.-]*", raw):
+        return normalize_numeric_code(raw)
+
+    leading_match = re.match(
+        r"^\s*([A-Za-z0-9_.-]*\d[A-Za-z0-9_.-]*)\s*(?:[|;/,]|-\s+)",
+        raw,
+    )
+    if leading_match:
+        return normalize_numeric_code(leading_match.group(1))
+
+    return ""
 
 
 def _build_recolha_baixa_validation_map(records: list[Any]) -> dict[str, dict[str, Any]]:
@@ -1676,6 +2427,897 @@ def _panel_context_allows_recolha(context: dict[str, Any] | None, record: Any) -
     return bool(record_filial and record_filial in allowed_filiais)
 
 
+def _panel_context_allowed_report_scopes(context: dict[str, Any] | None) -> tuple[list[str] | None, list[str] | None]:
+    if not context or bool(context.get("is_admin")):
+        return None, None
+    allowed_filiais = [str(filial).strip() for filial in context.get("filiais", ()) if str(filial).strip()]
+    return allowed_filiais, None
+
+
+def _parse_localized_decimal(value: Any) -> Decimal:
+    raw = str(value or "").strip()
+    if not raw:
+        return Decimal("0")
+    raw = raw.replace("R$", "").replace("+", "").strip()
+    if "," in raw:
+        raw = raw.replace(".", "").replace(",", ".")
+    try:
+        return Decimal(raw)
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
+
+
+def _sum_localized_decimal(values: Any) -> Decimal:
+    return sum((_parse_localized_decimal(value) for value in values), Decimal("0"))
+
+
+def _format_decimal_br(value: Decimal) -> str:
+    return f"{value:.2f}".replace(".", ",")
+
+
+def _format_box_total(value: Decimal) -> str:
+    return str(int(value.to_integral_value()))
+
+
+CRITICA_DASHBOARD_PROBLEM_LABELS = {
+    "ocorrencia": "Ocorrencia do relatorio",
+    "pedido_duplicado": "Pedido duplicado",
+    "produto_duplicado": "Produto duplicado no pedido",
+    "preco": "Preco divergente",
+    "sem_dprecos": "Produto sem DPrecos",
+    "pedido_acima_media": "Pedido acima da media",
+    "inadimplente": "Cliente inadimplente",
+    "multipack": "Multipack fora da segmentacao",
+    "mapa_buffer": "Mapa 1 / buffer",
+    "mapa_fora": "Mapa fora do vendedor",
+    "condicao": "Cond. pag. divergente",
+    "limite": "Estouro de limite",
+    "outros": "Outros problemas",
+}
+
+
+def _format_money_br(value: Decimal) -> str:
+    return f"R$ {_format_decimal_br(value)}"
+
+
+def _parse_admin_critica_date(value: str | None) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Data da critica invalida. Use AAAA-MM-DD.") from exc
+
+
+def _normalize_admin_filter_values(values: str | list[str] | None) -> set[str]:
+    if values is None:
+        return set()
+    raw_values = values if isinstance(values, list) else [values]
+    normalized: set[str] = set()
+    for value in raw_values:
+        for part in str(value or "").split(","):
+            text = part.strip()
+            if text:
+                normalized.add(text)
+    return normalized
+
+
+def _normalize_search_text(value: Any) -> str:
+    normalized = unicodedata.normalize("NFD", str(value or "").strip().lower())
+    ascii_only = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return re.sub(r"[^a-z0-9]+", " ", ascii_only).strip()
+
+
+def _critica_record_problem_keys(record: Any) -> set[str]:
+    labels = tuple(str(label or "").strip() for label in getattr(record, "problemas", ()) if str(label or "").strip())
+    normalized_labels = _normalize_search_text(" ".join(labels))
+    keys: set[str] = set()
+    if str(getattr(record, "critica_text", "") or "").strip() or str(getattr(record, "ocorrencia_1", "") or "").strip() or str(getattr(record, "ocorrencia_2", "") or "").strip():
+        keys.add("ocorrencia")
+    if bool(getattr(record, "pedido_cliente_duplicado", False)) or "possivel pedido duplicado" in normalized_labels:
+        keys.add("pedido_duplicado")
+    if bool(getattr(record, "pedido_produto_duplicado", False)) or "produto repetido" in normalized_labels:
+        keys.add("produto_duplicado")
+    if "produto sem referencia" in normalized_labels or "sem dprecos" in normalized_labels:
+        keys.add("sem_dprecos")
+    if "preco" in normalized_labels and "sem dprecos" not in normalized_labels and "sem referencia" not in normalized_labels:
+        keys.add("preco")
+    if bool(getattr(record, "order_above_average", False)) or "acima da media" in normalized_labels:
+        keys.add("pedido_acima_media")
+    if _parse_localized_decimal(getattr(record, "inad_total_vencido", "0")) > 0 or "vencido em aberto" in normalized_labels:
+        keys.add("inadimplente")
+    if bool(getattr(record, "multipack_item", False)) and not bool(getattr(record, "multipack_allowed", True)):
+        keys.add("multipack")
+    map_status = str(getattr(record, "map_status", "") or "").strip().lower()
+    if map_status == "buffer" or "mapa 1" in normalized_labels or "buffer" in normalized_labels:
+        keys.add("mapa_buffer")
+    if map_status == "fora" or "fora do mapa" in normalized_labels:
+        keys.add("mapa_fora")
+    if bool(getattr(record, "cond_divergente", False)) or "condicao de pagamento" in normalized_labels:
+        keys.add("condicao")
+    if _parse_localized_decimal(getattr(record, "limit_exceeded_amount", "0")) > 0 or "ultrapassa o limite" in normalized_labels:
+        keys.add("limite")
+    if labels and not keys:
+        keys.add("outros")
+    return keys
+
+
+def _critica_order_rows_from_records(records: list[Any]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for index, record in enumerate(records):
+        filial = str(getattr(record, "filial", "") or "").strip()
+        pedido = str(getattr(record, "pedido", "") or "").strip() or f"sem-pedido-{index}"
+        key = (filial, pedido)
+        problem_keys = _critica_record_problem_keys(record)
+        problem_labels = [
+            str(label or "").strip()
+            for label in getattr(record, "problemas", ())
+            if str(label or "").strip()
+        ]
+        entry = grouped.setdefault(
+            key,
+            {
+                "filial": filial,
+                "pedido": pedido,
+                "data_pedido": _serialize_admin_import_value(getattr(record, "data_pedido", None)),
+                "operation_name": str(getattr(record, "operation_name", "") or "").strip(),
+                "movement_operation_name": str(getattr(record, "movement_operation_name", "") or "").strip(),
+                "setor": str(getattr(record, "setor", "") or "").strip(),
+                "seller": str(getattr(record, "seller_code", "") or getattr(record, "vendedor_codigo", "") or "").strip(),
+                "manager": str(getattr(record, "manager_code", "") or getattr(record, "codigo_gv", "") or "").strip(),
+                "cod_pdv": str(getattr(record, "cod_pdv", "") or "").strip(),
+                "nome_pdv": str(getattr(record, "nome_pdv", "") or "").strip(),
+                "cidade": str(getattr(record, "client_cidade", "") or "").strip(),
+                "bairro": str(getattr(record, "client_bairro", "") or "").strip(),
+                "origem": str(getattr(record, "origem_pedido", "") or "").strip(),
+                "status_pedido": str(getattr(record, "status_pedido", "") or "").strip(),
+                "total_pedido_decimal": Decimal("0"),
+                "item_count": 0,
+                "problem_item_count": 0,
+                "problem_keys": set(),
+                "problem_labels": [],
+                "problem_products": [],
+                "inad_total_vencido_decimal": Decimal("0"),
+                "limit_exceeded_decimal": Decimal("0"),
+                "avg_order_value_decimal": Decimal("0"),
+                "hectolitros_decimal": Decimal("0"),
+                "nab_tt_hectolitros_decimal": Decimal("0"),
+                "high_end_hectolitros_decimal": Decimal("0"),
+                "cerveja_tt_hectolitros_decimal": Decimal("0"),
+                "refri_zero_hectolitros_decimal": Decimal("0"),
+                "cerveja_rgb_hectolitros_decimal": Decimal("0"),
+                "cerveja_ow_hectolitros_decimal": Decimal("0"),
+                "marketplace_tt_hectolitros_decimal": Decimal("0"),
+                "search_text_parts": [],
+            },
+        )
+        total_pedido = _parse_localized_decimal(getattr(record, "total_pedido", "0"))
+        if total_pedido:
+            entry["total_pedido_decimal"] = total_pedido
+        entry["item_count"] += 1
+        if problem_keys:
+            entry["problem_item_count"] += 1
+        entry["problem_keys"].update(problem_keys)
+        entry["problem_labels"].extend(problem_labels)
+        if problem_keys:
+            product = " ".join(
+                str(value or "").strip()
+                for value in (getattr(record, "produto_codigo", ""), getattr(record, "produto_descricao", ""))
+                if str(value or "").strip()
+            )
+            if product:
+                entry["problem_products"].append(product)
+        entry["inad_total_vencido_decimal"] = max(
+            entry["inad_total_vencido_decimal"],
+            _parse_localized_decimal(getattr(record, "inad_total_vencido", "0")),
+        )
+        entry["limit_exceeded_decimal"] = max(
+            entry["limit_exceeded_decimal"],
+            _parse_localized_decimal(getattr(record, "limit_exceeded_amount", "0")),
+        )
+        entry["avg_order_value_decimal"] = max(
+            entry["avg_order_value_decimal"],
+            _parse_localized_decimal(getattr(record, "avg_order_value_3m", "0")),
+        )
+        item_hectolitros = _parse_localized_decimal(getattr(record, "hectolitros", "0"))
+        entry["hectolitros_decimal"] += item_hectolitros
+        if bool(getattr(record, "cesta_nab_tt", False)):
+            entry["nab_tt_hectolitros_decimal"] += item_hectolitros
+        if bool(getattr(record, "cesta_high_end", False)):
+            entry["high_end_hectolitros_decimal"] += item_hectolitros
+        if bool(getattr(record, "cesta_cerveja_tt", False)):
+            entry["cerveja_tt_hectolitros_decimal"] += item_hectolitros
+        if bool(getattr(record, "cesta_refri_zero", False)):
+            entry["refri_zero_hectolitros_decimal"] += item_hectolitros
+        if bool(getattr(record, "cesta_cerveja_rgb", False)):
+            entry["cerveja_rgb_hectolitros_decimal"] += item_hectolitros
+        if bool(getattr(record, "cesta_cerveja_ow", False)):
+            entry["cerveja_ow_hectolitros_decimal"] += item_hectolitros
+        if bool(getattr(record, "cesta_marketplace_tt", False)):
+            entry["marketplace_tt_hectolitros_decimal"] += item_hectolitros
+        entry["search_text_parts"].extend(
+            [
+                filial,
+                pedido,
+                entry["operation_name"],
+                entry["movement_operation_name"],
+                entry["setor"],
+                entry["seller"],
+                entry["manager"],
+                entry["cod_pdv"],
+                entry["nome_pdv"],
+                entry["cidade"],
+                entry["bairro"],
+                entry["origem"],
+                " ".join(problem_labels),
+            ]
+        )
+
+    rows: list[dict[str, Any]] = []
+    for entry in grouped.values():
+        labels = _dedupe_texts(entry["problem_labels"])
+        products = _dedupe_texts(entry["problem_products"])
+        problem_keys = sorted(entry["problem_keys"], key=lambda key: CRITICA_DASHBOARD_PROBLEM_LABELS.get(key, key))
+        total_pedido = entry["total_pedido_decimal"]
+        rows.append(
+            {
+                "filial": entry["filial"],
+                "pedido": entry["pedido"],
+                "data_pedido": entry["data_pedido"],
+                "operation_name": entry["operation_name"],
+                "movement_operation_name": entry["movement_operation_name"],
+                "setor": entry["setor"],
+                "seller": entry["seller"],
+                "manager": entry["manager"],
+                "cod_pdv": entry["cod_pdv"],
+                "nome_pdv": entry["nome_pdv"],
+                "cidade": entry["cidade"],
+                "bairro": entry["bairro"],
+                "origem": entry["origem"],
+                "status_pedido": entry["status_pedido"],
+                "total_pedido": _format_money_br(total_pedido),
+                "total_pedido_value": str(total_pedido),
+                "item_count": int(entry["item_count"]),
+                "problem_item_count": int(entry["problem_item_count"]),
+                "problem_keys": problem_keys,
+                "problem_labels": labels,
+                "problem_products": products[:6],
+                "problem_count": len(problem_keys),
+                "inad_total_vencido": _format_money_br(entry["inad_total_vencido_decimal"]),
+                "limit_exceeded_amount": _format_money_br(entry["limit_exceeded_decimal"]),
+                "avg_order_value": _format_money_br(entry["avg_order_value_decimal"]),
+                "hectolitros": _format_decimal_br(entry["hectolitros_decimal"]),
+                "hectolitros_value": str(entry["hectolitros_decimal"]),
+                "nab_tt_hectolitros_value": str(entry["nab_tt_hectolitros_decimal"]),
+                "high_end_hectolitros_value": str(entry["high_end_hectolitros_decimal"]),
+                "cerveja_tt_hectolitros_value": str(entry["cerveja_tt_hectolitros_decimal"]),
+                "refri_zero_hectolitros_value": str(entry["refri_zero_hectolitros_decimal"]),
+                "cerveja_rgb_hectolitros_value": str(entry["cerveja_rgb_hectolitros_decimal"]),
+                "cerveja_ow_hectolitros_value": str(entry["cerveja_ow_hectolitros_decimal"]),
+                "marketplace_tt_hectolitros_value": str(entry["marketplace_tt_hectolitros_decimal"]),
+                "search_text": _normalize_search_text(" ".join(entry["search_text_parts"])),
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            0 if row["problem_count"] else 1,
+            -int(row["problem_count"]),
+            -_parse_localized_decimal(row["total_pedido_value"]),
+            _sort_numeric_text(row["filial"]),
+            _sort_numeric_text(row["pedido"]),
+        )
+    )
+    return rows
+
+
+def _dedupe_texts(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        key = _normalize_search_text(text)
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        result.append(text)
+    return result
+
+
+def _sort_numeric_text(value: Any) -> tuple[int, str]:
+    text = str(value or "").strip()
+    return (int(text), text) if text.isdigit() else (999999, text)
+
+
+def _critica_order_matches_filters(
+    row: dict[str, Any],
+    *,
+    operation: set[str],
+    sector: set[str],
+    seller: set[str],
+    manager: set[str],
+    city: set[str],
+    district: set[str],
+    origin: set[str],
+    problem: set[str],
+    search: str,
+    only_problems: bool,
+) -> bool:
+    if only_problems and not row.get("problem_keys"):
+        return False
+    if operation and str(row.get("filial") or "").strip() not in operation:
+        return False
+    if sector and str(row.get("setor") or "").strip() not in sector:
+        return False
+    if seller and str(row.get("seller") or "").strip() not in seller:
+        return False
+    if manager and str(row.get("manager") or "").strip() not in manager:
+        return False
+    if city and str(row.get("cidade") or "").strip() not in city:
+        return False
+    if district and str(row.get("bairro") or "").strip() not in district:
+        return False
+    if origin and str(row.get("origem") or "").strip() not in origin:
+        return False
+    if problem and not (set(row.get("problem_keys") or []) & problem):
+        return False
+    if search and search not in str(row.get("search_text") or ""):
+        return False
+    return True
+
+
+def _critica_option_items(
+    rows: list[dict[str, Any]],
+    *,
+    value_key: str,
+    label_factory: Any | None = None,
+) -> list[dict[str, Any]]:
+    counts: Counter[str] = Counter()
+    labels: dict[str, str] = {}
+    for row in rows:
+        value = str(row.get(value_key) or "").strip()
+        if not value:
+            continue
+        counts[value] += 1
+        labels.setdefault(value, label_factory(row, value) if label_factory else value)
+    return [
+        {"value": value, "label": labels.get(value, value), "count": count}
+        for value, count in sorted(counts.items(), key=lambda item: (_sort_numeric_text(item[0]), labels.get(item[0], item[0])))
+    ]
+
+
+def _critica_problem_option_items(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: Counter[str] = Counter()
+    for row in rows:
+        for key in row.get("problem_keys") or []:
+            counts[str(key)] += 1
+    return [
+        {"value": key, "label": CRITICA_DASHBOARD_PROBLEM_LABELS.get(key, key), "count": counts[key]}
+        for key in sorted(counts, key=lambda item: (-counts[item], CRITICA_DASHBOARD_PROBLEM_LABELS.get(item, item)))
+    ]
+
+
+def _critica_dashboard_options(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "operations": _critica_option_items(
+            rows,
+            value_key="filial",
+            label_factory=lambda row, value: f"{value} - {row.get('operation_name') or FILIAL_LABELS.get(value, '')}".strip(" -"),
+        ),
+        "sectors": _critica_option_items(rows, value_key="setor"),
+        "sellers": _critica_option_items(rows, value_key="seller"),
+        "managers": _critica_option_items(rows, value_key="manager"),
+        "cities": _critica_option_items(rows, value_key="cidade"),
+        "districts": _critica_option_items(rows, value_key="bairro"),
+        "origins": _critica_option_items(rows, value_key="origem"),
+        "problems": _critica_problem_option_items(rows),
+    }
+
+
+def _critica_dashboard_slicer_options(
+    all_rows: list[dict[str, Any]],
+    filters: dict[str, Any],
+    *,
+    only_problems: bool,
+) -> dict[str, list[dict[str, Any]]]:
+    def rows_for(omit: str) -> list[dict[str, Any]]:
+        return [
+            row
+            for row in all_rows
+            if _critica_order_matches_filters(
+                row,
+                operation=set() if omit == "operation" else filters["operation"],
+                sector=set() if omit == "sector" else filters["sector"],
+                seller=set() if omit == "seller" else filters["seller"],
+                manager=set() if omit == "manager" else filters["manager"],
+                city=set() if omit == "city" else filters["city"],
+                district=set() if omit == "district" else filters["district"],
+                origin=set() if omit == "origin" else filters["origin"],
+                problem=set() if omit == "problem" else filters["problem"],
+                search=filters["search"],
+                only_problems=only_problems,
+            )
+        ]
+
+    return {
+        "operations": _critica_option_items(
+            rows_for("operation"),
+            value_key="filial",
+            label_factory=lambda row, value: f"{value} - {row.get('operation_name') or FILIAL_LABELS.get(value, '')}".strip(" -"),
+        ),
+        "sectors": _critica_option_items(rows_for("sector"), value_key="setor"),
+        "sellers": _critica_option_items(rows_for("seller"), value_key="seller"),
+        "managers": _critica_option_items(rows_for("manager"), value_key="manager"),
+        "cities": _critica_option_items(rows_for("city"), value_key="cidade"),
+        "districts": _critica_option_items(rows_for("district"), value_key="bairro"),
+        "origins": _critica_option_items(rows_for("origin"), value_key="origem"),
+        "problems": _critica_problem_option_items(rows_for("problem")),
+    }
+
+
+def _critica_problem_rank(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: Counter[str] = Counter()
+    for row in rows:
+        for key in row.get("problem_keys") or []:
+            counts[str(key)] += 1
+    return [
+        {"key": key, "label": CRITICA_DASHBOARD_PROBLEM_LABELS.get(key, key), "orders": count}
+        for key, count in sorted(counts.items(), key=lambda item: (-item[1], CRITICA_DASHBOARD_PROBLEM_LABELS.get(item[0], item[0])))
+    ]
+
+
+def _critica_group_rank(rows: list[dict[str, Any]], *, key: str, label: str, limit: int = 8) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        value = str(row.get(key) or "").strip() or "-"
+        entry = grouped.setdefault(value, {"value": value, "label": value, "orders": 0, "problem_orders": 0, "total_decimal": Decimal("0")})
+        entry["orders"] += 1
+        if row.get("problem_keys"):
+            entry["problem_orders"] += 1
+        entry["total_decimal"] += _parse_localized_decimal(row.get("total_pedido_value"))
+    ranked = sorted(grouped.values(), key=lambda item: (-int(item["problem_orders"]), -item["total_decimal"], item["label"]))[:limit]
+    return [
+        {
+            "value": item["value"],
+            "label": f"{label} {item['label']}" if label else item["label"],
+            "orders": item["orders"],
+            "problem_orders": item["problem_orders"],
+            "total": _format_money_br(item["total_decimal"]),
+        }
+        for item in ranked
+    ]
+
+
+def _critica_client_rank(rows: list[dict[str, Any]], *, limit: int = 8) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (str(row.get("filial") or ""), str(row.get("cod_pdv") or ""))
+        entry = grouped.setdefault(
+            key,
+            {
+                "filial": row.get("filial") or "",
+                "cod_pdv": row.get("cod_pdv") or "",
+                "nome_pdv": row.get("nome_pdv") or "-",
+                "orders": 0,
+                "problem_orders": 0,
+                "total_decimal": Decimal("0"),
+            },
+        )
+        entry["orders"] += 1
+        if row.get("problem_keys"):
+            entry["problem_orders"] += 1
+        entry["total_decimal"] += _parse_localized_decimal(row.get("total_pedido_value"))
+    ranked = sorted(grouped.values(), key=lambda item: (-int(item["problem_orders"]), -item["total_decimal"], item["nome_pdv"]))[:limit]
+    return [
+        {
+            "filial": item["filial"],
+            "cod_pdv": item["cod_pdv"],
+            "label": item["nome_pdv"],
+            "orders": item["orders"],
+            "problem_orders": item["problem_orders"],
+            "total": _format_money_br(item["total_decimal"]),
+        }
+        for item in ranked
+    ]
+
+
+def _critica_dashboard_recommendations(problem_rank: list[dict[str, Any]], rows: list[dict[str, Any]]) -> list[dict[str, str]]:
+    rank_by_key = {item["key"]: int(item.get("orders") or 0) for item in problem_rank}
+    recommendations: list[dict[str, str]] = []
+    if rank_by_key.get("limite", 0) or rank_by_key.get("condicao", 0):
+        recommendations.append(
+            {
+                "title": "Validar credito antes de faturar",
+                "detail": "Priorize pedidos com estouro de limite ou condicao divergente, principalmente quando a operacao for 51.",
+            }
+        )
+    if rank_by_key.get("pedido_duplicado", 0) or rank_by_key.get("produto_duplicado", 0):
+        recommendations.append(
+            {
+                "title": "Conferir duplicidades por cliente",
+                "detail": "Compare pedidos do mesmo NB em datas proximas e confirme se nao houve redigitacao do mesmo mix.",
+            }
+        )
+    if rank_by_key.get("preco", 0) or rank_by_key.get("sem_dprecos", 0):
+        recommendations.append(
+            {
+                "title": "Tratar preco e cadastro de produto",
+                "detail": "Separe divergencias de preco real de produto sem DPrecos para evitar retrabalho na critica manual.",
+            }
+        )
+    if rank_by_key.get("mapa_buffer", 0) or rank_by_key.get("mapa_fora", 0):
+        recommendations.append(
+            {
+                "title": "Revisar origem do pedido",
+                "detail": "Pedidos em buffer ou fora do mapa indicam falha de digitacao, rota ou setor e devem ser cobrados com o responsavel.",
+            }
+        )
+    if rank_by_key.get("inadimplente", 0):
+        recommendations.append(
+            {
+                "title": "Cruzar critica com cobranca",
+                "detail": "Clientes inadimplentes com pedido novo devem ir para validacao comercial antes de seguir o fluxo normal.",
+            }
+        )
+    if not recommendations:
+        recommendations.append(
+            {
+                "title": "Sem concentracao critica nos filtros",
+                "detail": "Use filtros por operacao, setor ou problema para encontrar bolsões especificos de erro.",
+            }
+        )
+    if len(rows) > 300:
+        recommendations.append(
+            {
+                "title": "Quebrar a fila de trabalho",
+                "detail": "Para operacao grande, filtre por setor ou GV e trate primeiro os pedidos com maior valor total.",
+            }
+        )
+    return recommendations[:5]
+
+
+def _build_admin_critica_dashboard(
+    context: dict[str, Any] | None = None,
+    *,
+    target_date: date | None = None,
+    limit: int = 200,
+    operation: str | list[str] | None = None,
+    sector: str | list[str] | None = None,
+    seller: str | list[str] | None = None,
+    manager: str | list[str] | None = None,
+    city: str | list[str] | None = None,
+    district: str | list[str] | None = None,
+    origin: str | list[str] | None = None,
+    problem: str | list[str] | None = None,
+    search: str = "",
+    only_problems: bool = True,
+) -> dict[str, Any]:
+    allowed_sectors, allowed_gv_vdes = _panel_context_allowed_report_scopes(context)
+    effective_date = target_date or critica_rn_query_service.latest_date(
+        allowed_sectors=allowed_sectors,
+        allowed_gv_vdes=allowed_gv_vdes,
+    )
+    if effective_date is None:
+        return {
+            "total": 0,
+            "limit": limit,
+            "summary": {
+                "data_pedido": "",
+                "pedidos": 0,
+                "pedidos_com_problema": 0,
+                "clientes": 0,
+                "itens": 0,
+                "valor_total": "R$ 0,00",
+                "taxa_problema": "0,0%",
+            },
+            "options": _critica_dashboard_options([]),
+            "rankings": {"problems": [], "operations": [], "sectors": [], "clients": []},
+            "recommendations": _critica_dashboard_recommendations([], []),
+            "orders": [],
+        }
+    data = critica_rn_query_service.get_report_data(
+        target_date=effective_date,
+        allowed_sectors=allowed_sectors,
+        allowed_gv_vdes=allowed_gv_vdes,
+        limit=50000,
+    )
+    all_rows = _critica_order_rows_from_records(data.records)
+    filters = {
+        "operation": _normalize_admin_filter_values(operation),
+        "sector": _normalize_admin_filter_values(sector),
+        "seller": _normalize_admin_filter_values(seller),
+        "manager": _normalize_admin_filter_values(manager),
+        "city": _normalize_admin_filter_values(city),
+        "district": _normalize_admin_filter_values(district),
+        "origin": _normalize_admin_filter_values(origin),
+        "problem": _normalize_admin_filter_values(problem),
+        "search": _normalize_search_text(search),
+    }
+    filtered_rows = [
+        row
+        for row in all_rows
+        if _critica_order_matches_filters(
+            row,
+            operation=filters["operation"],
+            sector=filters["sector"],
+            seller=filters["seller"],
+            manager=filters["manager"],
+            city=filters["city"],
+            district=filters["district"],
+            origin=filters["origin"],
+            problem=filters["problem"],
+            search=filters["search"],
+            only_problems=only_problems,
+        )
+    ]
+    total_value = sum((_parse_localized_decimal(row.get("total_pedido_value")) for row in filtered_rows), Decimal("0"))
+    total_hectolitros = sum((_parse_localized_decimal(row.get("hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    nab_tt_hectolitros = sum((_parse_localized_decimal(row.get("nab_tt_hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    high_end_hectolitros = sum((_parse_localized_decimal(row.get("high_end_hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    cerveja_tt_hectolitros = sum((_parse_localized_decimal(row.get("cerveja_tt_hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    refri_zero_hectolitros = sum((_parse_localized_decimal(row.get("refri_zero_hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    cerveja_rgb_hectolitros = sum((_parse_localized_decimal(row.get("cerveja_rgb_hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    cerveja_ow_hectolitros = sum((_parse_localized_decimal(row.get("cerveja_ow_hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    marketplace_tt_hectolitros = sum((_parse_localized_decimal(row.get("marketplace_tt_hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    problem_orders = sum(1 for row in filtered_rows if row.get("problem_keys"))
+    client_count = len({(row.get("filial"), row.get("cod_pdv")) for row in filtered_rows if row.get("filial") and row.get("cod_pdv")})
+    problem_rank = _critica_problem_rank(filtered_rows)
+    safe_limit = max(1, min(int(limit or 200), 1000))
+    return {
+        "total": len(filtered_rows),
+        "limit": safe_limit,
+        "summary": {
+            "data_pedido": effective_date.isoformat(),
+            "planilha_atualizada_em": data.summary.planilha_atualizada_em,
+            "pedidos": len(filtered_rows),
+            "pedidos_base": len(all_rows),
+            "pedidos_com_problema": problem_orders,
+            "clientes": client_count,
+            "itens": sum(int(row.get("item_count") or 0) for row in filtered_rows),
+            "valor_total": _format_money_br(total_value),
+            "total_hectolitros": _format_decimal_br(total_hectolitros),
+            "nab_tt_hectolitros": _format_decimal_br(nab_tt_hectolitros),
+            "high_end_hectolitros": _format_decimal_br(high_end_hectolitros),
+            "cerveja_tt_hectolitros": _format_decimal_br(cerveja_tt_hectolitros),
+            "refri_zero_hectolitros": _format_decimal_br(refri_zero_hectolitros),
+            "cerveja_rgb_hectolitros": _format_decimal_br(cerveja_rgb_hectolitros),
+            "cerveja_ow_hectolitros": _format_decimal_br(cerveja_ow_hectolitros),
+            "marketplace_tt_hectolitros": _format_decimal_br(marketplace_tt_hectolitros),
+            "ticket_medio": _format_money_br(total_value / Decimal(len(filtered_rows))) if filtered_rows else "R$ 0,00",
+            "taxa_problema": _format_decimal_br((Decimal(problem_orders) / Decimal(len(filtered_rows)) * Decimal("100")) if filtered_rows else Decimal("0")) + "%",
+            "maior_problema": problem_rank[0]["label"] if problem_rank else "-",
+        },
+        "options": _critica_dashboard_slicer_options(all_rows, filters, only_problems=only_problems),
+        "rankings": {
+            "problems": problem_rank[:12],
+            "operations": _critica_group_rank(filtered_rows, key="filial", label="Operacao", limit=8),
+            "sectors": _critica_group_rank(filtered_rows, key="setor", label="Setor", limit=8),
+            "clients": _critica_client_rank(filtered_rows, limit=8),
+        },
+        "recommendations": _critica_dashboard_recommendations(problem_rank, filtered_rows),
+        "orders": filtered_rows[:safe_limit],
+    }
+
+
+def _build_admin_giro_recolha_dashboard(
+    context: dict[str, Any] | None = None,
+    *,
+    limit: int = 200,
+    min_gap: str = "1",
+    operation: str | list[str] | None = None,
+    city: str | list[str] | None = None,
+    district: str | list[str] | None = None,
+    seller: str | list[str] | None = None,
+    manager: str | list[str] | None = None,
+    visit_day: str | list[str] | None = None,
+    zero_only: bool = False,
+) -> dict[str, Any]:
+    allowed_sectors, allowed_gv_vdes = _panel_context_allowed_report_scopes(context)
+    records = giro_query_service.list_recolha_opportunities(
+        allowed_sectors=allowed_sectors,
+        allowed_gv_vdes=allowed_gv_vdes,
+        limit=limit,
+        min_gap=min_gap,
+        operation=operation,
+        city=city,
+        district=district,
+        seller=seller,
+        manager=manager,
+        visit_day=visit_day,
+        zero_only=zero_only,
+    )
+    rows = [record.to_dict() for record in records]
+    total_gap = _sum_localized_decimal(row.get("gap_caixas") for row in rows)
+    zero_clients = sum(
+        1
+        for row in rows
+        if str(row.get("giro_litrinho") or "") == "ZERO"
+        or str(row.get("giro_inteira") or "") == "ZERO"
+        or str(row.get("giro_litrao") or "") == "ZERO"
+    )
+    return {
+        "total": len(rows),
+        "limit": limit,
+        "min_gap": str(min_gap or "1"),
+        "summary": {
+            "clientes": len(rows),
+            "clientes_zero": zero_clients,
+            "gap_total": _format_box_total(total_gap),
+            "maior_gap": rows[0].get("gap_caixas", "0") if rows else "0",
+        },
+        "records": rows,
+    }
+
+
+def _build_admin_giro_recolha_filter_options(
+    context: dict[str, Any] | None = None,
+    *,
+    min_gap: str = "1",
+    operation: str | list[str] | None = None,
+    city: str | list[str] | None = None,
+    district: str | list[str] | None = None,
+    seller: str | list[str] | None = None,
+    manager: str | list[str] | None = None,
+    visit_day: str | list[str] | None = None,
+    zero_only: bool = False,
+) -> dict[str, Any]:
+    allowed_sectors, allowed_gv_vdes = _panel_context_allowed_report_scopes(context)
+    options = giro_query_service.list_recolha_filter_options(
+        allowed_sectors=allowed_sectors,
+        allowed_gv_vdes=allowed_gv_vdes,
+        min_gap=min_gap,
+        operation=operation,
+        city=city,
+        district=district,
+        seller=seller,
+        manager=manager,
+        visit_day=visit_day,
+        zero_only=zero_only,
+    )
+    return {"options": options}
+
+
+def _route_day_sort_key(value: str) -> tuple[int, str]:
+    normalized = str(value or "").upper()
+    order = {
+        "SEG": 1,
+        "TER": 2,
+        "QUA": 3,
+        "QUI": 4,
+        "SEX": 5,
+        "SAB": 6,
+        "DOM": 7,
+    }
+    for token, index in order.items():
+        if token in normalized:
+            return index, normalized
+    return 99, normalized
+
+
+def _build_admin_giro_recolha_routes(
+    context: dict[str, Any] | None = None,
+    *,
+    limit: int = 500,
+    min_gap: str = "1",
+    operation: str | list[str] | None = None,
+    city: str | list[str] | None = None,
+    district: str | list[str] | None = None,
+    seller: str | list[str] | None = None,
+    manager: str | list[str] | None = None,
+    visit_day: str | list[str] | None = None,
+    zero_only: bool = False,
+    max_route_size: int = 12,
+) -> dict[str, Any]:
+    allowed_sectors, allowed_gv_vdes = _panel_context_allowed_report_scopes(context)
+    records = giro_query_service.list_recolha_opportunities(
+        allowed_sectors=allowed_sectors,
+        allowed_gv_vdes=allowed_gv_vdes,
+        limit=limit,
+        min_gap=min_gap,
+        operation=operation,
+        city=city,
+        district=district,
+        seller=seller,
+        manager=manager,
+        visit_day=visit_day,
+        zero_only=zero_only,
+    )
+    rows = [record.to_dict() for record in records]
+    max_size = max(1, min(int(max_route_size or 12), 50))
+
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        key = (
+            str(row.get("filial") or "").strip() or "Sem operacao",
+            str(row.get("visit_day") or "").strip() or "Sem dia de visita",
+            str(row.get("cidade") or "").strip() or "Sem cidade",
+        )
+        grouped.setdefault(key, []).append(row)
+
+    routes: list[dict[str, Any]] = []
+    sequence = 1
+    for key in sorted(grouped, key=lambda item: (item[0], _route_day_sort_key(item[1]), item[2])):
+        items = sorted(
+            grouped[key],
+            key=lambda row: (
+                str(row.get("bairro") or ""),
+                -_parse_localized_decimal(row.get("gap_caixas")),
+                -_parse_localized_decimal(row.get("media_faturamento_pedido")),
+                str(row.get("nome") or ""),
+            ),
+        )
+        for start in range(0, len(items), max_size):
+            chunk = items[start : start + max_size]
+            total_gap = _sum_localized_decimal(row.get("gap_caixas") for row in chunk)
+            total_boxes = _sum_localized_decimal(row.get("total_caixas") for row in chunk)
+            total_revenue = _sum_localized_decimal(row.get("faturamento_total") for row in chunk)
+            sellers = sorted({str(row.get("seller_code") or row.get("setor") or "").strip() for row in chunk if str(row.get("seller_code") or row.get("setor") or "").strip()})
+            managers = sorted({str(row.get("manager_code") or "").strip() for row in chunk if str(row.get("manager_code") or "").strip()})
+            neighborhoods = sorted({str(row.get("bairro") or "").strip() for row in chunk if str(row.get("bairro") or "").strip()})
+            route_rows = []
+            for index, row in enumerate(chunk, start=1):
+                route_rows.append(
+                    {
+                        "sequence": index,
+                        "filial": row.get("filial"),
+                        "cod_pdv": row.get("cod_pdv"),
+                        "nome": row.get("nome"),
+                        "cidade": row.get("cidade"),
+                        "bairro": row.get("bairro"),
+                        "visit_day": row.get("visit_day"),
+                        "total_caixas": row.get("total_caixas"),
+                        "real_caixas": row.get("real_caixas"),
+                        "gap_caixas": row.get("gap_caixas"),
+                        "gap_litrinho": row.get("gap_litrinho"),
+                        "gap_inteira": row.get("gap_inteira"),
+                        "gap_litrao": row.get("gap_litrao"),
+                        "giro_litrinho": row.get("giro_litrinho"),
+                        "giro_inteira": row.get("giro_inteira"),
+                        "giro_litrao": row.get("giro_litrao"),
+                        "media_faturamento_pedido": row.get("media_faturamento_pedido"),
+                        "faturamento_total": row.get("faturamento_total"),
+                        "seller": row.get("seller_code") or row.get("setor"),
+                        "manager": row.get("manager_code"),
+                        "command": f"recolha {row.get('filial') or ''} {row.get('cod_pdv') or ''}".strip(),
+                    }
+                )
+            routes.append(
+                {
+                    "id": f"R{sequence:03d}",
+                    "operation": key[0],
+                    "seller": sellers[0] if len(sellers) == 1 else ("Varios" if sellers else "-"),
+                    "sellers": sellers,
+                    "manager": managers[0] if len(managers) == 1 else ("Varios" if managers else "-"),
+                    "managers": managers,
+                    "visit_day": key[1],
+                    "city": key[2],
+                    "neighborhoods": neighborhoods,
+                    "neighborhood_sequence": " -> ".join(neighborhoods),
+                    "pdvs": len(chunk),
+                    "total_caixas": _format_box_total(total_boxes),
+                    "gap_total": _format_box_total(total_gap),
+                    "faturamento_total": f"R$ {_format_decimal_br(total_revenue)}",
+                    "items": route_rows,
+                }
+            )
+            sequence += 1
+
+    routes.sort(key=lambda route: (_route_day_sort_key(route.get("visit_day", "")), route.get("operation", ""), route.get("city", ""), str(route.get("neighborhood_sequence") or ""), -_parse_localized_decimal(route.get("gap_total"))))
+    for index, route in enumerate(routes, start=1):
+        route["id"] = f"R{index:03d}"
+    return {
+        "total": len(routes),
+        "summary": {
+            "rotas": len(routes),
+            "pdvs": len(rows),
+            "gap_total": _format_box_total(_sum_localized_decimal(row.get("gap_caixas") for row in rows)),
+            "total_caixas": _format_box_total(_sum_localized_decimal(row.get("total_caixas") for row in rows)),
+            "max_pdvs_por_rota": max_size,
+        },
+        "routes": routes,
+    }
+
+
 def _list_admin_recolhas(context: dict[str, Any] | None = None) -> dict[str, Any]:
     recolha_request_service.normalize_grouped_comodato_requests()
     records = recolha_request_service.list_all_requests()
@@ -1709,6 +3351,59 @@ def _list_admin_recolhas(context: dict[str, Any] | None = None) -> dict[str, Any
 
     operations = sorted(grouped.values(), key=lambda item: str(item["revenda"]).lower())
     return {"total": len(records), "operations": operations}
+
+
+def _parse_admin_recolha_export_date(value: str | None, *, label: str) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{label} invalida. Use AAAA-MM-DD.") from exc
+
+
+def _recolha_record_created_date(record: Any) -> date | None:
+    iso = _recolha_created_at_iso(str(getattr(record, "criado_em", "") or ""))
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(iso).date()
+    except ValueError:
+        return None
+
+
+def _export_admin_recolhas_csv(
+    context: dict[str, Any] | None = None,
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> tuple[bytes, int, str]:
+    recolha_request_service.normalize_grouped_comodato_requests()
+    start = _parse_admin_recolha_export_date(start_date, label="Data inicial")
+    end = _parse_admin_recolha_export_date(end_date, label="Data final")
+    if start and end and start > end:
+        raise HTTPException(status_code=400, detail="Periodo invalido. A data inicial nao pode ser maior que a final.")
+
+    records = recolha_request_service.list_all_requests()
+    records = [record for record in records if _panel_context_allows_recolha(context, record)]
+    if start or end:
+        filtered_records = []
+        for record in records:
+            created_date = _recolha_record_created_date(record)
+            if created_date is None:
+                continue
+            if start and created_date < start:
+                continue
+            if end and created_date > end:
+                continue
+            filtered_records.append(record)
+        records = filtered_records
+
+    csv_bytes = recolha_request_service.export_csv_bytes(records, include_meta=True)
+    generated_at = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"relatorio_recolhas_{generated_at}.csv"
+    return csv_bytes, len(records), filename
 
 
 def _update_admin_recolha(
@@ -2801,6 +4496,364 @@ def _admin_broadcast_worker(
         }
 
 
+def _daily_route_state_path() -> Path:
+    raw_path = Path(settings.daily_route_broadcast_state_file or "exports/scheduled_messages/daily_route_state.json")
+    return raw_path if raw_path.is_absolute() else PROJECT_ROOT / raw_path
+
+
+def _load_daily_route_state() -> dict[str, Any]:
+    path = _daily_route_state_path()
+    if not path.exists():
+        return {"runs": {}}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Falha ao ler estado do envio diario de rota: %s", exc)
+        return {"runs": {}}
+    if not isinstance(payload, dict):
+        return {"runs": {}}
+    runs = payload.get("runs")
+    if not isinstance(runs, dict):
+        payload["runs"] = {}
+    return payload
+
+
+def _write_daily_route_state(state: dict[str, Any]) -> None:
+    path = _daily_route_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_suffix(f"{path.suffix}.tmp")
+    temp_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def _prune_daily_route_state(state: dict[str, Any], keep_days: int = 45) -> None:
+    runs = state.setdefault("runs", {})
+    if not isinstance(runs, dict):
+        state["runs"] = {}
+        return
+    keys = sorted(str(key) for key in runs.keys())
+    for key in keys[:-max(1, keep_days)]:
+        runs.pop(key, None)
+
+
+def _daily_route_timezone() -> Any:
+    timezone_name = settings.daily_route_broadcast_timezone or "America/Fortaleza"
+    try:
+        return ZoneInfo(timezone_name)
+    except Exception:
+        logger.warning("Timezone invalido para envio diario de rota: %s", timezone_name)
+        return timezone(timedelta(hours=-3), name="America/Fortaleza")
+
+
+def _daily_route_schedule_time() -> tuple[int, int]:
+    raw_value = str(settings.daily_route_broadcast_time or "07:00").strip()
+    match = re.fullmatch(r"(\d{1,2}):(\d{2})", raw_value)
+    if not match:
+        logger.warning("Horario invalido para envio diario de rota: %s. Usando 07:00.", raw_value)
+        return 7, 0
+    hour = max(0, min(int(match.group(1)), 23))
+    minute = max(0, min(int(match.group(2)), 59))
+    return hour, minute
+
+
+def _daily_route_now() -> datetime:
+    return datetime.now(_daily_route_timezone())
+
+
+def _should_run_daily_route_broadcast(now: datetime, state: dict[str, Any]) -> bool:
+    if now.weekday() >= 5:
+        return False
+    hour, minute = _daily_route_schedule_time()
+    target_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if now < target_at:
+        return False
+    run_date = now.date().isoformat()
+    run_payload = (state.get("runs") or {}).get(run_date)
+    return not (isinstance(run_payload, dict) and run_payload.get("status") == "completed")
+
+
+def _daily_route_audiences() -> tuple[str, ...]:
+    raw_audiences = settings.daily_route_broadcast_audiences or ("vendedor",)
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for audience in raw_audiences:
+        try:
+            item = _normalize_admin_broadcast_audience(audience)
+        except HTTPException:
+            logger.warning("Publico invalido no envio diario de rota: %s", audience)
+            continue
+        if item not in seen:
+            normalized.append(item)
+            seen.add(item)
+    return tuple(normalized or ["vendedor"])
+
+
+def _list_daily_route_recipients() -> list[dict[str, Any]]:
+    audiences = set(_daily_route_audiences())
+    users = _access_call(access_control.list_users)
+    recipients: list[dict[str, Any]] = []
+    seen_numbers: set[str] = set()
+    for user in users:
+        if not isinstance(user, dict) or not _is_admin_broadcast_user(user):
+            continue
+        if not any(_user_matches_admin_broadcast_audience(user, audience) for audience in audiences):
+            continue
+        phone_number = str(user.get("phone_number") or "").strip()
+        comparable_number = _admin_broadcast_comparable_number(phone_number)
+        if not comparable_number or comparable_number in seen_numbers:
+            continue
+        seen_numbers.add(comparable_number)
+        recipients.append(
+            {
+                "phone_number": phone_number,
+                "name": _admin_broadcast_user_label(user),
+                "role": _admin_broadcast_user_role_label(user),
+                "roles": list(user.get("roles") or []),
+                "sectors": list(user.get("sectors") or []),
+                "gv_vdes": list(user.get("gv_vdes") or []),
+            }
+        )
+    recipients.sort(key=lambda item: (str(item.get("role") or ""), str(item.get("name") or ""), str(item.get("phone_number") or "")))
+    return recipients
+
+
+def _daily_route_run_record(state: dict[str, Any], run_date: str, now: datetime, shortcut: str) -> dict[str, Any]:
+    runs = state.setdefault("runs", {})
+    if not isinstance(runs, dict):
+        state["runs"] = {}
+        runs = state["runs"]
+    record = runs.setdefault(
+        run_date,
+        {
+            "status": "running",
+            "started_at": now.isoformat(),
+            "finished_at": "",
+            "shortcut": shortcut,
+            "audiences": list(_daily_route_audiences()),
+            "total": 0,
+            "sent": 0,
+            "failed": 0,
+            "skipped": 0,
+            "sent_numbers": [],
+            "failed_numbers": [],
+            "skipped_numbers": [],
+            "results": [],
+        },
+    )
+    if not isinstance(record, dict):
+        record = {}
+        runs[run_date] = record
+    record["status"] = "running"
+    record.setdefault("started_at", now.isoformat())
+    record["shortcut"] = shortcut
+    record["audiences"] = list(_daily_route_audiences())
+    record.setdefault("sent_numbers", [])
+    record.setdefault("failed_numbers", [])
+    record.setdefault("skipped_numbers", [])
+    record.setdefault("results", [])
+    return record
+
+
+def _daily_route_update_status(**updates: Any) -> None:
+    with daily_route_broadcast_lock:
+        daily_route_broadcast_status.update(updates)
+
+
+def _daily_route_status_summary(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": str(record.get("status") or ""),
+        "started_at": str(record.get("started_at") or ""),
+        "finished_at": str(record.get("finished_at") or ""),
+        "shortcut": str(record.get("shortcut") or ""),
+        "audiences": list(record.get("audiences") or []),
+        "total": int(record.get("total") or 0),
+        "sent": int(record.get("sent") or 0),
+        "failed": int(record.get("failed") or 0),
+        "skipped": int(record.get("skipped") or 0),
+    }
+
+
+def _run_daily_route_broadcast_if_due() -> bool:
+    if not settings.daily_route_broadcast_enabled:
+        return False
+    if not evolution_client.enabled:
+        _daily_route_update_status(last_error="Evolution nao configurada para envio.")
+        return False
+
+    now = _daily_route_now()
+    state = _load_daily_route_state()
+    _daily_route_update_status(last_checked_at=now.isoformat())
+    if not _should_run_daily_route_broadcast(now, state):
+        run_date = now.date().isoformat()
+        run_payload = (state.get("runs") or {}).get(run_date)
+        if isinstance(run_payload, dict):
+            _daily_route_update_status(last_run_date=run_date, last_run=_daily_route_status_summary(run_payload))
+        return False
+
+    if not daily_route_broadcast_lock.acquire(blocking=False):
+        return False
+    try:
+        daily_route_broadcast_status["running"] = True
+        daily_route_broadcast_status["last_error"] = ""
+        run_date = now.date().isoformat()
+        shortcut = _build_admin_broadcast_shortcut("rota_dia", "hoje")
+        recipients = _list_daily_route_recipients()
+        state = _load_daily_route_state()
+        record = _daily_route_run_record(state, run_date, now, shortcut)
+        record["total"] = len(recipients)
+        _prune_daily_route_state(state)
+        _write_daily_route_state(state)
+
+        sent_numbers = {str(item) for item in record.get("sent_numbers") or [] if str(item).strip()}
+        skipped_numbers = {str(item) for item in record.get("skipped_numbers") or [] if str(item).strip()}
+        failed_numbers: set[str] = set()
+        sent = len(sent_numbers)
+        skipped = len(skipped_numbers)
+        failed = 0
+        results = list(record.get("results") or [])
+
+        for index, recipient in enumerate(recipients, start=1):
+            phone_number = str(recipient.get("phone_number") or "").strip()
+            comparable_number = _admin_broadcast_comparable_number(phone_number)
+            if not comparable_number or comparable_number in sent_numbers or comparable_number in skipped_numbers:
+                continue
+            result = {
+                "phone_number": phone_number,
+                "name": recipient.get("name") or phone_number,
+                "role": recipient.get("role") or "",
+                "status": "skipped",
+                "error": "",
+            }
+            try:
+                decision = access_control.authorize(phone_number=phone_number, area="cliente")
+                if not decision.allowed:
+                    skipped_numbers.add(comparable_number)
+                    skipped += 1
+                    result["error"] = decision.reason or "access_denied"
+                else:
+                    reset_incoming = IncomingMessage(
+                        sender=phone_number,
+                        text="menu",
+                        channel="evolution",
+                        message_id=f"daily-route:{run_date}:{comparable_number}:reset",
+                    )
+                    lookup_flow.handle(incoming=reset_incoming, decision=decision)
+                    incoming = IncomingMessage(
+                        sender=phone_number,
+                        text=shortcut,
+                        channel="evolution",
+                        message_id=f"daily-route:{run_date}:{comparable_number}",
+                    )
+                    outgoing = lookup_flow.handle(incoming=incoming, decision=decision)
+                    evolution_client.send(number=phone_number, message=outgoing)
+                    sent_numbers.add(comparable_number)
+                    sent += 1
+                    result["status"] = "sent"
+                result["error"] = str(result.get("error") or "")
+            except Exception as exc:
+                failed_numbers.add(comparable_number)
+                failed += 1
+                result["status"] = "failed"
+                result["error"] = str(exc)
+                logger.exception("Falha no envio diario da rota para %s: %s", phone_number, exc)
+
+            results.append(result)
+            record.update(
+                {
+                    "status": "running",
+                    "sent": sent,
+                    "failed": failed,
+                    "skipped": skipped,
+                    "sent_numbers": sorted(sent_numbers),
+                    "failed_numbers": sorted(failed_numbers),
+                    "skipped_numbers": sorted(skipped_numbers),
+                    "results": results[-100:],
+                }
+            )
+            _write_daily_route_state(state)
+            _daily_route_update_status(last_run_date=run_date, last_run=_daily_route_status_summary(record))
+
+            if index < len(recipients) and ADMIN_BROADCAST_SEND_DELAY_SECONDS > 0:
+                time.sleep(ADMIN_BROADCAST_SEND_DELAY_SECONDS)
+
+        finished_at = _daily_route_now().isoformat()
+        record.update(
+            {
+                "status": "completed",
+                "finished_at": finished_at,
+                "sent": sent,
+                "failed": failed,
+                "skipped": skipped,
+                "sent_numbers": sorted(sent_numbers),
+                "failed_numbers": sorted(failed_numbers),
+                "skipped_numbers": sorted(skipped_numbers),
+                "results": results[-100:],
+            }
+        )
+        _write_daily_route_state(state)
+        _daily_route_update_status(
+            running=False,
+            last_run_date=run_date,
+            last_run=_daily_route_status_summary(record),
+            last_error="",
+        )
+        logger.info(
+            "Envio diario da rota concluido: data=%s total=%s enviados=%s falhas=%s ignorados=%s",
+            run_date,
+            len(recipients),
+            sent,
+            failed,
+            skipped,
+        )
+        return True
+    except Exception as exc:
+        _daily_route_update_status(running=False, last_error=str(exc))
+        logger.exception("Falha no agendamento diario da rota: %s", exc)
+        return False
+    finally:
+        daily_route_broadcast_status["running"] = False
+        daily_route_broadcast_lock.release()
+
+
+def _daily_route_broadcast_loop() -> None:
+    initial_delay = settings.daily_route_broadcast_initial_delay_seconds
+    if initial_delay and daily_route_broadcast_stop_event.wait(initial_delay):
+        return
+    while not daily_route_broadcast_stop_event.is_set():
+        _run_daily_route_broadcast_if_due()
+        interval = settings.daily_route_broadcast_check_interval_seconds
+        if daily_route_broadcast_stop_event.wait(interval):
+            return
+
+
+def _start_daily_route_broadcast_scheduler() -> None:
+    global daily_route_broadcast_thread
+    if not settings.daily_route_broadcast_enabled:
+        logger.info("Envio diario da rota desabilitado.")
+        return
+    if daily_route_broadcast_thread and daily_route_broadcast_thread.is_alive():
+        return
+    daily_route_broadcast_stop_event.clear()
+    daily_route_broadcast_thread = Thread(
+        target=_daily_route_broadcast_loop,
+        name="daily-route-broadcast",
+        daemon=True,
+    )
+    daily_route_broadcast_thread.start()
+    logger.info(
+        "Envio diario da rota agendado para %s (%s).",
+        settings.daily_route_broadcast_time,
+        settings.daily_route_broadcast_timezone,
+    )
+
+
+def _stop_daily_route_broadcast_scheduler() -> None:
+    daily_route_broadcast_stop_event.set()
+    thread = daily_route_broadcast_thread
+    if thread and thread.is_alive():
+        thread.join(timeout=5)
+
+
 def _load_admin_import_panel_html() -> str:
     if ADMIN_IMPORT_PANEL_TEMPLATE.exists():
         return ADMIN_IMPORT_PANEL_TEMPLATE.read_text(encoding="utf-8").replace(
@@ -2953,12 +5006,18 @@ def startup() -> None:
         ready = security_monitor.initialize()
         if not ready:
             logger.warning("Auditoria de seguranca indisponivel no startup: %s", security_monitor.status().get("last_error"))
+    maintenance_result = _run_admin_import_maintenance(force_stale=True)
+    if not maintenance_result.get("ok"):
+        logger.warning("Manutencao de imports indisponivel no startup: %s", maintenance_result.get("error"))
+    _start_daily_route_broadcast_scheduler()
 
 
 @app.on_event("shutdown")
 def shutdown() -> None:
+    _stop_daily_route_broadcast_scheduler()
     security_monitor.shutdown()
     admin_import_executor.shutdown(wait=False, cancel_futures=False)
+    critica_pdf_prebuild_executor.shutdown(wait=False, cancel_futures=False)
     admin_broadcast_executor.shutdown(wait=False, cancel_futures=False)
     webhook_executor.shutdown(wait=True, cancel_futures=False)
     close_all_connection_pools()
@@ -2971,6 +5030,8 @@ def _build_detailed_health_payload() -> dict[str, Any]:
     inadimplencia_status = inadimplencia_query_service.status()
     comodatos_status = comodatos_query_service.status()
     giro_status = giro_query_service.status()
+    with daily_route_broadcast_lock:
+        daily_route_status = dict(daily_route_broadcast_status)
     return {
         "ok": True,
         "api_auth_enabled": settings.api_auth_enabled,
@@ -3013,6 +5074,7 @@ def _build_detailed_health_payload() -> dict[str, Any]:
         "giro_ready": giro_status["ready"],
         "giro_latest_view_exists": giro_status["latest_view_exists"],
         "giro_last_error": giro_status["last_error"],
+        "daily_route_broadcast": daily_route_status,
     }
 
 
@@ -3923,13 +5985,13 @@ def api_admin_imports_run(
     x_api_token: str | None = Header(default=None),
     x_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _require_admin_panel_auth(
+    context = _require_admin_panel_auth(
         request=request,
         authorization=authorization,
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
-    result = _queue_admin_import(payload.dataset, reference_date=payload.reference_date)
+    result = _queue_admin_import(payload.dataset, reference_date=payload.reference_date, context=context)
     _record_security_event(
         request,
         channel="api",
@@ -3949,13 +6011,13 @@ def api_admin_imports_upload(
     x_api_token: str | None = Header(default=None),
     x_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _require_admin_panel_auth(
+    context = _require_admin_panel_auth(
         request=request,
         authorization=authorization,
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
-    result = _access_call(_store_admin_import_uploads, dataset, files)
+    result = _access_call(_store_admin_import_uploads, dataset, files, context)
     _record_security_event(
         request,
         channel="api",
@@ -3984,6 +6046,193 @@ def api_admin_recolhas(
         request,
         channel="api",
         event_type="admin_recolhas_list",
+        decision="allowed",
+        reason=f"total={payload.get('total')}",
+    )
+    return {"ok": True, **payload}
+
+
+@app.get("/api/admin/giro/recolha-dashboard")
+def api_admin_giro_recolha_dashboard(
+    request: Request,
+    limit: int = Query(default=200, ge=1, le=1000),
+    min_gap: str = Query(default="1"),
+    operation: list[str] | None = Query(default=None),
+    city: list[str] | None = Query(default=None),
+    district: list[str] | None = Query(default=None),
+    seller: list[str] | None = Query(default=None),
+    manager: list[str] | None = Query(default=None),
+    visit_day: list[str] | None = Query(default=None),
+    zero_only: bool = Query(default=False),
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    context = _require_admin_panel_auth(
+        request=request,
+        authorization=authorization,
+        x_api_token=x_api_token,
+        x_admin_token=x_admin_token,
+    )
+    try:
+        payload = _build_admin_giro_recolha_dashboard(
+            context,
+            limit=limit,
+            min_gap=min_gap,
+            operation=operation,
+            city=city,
+            district=district,
+            seller=seller,
+            manager=manager,
+            visit_day=visit_day,
+            zero_only=zero_only,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    _record_security_event(
+        request,
+        channel="api",
+        event_type="admin_giro_recolha_dashboard",
+        decision="allowed",
+        reason=f"total={payload.get('total')}",
+    )
+    return {"ok": True, **payload}
+
+
+@app.get("/api/admin/giro/recolha-filter-options")
+def api_admin_giro_recolha_filter_options(
+    request: Request,
+    min_gap: str = Query(default="1"),
+    operation: list[str] | None = Query(default=None),
+    city: list[str] | None = Query(default=None),
+    district: list[str] | None = Query(default=None),
+    seller: list[str] | None = Query(default=None),
+    manager: list[str] | None = Query(default=None),
+    visit_day: list[str] | None = Query(default=None),
+    zero_only: bool = Query(default=False),
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    context = _require_admin_panel_auth(
+        request=request,
+        authorization=authorization,
+        x_api_token=x_api_token,
+        x_admin_token=x_admin_token,
+    )
+    try:
+        payload = _build_admin_giro_recolha_filter_options(
+            context,
+            min_gap=min_gap,
+            operation=operation,
+            city=city,
+            district=district,
+            seller=seller,
+            manager=manager,
+            visit_day=visit_day,
+            zero_only=zero_only,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"ok": True, **payload}
+
+
+@app.get("/api/admin/critica/dashboard")
+def api_admin_critica_dashboard(
+    request: Request,
+    date_value: str | None = Query(default=None, alias="date"),
+    limit: int = Query(default=200, ge=1, le=1000),
+    operation: list[str] | None = Query(default=None),
+    sector: list[str] | None = Query(default=None),
+    seller: list[str] | None = Query(default=None),
+    manager: list[str] | None = Query(default=None),
+    city: list[str] | None = Query(default=None),
+    district: list[str] | None = Query(default=None),
+    origin: list[str] | None = Query(default=None),
+    problem: list[str] | None = Query(default=None),
+    search: str = Query(default=""),
+    only_problems: bool = Query(default=True),
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    context = _require_admin_panel_auth(
+        request=request,
+        authorization=authorization,
+        x_api_token=x_api_token,
+        x_admin_token=x_admin_token,
+    )
+    try:
+        payload = _build_admin_critica_dashboard(
+            context,
+            target_date=_parse_admin_critica_date(date_value),
+            limit=limit,
+            operation=operation,
+            sector=sector,
+            seller=seller,
+            manager=manager,
+            city=city,
+            district=district,
+            origin=origin,
+            problem=problem,
+            search=search,
+            only_problems=only_problems,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    _record_security_event(
+        request,
+        channel="api",
+        event_type="admin_critica_dashboard",
+        decision="allowed",
+        reason=f"total={payload.get('total')}",
+    )
+    return {"ok": True, **payload}
+
+
+@app.get("/api/admin/giro/recolha-routes")
+def api_admin_giro_recolha_routes(
+    request: Request,
+    limit: int = Query(default=500, ge=1, le=1000),
+    min_gap: str = Query(default="1"),
+    operation: list[str] | None = Query(default=None),
+    city: list[str] | None = Query(default=None),
+    district: list[str] | None = Query(default=None),
+    seller: list[str] | None = Query(default=None),
+    manager: list[str] | None = Query(default=None),
+    visit_day: list[str] | None = Query(default=None),
+    zero_only: bool = Query(default=False),
+    max_route_size: int = Query(default=12, ge=1, le=50),
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    context = _require_admin_panel_auth(
+        request=request,
+        authorization=authorization,
+        x_api_token=x_api_token,
+        x_admin_token=x_admin_token,
+    )
+    try:
+        payload = _build_admin_giro_recolha_routes(
+            context,
+            limit=limit,
+            min_gap=min_gap,
+            operation=operation,
+            city=city,
+            district=district,
+            seller=seller,
+            manager=manager,
+            visit_day=visit_day,
+            zero_only=zero_only,
+            max_route_size=max_route_size,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    _record_security_event(
+        request,
+        channel="api",
+        event_type="admin_giro_recolha_routes",
         decision="allowed",
         reason=f"total={payload.get('total')}",
     )
@@ -4038,6 +6287,40 @@ def api_admin_recolhas_import(
         reason=f"imported={result.get('imported')};skipped={result.get('skipped')}",
     )
     return {"ok": True, **result}
+
+
+@app.get("/api/admin/recolhas/export")
+def api_admin_recolhas_export(
+    request: Request,
+    start_date: str | None = Query(default=None),
+    end_date: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+    x_admin_token: str | None = Header(default=None),
+) -> Response:
+    context = _require_admin_panel_auth(
+        request=request,
+        authorization=authorization,
+        x_api_token=x_api_token,
+        x_admin_token=x_admin_token,
+    )
+    csv_bytes, total, filename = _export_admin_recolhas_csv(
+        context,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    _record_security_event(
+        request,
+        channel="api",
+        event_type="admin_recolha_export",
+        decision="allowed",
+        reason=f"total={total}",
+    )
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.patch("/api/admin/recolhas/{recolha_id}")

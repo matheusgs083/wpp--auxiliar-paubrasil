@@ -300,6 +300,159 @@
       overflow-y: auto;
       max-height: 420px;
     }
+    .route-table-scroll {
+      height: 260px;
+      min-height: 180px;
+      max-height: 1400px;
+    }
+    .route-resize-handle {
+      min-height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      border: 1px dashed var(--line);
+      border-top: 0;
+      border-radius: 0 0 8px 8px;
+      color: var(--muted);
+      cursor: ns-resize;
+      user-select: none;
+      touch-action: none;
+      background: rgba(255,255,255,0.4);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    body.is-resizing-route {
+      cursor: ns-resize;
+      user-select: none;
+    }
+    .route-builder-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 0.65rem;
+      max-height: 360px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+    .route-pdv-block {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.7rem;
+      background: rgba(255,255,255,0.58);
+    }
+    .route-pdv-block.is-active {
+      border-color: rgba(34, 197, 94, 0.55);
+      background: rgba(34, 197, 94, 0.1);
+    }
+    .power-slicer {
+      position: relative;
+    }
+    .power-slicer-toggle {
+      min-height: 31px;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 2rem;
+      position: relative;
+    }
+    .power-slicer-toggle::after {
+      content: "▾";
+      position: absolute;
+      right: 0.65rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+    .power-slicer-panel {
+      position: absolute;
+      z-index: 40;
+      top: calc(100% + 0.25rem);
+      left: 0;
+      right: 0;
+      min-width: 260px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: 0 18px 38px rgba(15, 23, 42, 0.22);
+      padding: 0.65rem;
+    }
+    .power-slicer-list {
+      max-height: 260px;
+      overflow-y: auto;
+      display: grid;
+      gap: 0.25rem;
+      margin-top: 0.5rem;
+    }
+    .power-slicer-item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      min-height: 28px;
+      padding: 0.25rem 0.35rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .power-slicer-item:hover {
+      background: rgba(37, 99, 235, 0.08);
+    }
+    .power-slicer-actions {
+      display: flex;
+      gap: 0.35rem;
+      margin-top: 0.5rem;
+    }
+    .critica-dashboard-block {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.85rem;
+      background: rgba(255,255,255,0.54);
+      min-height: 100%;
+    }
+    .critica-dashboard-list {
+      display: grid;
+      gap: 0.45rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .critica-dashboard-list li {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 0.4rem;
+    }
+    .critica-dashboard-list li:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+    .critica-problem-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid rgba(220, 38, 38, 0.28);
+      background: rgba(254, 226, 226, 0.72);
+      color: #991b1b;
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1.1;
+      padding: 0.24rem 0.48rem;
+      margin: 0 0.2rem 0.2rem 0;
+    }
+    .critica-problem-badge.muted {
+      border-color: var(--line);
+      background: rgba(148, 163, 184, 0.12);
+      color: var(--muted);
+    }
+    .critica-recommendation {
+      border-left: 3px solid #dc2626;
+      padding: 0.45rem 0.65rem;
+      background: rgba(254, 226, 226, 0.45);
+      border-radius: 0 8px 8px 0;
+    }
     .table-scroll thead th {
       position: sticky;
       top: 0;
@@ -325,6 +478,38 @@
       grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
       gap: 0.9rem;
     }
+    .dataset-groups {
+      display: grid;
+      gap: 1rem;
+    }
+    .dataset-group {
+      display: grid;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .dataset-group:last-child { margin-bottom: 0; }
+    .dataset-group-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.15rem 0.1rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .dataset-group-title {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 850;
+      color: var(--ink-900);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .dataset-group-note {
+      margin: 0.12rem 0 0.45rem;
+      color: var(--ink-500);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
     .dataset-card {
       border: 1px solid var(--glass-line);
       border-radius: 12px;
@@ -333,6 +518,13 @@
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       box-shadow: 10px 10px 22px rgba(15, 23, 42, 0.12), inset -4px -4px 10px rgba(255,255,255,0.35);
+    }
+    .dataset-card.is-disabled {
+      opacity: 0.82;
+      background: linear-gradient(150deg, rgba(148, 163, 184, 0.12), var(--glass-bg));
+    }
+    .dataset-card.is-disabled .dataset-head {
+      background: linear-gradient(180deg, rgba(148, 163, 184, 0.13), var(--surface));
     }
     .recolha-operation {
       border: 1px solid var(--line);
@@ -739,6 +931,45 @@
     body[data-theme="dark"] .recolha-insight-row {
       border-bottom-color: rgba(148, 163, 184, 0.18);
     }
+    body[data-theme="dark"] .route-pdv-block {
+      background: rgba(15, 23, 42, 0.58);
+      border-color: rgba(148, 163, 184, 0.22);
+    }
+    body[data-theme="dark"] .route-pdv-block.is-active {
+      background: rgba(34, 197, 94, 0.12);
+      border-color: rgba(34, 197, 94, 0.45);
+    }
+    body[data-theme="dark"] .critica-dashboard-block {
+      background: linear-gradient(145deg, rgba(11, 18, 32, 0.96), rgba(17, 27, 49, 0.84));
+      border-color: rgba(96, 165, 250, 0.18);
+    }
+    body[data-theme="dark"] .critica-problem-badge {
+      background: rgba(127, 29, 29, 0.5);
+      border-color: rgba(248, 113, 113, 0.32);
+      color: #fecaca;
+    }
+    body[data-theme="dark"] .critica-problem-badge.muted {
+      background: rgba(30, 41, 59, 0.72);
+      border-color: rgba(148, 163, 184, 0.22);
+      color: #cbd5e1;
+    }
+    body[data-theme="dark"] .critica-recommendation {
+      background: rgba(127, 29, 29, 0.24);
+      border-left-color: #f87171;
+    }
+    body[data-theme="dark"] .power-slicer-panel {
+      background: #0f172a;
+      border-color: rgba(148, 163, 184, 0.28);
+      box-shadow: 0 18px 38px rgba(2, 8, 23, 0.5);
+    }
+    body[data-theme="dark"] .power-slicer-item:hover {
+      background: rgba(37, 99, 235, 0.16);
+    }
+    body[data-theme="dark"] .route-resize-handle {
+      background: rgba(15, 23, 42, 0.52);
+      border-color: rgba(148, 163, 184, 0.28);
+      color: #94a3b8;
+    }
     body[data-theme="dark"] .recolha-table tbody td {
       background: rgba(8, 14, 28, 0.34);
     }
@@ -865,8 +1096,28 @@
           </button>
         </li>
         <li class="nav-item" role="presentation">
+          <button class="nav-link" id="operationalTablesTab" data-bs-toggle="tab" data-bs-target="#operationalTablesPane" type="button" role="tab" aria-controls="operationalTablesPane" aria-selected="false">
+            <i class="bi bi-table me-1"></i>Tabelas
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="criticaTab" data-bs-toggle="tab" data-bs-target="#criticaPane" type="button" role="tab" aria-controls="criticaPane" aria-selected="false">
+            <i class="bi bi-clipboard-data me-1"></i>Critica
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
           <button class="nav-link" id="usageEvolutionTab" data-bs-toggle="tab" data-bs-target="#usageEvolutionPane" type="button" role="tab" aria-controls="usageEvolutionPane" aria-selected="false">
             <i class="bi bi-whatsapp me-1"></i>Uso Evolution
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="recolhasTab" data-bs-toggle="tab" data-bs-target="#recolhasPane" type="button" role="tab" aria-controls="recolhasPane" aria-selected="false">
+            <i class="bi bi-truck me-1"></i>Recolhas
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="giroRecolhaTab" data-bs-toggle="tab" data-bs-target="#giroRecolhaPane" type="button" role="tab" aria-controls="giroRecolhaPane" aria-selected="false">
+            <i class="bi bi-arrow-repeat me-1"></i>Giro
           </button>
         </li>
       </ul>
@@ -1029,7 +1280,7 @@
           </div>
         </section>
 
-        <section class="panel-card p-3 mb-3">
+        <section class="panel-card p-3 mb-3" id="recolhasPanel">
           <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
             <div>
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Recolhas por operação</h2>
@@ -1037,6 +1288,7 @@
             </div>
             <div class="d-flex flex-wrap gap-2 align-items-center">
               <span class="pill" id="recolhasCount">Aguardando dados</span>
+              <button class="btn btn-outline-success btn-sm" id="recolhasExportBtn"><i class="bi bi-download me-1"></i>Exportar relatório</button>
               <button class="btn btn-outline-primary btn-sm" id="recolhasRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar recolhas/baixas</button>
             </div>
           </div>
@@ -1081,12 +1333,13 @@
         </section>
 
         <section class="panel-card p-3 mb-3">
-          <h2 class="h6 fw-bold mb-3"><i class="bi bi-database-up me-2 text-primary"></i>Carga de dados</h2>
-          <div class="dataset-grid" id="datasetGrid"></div>
+          <h2 class="h6 fw-bold mb-1"><i class="bi bi-database-up me-2 text-primary"></i>Relatorios de negocio</h2>
+          <div class="form-text mb-3">Uploads usados diretamente nas consultas, dashboards e respostas do bot.</div>
+          <div class="dataset-groups" id="reportDatasetGrid"></div>
         </section>
 
         <section class="row g-3">
-          <div class="col-xl-8">
+          <div class="col-xl-7">
             <article class="panel-card h-100">
               <header class="px-3 pt-3 pb-2 border-bottom">
                 <h2 class="h6 mb-0 fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>Histórico de importações</h2>
@@ -1109,11 +1362,445 @@
               </div>
             </article>
           </div>
-          <div class="col-xl-4">
+          <div class="col-xl-5">
+            <article class="panel-card h-100">
+              <header class="px-3 pt-3 pb-2 border-bottom">
+                <h2 class="h6 mb-0 fw-bold"><i class="bi bi-list-task me-2 text-primary"></i>Jobs administrativos</h2>
+              </header>
+              <div class="table-scroll">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead>
+                    <tr class="text-uppercase small text-secondary">
+                      <th class="ps-3" scope="col">Job</th>
+                      <th scope="col">Dataset</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Atualizado</th>
+                    </tr>
+                  </thead>
+                  <tbody id="jobsBody">
+                    <tr><td colspan="4" class="text-center py-4 text-secondary">Carregando jobs...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+          <div class="col-12">
             <article class="panel-card p-3 h-100" style="background:#07142b;border-color:#0f2d5e;">
               <h2 class="h6 mb-2 fw-bold text-light"><i class="bi bi-terminal me-2 text-info"></i>Log Operacional</h2>
               <pre id="logPanel" class="mono" role="log" aria-live="polite">Painel pronto. Clique em Atualizar.</pre>
             </article>
+          </div>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="operationalTablesPane" role="tabpanel" aria-labelledby="operationalTablesTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-table me-2 text-primary"></i>Tabelas operacionais</h2>
+              <div class="form-text">Bases auxiliares internas: setores, precos e operacoes.</div>
+            </div>
+            <span class="pill">Uploads administrativos</span>
+          </div>
+          <div class="dataset-groups" id="operationalDatasetGrid"></div>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="criticaPane" role="tabpanel" aria-labelledby="criticaTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard da critica</h2>
+              <div class="form-text">Visao por pedido para encontrar concentracao de problemas, setores de maior impacto e prioridades de tratativa.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="criticaDashboardCount">Aguardando dados</span>
+              <button class="btn btn-outline-primary btn-sm" id="criticaDashboardRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar critica</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaDate">Data</label>
+              <input type="date" class="form-control form-control-sm" id="criticaDate">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaOperation">Operacao</label>
+              <div class="power-slicer" id="criticaOperationSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaOperationButton" aria-expanded="false">Todas</button>
+                <div class="power-slicer-panel d-none" id="criticaOperationPanel">
+                  <input type="text" class="form-control form-control-sm" id="criticaOperationSearch" placeholder="Pesquisar operacao">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaOperationSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaOperationClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="criticaOperationList"></div>
+                </div>
+                <select class="d-none" id="criticaOperation" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaProblem">Problema</label>
+              <div class="power-slicer" id="criticaProblemSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaProblemButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="criticaProblemPanel">
+                  <input type="text" class="form-control form-control-sm" id="criticaProblemSearch" placeholder="Pesquisar problema">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaProblemSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaProblemClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="criticaProblemList"></div>
+                </div>
+                <select class="d-none" id="criticaProblem" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaSector">Setor</label>
+              <div class="power-slicer" id="criticaSectorSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaSectorButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="criticaSectorPanel">
+                  <input type="text" class="form-control form-control-sm" id="criticaSectorSearch" placeholder="Pesquisar setor">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaSectorSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaSectorClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="criticaSectorList"></div>
+                </div>
+                <select class="d-none" id="criticaSector" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaManager">GV</label>
+              <div class="power-slicer" id="criticaManagerSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaManagerButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="criticaManagerPanel">
+                  <input type="text" class="form-control form-control-sm" id="criticaManagerSearch" placeholder="Pesquisar GV">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaManagerSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaManagerClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="criticaManagerList"></div>
+                </div>
+                <select class="d-none" id="criticaManager" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaSeller">Vendedor</label>
+              <div class="power-slicer" id="criticaSellerSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaSellerButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="criticaSellerPanel">
+                  <input type="text" class="form-control form-control-sm" id="criticaSellerSearch" placeholder="Pesquisar vendedor">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaSellerSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaSellerClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="criticaSellerList"></div>
+                </div>
+                <select class="d-none" id="criticaSeller" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaCity">Cidade</label>
+              <div class="power-slicer" id="criticaCitySlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaCityButton" aria-expanded="false">Todas</button>
+                <div class="power-slicer-panel d-none" id="criticaCityPanel">
+                  <input type="text" class="form-control form-control-sm" id="criticaCitySearch" placeholder="Pesquisar cidade">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaCitySelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaCityClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="criticaCityList"></div>
+                </div>
+                <select class="d-none" id="criticaCity" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaDistrict">Bairro</label>
+              <div class="power-slicer" id="criticaDistrictSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaDistrictButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="criticaDistrictPanel">
+                  <input type="text" class="form-control form-control-sm" id="criticaDistrictSearch" placeholder="Pesquisar bairro">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaDistrictSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaDistrictClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="criticaDistrictList"></div>
+                </div>
+                <select class="d-none" id="criticaDistrict" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="criticaOrigin">Origem</label>
+              <div class="power-slicer" id="criticaOriginSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaOriginButton" aria-expanded="false">Todas</button>
+                <div class="power-slicer-panel d-none" id="criticaOriginPanel">
+                  <input type="text" class="form-control form-control-sm" id="criticaOriginSearch" placeholder="Pesquisar origem">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaOriginSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaOriginClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="criticaOriginList"></div>
+                </div>
+                <select class="d-none" id="criticaOrigin" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="criticaSearch">Pesquisar</label>
+              <input type="text" class="form-control form-control-sm" id="criticaSearch" placeholder="Pedido, NB, cliente, setor">
+            </div>
+            <div class="col-md-1">
+              <label class="form-label small fw-semibold mb-1" for="criticaLimit">Limite</label>
+              <input type="number" min="1" max="1000" step="1" class="form-control form-control-sm" id="criticaLimit" value="200">
+            </div>
+            <div class="col-md-2">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="criticaOnlyProblems" checked>
+                <label class="form-check-label small fw-semibold" for="criticaOnlyProblems">Somente problemas</label>
+              </div>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm w-100" id="criticaDashboardClearBtn"><i class="bi bi-x-circle me-1"></i>Limpar</button>
+            </div>
+          </div>
+          <div class="recolha-dashboard-grid mb-3" id="criticaDashboardCards"></div>
+          <div class="row g-3 mb-3">
+            <div class="col-lg-4">
+              <div class="critica-dashboard-block">
+                <div class="small fw-bold mb-2">Principais problemas</div>
+                <ul class="critica-dashboard-list" id="criticaProblemRank"></ul>
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <div class="critica-dashboard-block">
+                <div class="small fw-bold mb-2">Maiores concentracoes</div>
+                <ul class="critica-dashboard-list" id="criticaConcentrationRank"></ul>
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <div class="critica-dashboard-block">
+                <div class="small fw-bold mb-2">Opcoes sugeridas</div>
+                <div class="d-grid gap-2" id="criticaRecommendations"></div>
+              </div>
+            </div>
+          </div>
+          <div class="table-responsive table-scroll">
+            <table class="table table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th class="ps-3">Pedido</th>
+                  <th>Problemas</th>
+                  <th>Valor</th>
+                  <th>Contexto</th>
+                  <th class="text-end pe-3">Acao</th>
+                </tr>
+              </thead>
+              <tbody id="criticaDashboardBody">
+                <tr><td colspan="5" class="text-center py-3 text-secondary">Abra a aba ou clique em Atualizar critica.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-clipboard-data me-2 text-primary"></i>Critica por operacao</h2>
+              <div class="form-text">Upload separado por filial. Cada card aceita apenas o arquivo da operacao correspondente e publica a base consolidada usada pelo bot.</div>
+            </div>
+            <span class="pill">Rotina nova</span>
+          </div>
+          <div class="dataset-groups" id="criticaDatasetGrid"></div>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="recolhasPane" role="tabpanel" aria-labelledby="recolhasTab" tabindex="0"></div>
+
+      <div class="tab-pane fade" id="giroRecolhaPane" role="tabpanel" aria-labelledby="giroRecolhaTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-arrow-repeat me-2 text-primary"></i>Giro abaixo do esperado</h2>
+              <div class="form-text">Clientes com vasilhame sem giro suficiente, priorizados por falta de caixas e faturamento medio para apoiar decisoes de recolha.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="giroRecolhaCount">Aguardando dados</span>
+              <button class="btn btn-outline-success btn-sm" id="giroRecolhaRoutesBtn"><i class="bi bi-signpost-split me-1"></i>Gerar rotas</button>
+              <button class="btn btn-outline-primary btn-sm" id="giroRecolhaRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar giro</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaOperation">Operacao</label>
+              <div class="power-slicer" id="giroRecolhaOperationSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaOperationButton" aria-expanded="false">Todas</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaOperationPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaOperationSearch" placeholder="Pesquisar operacao">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaOperationSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaOperationClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaOperationList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaOperation" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaCity">Cidade(s)</label>
+              <div class="power-slicer" id="giroRecolhaCitySlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaCityButton" aria-expanded="false">Todas</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaCityPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaCitySearch" placeholder="Pesquisar cidade">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaCitySelectAllBtn">Selecionar visíveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaCityClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaCityList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaCity" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaDistrict">Bairro</label>
+              <div class="power-slicer" id="giroRecolhaDistrictSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaDistrictButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaDistrictPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaDistrictSearch" placeholder="Pesquisar bairro">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaDistrictSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaDistrictClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaDistrictList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaDistrict" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaSeller">Vendedor</label>
+              <div class="power-slicer" id="giroRecolhaSellerSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaSellerButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaSellerPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaSellerSearch" placeholder="Pesquisar vendedor">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaSellerSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaSellerClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaSellerList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaSeller" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaManager">GV</label>
+              <div class="power-slicer" id="giroRecolhaManagerSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaManagerButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaManagerPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaManagerSearch" placeholder="Pesquisar GV">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaManagerSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaManagerClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaManagerList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaManager" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaVisitDay">Dia visita</label>
+              <div class="power-slicer" id="giroRecolhaVisitDaySlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaVisitDayButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaVisitDayPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaVisitDaySearch" placeholder="Pesquisar dia">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaVisitDaySelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaVisitDayClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaVisitDayList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaVisitDay" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-1">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaMinGap">Faltam min.</label>
+              <input type="number" min="0" step="1" class="form-control form-control-sm" id="giroRecolhaMinGap" value="1">
+            </div>
+            <div class="col-md-1">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaLimit">Limite</label>
+              <input type="number" min="1" max="1000" step="1" class="form-control form-control-sm" id="giroRecolhaLimit" value="200">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaMaxRouteSize">PDVs/rota</label>
+              <input type="number" min="1" max="50" step="1" class="form-control form-control-sm" id="giroRecolhaMaxRouteSize" value="12">
+            </div>
+            <div class="col-md-2">
+              <div class="form-check form-switch mt-md-4">
+                <input class="form-check-input" type="checkbox" role="switch" id="giroRecolhaZeroOnly">
+                <label class="form-check-label small fw-semibold" for="giroRecolhaZeroOnly">Somente giro zero</label>
+              </div>
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-secondary btn-sm" id="giroRecolhaClearBtn"><i class="bi bi-x-circle me-1"></i>Limpar filtros</button>
+            </div>
+          </div>
+          <div class="recolha-dashboard-grid mb-3" id="giroRecolhaCards"></div>
+          <div class="recolha-dashboard-grid mb-3" id="giroRecolhaRouteCards"></div>
+          <div class="row g-2 align-items-end mb-3 d-none" id="giroRecolhaRouteTools">
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaRouteSearch">Pesquisar nas rotas</label>
+              <input type="text" class="form-control form-control-sm" id="giroRecolhaRouteSearch" placeholder="PDV, NB, bairro, cidade, vendedor">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaRouteDistrict">Bairro da rota</label>
+              <select class="form-select form-select-sm" id="giroRecolhaRouteDistrict">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaRouteMinGap">Faltam min. rota</label>
+              <input type="number" min="0" step="1" class="form-control form-control-sm" id="giroRecolhaRouteMinGap">
+            </div>
+            <div class="col-md-3 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-secondary btn-sm" id="giroRecolhaRouteClearBtn"><i class="bi bi-x-circle me-1"></i>Limpar rotas</button>
+              <button class="btn btn-outline-success btn-sm" id="giroRecolhaRouteExportBtn"><i class="bi bi-download me-1"></i>Exportar CSV</button>
+            </div>
+          </div>
+          <div class="panel-card p-3 mb-3 d-none" id="giroRecolhaBuilder">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+              <div>
+                <h3 class="h6 fw-bold mb-1"><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>Montagem interativa</h3>
+                <div class="form-text">Escolha a rota destino e mova blocos de PDV para montar ou reorganizar as rotas.</div>
+              </div>
+              <button class="btn btn-outline-primary btn-sm" id="giroRecolhaNewRouteBtn"><i class="bi bi-plus-square me-1"></i>Nova rota</button>
+            </div>
+            <div class="row g-2 align-items-end mb-3">
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold mb-1" for="giroRecolhaActiveRoute">Rota destino</label>
+                <select class="form-select form-select-sm" id="giroRecolhaActiveRoute"></select>
+              </div>
+              <div class="col-md-5">
+                <label class="form-label small fw-semibold mb-1" for="giroRecolhaBlockSearch">Buscar bloco</label>
+                <input type="text" class="form-control form-control-sm" id="giroRecolhaBlockSearch" placeholder="NB, PDV, cidade, bairro, vendedor">
+              </div>
+              <div class="col-md-3">
+                <div class="form-text" id="giroRecolhaBuilderHint">Gere rotas para iniciar a montagem.</div>
+              </div>
+            </div>
+            <div class="route-builder-grid" id="giroRecolhaBlockPool"></div>
+          </div>
+          <div id="giroRecolhaRoutesContainer" class="mb-3"></div>
+          <div class="table-scroll" style="max-height: 560px;">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th class="ps-3">Cliente</th>
+                  <th>Giro</th>
+                  <th>Faltam</th>
+                  <th>Fat. M-1</th>
+                  <th>Credito</th>
+                  <th class="text-end pe-3">Acao</th>
+                </tr>
+              </thead>
+              <tbody id="giroRecolhaBody">
+                <tr><td colspan="6" class="text-center py-3 text-secondary">Informe o token e clique em Atualizar.</td></tr>
+              </tbody>
+            </table>
           </div>
         </section>
       </div>
@@ -1281,7 +1968,16 @@
           update: "/api/admin/recolhas",
           bulk: "/api/admin/recolhas/bulk",
           importCsv: "/api/admin/recolhas/import",
+          exportCsv: "/api/admin/recolhas/export",
           delete: "/api/admin/recolhas"
+        },
+        giroRecolha: {
+          dashboard: "/api/admin/giro/recolha-dashboard",
+          options: "/api/admin/giro/recolha-filter-options",
+          routes: "/api/admin/giro/recolha-routes"
+        },
+        critica: {
+          dashboard: "/api/admin/critica/dashboard"
         }
       },
       roles: {
@@ -1292,24 +1988,45 @@
         ADMIN: "Administrador / TI"
       },
       datasets: [
-        { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2" },
-        { id: "dClientes", name: "Carteira de Clientes", icon: "bi-person-badge" },
-        { id: "Inadimplencia", name: "Inadimplencia Vencimento", icon: "bi-graph-down-arrow" },
-        { id: "Comodatos", name: "Equipamentos em Comodato", icon: "bi-box-seam" },
-        { id: "Giro", name: "Giro de Vasilhame", icon: "bi-arrow-repeat" },
-        { id: "DocumentacaoPendente", name: "Documentacao Pendente", icon: "bi-file-earmark-check" },
-        { id: "PrazoLimite", name: "Prazo e Limite", icon: "bi-cash-stack" }
+        { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2", area: "operational", group: "Tabelas operacionais", groupNote: "Apoio interno para escopo, usuarios e tabelas auxiliares." },
+        { id: "DPrecos", name: "Tabela de Precos", icon: "bi-tags", area: "operational", group: "Tabelas operacionais" },
+        { id: "dOperacoes", name: "Tabela de Operacoes", icon: "bi-list-columns", area: "operational", group: "Tabelas operacionais" },
+        { id: "dProdutos", name: "Cadastro de Produtos", icon: "bi-boxes", area: "operational", group: "Produtos", groupNote: "Dimensoes auxiliares para enriquecer regras e analises por produto." },
+        { id: "ProdutoCestas", name: "Cesta de Produtos", icon: "bi-collection", area: "operational", group: "Produtos" },
+        { id: "dClientes", name: "Carteira de Clientes", icon: "bi-person-badge", area: "reports", group: "Relatorios de negocio", groupNote: "Bases usadas diretamente nas consultas e dashboards do bot." },
+        { id: "Inadimplencia", name: "Inadimplencia Vencimento", icon: "bi-graph-down-arrow", area: "reports", group: "Relatorios de negocio" },
+        { id: "Comodatos", name: "Equipamentos em Comodato", icon: "bi-box-seam", area: "reports", group: "Relatorios de negocio" },
+        { id: "Giro", name: "Giro de Vasilhame", icon: "bi-arrow-repeat", area: "reports", group: "Relatorios de negocio" },
+        { id: "DocumentacaoPendente", name: "Documentacao Pendente", icon: "bi-file-earmark-check", area: "reports", group: "Relatorios de negocio" },
+        { id: "PrazoLimite", name: "Prazo e Limite", icon: "bi-cash-stack", area: "reports", group: "Relatorios de negocio" },
+        { id: "CriticaOp1", name: "Critica Operacao 1 - Sousa", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao", groupNote: "Upload separado por filial. A consolidacao final do bot passa a sair desta aba." },
+        { id: "CriticaOp2", name: "Critica Operacao 2 - Itaporanga", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
+        { id: "CriticaOp3", name: "Critica Operacao 3 - Patos", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
+        { id: "CriticaOp4", name: "Critica Operacao 4 - Sume", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
+        { id: "CriticaOp5", name: "Critica Operacao 5 - Guarabira", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
+        { id: "CriticaOp6", name: "Critica Operacao 6 - Brumado", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
+        { id: "CriticaOp7", name: "Critica Operacao 7 - Barra", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
+        { id: "CriticaOp8", name: "Critica Operacao 8 - Cacule", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
+        { id: "CriticaRNLegacy", name: "Critica RN (legado)", icon: "bi-archive", area: "critica", group: "Rotina anterior", groupNote: "Mantida apenas para compatibilidade. O fluxo atual deve usar os uploads por operacao.", disabled: true, badge: "Legado", description: "Importacao antiga preservada no codigo, sem uso no fluxo atual do bot.", sourcePath: "data/CriticaRN/critica_rn.xlsx" }
       ]
     };
 
     const state = {
-      logs: [], history: [], status: null,
+      logs: [], history: [], jobs: [], status: null,
       tokens: { api: "", admin: "" },
       panel: { mode: "", isAdmin: false, filiais: [], canBroadcast: true },
       accessUsers: [], accessEditing: null, lastSyncAt: null,
       evolutionUsage: null,
       broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
       recolhas: { total: 0, operations: [] },
+      giroRecolha: { total: 0, summary: {}, records: [] },
+      giroRecolhaOptions: { operations: [], sellers: [], managers: [], cities: [], districts: [], visit_days: [] },
+      giroRecolhaSlicerOptions: { operations: [], sellers: [], managers: [], cities: [], districts: [], visit_days: [] },
+      giroRecolhaRoutes: { generated: false, total: 0, summary: {}, routes: [] },
+      giroRecolhaRouteFilter: { search: "", district: "", minGap: "" },
+      giroRecolhaBuilder: { activeRouteId: "", search: "" },
+      giroRecolhaRouteHeights: {},
+      criticaDashboard: { total: 0, summary: {}, options: {}, rankings: {}, recommendations: [], orders: [] },
       recolhasFilter: { start: "", end: "" },
       datasetValidation: {},
       datasetBusy: {}
@@ -1317,19 +2034,43 @@
 
     const DATASET_MAP = {
       dSetores: "dsetores",
+      DPrecos: "dprecos",
+      dOperacoes: "doperacoes",
+      dProdutos: "dprodutos",
+      ProdutoCestas: "produto_cestas",
       dClientes: "dclientes",
       Inadimplencia: "inadimplencia",
       Comodatos: "comodatos",
       Giro: "giro",
+      CriticaOp1: "critica_op_1",
+      CriticaOp2: "critica_op_2",
+      CriticaOp3: "critica_op_3",
+      CriticaOp4: "critica_op_4",
+      CriticaOp5: "critica_op_5",
+      CriticaOp6: "critica_op_6",
+      CriticaOp7: "critica_op_7",
+      CriticaOp8: "critica_op_8",
       DocumentacaoPendente: "documentacao_pendente",
       PrazoLimite: "prazo_limite"
     };
     const DATASET_UPLOAD_META = {
       dSetores: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
+      DPrecos: { accept: ".xlsx,.xlsm,.csv", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm) ou CSV." },
+      dOperacoes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
+      dProdutos: { accept: ".csv", mode: "single", label: "CSV de Produtos", emptyHint: "Selecione o arquivo 01.11.CSV." },
+      ProdutoCestas: { accept: ".xlsx,.xlsm,.csv", mode: "single", label: "Cesta de Produtos", emptyHint: "Selecione o arquivo Cesta de Produtos.xlsx." },
       dClientes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
       Inadimplencia: { accept: ".csv", mode: "multiple", label: "CSV do Dataset(s)", emptyHint: "Selecione um ou mais arquivos CSV." },
       Comodatos: { accept: ".csv", mode: "multiple", label: "CSV do Dataset(s)", emptyHint: "Selecione um ou mais arquivos CSV." },
       Giro: { accept: ".xlsx,.xlsm,.xls", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm ou .xls)." },
+      CriticaOp1: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 1." },
+      CriticaOp2: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 2." },
+      CriticaOp3: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 3." },
+      CriticaOp4: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 4." },
+      CriticaOp5: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 5." },
+      CriticaOp6: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 6." },
+      CriticaOp7: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 7." },
+      CriticaOp8: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 8." },
       DocumentacaoPendente: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
       PrazoLimite: { accept: ".xlsx,.xlsm,.xls,.csv", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm, .xls) ou CSV." }
     };
@@ -1350,8 +2091,11 @@
       runningState: document.getElementById("runningState"),
       lastJobState: document.getElementById("lastJobState"),
       authState: document.getElementById("authState"),
-      grid: document.getElementById("datasetGrid"),
+      operationalGrid: document.getElementById("operationalDatasetGrid"),
+      criticaGrid: document.getElementById("criticaDatasetGrid"),
+      reportGrid: document.getElementById("reportDatasetGrid"),
       historyTable: document.getElementById("historyBody"),
+      jobsTable: document.getElementById("jobsBody"),
       accessRole: document.getElementById("accessRole"),
       accessScopeHint: document.getElementById("accessScopeHint"),
       accessModeHint: document.getElementById("accessModeHint"),
@@ -1397,6 +2141,7 @@
       broadcastSelectAll: document.getElementById("broadcastSelectAll"),
       recolhasContainer: document.getElementById("recolhasContainer"),
       recolhasCount: document.getElementById("recolhasCount"),
+      recolhasExportBtn: document.getElementById("recolhasExportBtn"),
       recolhasRefreshBtn: document.getElementById("recolhasRefreshBtn"),
       recolhasStartDate: document.getElementById("recolhasStartDate"),
       recolhasEndDate: document.getElementById("recolhasEndDate"),
@@ -1407,18 +2152,229 @@
       recolhasDashboardCards: document.getElementById("recolhasDashboardCards"),
       recolhasReasonList: document.getElementById("recolhasReasonList"),
       recolhasOperationSummary: document.getElementById("recolhasOperationSummary"),
+      giroRecolhaCount: document.getElementById("giroRecolhaCount"),
+      giroRecolhaRefreshBtn: document.getElementById("giroRecolhaRefreshBtn"),
+      giroRecolhaRoutesBtn: document.getElementById("giroRecolhaRoutesBtn"),
+      giroRecolhaOperation: document.getElementById("giroRecolhaOperation"),
+      giroRecolhaCity: document.getElementById("giroRecolhaCity"),
+      giroRecolhaCitySlicer: document.getElementById("giroRecolhaCitySlicer"),
+      giroRecolhaCityButton: document.getElementById("giroRecolhaCityButton"),
+      giroRecolhaCityPanel: document.getElementById("giroRecolhaCityPanel"),
+      giroRecolhaCitySearch: document.getElementById("giroRecolhaCitySearch"),
+      giroRecolhaCityList: document.getElementById("giroRecolhaCityList"),
+      giroRecolhaCitySelectAllBtn: document.getElementById("giroRecolhaCitySelectAllBtn"),
+      giroRecolhaCityClearBtn: document.getElementById("giroRecolhaCityClearBtn"),
+      giroRecolhaDistrict: document.getElementById("giroRecolhaDistrict"),
+      giroRecolhaSeller: document.getElementById("giroRecolhaSeller"),
+      giroRecolhaManager: document.getElementById("giroRecolhaManager"),
+      giroRecolhaVisitDay: document.getElementById("giroRecolhaVisitDay"),
+      giroRecolhaMinGap: document.getElementById("giroRecolhaMinGap"),
+      giroRecolhaLimit: document.getElementById("giroRecolhaLimit"),
+      giroRecolhaMaxRouteSize: document.getElementById("giroRecolhaMaxRouteSize"),
+      giroRecolhaZeroOnly: document.getElementById("giroRecolhaZeroOnly"),
+      giroRecolhaClearBtn: document.getElementById("giroRecolhaClearBtn"),
+      giroRecolhaCards: document.getElementById("giroRecolhaCards"),
+      giroRecolhaRouteCards: document.getElementById("giroRecolhaRouteCards"),
+      giroRecolhaRouteTools: document.getElementById("giroRecolhaRouteTools"),
+      giroRecolhaRouteSearch: document.getElementById("giroRecolhaRouteSearch"),
+      giroRecolhaRouteDistrict: document.getElementById("giroRecolhaRouteDistrict"),
+      giroRecolhaRouteMinGap: document.getElementById("giroRecolhaRouteMinGap"),
+      giroRecolhaRouteClearBtn: document.getElementById("giroRecolhaRouteClearBtn"),
+      giroRecolhaRouteExportBtn: document.getElementById("giroRecolhaRouteExportBtn"),
+      giroRecolhaBuilder: document.getElementById("giroRecolhaBuilder"),
+      giroRecolhaActiveRoute: document.getElementById("giroRecolhaActiveRoute"),
+      giroRecolhaBlockSearch: document.getElementById("giroRecolhaBlockSearch"),
+      giroRecolhaBuilderHint: document.getElementById("giroRecolhaBuilderHint"),
+      giroRecolhaBlockPool: document.getElementById("giroRecolhaBlockPool"),
+      giroRecolhaNewRouteBtn: document.getElementById("giroRecolhaNewRouteBtn"),
+      giroRecolhaRoutesContainer: document.getElementById("giroRecolhaRoutesContainer"),
+      giroRecolhaBody: document.getElementById("giroRecolhaBody"),
+      criticaDashboardCount: document.getElementById("criticaDashboardCount"),
+      criticaDashboardRefreshBtn: document.getElementById("criticaDashboardRefreshBtn"),
+      criticaDashboardClearBtn: document.getElementById("criticaDashboardClearBtn"),
+      criticaDate: document.getElementById("criticaDate"),
+      criticaOperation: document.getElementById("criticaOperation"),
+      criticaProblem: document.getElementById("criticaProblem"),
+      criticaSector: document.getElementById("criticaSector"),
+      criticaManager: document.getElementById("criticaManager"),
+      criticaSeller: document.getElementById("criticaSeller"),
+      criticaCity: document.getElementById("criticaCity"),
+      criticaDistrict: document.getElementById("criticaDistrict"),
+      criticaOrigin: document.getElementById("criticaOrigin"),
+      criticaSearch: document.getElementById("criticaSearch"),
+      criticaLimit: document.getElementById("criticaLimit"),
+      criticaOnlyProblems: document.getElementById("criticaOnlyProblems"),
+      criticaDashboardCards: document.getElementById("criticaDashboardCards"),
+      criticaProblemRank: document.getElementById("criticaProblemRank"),
+      criticaConcentrationRank: document.getElementById("criticaConcentrationRank"),
+      criticaRecommendations: document.getElementById("criticaRecommendations"),
+      criticaDashboardBody: document.getElementById("criticaDashboardBody"),
       confirmModalText: document.getElementById("confirmModalText"),
       confirmModalOk: document.getElementById("confirmModalOk"),
       confirmModalCancel: document.getElementById("confirmModalCancel")
     };
 
+    const GIRO_RECOLHA_SLICERS = [
+      {
+        key: "operation",
+        selectKey: "giroRecolhaOperation",
+        optionKey: "operations",
+        idPrefix: "giroRecolhaOperation",
+        allText: "Todas",
+        selectedText: "operacoes selecionadas",
+        emptyText: "Nenhuma operacao encontrada.",
+        clears: ["city", "district", "seller", "manager", "visitDay"]
+      },
+      {
+        key: "city",
+        selectKey: "giroRecolhaCity",
+        optionKey: "cities",
+        idPrefix: "giroRecolhaCity",
+        allText: "Todas",
+        selectedText: "cidades selecionadas",
+        emptyText: "Nenhuma cidade encontrada.",
+        clears: ["district"]
+      },
+      {
+        key: "district",
+        selectKey: "giroRecolhaDistrict",
+        optionKey: "districts",
+        idPrefix: "giroRecolhaDistrict",
+        allText: "Todos",
+        selectedText: "bairros selecionados",
+        emptyText: "Nenhum bairro encontrado."
+      },
+      {
+        key: "seller",
+        selectKey: "giroRecolhaSeller",
+        optionKey: "sellers",
+        idPrefix: "giroRecolhaSeller",
+        allText: "Todos",
+        selectedText: "vendedores selecionados",
+        emptyText: "Nenhum vendedor encontrado."
+      },
+      {
+        key: "manager",
+        selectKey: "giroRecolhaManager",
+        optionKey: "managers",
+        idPrefix: "giroRecolhaManager",
+        allText: "Todos",
+        selectedText: "GVs selecionados",
+        emptyText: "Nenhum GV encontrado."
+      },
+      {
+        key: "visitDay",
+        selectKey: "giroRecolhaVisitDay",
+        optionKey: "visit_days",
+        idPrefix: "giroRecolhaVisitDay",
+        allText: "Todos",
+        selectedText: "dias selecionados",
+        emptyText: "Nenhum dia encontrado."
+      }
+    ];
+    const GIRO_RECOLHA_SLICER_BY_KEY = GIRO_RECOLHA_SLICERS.reduce((acc, item) => {
+      acc[item.key] = item;
+      return acc;
+    }, {});
+
+    const CRITICA_DASHBOARD_SLICERS = [
+      {
+        key: "operation",
+        selectKey: "criticaOperation",
+        optionKey: "operations",
+        idPrefix: "criticaOperation",
+        allText: "Todas",
+        selectedText: "operacoes selecionadas",
+        emptyText: "Nenhuma operacao encontrada.",
+        clears: ["sector", "manager", "seller", "city", "district", "origin"]
+      },
+      {
+        key: "problem",
+        selectKey: "criticaProblem",
+        optionKey: "problems",
+        idPrefix: "criticaProblem",
+        allText: "Todos",
+        selectedText: "problemas selecionados",
+        emptyText: "Nenhum problema encontrado."
+      },
+      {
+        key: "sector",
+        selectKey: "criticaSector",
+        optionKey: "sectors",
+        idPrefix: "criticaSector",
+        allText: "Todos",
+        selectedText: "setores selecionados",
+        emptyText: "Nenhum setor encontrado."
+      },
+      {
+        key: "manager",
+        selectKey: "criticaManager",
+        optionKey: "managers",
+        idPrefix: "criticaManager",
+        allText: "Todos",
+        selectedText: "GVs selecionados",
+        emptyText: "Nenhum GV encontrado."
+      },
+      {
+        key: "seller",
+        selectKey: "criticaSeller",
+        optionKey: "sellers",
+        idPrefix: "criticaSeller",
+        allText: "Todos",
+        selectedText: "vendedores selecionados",
+        emptyText: "Nenhum vendedor encontrado."
+      },
+      {
+        key: "city",
+        selectKey: "criticaCity",
+        optionKey: "cities",
+        idPrefix: "criticaCity",
+        allText: "Todas",
+        selectedText: "cidades selecionadas",
+        emptyText: "Nenhuma cidade encontrada.",
+        clears: ["district"]
+      },
+      {
+        key: "district",
+        selectKey: "criticaDistrict",
+        optionKey: "districts",
+        idPrefix: "criticaDistrict",
+        allText: "Todos",
+        selectedText: "bairros selecionados",
+        emptyText: "Nenhum bairro encontrado."
+      },
+      {
+        key: "origin",
+        selectKey: "criticaOrigin",
+        optionKey: "origins",
+        idPrefix: "criticaOrigin",
+        allText: "Todas",
+        selectedText: "origens selecionadas",
+        emptyText: "Nenhuma origem encontrada."
+      }
+    ];
+    const CRITICA_DASHBOARD_SLICER_BY_KEY = CRITICA_DASHBOARD_SLICERS.reduce((acc, item) => {
+      acc[item.key] = item;
+      return acc;
+    }, {});
+
     const confirmModalInstance = document.getElementById("confirmModal")
       ? new bootstrap.Modal(document.getElementById("confirmModal"), { backdrop: "static", keyboard: true })
       : null;
     let allowedUsersCardResizeObserver = null;
+    let giroRouteResizeObserver = null;
+
+    function setupRecolhasPane() {
+      const pane = document.getElementById("recolhasPane");
+      const panel = document.getElementById("recolhasPanel");
+      if (pane && panel && panel.parentElement !== pane) {
+        pane.appendChild(panel);
+      }
+    }
 
     function init() {
       applyTheme(localStorage.getItem("bot_admin_theme") || "dark");
+      setupRecolhasPane();
 
       localStorage.removeItem("bot_api_token");
       localStorage.removeItem("bot_admin_token");
@@ -1429,6 +2385,10 @@
       updateScopeHint();
       updateMetrics();
       renderEvolutionUsage();
+      ensureGiroRecolhaSection();
+      renderGiroRecolha();
+      renderGiroRecolhaRoutes();
+      renderCriticaDashboard();
       renderRecolhas();
       setupAllowedUsersCardSizing();
 
@@ -1454,11 +2414,41 @@
       if (E.broadcastTargetMode) E.broadcastTargetMode.addEventListener("change", () => { syncBroadcastTargetModeState(); resetBroadcastPreview(); });
       if (E.broadcastTargetNumber) E.broadcastTargetNumber.addEventListener("input", resetBroadcastPreview);
       if (E.broadcastSelectAll) E.broadcastSelectAll.addEventListener("change", toggleBroadcastSelectAll);
+      if (E.recolhasExportBtn) E.recolhasExportBtn.addEventListener("click", exportRecolhasCsv);
       if (E.recolhasRefreshBtn) E.recolhasRefreshBtn.addEventListener("click", () => syncRecolhas({ silent: false }));
       if (E.recolhasStartDate) E.recolhasStartDate.addEventListener("change", updateRecolhasPeriodFilter);
       if (E.recolhasEndDate) E.recolhasEndDate.addEventListener("change", updateRecolhasPeriodFilter);
       if (E.recolhasPeriodClearBtn) E.recolhasPeriodClearBtn.addEventListener("click", clearRecolhasPeriodFilter);
       if (E.recolhasImportBtn) E.recolhasImportBtn.addEventListener("click", importRecolhasCsv);
+      if (E.giroRecolhaRefreshBtn) E.giroRecolhaRefreshBtn.addEventListener("click", () => syncGiroRecolha({ silent: false }));
+      if (E.giroRecolhaRoutesBtn) E.giroRecolhaRoutesBtn.addEventListener("click", () => syncGiroRecolhaRoutes({ silent: false }));
+      setupGiroRecolhaSlicerEvents();
+      if (E.giroRecolhaMinGap) E.giroRecolhaMinGap.addEventListener("change", () => syncGiroRecolha({ silent: false }));
+      if (E.giroRecolhaLimit) E.giroRecolhaLimit.addEventListener("change", () => syncGiroRecolha({ silent: false }));
+      if (E.giroRecolhaZeroOnly) E.giroRecolhaZeroOnly.addEventListener("change", () => syncGiroRecolha({ silent: false }));
+      if (E.giroRecolhaMaxRouteSize) E.giroRecolhaMaxRouteSize.addEventListener("change", () => clearGiroRecolhaRoutes());
+      if (E.giroRecolhaClearBtn) E.giroRecolhaClearBtn.addEventListener("click", clearGiroRecolhaFilters);
+      if (E.giroRecolhaRouteSearch) E.giroRecolhaRouteSearch.addEventListener("input", updateGiroRecolhaRouteFilters);
+      if (E.giroRecolhaRouteDistrict) E.giroRecolhaRouteDistrict.addEventListener("change", updateGiroRecolhaRouteFilters);
+      if (E.giroRecolhaRouteMinGap) E.giroRecolhaRouteMinGap.addEventListener("input", updateGiroRecolhaRouteFilters);
+      if (E.giroRecolhaRouteClearBtn) E.giroRecolhaRouteClearBtn.addEventListener("click", clearGiroRecolhaRouteFilters);
+      if (E.giroRecolhaRouteExportBtn) E.giroRecolhaRouteExportBtn.addEventListener("click", exportGiroRecolhaRoutesCsv);
+      if (E.giroRecolhaActiveRoute) E.giroRecolhaActiveRoute.addEventListener("change", updateGiroRecolhaActiveRoute);
+      if (E.giroRecolhaBlockSearch) E.giroRecolhaBlockSearch.addEventListener("input", updateGiroRecolhaBlockSearch);
+      if (E.giroRecolhaNewRouteBtn) E.giroRecolhaNewRouteBtn.addEventListener("click", createGiroRecolhaManualRoute);
+      if (E.criticaDashboardRefreshBtn) E.criticaDashboardRefreshBtn.addEventListener("click", () => syncCriticaDashboard({ silent: false }));
+      if (E.criticaDashboardClearBtn) E.criticaDashboardClearBtn.addEventListener("click", clearCriticaDashboardFilters);
+      setupCriticaDashboardSlicerEvents();
+      [E.criticaDate, E.criticaLimit, E.criticaOnlyProblems]
+        .forEach(element => {
+          if (element) element.addEventListener("change", () => syncCriticaDashboard({ silent: false }));
+        });
+      if (E.criticaSearch) E.criticaSearch.addEventListener("input", scheduleCriticaDashboardSync);
+      const criticaTab = document.getElementById("criticaTab");
+      if (criticaTab) criticaTab.addEventListener("shown.bs.tab", () => {
+        const current = state.criticaDashboard || {};
+        if (!current.summary || !current.summary.data_pedido) syncCriticaDashboard({ silent: true });
+      });
       E.accessRole.addEventListener("change", updateScopeHint);
       E.accessUsersFilter.addEventListener("input", renderAccess);
       if (E.usageWindow) {
@@ -1517,6 +2507,64 @@
       window.addEventListener("resize", syncAllowedUsersCardSizing);
     }
 
+    function ensureGiroRecolhaSection() {
+      if (document.getElementById("giroRecolhaBody")) return;
+      const recolhasSection = E.recolhasContainer ? E.recolhasContainer.closest("section") : null;
+      if (!recolhasSection || !recolhasSection.parentElement) return;
+      const section = document.createElement("section");
+      section.className = "panel-card p-3 mb-3";
+      section.innerHTML = `
+        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+          <div>
+            <h2 class="h6 fw-bold mb-1"><i class="bi bi-arrow-repeat me-2 text-primary"></i>Giro abaixo do esperado</h2>
+            <div class="form-text">Clientes com vasilhame sem giro suficiente, priorizados por falta de caixas e faturamento medio para apoiar decisoes de recolha.</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="pill" id="giroRecolhaCount">Aguardando dados</span>
+            <button class="btn btn-outline-primary btn-sm" id="giroRecolhaRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar giro</button>
+          </div>
+        </div>
+        <div class="row g-2 align-items-end mb-3">
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold mb-1" for="giroRecolhaMinGap">Faltam minimo de caixas</label>
+            <input type="number" min="0" step="1" class="form-control form-control-sm" id="giroRecolhaMinGap" value="1">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold mb-1" for="giroRecolhaLimit">Limite de clientes</label>
+            <input type="number" min="1" max="1000" step="1" class="form-control form-control-sm" id="giroRecolhaLimit" value="200">
+          </div>
+          <div class="col-md-6">
+            <div class="form-text">Use a lista como fila de analise: maior gap primeiro, com faturamento e media por pedido ao lado.</div>
+          </div>
+        </div>
+        <div class="recolha-dashboard-grid mb-3" id="giroRecolhaCards"></div>
+        <div class="table-scroll" style="max-height: 430px;">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead>
+              <tr class="text-uppercase small text-secondary">
+                <th class="ps-3">Cliente</th>
+                <th>Giro</th>
+                <th>Faltam</th>
+                <th>Fat. M-1</th>
+                <th>Credito</th>
+                <th class="text-end pe-3">Acao</th>
+              </tr>
+            </thead>
+            <tbody id="giroRecolhaBody">
+              <tr><td colspan="6" class="text-center py-3 text-secondary">Carregando oportunidades...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+      recolhasSection.parentElement.insertBefore(section, recolhasSection);
+      E.giroRecolhaCount = document.getElementById("giroRecolhaCount");
+      E.giroRecolhaRefreshBtn = document.getElementById("giroRecolhaRefreshBtn");
+      E.giroRecolhaMinGap = document.getElementById("giroRecolhaMinGap");
+      E.giroRecolhaLimit = document.getElementById("giroRecolhaLimit");
+      E.giroRecolhaCards = document.getElementById("giroRecolhaCards");
+      E.giroRecolhaBody = document.getElementById("giroRecolhaBody");
+    }
+
     function applyTheme(theme) {
       const normalized = theme === "dark" ? "dark" : "light";
       document.body.setAttribute("data-theme", normalized);
@@ -1544,11 +2592,18 @@
 
     function showSkeletonLoading() {
       E.historyTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="5" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
+      if (E.jobsTable) E.jobsTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="4" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
       E.accessUsersTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="6" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
       if (E.recolhasContainer) {
         E.recolhasContainer.innerHTML = '<div class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>';
       }
-      CONFIG.datasets.forEach(ds => {
+      if (E.giroRecolhaBody) {
+        E.giroRecolhaBody.innerHTML = '<tr><td colspan="6" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>';
+      }
+      if (E.giroRecolhaRoutesContainer) {
+        E.giroRecolhaRoutesContainer.innerHTML = '<div class="py-2"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>';
+      }
+      CONFIG.datasets.filter(ds => !ds.disabled).forEach(ds => {
         const card = document.getElementById(`card-${ds.id}`);
         if (card) card.classList.add("is-loading");
       });
@@ -1556,7 +2611,7 @@
     }
 
     function updateMetrics() {
-      E.metricDatasets.textContent = String(CONFIG.datasets.length);
+      E.metricDatasets.textContent = String(CONFIG.datasets.filter(ds => !ds.disabled).length);
       E.metricUsers.textContent = String(state.accessUsers.length);
       const running = Boolean(state.status && state.status.running);
       E.metricRunning.textContent = running ? "Rodando" : "Ocioso";
@@ -2416,6 +3471,1849 @@
         .replace(/Ãº/g, "ú");
     }
 
+    function emptyGiroRecolhaOptions() {
+      return { operations: [], sellers: [], managers: [], cities: [], districts: [], visit_days: [] };
+    }
+
+    function emptyCriticaDashboard() {
+      return { total: 0, summary: {}, options: {}, rankings: {}, recommendations: [], orders: [] };
+    }
+
+    function selectedCriticaValues(select) {
+      if (!select) return [];
+      return Array.from(select.selectedOptions || [])
+        .map(option => String(option.value || "").trim())
+        .filter(Boolean);
+    }
+
+    function normalizeCriticaOptionItems(options) {
+      const mapped = [];
+      const seen = new Set();
+      (Array.isArray(options) ? options : []).forEach(item => {
+        const value = String(item && item.value || "").trim();
+        if (!value || seen.has(value)) return;
+        const count = Number(item && item.count || 0);
+        const labelBase = cleanDisplayText(item && (item.label || item.value) || value);
+        mapped.push({ value, label: count ? `${labelBase} (${formatNumber(count)})` : labelBase });
+        seen.add(value);
+      });
+      return mapped;
+    }
+
+    function criticaSlicerElements(def) {
+      return {
+        select: E[def.selectKey],
+        root: document.getElementById(`${def.idPrefix}Slicer`),
+        button: document.getElementById(`${def.idPrefix}Button`),
+        panel: document.getElementById(`${def.idPrefix}Panel`),
+        search: document.getElementById(`${def.idPrefix}Search`),
+        list: document.getElementById(`${def.idPrefix}List`),
+        selectAllBtn: document.getElementById(`${def.idPrefix}SelectAllBtn`),
+        clearBtn: document.getElementById(`${def.idPrefix}ClearBtn`)
+      };
+    }
+
+    function criticaOptionsForSlicer(def) {
+      const options = state.criticaDashboard && state.criticaDashboard.options ? state.criticaDashboard.options : {};
+      const mapped = normalizeCriticaOptionItems(options[def.optionKey]);
+      const values = new Set(mapped.map(item => item.value));
+      selectedCriticaValues(E[def.selectKey]).forEach(value => {
+        if (value && !values.has(value)) {
+          mapped.unshift({ value, label: cleanDisplayText(value) });
+          values.add(value);
+        }
+      });
+      return mapped;
+    }
+
+    function syncCriticaHiddenSelect(def, options, selectedValues) {
+      const select = E[def.selectKey];
+      if (!select) return [];
+      const selected = (Array.isArray(selectedValues) ? selectedValues : [])
+        .map(value => String(value || "").trim())
+        .filter(Boolean);
+      const selectedSet = new Set(selected);
+      const optionValues = new Set((options || []).map(item => String(item.value || "")));
+      const extra = selected
+        .filter(value => value && !optionValues.has(value))
+        .map(value => ({ value, label: cleanDisplayText(value) }));
+      select.innerHTML = extra.concat(options || [])
+        .map(item => `<option value="${escapeHtml(item.value || "")}">${escapeHtml(item.label || item.value || "")}</option>`)
+        .join("");
+      Array.from(select.options || []).forEach(option => {
+        option.selected = selectedSet.has(String(option.value || ""));
+      });
+      return selectedCriticaValues(select);
+    }
+
+    function criticaSlicerSelectedSet(def) {
+      return new Set(selectedCriticaValues(E[def.selectKey]));
+    }
+
+    function criticaSlicerButtonText(def, selectedValues, options) {
+      const selected = Array.isArray(selectedValues) ? selectedValues : [];
+      if (!selected.length) return def.allText;
+      if (selected.length === 1) {
+        const match = (options || []).find(item => item.value === selected[0]);
+        return cleanDisplayText(match ? match.label : selected[0]);
+      }
+      return `${selected.length} ${def.selectedText}`;
+    }
+
+    function renderCriticaSlicer(def) {
+      const els = criticaSlicerElements(def);
+      const options = criticaOptionsForSlicer(def);
+      const selectedSet = criticaSlicerSelectedSet(def);
+      const search = normalizeTextForSearch(els.search ? els.search.value : "");
+      const visibleOptions = options.filter(item => !search || normalizeTextForSearch(item.label || item.value).includes(search));
+      if (els.button) {
+        els.button.textContent = criticaSlicerButtonText(def, [...selectedSet], options);
+        els.button.title = selectedSet.size ? [...selectedSet].join(", ") : def.allText;
+      }
+      if (!els.list) return;
+      if (!visibleOptions.length) {
+        els.list.innerHTML = `<div class="small text-secondary px-1 py-2">${escapeHtml(def.emptyText)}</div>`;
+        return;
+      }
+      els.list.innerHTML = visibleOptions.map(item => {
+        const checked = selectedSet.has(item.value);
+        return `
+          <label class="power-slicer-item">
+            <input class="form-check-input m-0 critica-slicer-option" type="checkbox" value="${escapeHtml(item.value)}" ${checked ? "checked" : ""}>
+            <span>${escapeHtml(item.label || item.value)}</span>
+          </label>
+        `;
+      }).join("");
+      els.list.querySelectorAll(".critica-slicer-option").forEach(input => {
+        input.addEventListener("change", event => onCriticaSlicerCheckboxChange(def, event));
+      });
+    }
+
+    function clearCriticaSlicerDependents(def) {
+      (def.clears || []).forEach(key => {
+        const childDef = CRITICA_DASHBOARD_SLICER_BY_KEY[key];
+        if (childDef) setCriticaSlicerSelection(childDef, [], { sync: false, clearDependents: false });
+      });
+    }
+
+    function setCriticaSlicerSelection(def, values, { sync = true, clearDependents = true } = {}) {
+      const options = criticaOptionsForSlicer(def);
+      const selected = syncCriticaHiddenSelect(def, options, values);
+      renderCriticaSlicer(def);
+      if (sync && clearDependents) clearCriticaSlicerDependents(def);
+      if (sync) syncCriticaDashboard({ silent: false });
+      return selected;
+    }
+
+    function onCriticaSlicerCheckboxChange(def, event) {
+      const selectedSet = criticaSlicerSelectedSet(def);
+      const value = String(event.target && event.target.value || "").trim();
+      if (!value) return;
+      if (event.target.checked) selectedSet.add(value);
+      else selectedSet.delete(value);
+      setCriticaSlicerSelection(def, [...selectedSet]);
+    }
+
+    function toggleCriticaSlicerPanel(def, event) {
+      if (event) event.stopPropagation();
+      const els = criticaSlicerElements(def);
+      if (!els.panel) return;
+      const willOpen = els.panel.classList.contains("d-none");
+      CRITICA_DASHBOARD_SLICERS.forEach(item => {
+        if (item.key === def.key) return;
+        const other = criticaSlicerElements(item);
+        if (other.panel) other.panel.classList.add("d-none");
+        if (other.button) other.button.setAttribute("aria-expanded", "false");
+      });
+      els.panel.classList.toggle("d-none", !willOpen);
+      if (els.button) els.button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      if (willOpen) {
+        renderCriticaSlicer(def);
+        if (els.search) els.search.focus();
+      }
+    }
+
+    function closeCriticaSlicerPanelsOnOutsideClick(event) {
+      CRITICA_DASHBOARD_SLICERS.forEach(def => {
+        const els = criticaSlicerElements(def);
+        if (!els.panel || els.panel.classList.contains("d-none")) return;
+        if (els.root && els.root.contains(event.target)) return;
+        els.panel.classList.add("d-none");
+        if (els.button) els.button.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    function visibleCriticaSlicerValues(def) {
+      const els = criticaSlicerElements(def);
+      const options = criticaOptionsForSlicer(def);
+      const search = normalizeTextForSearch(els.search ? els.search.value : "");
+      return options
+        .filter(item => !search || normalizeTextForSearch(item.label || item.value).includes(search))
+        .map(item => item.value);
+    }
+
+    function selectVisibleCriticaSlicerValues(def, event) {
+      if (event) event.stopPropagation();
+      const selectedSet = criticaSlicerSelectedSet(def);
+      visibleCriticaSlicerValues(def).forEach(value => selectedSet.add(value));
+      setCriticaSlicerSelection(def, [...selectedSet]);
+    }
+
+    function clearCriticaSlicerSelection(def, event) {
+      if (event) event.stopPropagation();
+      setCriticaSlicerSelection(def, []);
+    }
+
+    function setupCriticaDashboardSlicerEvents() {
+      CRITICA_DASHBOARD_SLICERS.forEach(def => {
+        const els = criticaSlicerElements(def);
+        if (els.select) {
+          els.select.addEventListener("change", () => {
+            clearCriticaSlicerDependents(def);
+            syncCriticaDashboard({ silent: false });
+          });
+        }
+        if (els.button) els.button.addEventListener("click", event => toggleCriticaSlicerPanel(def, event));
+        if (els.search) els.search.addEventListener("input", () => renderCriticaSlicer(def));
+        if (els.selectAllBtn) els.selectAllBtn.addEventListener("click", event => selectVisibleCriticaSlicerValues(def, event));
+        if (els.clearBtn) els.clearBtn.addEventListener("click", event => clearCriticaSlicerSelection(def, event));
+      });
+      document.addEventListener("click", closeCriticaSlicerPanelsOnOutsideClick);
+    }
+
+    function currentCriticaDashboardParams() {
+      const limit = Number(E.criticaLimit && E.criticaLimit.value ? E.criticaLimit.value : 200);
+      return {
+        date: E.criticaDate ? E.criticaDate.value : "",
+        limit: Number.isFinite(limit) ? Math.max(1, Math.min(1000, Math.trunc(limit))) : 200,
+        operation: selectedCriticaValues(E.criticaOperation),
+        problem: selectedCriticaValues(E.criticaProblem),
+        sector: selectedCriticaValues(E.criticaSector),
+        manager: selectedCriticaValues(E.criticaManager),
+        seller: selectedCriticaValues(E.criticaSeller),
+        city: selectedCriticaValues(E.criticaCity),
+        district: selectedCriticaValues(E.criticaDistrict),
+        origin: selectedCriticaValues(E.criticaOrigin),
+        search: E.criticaSearch ? E.criticaSearch.value.trim() : "",
+        onlyProblems: E.criticaOnlyProblems ? E.criticaOnlyProblems.checked : true
+      };
+    }
+
+    function appendCriticaValues(query, name, values) {
+      (Array.isArray(values) ? values : []).forEach(value => {
+        const text = String(value || "").trim();
+        if (text) query.append(name, text);
+      });
+    }
+
+    function criticaDashboardQueryString(params) {
+      const query = new URLSearchParams();
+      query.set("limit", String(params.limit || 200));
+      if (params.date) query.set("date", params.date);
+      if (params.search) query.set("search", params.search);
+      if (params.onlyProblems) query.set("only_problems", "1");
+      else query.set("only_problems", "0");
+      appendCriticaValues(query, "operation", params.operation);
+      appendCriticaValues(query, "problem", params.problem);
+      appendCriticaValues(query, "sector", params.sector);
+      appendCriticaValues(query, "manager", params.manager);
+      appendCriticaValues(query, "seller", params.seller);
+      appendCriticaValues(query, "city", params.city);
+      appendCriticaValues(query, "district", params.district);
+      appendCriticaValues(query, "origin", params.origin);
+      return query.toString();
+    }
+
+    function renderCriticaFilterOptions(previousParams = currentCriticaDashboardParams()) {
+      CRITICA_DASHBOARD_SLICERS.forEach(def => {
+        setCriticaSlicerSelection(def, previousParams[def.key], { sync: false, clearDependents: false });
+      });
+      const summaryDate = state.criticaDashboard && state.criticaDashboard.summary ? state.criticaDashboard.summary.data_pedido : "";
+      if (E.criticaDate && !previousParams.date && summaryDate) E.criticaDate.value = summaryDate;
+    }
+
+    function criticaProblemBadges(order) {
+      const keys = Array.isArray(order && order.problem_keys) ? order.problem_keys : [];
+      const labels = Array.isArray(order && order.problem_labels) ? order.problem_labels : [];
+      if (!keys.length && !labels.length) return '<span class="critica-problem-badge muted">Sem problema</span>';
+      const source = labels.length ? labels.slice(0, 4) : keys.slice(0, 4);
+      const html = source.map(label => `<span class="critica-problem-badge">${escapeHtml(cleanDisplayText(label))}</span>`).join("");
+      const remaining = Math.max(0, (labels.length || keys.length) - source.length);
+      return html + (remaining ? `<span class="critica-problem-badge muted">+${formatNumber(remaining)}</span>` : "");
+    }
+
+    function renderCriticaRankList(element, items, { valueKey = "orders", emptyText = "Sem dados nos filtros atuais." } = {}) {
+      if (!element) return;
+      const source = Array.isArray(items) ? items : [];
+      if (!source.length) {
+        element.innerHTML = `<li><span class="text-secondary small">${escapeHtml(emptyText)}</span></li>`;
+        return;
+      }
+      element.innerHTML = source.slice(0, 8).map(item => {
+        const label = cleanDisplayText(item.label || item.value || "-");
+        const value = item[valueKey] != null ? item[valueKey] : item.orders;
+        const sub = item.total ? `<div class="small text-secondary">${escapeHtml(item.total)}</div>` : "";
+        return `
+          <li>
+            <span><strong>${escapeHtml(label)}</strong>${sub}</span>
+            <span class="badge text-bg-light">${formatNumber(value || 0)}</span>
+          </li>
+        `;
+      }).join("");
+    }
+
+    function renderCriticaRecommendations(items) {
+      if (!E.criticaRecommendations) return;
+      const source = Array.isArray(items) ? items : [];
+      if (!source.length) {
+        E.criticaRecommendations.innerHTML = '<div class="text-secondary small">Sem sugestoes para os filtros atuais.</div>';
+        return;
+      }
+      E.criticaRecommendations.innerHTML = source.map(item => `
+        <div class="critica-recommendation">
+          <div class="fw-bold small">${escapeHtml(cleanDisplayText(item.title || "-"))}</div>
+          <div class="small text-secondary">${escapeHtml(cleanDisplayText(item.detail || ""))}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderCriticaDashboard() {
+      const payload = state.criticaDashboard && typeof state.criticaDashboard === "object" ? state.criticaDashboard : emptyCriticaDashboard();
+      const summary = payload.summary || {};
+      const orders = Array.isArray(payload.orders) ? payload.orders : [];
+      const rankings = payload.rankings || {};
+      if (E.criticaDashboardCount) {
+        E.criticaDashboardCount.textContent = summary.data_pedido
+          ? `${formatNumber(summary.pedidos || orders.length)} pedido(s) | ${formatDate(summary.data_pedido)}`
+          : `${formatNumber(summary.pedidos || orders.length)} pedido(s)`;
+        E.criticaDashboardCount.className = Number(summary.pedidos_com_problema || 0) ? "pill warn" : "pill ok";
+      }
+      if (E.criticaDashboardCards) {
+        E.criticaDashboardCards.innerHTML = [
+          ["Pedidos analisados", summary.pedidos || orders.length, `${formatNumber(summary.pedidos_base || summary.pedidos || 0)} na base da data`],
+          ["Com problema", summary.pedidos_com_problema || 0, `${summary.taxa_problema || "0,0%"} dos filtros`],
+          ["Valor total", summary.valor_total || "R$ 0,00", `Ticket ${summary.ticket_medio || "R$ 0,00"}`],
+          ["Total HL", summary.total_hectolitros || "0,00", "fator hecto x quantidade"],
+          ["NAB TT HL", summary.nab_tt_hectolitros || "0,00", "cesta de produtos"],
+          ["High End HL", summary.high_end_hectolitros || "0,00", "cesta de produtos"],
+          ["Cerveja TT HL", summary.cerveja_tt_hectolitros || "0,00", "cesta de produtos"],
+          ["Refri Zero HL", summary.refri_zero_hectolitros || "0,00", "cesta de produtos"],
+          ["Cerveja RGB/OW HL", `${summary.cerveja_rgb_hectolitros || "0,00"} / ${summary.cerveja_ow_hectolitros || "0,00"}`, "RGB / OW"],
+          ["Marketplace TT HL", summary.marketplace_tt_hectolitros || "0,00", "cesta de produtos"],
+          ["Maior problema", summary.maior_problema || "-", "por quantidade de pedidos"]
+        ].map(([label, value, sub]) => `
+          <article class="recolha-dashboard-card">
+            <span class="label">${escapeHtml(label)}</span>
+            <span class="value">${escapeHtml(String(value))}</span>
+            <span class="sub">${escapeHtml(String(sub))}</span>
+          </article>
+        `).join("");
+      }
+      renderCriticaRankList(E.criticaProblemRank, rankings.problems || [], { valueKey: "orders" });
+      const concentrations = []
+        .concat(Array.isArray(rankings.operations) ? rankings.operations.slice(0, 3) : [])
+        .concat(Array.isArray(rankings.sectors) ? rankings.sectors.slice(0, 3) : [])
+        .concat(Array.isArray(rankings.clients) ? rankings.clients.slice(0, 3) : []);
+      renderCriticaRankList(E.criticaConcentrationRank, concentrations, { valueKey: "problem_orders" });
+      renderCriticaRecommendations(payload.recommendations || []);
+      if (!E.criticaDashboardBody) return;
+      if (!orders.length) {
+        E.criticaDashboardBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Nenhum pedido encontrado nos filtros atuais.</td></tr>';
+        return;
+      }
+      E.criticaDashboardBody.innerHTML = orders.map(order => {
+        const command = `critica nb ${order.filial || ""} ${order.cod_pdv || ""}`.trim();
+        const products = Array.isArray(order.problem_products) && order.problem_products.length
+          ? `<div class="small text-secondary mt-1">Produtos: ${escapeHtml(cleanDisplayText(order.problem_products.slice(0, 3).join(" | ")))}</div>`
+          : "";
+        return `
+          <tr>
+            <td class="ps-3">
+              <strong>${escapeHtml(order.pedido || "-")}</strong>
+              <div class="small text-secondary">Operacao ${escapeHtml(order.filial || "-")} | Setor ${escapeHtml(order.setor || "-")} | GV ${escapeHtml(order.manager || "-")}</div>
+              <div class="small text-secondary">NB ${escapeHtml(order.cod_pdv || "-")} | ${escapeHtml(cleanDisplayText(order.nome_pdv || "-"))}</div>
+            </td>
+            <td>
+              ${criticaProblemBadges(order)}
+              ${products}
+            </td>
+            <td>
+              <strong>${escapeHtml(order.total_pedido || "R$ 0,00")}</strong>
+              <div class="small text-secondary">HL ${escapeHtml(order.hectolitros || "0,00")} | Itens ${formatNumber(order.item_count || 0)} | Itens criticos ${formatNumber(order.problem_item_count || 0)}</div>
+            </td>
+            <td>
+              <div>${escapeHtml(cleanDisplayText([order.cidade, order.bairro].filter(Boolean).join(" | ") || "-"))}</div>
+              <div class="small text-secondary">Origem ${escapeHtml(order.origem || "-")} | Tipo ${escapeHtml(cleanDisplayText(order.movement_operation_name || order.status_pedido || "-"))}</div>
+            </td>
+            <td class="text-end pe-3">
+              <button class="btn btn-outline-primary btn-sm" onclick="copyCriticaCommand('${escapeHtml(command)}')">
+                <i class="bi bi-clipboard me-1"></i>Copiar NB
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function clearCriticaDashboardFilters() {
+      CRITICA_DASHBOARD_SLICERS.forEach(def => {
+        setCriticaSlicerSelection(def, [], { sync: false, clearDependents: false });
+      });
+      if (E.criticaSearch) E.criticaSearch.value = "";
+      if (E.criticaDate) E.criticaDate.value = "";
+      if (E.criticaLimit) E.criticaLimit.value = "200";
+      if (E.criticaOnlyProblems) E.criticaOnlyProblems.checked = true;
+      syncCriticaDashboard({ silent: false });
+    }
+
+    let criticaDashboardSearchTimer = null;
+
+    function scheduleCriticaDashboardSync() {
+      clearTimeout(criticaDashboardSearchTimer);
+      criticaDashboardSearchTimer = setTimeout(() => syncCriticaDashboard({ silent: true }), 350);
+    }
+
+    async function syncCriticaDashboard({ silent = true } = {}) {
+      updateTokens();
+      if (!hasPanelAuth()) {
+        if (!silent) addLog("Sessao do painel nao validada.", "warn");
+        return false;
+      }
+      try {
+        if (!state.panel || !state.panel.mode) await syncPanelSession();
+        const params = currentCriticaDashboardParams();
+        const payload = await req(`${CONFIG.endpoints.critica.dashboard}?${criticaDashboardQueryString(params)}`, { timeoutMs: 45000 });
+        state.criticaDashboard = payload && typeof payload === "object"
+          ? {
+              total: Number(payload.total || 0),
+              summary: payload.summary || {},
+              options: payload.options || {},
+              rankings: payload.rankings || {},
+              recommendations: Array.isArray(payload.recommendations) ? payload.recommendations : [],
+              orders: Array.isArray(payload.orders) ? payload.orders : []
+            }
+          : emptyCriticaDashboard();
+        renderCriticaFilterOptions(params);
+        renderCriticaDashboard();
+        if (!silent) addLog("Dashboard da critica atualizado.", "ok");
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao carregar dashboard da critica: ${err.message}`, "err");
+        renderCriticaDashboard();
+        return false;
+      }
+    }
+
+    function normalizeGiroRecolhaValues(values) {
+      const rawValues = Array.isArray(values) ? values : String(values || "").split(",");
+      const normalized = [];
+      const seen = new Set();
+      rawValues.forEach(value => {
+        const item = String(value || "").trim();
+        if (item && !seen.has(item)) {
+          normalized.push(item);
+          seen.add(item);
+        }
+      });
+      return normalized;
+    }
+
+    function selectedGiroRecolhaValues(select) {
+      if (!select) return [];
+      return Array.from(select.selectedOptions || [])
+        .map(option => String(option.value || "").trim())
+        .filter(Boolean);
+    }
+
+    function currentGiroRecolhaParams() {
+      const limit = Number(E.giroRecolhaLimit && E.giroRecolhaLimit.value ? E.giroRecolhaLimit.value : 200);
+      const minGap = Number(E.giroRecolhaMinGap && E.giroRecolhaMinGap.value ? E.giroRecolhaMinGap.value : 1);
+      const maxRouteSize = Number(E.giroRecolhaMaxRouteSize && E.giroRecolhaMaxRouteSize.value ? E.giroRecolhaMaxRouteSize.value : 12);
+      return {
+        limit: Number.isFinite(limit) ? Math.max(1, Math.min(1000, Math.trunc(limit))) : 200,
+        minGap: Number.isFinite(minGap) ? Math.max(0, minGap) : 1,
+        operation: selectedGiroRecolhaValues(E.giroRecolhaOperation),
+        city: selectedGiroRecolhaValues(E.giroRecolhaCity),
+        district: selectedGiroRecolhaValues(E.giroRecolhaDistrict),
+        seller: selectedGiroRecolhaValues(E.giroRecolhaSeller),
+        manager: selectedGiroRecolhaValues(E.giroRecolhaManager),
+        visitDay: selectedGiroRecolhaValues(E.giroRecolhaVisitDay),
+        zeroOnly: E.giroRecolhaZeroOnly ? E.giroRecolhaZeroOnly.checked : false,
+        maxRouteSize: Number.isFinite(maxRouteSize) ? Math.max(1, Math.min(50, Math.trunc(maxRouteSize))) : 12
+      };
+    }
+
+    function appendGiroRecolhaParamValues(query, name, values) {
+      normalizeGiroRecolhaValues(values).forEach(value => query.append(name, value));
+    }
+
+    function appendGiroRecolhaFilters(query, params, { omit = "" } = {}) {
+      if (omit !== "operation") appendGiroRecolhaParamValues(query, "operation", params.operation);
+      if (omit !== "city") appendGiroRecolhaParamValues(query, "city", params.city);
+      if (omit !== "district") appendGiroRecolhaParamValues(query, "district", params.district);
+      if (omit !== "seller") appendGiroRecolhaParamValues(query, "seller", params.seller);
+      if (omit !== "manager") appendGiroRecolhaParamValues(query, "manager", params.manager);
+      if (omit !== "visitDay") appendGiroRecolhaParamValues(query, "visit_day", params.visitDay);
+      if (params.zeroOnly) query.set("zero_only", "1");
+    }
+
+    function giroRecolhaQueryString(params) {
+      const query = new URLSearchParams();
+      query.set("limit", String(params.limit));
+      query.set("min_gap", String(params.minGap));
+      appendGiroRecolhaFilters(query, params);
+      return query.toString();
+    }
+
+    function giroRecolhaOptionsQueryString(params, { omit = "" } = {}) {
+      const query = new URLSearchParams();
+      query.set("min_gap", String(params.minGap));
+      appendGiroRecolhaFilters(query, params, { omit });
+      return query.toString();
+    }
+
+    function giroRecolhaRoutesQueryString(params) {
+      const query = new URLSearchParams(giroRecolhaQueryString(params));
+      query.set("max_route_size", String(params.maxRouteSize || 12));
+      return query.toString();
+    }
+
+    function normalizeGiroRecolhaOptionItems(options) {
+      const mapped = [];
+      const seen = new Set();
+      (Array.isArray(options) ? options : []).forEach(item => {
+        const value = String(item && item.value || "").trim();
+        if (!value || seen.has(value)) return;
+        mapped.push({ value, label: cleanDisplayText(item.label || item.value || "") });
+        seen.add(value);
+      });
+      return mapped;
+    }
+
+    function giroRecolhaSlicerElements(def) {
+      return {
+        select: E[def.selectKey],
+        root: document.getElementById(`${def.idPrefix}Slicer`),
+        button: document.getElementById(`${def.idPrefix}Button`),
+        panel: document.getElementById(`${def.idPrefix}Panel`),
+        search: document.getElementById(`${def.idPrefix}Search`),
+        list: document.getElementById(`${def.idPrefix}List`),
+        selectAllBtn: document.getElementById(`${def.idPrefix}SelectAllBtn`),
+        clearBtn: document.getElementById(`${def.idPrefix}ClearBtn`)
+      };
+    }
+
+    function giroRecolhaOptionsForSlicer(def) {
+      const slicerOptions = state.giroRecolhaSlicerOptions || {};
+      const fallbackOptions = state.giroRecolhaOptions || {};
+      const source = Array.isArray(slicerOptions[def.optionKey])
+        ? slicerOptions[def.optionKey]
+        : fallbackOptions[def.optionKey];
+      const mapped = normalizeGiroRecolhaOptionItems(source);
+      const values = new Set(mapped.map(item => item.value));
+      selectedGiroRecolhaValues(E[def.selectKey]).forEach(value => {
+        if (value && !values.has(value)) {
+          mapped.unshift({ value, label: cleanDisplayText(value) });
+          values.add(value);
+        }
+      });
+      return mapped;
+    }
+
+    function syncGiroRecolhaHiddenSelect(def, options, selectedValues) {
+      const select = E[def.selectKey];
+      if (!select) return [];
+      const selected = normalizeGiroRecolhaValues(selectedValues);
+      const selectedSet = new Set(selected);
+      const optionValues = new Set((options || []).map(item => String(item.value || "")));
+      const extra = selected.filter(value => value && !optionValues.has(value)).map(value => ({ value, label: value }));
+      select.innerHTML = extra.concat(options || [])
+        .map(item => `<option value="${escapeHtml(item.value || "")}">${escapeHtml(item.label || item.value || "")}</option>`)
+        .join("");
+      Array.from(select.options || []).forEach(option => {
+        option.selected = selectedSet.has(String(option.value || ""));
+      });
+      return selectedGiroRecolhaValues(select);
+    }
+
+    function giroRecolhaSlicerSelectedSet(def) {
+      return new Set(selectedGiroRecolhaValues(E[def.selectKey]));
+    }
+
+    function giroRecolhaSlicerButtonText(def, selectedValues, options) {
+      const selected = Array.isArray(selectedValues) ? selectedValues : [];
+      if (!selected.length) return def.allText;
+      if (selected.length === 1) {
+        const match = (options || []).find(item => item.value === selected[0]);
+        return cleanDisplayText(match ? match.label : selected[0]);
+      }
+      return `${selected.length} ${def.selectedText}`;
+    }
+
+    function renderGiroRecolhaSlicer(def) {
+      const els = giroRecolhaSlicerElements(def);
+      const options = giroRecolhaOptionsForSlicer(def);
+      const selectedSet = giroRecolhaSlicerSelectedSet(def);
+      const search = normalizeTextForSearch(els.search ? els.search.value : "");
+      const visibleOptions = options.filter(item => !search || normalizeTextForSearch(item.label || item.value).includes(search));
+      if (els.button) {
+        els.button.textContent = giroRecolhaSlicerButtonText(def, [...selectedSet], options);
+        els.button.title = selectedSet.size ? [...selectedSet].join(", ") : def.allText;
+      }
+      if (!els.list) return;
+      if (!visibleOptions.length) {
+        els.list.innerHTML = `<div class="small text-secondary px-1 py-2">${escapeHtml(def.emptyText)}</div>`;
+        return;
+      }
+      els.list.innerHTML = visibleOptions.map(item => {
+        const checked = selectedSet.has(item.value);
+        return `
+          <label class="power-slicer-item">
+            <input class="form-check-input m-0 giro-recolha-slicer-option" type="checkbox" value="${escapeHtml(item.value)}" ${checked ? "checked" : ""}>
+            <span>${escapeHtml(item.label || item.value)}</span>
+          </label>
+        `;
+      }).join("");
+      els.list.querySelectorAll(".giro-recolha-slicer-option").forEach(input => {
+        input.addEventListener("change", event => onGiroRecolhaSlicerCheckboxChange(def, event));
+      });
+    }
+
+    function clearGiroRecolhaSlicerDependents(def) {
+      (def.clears || []).forEach(key => {
+        const childDef = GIRO_RECOLHA_SLICER_BY_KEY[key];
+        if (childDef) setGiroRecolhaSlicerSelection(childDef, [], { sync: false, clearDependents: false });
+      });
+    }
+
+    function setGiroRecolhaSlicerSelection(def, values, { sync = true, clearDependents = true } = {}) {
+      const options = giroRecolhaOptionsForSlicer(def);
+      const selected = syncGiroRecolhaHiddenSelect(def, options, values);
+      renderGiroRecolhaSlicer(def);
+      if (sync && clearDependents) clearGiroRecolhaSlicerDependents(def);
+      if (sync) syncGiroRecolha({ silent: false });
+      return selected;
+    }
+
+    function onGiroRecolhaSlicerCheckboxChange(def, event) {
+      const selectedSet = giroRecolhaSlicerSelectedSet(def);
+      const value = String(event.target && event.target.value || "").trim();
+      if (!value) return;
+      if (event.target.checked) selectedSet.add(value);
+      else selectedSet.delete(value);
+      setGiroRecolhaSlicerSelection(def, [...selectedSet]);
+    }
+
+    function toggleGiroRecolhaSlicerPanel(def, event) {
+      if (event) event.stopPropagation();
+      const els = giroRecolhaSlicerElements(def);
+      if (!els.panel) return;
+      const willOpen = els.panel.classList.contains("d-none");
+      GIRO_RECOLHA_SLICERS.forEach(item => {
+        if (item.key === def.key) return;
+        const other = giroRecolhaSlicerElements(item);
+        if (other.panel) other.panel.classList.add("d-none");
+        if (other.button) other.button.setAttribute("aria-expanded", "false");
+      });
+      els.panel.classList.toggle("d-none", !willOpen);
+      if (els.button) els.button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      if (willOpen) {
+        renderGiroRecolhaSlicer(def);
+        if (els.search) els.search.focus();
+      }
+    }
+
+    function closeGiroRecolhaSlicerPanelsOnOutsideClick(event) {
+      GIRO_RECOLHA_SLICERS.forEach(def => {
+        const els = giroRecolhaSlicerElements(def);
+        if (!els.panel || els.panel.classList.contains("d-none")) return;
+        if (els.root && els.root.contains(event.target)) return;
+        els.panel.classList.add("d-none");
+        if (els.button) els.button.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    function visibleGiroRecolhaSlicerValues(def) {
+      const els = giroRecolhaSlicerElements(def);
+      const options = giroRecolhaOptionsForSlicer(def);
+      const search = normalizeTextForSearch(els.search ? els.search.value : "");
+      return options
+        .filter(item => !search || normalizeTextForSearch(item.label || item.value).includes(search))
+        .map(item => item.value);
+    }
+
+    function selectVisibleGiroRecolhaSlicerValues(def, event) {
+      if (event) event.stopPropagation();
+      const selectedSet = giroRecolhaSlicerSelectedSet(def);
+      visibleGiroRecolhaSlicerValues(def).forEach(value => selectedSet.add(value));
+      setGiroRecolhaSlicerSelection(def, [...selectedSet]);
+    }
+
+    function clearGiroRecolhaSlicerSelection(def, event) {
+      if (event) event.stopPropagation();
+      setGiroRecolhaSlicerSelection(def, []);
+    }
+
+    function setupGiroRecolhaSlicerEvents() {
+      GIRO_RECOLHA_SLICERS.forEach(def => {
+        const els = giroRecolhaSlicerElements(def);
+        if (els.select) {
+          els.select.addEventListener("change", () => {
+            clearGiroRecolhaSlicerDependents(def);
+            syncGiroRecolha({ silent: false });
+          });
+        }
+        if (els.button) els.button.addEventListener("click", event => toggleGiroRecolhaSlicerPanel(def, event));
+        if (els.search) els.search.addEventListener("input", () => renderGiroRecolhaSlicer(def));
+        if (els.selectAllBtn) els.selectAllBtn.addEventListener("click", event => selectVisibleGiroRecolhaSlicerValues(def, event));
+        if (els.clearBtn) els.clearBtn.addEventListener("click", event => clearGiroRecolhaSlicerSelection(def, event));
+      });
+      document.addEventListener("click", closeGiroRecolhaSlicerPanelsOnOutsideClick);
+    }
+
+    function normalizeGiroRecolhaSlicerOptions(payloads, fallbackOptions) {
+      const result = emptyGiroRecolhaOptions();
+      GIRO_RECOLHA_SLICERS.forEach((def, index) => {
+        const payloadOptions = payloads && payloads[index] && payloads[index].options ? payloads[index].options : {};
+        const source = Array.isArray(payloadOptions[def.optionKey])
+          ? payloadOptions[def.optionKey]
+          : (fallbackOptions && fallbackOptions[def.optionKey]);
+        result[def.optionKey] = normalizeGiroRecolhaOptionItems(source);
+      });
+      return result;
+    }
+
+    async function loadGiroRecolhaSlicerOptions(params) {
+      return Promise.all(GIRO_RECOLHA_SLICERS.map(def => (
+        req(`${CONFIG.endpoints.giroRecolha.options}?${giroRecolhaOptionsQueryString(params, { omit: def.key })}`, { timeoutMs: 45000 })
+      )));
+    }
+
+    function renderGiroRecolhaFilterOptions(previousParams = currentGiroRecolhaParams()) {
+      const selected = {};
+      GIRO_RECOLHA_SLICERS.forEach(def => {
+        selected[def.key] = setGiroRecolhaSlicerSelection(def, previousParams[def.key], { sync: false, clearDependents: false });
+      });
+      return selected;
+    }
+
+    function clearGiroRecolhaFilters() {
+      GIRO_RECOLHA_SLICERS.forEach(def => {
+        setGiroRecolhaSlicerSelection(def, [], { sync: false, clearDependents: false });
+      });
+      if (E.giroRecolhaMinGap) E.giroRecolhaMinGap.value = "1";
+      if (E.giroRecolhaLimit) E.giroRecolhaLimit.value = "200";
+      if (E.giroRecolhaMaxRouteSize) E.giroRecolhaMaxRouteSize.value = "12";
+      if (E.giroRecolhaZeroOnly) E.giroRecolhaZeroOnly.checked = false;
+      syncGiroRecolha({ silent: false });
+    }
+
+    function clearGiroRecolhaRoutes() {
+      state.giroRecolhaRoutes = { generated: false, total: 0, summary: {}, routes: [] };
+      state.giroRecolhaRouteFilter = { search: "", district: "", minGap: "" };
+      state.giroRecolhaBuilder = { activeRouteId: "", search: "" };
+      if (E.giroRecolhaRouteSearch) E.giroRecolhaRouteSearch.value = "";
+      if (E.giroRecolhaRouteDistrict) E.giroRecolhaRouteDistrict.value = "";
+      if (E.giroRecolhaRouteMinGap) E.giroRecolhaRouteMinGap.value = "";
+      if (E.giroRecolhaActiveRoute) E.giroRecolhaActiveRoute.value = "";
+      if (E.giroRecolhaBlockSearch) E.giroRecolhaBlockSearch.value = "";
+      renderGiroRecolhaRoutes();
+    }
+
+    function updateGiroRecolhaRouteFilters() {
+      state.giroRecolhaRouteFilter = {
+        search: E.giroRecolhaRouteSearch ? E.giroRecolhaRouteSearch.value.trim() : "",
+        district: E.giroRecolhaRouteDistrict ? E.giroRecolhaRouteDistrict.value.trim() : "",
+        minGap: E.giroRecolhaRouteMinGap ? E.giroRecolhaRouteMinGap.value.trim() : ""
+      };
+      renderGiroRecolhaRoutes();
+    }
+
+    function clearGiroRecolhaRouteFilters() {
+      state.giroRecolhaRouteFilter = { search: "", district: "", minGap: "" };
+      if (E.giroRecolhaRouteSearch) E.giroRecolhaRouteSearch.value = "";
+      if (E.giroRecolhaRouteDistrict) E.giroRecolhaRouteDistrict.value = "";
+      if (E.giroRecolhaRouteMinGap) E.giroRecolhaRouteMinGap.value = "";
+      renderGiroRecolhaRoutes();
+    }
+
+    function clampGiroRecolhaRouteHeight(value) {
+      const height = Number(value);
+      return Number.isFinite(height) ? Math.max(180, Math.min(1400, Math.trunc(height))) : 260;
+    }
+
+    function findGiroRecolhaRouteTable(routeId) {
+      return Array.from(document.querySelectorAll(".route-table-scroll[data-route-id]"))
+        .find(node => String(node.dataset.routeId || "") === String(routeId || ""));
+    }
+
+    function setGiroRecolhaRouteTableHeight(routeId, height) {
+      const nextHeight = clampGiroRecolhaRouteHeight(height);
+      state.giroRecolhaRouteHeights[routeId] = nextHeight;
+      const tableWrap = findGiroRecolhaRouteTable(routeId);
+      if (tableWrap) tableWrap.style.height = `${nextHeight}px`;
+    }
+
+    function startGiroRouteResize(event, routeId) {
+      const tableWrap = findGiroRecolhaRouteTable(routeId);
+      if (!tableWrap) return;
+      event.preventDefault();
+      const startY = Number(event.clientY || 0);
+      const startHeight = tableWrap.getBoundingClientRect().height || clampGiroRecolhaRouteHeight(state.giroRecolhaRouteHeights[routeId]);
+      document.body.classList.add("is-resizing-route");
+      const onMove = moveEvent => {
+        const delta = Number(moveEvent.clientY || 0) - startY;
+        setGiroRecolhaRouteTableHeight(routeId, startHeight + delta);
+      };
+      const onUp = () => {
+        document.body.classList.remove("is-resizing-route");
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    }
+
+    function giroStatusBadges(record) {
+      const items = [
+        ["Litrinho", record.giro_litrinho, record.gap_litrinho],
+        ["Inteira", record.giro_inteira, record.gap_inteira],
+        ["Litrao", record.giro_litrao, record.gap_litrao]
+      ];
+      return items.map(([label, status, gap]) => {
+        const normalized = String(status || "-").toUpperCase();
+        const cls = normalized === "OK" ? "text-bg-success" : normalized === "ZERO" ? "text-bg-danger" : normalized === "NOK" ? "text-bg-warning" : "text-bg-secondary";
+        return `<span class="badge ${cls} me-1 mb-1">${escapeHtml(label)} ${escapeHtml(normalized)} | Faltam ${escapeHtml(gap || "0")}</span>`;
+      }).join("");
+    }
+
+    function giroBoxWhole(value) {
+      return String(Math.trunc(parseGiroRecolhaNumber(value || "0")));
+    }
+
+    function giroMissingTypeParts(item) {
+      const items = [
+        ["Litrinho", item && item.giro_litrinho, item && item.gap_litrinho],
+        ["Inteira", item && item.giro_inteira, item && item.gap_inteira],
+        ["Litrao", item && item.giro_litrao, item && item.gap_litrao]
+      ];
+      return items
+        .map(([label, status, gap]) => {
+          const normalized = String(status || "-").toUpperCase();
+          const gapValue = parseGiroRecolhaNumber(gap || "0");
+          if (gapValue <= 0 && normalized !== "ZERO" && normalized !== "NOK") return "";
+          return `${label} ${giroBoxWhole(gap)} cx (${normalized})`;
+        })
+        .filter(Boolean);
+    }
+
+    function giroMissingTypesText(item) {
+      const parts = giroMissingTypeParts(item);
+      return parts.length ? parts.join(" | ") : "Sem tipo em falta";
+    }
+
+    function giroRouteMissingTypesText(items) {
+      const totals = [
+        ["Litrinho", "gap_litrinho"],
+        ["Inteira", "gap_inteira"],
+        ["Litrao", "gap_litrao"]
+      ].map(([label, key]) => {
+        const total = (items || []).reduce((sum, item) => sum + parseGiroRecolhaNumber(item && item[key]), 0);
+        return total > 0 ? `${label} ${Math.trunc(total)} cx` : "";
+      }).filter(Boolean);
+      return totals.length ? totals.join(" | ") : "Sem tipo em falta";
+    }
+
+    function renderGiroRecolha() {
+      ensureGiroRecolhaSection();
+      const payload = state.giroRecolha && typeof state.giroRecolha === "object" ? state.giroRecolha : { total: 0, summary: {}, records: [] };
+      const records = Array.isArray(payload.records) ? payload.records : [];
+      const summary = payload.summary || {};
+      if (E.giroRecolhaCount) {
+        E.giroRecolhaCount.textContent = `${formatNumber(records.length)} cliente(s)`;
+        E.giroRecolhaCount.className = records.length ? "pill warn" : "pill";
+      }
+      if (E.giroRecolhaCards) {
+        E.giroRecolhaCards.innerHTML = [
+          ["Clientes", summary.clientes || records.length, "fora do giro"],
+          ["Giro zero", summary.clientes_zero || 0, "com item zerado"],
+          ["Faltam total", summary.gap_total || "0", "caixas em falta"],
+          ["Maior falta", summary.maior_gap || "0", "cliente mais critico"]
+        ].map(([label, value, sub]) => `
+          <article class="recolha-dashboard-card">
+            <span class="label">${escapeHtml(label)}</span>
+            <span class="value">${escapeHtml(String(value))}</span>
+            <span class="sub">${escapeHtml(sub)}</span>
+          </article>
+        `).join("");
+      }
+      if (!E.giroRecolhaBody) return;
+      if (!records.length) {
+        E.giroRecolhaBody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-secondary">Nenhum cliente fora do giro nos filtros atuais.</td></tr>';
+        return;
+      }
+      E.giroRecolhaBody.innerHTML = records.map(record => {
+        const command = `recolha ${record.filial || ""} ${record.cod_pdv || ""}`.trim();
+        return `
+          <tr>
+            <td class="ps-3">
+              <strong>${escapeHtml(cleanDisplayText(record.nome || "-"))}</strong>
+              <div class="small text-secondary">Revenda ${escapeHtml(record.filial || "-")} | NB ${escapeHtml(record.cod_pdv || "-")} | Setor ${escapeHtml(record.setor || "-")}</div>
+              <div class="small text-secondary">${escapeHtml(cleanDisplayText([record.cidade, record.bairro || record.status_pdv].filter(Boolean).join(" | ") || "-"))}</div>
+            </td>
+            <td>${giroStatusBadges(record)}</td>
+            <td>
+              <strong>${escapeHtml(record.gap_caixas || "0")} cx</strong>
+              <div class="small text-secondary">Total ${escapeHtml(record.total_caixas || "0")} | Real ${escapeHtml(record.real_caixas || "0")}</div>
+              <div class="small text-secondary">Tipos: ${escapeHtml(giroMissingTypesText(record))}</div>
+            </td>
+            <td>
+              <strong>${escapeHtml(record.media_faturamento_pedido || "R$ 0,00")}</strong>
+              <div class="small text-secondary">Fat. M-1 ${escapeHtml(record.faturamento_total || "R$ 0,00")} | Pedidos ${escapeHtml(record.pedidos_total || "0")}</div>
+            </td>
+            <td>
+              <div>${escapeHtml(record.prazo_atual || "-")} | ${escapeHtml(record.cond_pag_atual || "-")}</div>
+              <div class="small text-secondary">Atraso ${escapeHtml(record.percentual_pag_atraso || "-")}</div>
+            </td>
+            <td class="text-end pe-3">
+              <button class="btn btn-outline-primary btn-sm" onclick="copyGiroRecolhaCommand('${escapeHtml(command)}')">
+                <i class="bi bi-clipboard me-1"></i>Copiar
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function parseGiroRecolhaNumber(value) {
+      const cleaned = String(value || "")
+        .replace("R$", "")
+        .replace(/\./g, "")
+        .replace(",", ".")
+        .replace(/[^\d.-]/g, "");
+      const parsed = Number(cleaned);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function giroRecolhaPdvKey(item) {
+      return `${String(item && item.filial || "").trim()}|${String(item && (item.cod_pdv || item.nb) || "").trim()}`;
+    }
+
+    function giroRecolhaRouteItemFromRecord(record, sequence = 1) {
+      const filial = String(record && record.filial || "").trim();
+      const codPdv = String(record && record.cod_pdv || "").trim();
+      return {
+        sequence,
+        filial,
+        cod_pdv: codPdv,
+        nome: record && record.nome || "-",
+        cidade: record && record.cidade || "",
+        bairro: record && record.bairro || "",
+        visit_day: record && record.visit_day || "",
+        total_caixas: record && record.total_caixas || "0",
+        real_caixas: record && record.real_caixas || "0",
+        gap_caixas: record && record.gap_caixas || "0",
+        gap_litrinho: record && record.gap_litrinho || "0",
+        gap_inteira: record && record.gap_inteira || "0",
+        gap_litrao: record && record.gap_litrao || "0",
+        giro_litrinho: record && record.giro_litrinho || "-",
+        giro_inteira: record && record.giro_inteira || "-",
+        giro_litrao: record && record.giro_litrao || "-",
+        media_faturamento_pedido: record && record.media_faturamento_pedido || "R$ 0,00",
+        faturamento_total: record && record.faturamento_total || "R$ 0,00",
+        seller: record && (record.seller_code || record.setor || record.seller) || "",
+        manager: record && (record.manager_code || record.manager) || "",
+        command: `recolha ${filial} ${codPdv}`.trim()
+      };
+    }
+
+    function sortGiroRecolhaRouteItems(items) {
+      return [...(items || [])].sort((a, b) => {
+        const bairroCompare = String(a.bairro || "").localeCompare(String(b.bairro || ""), "pt-BR");
+        if (bairroCompare) return bairroCompare;
+        const gapCompare = parseGiroRecolhaNumber(b.gap_caixas) - parseGiroRecolhaNumber(a.gap_caixas);
+        if (gapCompare) return gapCompare;
+        const mediaCompare = parseGiroRecolhaNumber(b.media_faturamento_pedido) - parseGiroRecolhaNumber(a.media_faturamento_pedido);
+        if (mediaCompare) return mediaCompare;
+        return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+      });
+    }
+
+    function routeGroupLabel(values, emptyLabel = "-") {
+      const cleanValues = [...new Set((values || []).map(value => String(value || "").trim()).filter(Boolean))].sort();
+      if (cleanValues.length === 1) return cleanValues[0];
+      return cleanValues.length ? "Varios" : emptyLabel;
+    }
+
+    function recalcGiroRecolhaRoute(route) {
+      const items = sortGiroRecolhaRouteItems(Array.isArray(route.items) ? route.items : [])
+        .map((item, index) => ({ ...item, sequence: index + 1 }));
+      const operations = [...new Set(items.map(item => String(item.filial || item.operation || "").trim()).filter(Boolean))].sort();
+      const cities = [...new Set(items.map(item => String(item.cidade || item.city || "").trim()).filter(Boolean))].sort();
+      const visitDays = [...new Set(items.map(item => String(item.visit_day || "").trim()).filter(Boolean))].sort();
+      const neighborhoods = [...new Set(items.map(item => String(item.bairro || "").trim()).filter(Boolean))];
+      const sellers = [...new Set(items.map(item => String(item.seller || "").trim()).filter(Boolean))].sort();
+      const managers = [...new Set(items.map(item => String(item.manager || "").trim()).filter(Boolean))].sort();
+      const totalGap = items.reduce((sum, item) => sum + parseGiroRecolhaNumber(item.gap_caixas), 0);
+      const totalBoxes = items.reduce((sum, item) => sum + parseGiroRecolhaNumber(item.total_caixas), 0);
+      return {
+        ...route,
+        operation: routeGroupLabel(operations, route.operation || "-"),
+        operations,
+        city: routeGroupLabel(cities, route.city || "-"),
+        cities,
+        visit_day: routeGroupLabel(visitDays, route.visit_day || "Sem dia"),
+        visit_days: visitDays,
+        items,
+        neighborhoods,
+        neighborhood_sequence: neighborhoods.join(" -> "),
+        sellers,
+        managers,
+        seller: sellers.length === 1 ? sellers[0] : (sellers.length ? "Varios" : "-"),
+        manager: managers.length === 1 ? managers[0] : (managers.length ? "Varios" : "-"),
+        pdvs: items.length,
+        total_caixas: String(Math.trunc(totalBoxes)),
+        gap_total: String(Math.trunc(totalGap)),
+        manual: Boolean(route.manual)
+      };
+    }
+
+    function recalcGiroRecolhaRoutesState() {
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : { generated: false, routes: [], summary: {} };
+      const routes = (Array.isArray(payload.routes) ? payload.routes : [])
+        .map(recalcGiroRecolhaRoute)
+        .filter(route => route.manual || (Array.isArray(route.items) && route.items.length));
+      const totalPdvs = routes.reduce((sum, route) => sum + route.items.length, 0);
+      const totalGap = routes.reduce((sum, route) => sum + parseGiroRecolhaNumber(route.gap_total), 0);
+      const totalBoxes = routes.reduce((sum, route) => sum + parseGiroRecolhaNumber(route.total_caixas), 0);
+      state.giroRecolhaRoutes = {
+        ...payload,
+        total: routes.length,
+        routes,
+        summary: {
+          ...(payload.summary || {}),
+          rotas: routes.length,
+          pdvs: totalPdvs,
+          gap_total: String(Math.trunc(totalGap)),
+          total_caixas: String(Math.trunc(totalBoxes))
+        }
+      };
+      if (!routes.some(route => String(route.id || "") === String(state.giroRecolhaBuilder.activeRouteId || ""))) {
+        state.giroRecolhaBuilder.activeRouteId = routes.length ? String(routes[0].id || "") : "";
+      }
+    }
+
+    function allGiroRecolhaRouteCandidates() {
+      const records = state.giroRecolha && Array.isArray(state.giroRecolha.records) ? state.giroRecolha.records : [];
+      const routeItems = state.giroRecolhaRoutes && Array.isArray(state.giroRecolhaRoutes.routes)
+        ? state.giroRecolhaRoutes.routes.flatMap(route => Array.isArray(route.items) ? route.items : [])
+        : [];
+      const map = new Map();
+      records.forEach(record => {
+        const item = giroRecolhaRouteItemFromRecord(record);
+        const key = giroRecolhaPdvKey(item);
+        if (key !== "|") map.set(key, item);
+      });
+      routeItems.forEach(item => {
+        const key = giroRecolhaPdvKey(item);
+        if (key !== "|" && !map.has(key)) map.set(key, item);
+      });
+      return [...map.values()];
+    }
+
+    function normalizeGiroRecolhaNb(value) {
+      return String(value || "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    }
+
+    function findGiroRecolhaCandidateByNb(nb, targetRoute) {
+      const rawNb = String(nb || "").trim().toUpperCase();
+      const normalizedNb = normalizeGiroRecolhaNb(rawNb);
+      if (!rawNb && !normalizedNb) return null;
+      const matches = allGiroRecolhaRouteCandidates().filter(item => {
+        const itemNb = String(item && (item.cod_pdv || item.nb) || "").trim();
+        return itemNb.toUpperCase() === rawNb || (normalizedNb && normalizeGiroRecolhaNb(itemNb) === normalizedNb);
+      });
+      if (!matches.length) return null;
+      const routeOperation = String(targetRoute && targetRoute.operation || "").trim();
+      if (routeOperation && routeOperation !== "Varios") {
+        const sameOperation = matches.find(item => String(item.filial || "").trim() === routeOperation);
+        if (sameOperation) return sameOperation;
+      }
+      return matches[0];
+    }
+
+    function giroRecolhaRouteLabel(route) {
+      if (!route) return "-";
+      return `${route.id || "-"} | ${cleanDisplayText(route.city || "-")} | ${cleanDisplayText(route.visit_day || "Sem dia")} | ${route.pdvs || 0} PDV(s)`;
+    }
+
+    function giroRecolhaRouteMembershipMap(routes = null) {
+      const sourceRoutes = Array.isArray(routes)
+        ? routes
+        : (state.giroRecolhaRoutes && Array.isArray(state.giroRecolhaRoutes.routes) ? state.giroRecolhaRoutes.routes : []);
+      const map = new Map();
+      sourceRoutes.forEach(route => {
+        (Array.isArray(route.items) ? route.items : []).forEach(item => {
+          map.set(giroRecolhaPdvKey(item), String(route.id || ""));
+        });
+      });
+      return map;
+    }
+
+    function ensureGiroRecolhaActiveRoute(routes) {
+      const items = Array.isArray(routes) ? routes : [];
+      const current = String(state.giroRecolhaBuilder.activeRouteId || "");
+      if (current && items.some(route => String(route.id || "") === current)) return current;
+      const next = items.length ? String(items[0].id || "") : "";
+      state.giroRecolhaBuilder.activeRouteId = next;
+      return next;
+    }
+
+    function updateGiroRecolhaActiveRoute() {
+      state.giroRecolhaBuilder.activeRouteId = E.giroRecolhaActiveRoute ? E.giroRecolhaActiveRoute.value : "";
+      renderGiroRecolhaBuilder();
+    }
+
+    function updateGiroRecolhaBlockSearch() {
+      state.giroRecolhaBuilder.search = E.giroRecolhaBlockSearch ? E.giroRecolhaBlockSearch.value.trim() : "";
+      renderGiroRecolhaBuilder();
+    }
+
+    function moveGiroRecolhaPdvToRoute(pdvKey, routeId) {
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : null;
+      if (!payload || !Array.isArray(payload.routes)) return;
+      const targetRoute = payload.routes.find(route => String(route.id || "") === String(routeId || ""));
+      if (!targetRoute) {
+        addLog("Selecione uma rota destino para mover o PDV.", "warn");
+        return;
+      }
+      const candidate = allGiroRecolhaRouteCandidates().find(item => giroRecolhaPdvKey(item) === pdvKey);
+      if (!candidate) {
+        addLog("PDV nao encontrado nas oportunidades carregadas.", "warn");
+        return;
+      }
+      if ((Array.isArray(targetRoute.items) ? targetRoute.items : []).some(item => giroRecolhaPdvKey(item) === pdvKey)) {
+        addLog(`NB ${candidate.cod_pdv || ""} ja esta na rota ${routeId}.`, "warn");
+        return;
+      }
+      payload.routes.forEach(route => {
+        route.items = (Array.isArray(route.items) ? route.items : []).filter(item => giroRecolhaPdvKey(item) !== pdvKey);
+      });
+      targetRoute.items = [...(Array.isArray(targetRoute.items) ? targetRoute.items : []), candidate];
+      state.giroRecolhaBuilder.activeRouteId = String(targetRoute.id || "");
+      recalcGiroRecolhaRoutesState();
+      renderGiroRecolhaRoutes();
+      addLog(`NB ${candidate.cod_pdv || ""} movido para a rota ${targetRoute.id || ""}.`, "ok");
+    }
+
+    function createGiroRecolhaManualRoute() {
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : null;
+      if (!payload || !payload.generated || !Array.isArray(payload.routes)) {
+        addLog("Gere as rotas antes de criar uma rota manual.", "warn");
+        return;
+      }
+      const nextNumber = payload.routes.reduce((max, route) => {
+        const match = String(route.id || "").match(/\d+/);
+        return Math.max(max, match ? Number(match[0]) : 0);
+      }, 0) + 1;
+      const id = `R${String(nextNumber).padStart(3, "0")}`;
+      payload.routes.push({
+        id,
+        operation: "Manual",
+        seller: "-",
+        sellers: [],
+        manager: "-",
+        managers: [],
+        visit_day: "Manual",
+        city: "Manual",
+        neighborhoods: [],
+        neighborhood_sequence: "",
+        pdvs: 0,
+        total_caixas: "0",
+        gap_total: "0",
+        faturamento_total: "R$ 0,00",
+        items: [],
+        manual: true
+      });
+      state.giroRecolhaBuilder.activeRouteId = id;
+      recalcGiroRecolhaRoutesState();
+      renderGiroRecolhaRoutes();
+      addLog(`Rota ${id} criada para montagem manual.`, "ok");
+    }
+
+    function mergeGiroRecolhaRoute(targetRouteId) {
+      const select = document.getElementById(`giroRouteMerge-${targetRouteId}`);
+      const sourceRouteId = select ? String(select.value || "") : "";
+      if (!sourceRouteId) {
+        addLog("Selecione a rota que sera mesclada.", "warn");
+        return;
+      }
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : null;
+      if (!payload || !Array.isArray(payload.routes)) return;
+      if (String(sourceRouteId) === String(targetRouteId)) {
+        addLog("Escolha rotas diferentes para mesclar.", "warn");
+        return;
+      }
+      const targetRoute = payload.routes.find(route => String(route.id || "") === String(targetRouteId || ""));
+      const sourceRoute = payload.routes.find(route => String(route.id || "") === String(sourceRouteId || ""));
+      if (!targetRoute || !sourceRoute) {
+        addLog("Rota de origem ou destino nao encontrada.", "warn");
+        return;
+      }
+      const existing = new Set((Array.isArray(targetRoute.items) ? targetRoute.items : []).map(giroRecolhaPdvKey));
+      const movedItems = (Array.isArray(sourceRoute.items) ? sourceRoute.items : []).filter(item => !existing.has(giroRecolhaPdvKey(item)));
+      targetRoute.items = [...(Array.isArray(targetRoute.items) ? targetRoute.items : []), ...movedItems];
+      payload.routes = payload.routes.filter(route => String(route.id || "") !== String(sourceRouteId));
+      delete state.giroRecolhaRouteHeights[sourceRouteId];
+      state.giroRecolhaBuilder.activeRouteId = String(targetRoute.id || "");
+      recalcGiroRecolhaRoutesState();
+      renderGiroRecolhaRoutes();
+      addLog(`Rota ${sourceRouteId} mesclada em ${targetRouteId}.`, "ok");
+    }
+
+    function renderGiroRecolhaBuilder(routes = null) {
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : null;
+      const sourceRoutes = Array.isArray(routes)
+        ? routes
+        : (payload && Array.isArray(payload.routes) ? payload.routes : []);
+      if (!E.giroRecolhaBuilder) return;
+      if (!payload || !payload.generated || !sourceRoutes.length) {
+        E.giroRecolhaBuilder.classList.add("d-none");
+        if (E.giroRecolhaBlockPool) E.giroRecolhaBlockPool.innerHTML = "";
+        return;
+      }
+      E.giroRecolhaBuilder.classList.remove("d-none");
+      const activeRouteId = ensureGiroRecolhaActiveRoute(sourceRoutes);
+      if (E.giroRecolhaActiveRoute) {
+        E.giroRecolhaActiveRoute.innerHTML = sourceRoutes
+          .map(route => `<option value="${escapeHtml(route.id || "")}">${escapeHtml(giroRecolhaRouteLabel(route))}</option>`)
+          .join("");
+        E.giroRecolhaActiveRoute.value = activeRouteId;
+      }
+      if (E.giroRecolhaBlockSearch && E.giroRecolhaBlockSearch.value !== state.giroRecolhaBuilder.search) {
+        E.giroRecolhaBlockSearch.value = state.giroRecolhaBuilder.search || "";
+      }
+      const membership = giroRecolhaRouteMembershipMap(sourceRoutes);
+      const search = normalizeTextForSearch(state.giroRecolhaBuilder.search || "");
+      const activeRoute = sourceRoutes.find(route => String(route.id || "") === activeRouteId);
+      const candidates = allGiroRecolhaRouteCandidates()
+        .filter(item => {
+          if (!search) return true;
+          return giroRecolhaRouteItemText(item).includes(search);
+        })
+        .sort((a, b) => {
+          const currentA = membership.get(giroRecolhaPdvKey(a)) || "";
+          const currentB = membership.get(giroRecolhaPdvKey(b)) || "";
+          const activeA = currentA === activeRouteId ? 1 : 0;
+          const activeB = currentB === activeRouteId ? 1 : 0;
+          if (activeA !== activeB) return activeA - activeB;
+          const cityCompare = String(a.cidade || "").localeCompare(String(b.cidade || ""), "pt-BR");
+          if (cityCompare) return cityCompare;
+          const bairroCompare = String(a.bairro || "").localeCompare(String(b.bairro || ""), "pt-BR");
+          if (bairroCompare) return bairroCompare;
+          return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+        });
+      const visibleCandidates = candidates.slice(0, 80);
+      if (E.giroRecolhaBuilderHint) {
+        E.giroRecolhaBuilderHint.textContent = `${formatNumber(candidates.length)} bloco(s) disponiveis${candidates.length > visibleCandidates.length ? " - mostrando 80" : ""}.`;
+      }
+      if (!E.giroRecolhaBlockPool) return;
+      if (!visibleCandidates.length) {
+        E.giroRecolhaBlockPool.innerHTML = '<div class="text-center py-3 text-secondary border rounded-3">Nenhum bloco encontrado na busca atual.</div>';
+        return;
+      }
+      E.giroRecolhaBlockPool.innerHTML = visibleCandidates.map(item => {
+        const key = giroRecolhaPdvKey(item);
+        const currentRouteId = membership.get(key) || "";
+        const isActive = currentRouteId === activeRouteId;
+        return `
+          <article class="route-pdv-block ${isActive ? "is-active" : ""}">
+            <div class="d-flex justify-content-between gap-2 mb-1">
+              <strong>${escapeHtml(cleanDisplayText(item.nome || "-"))}</strong>
+              <span class="badge ${isActive ? "text-bg-success" : "text-bg-secondary"}">${escapeHtml(currentRouteId || "Fora")}</span>
+            </div>
+            <div class="small text-secondary">NB ${escapeHtml(item.cod_pdv || "-")} | Op. ${escapeHtml(item.filial || "-")} | ${escapeHtml(cleanDisplayText(item.cidade || "-"))}</div>
+            <div class="small text-secondary">${escapeHtml(cleanDisplayText(item.bairro || "-"))} | Vend. ${escapeHtml(item.seller || "-")}</div>
+            <div class="small mt-1">Caixas ${escapeHtml(item.total_caixas || "0")} cx | Faltam ${escapeHtml(item.gap_caixas || "0")} cx</div>
+            <div class="small text-secondary">${escapeHtml(giroMissingTypesText(item))}</div>
+            <button class="btn btn-outline-primary btn-sm mt-2 w-100" ${isActive ? "disabled" : ""} onclick="moveGiroRecolhaPdvToRoute('${escapeHtml(key)}', '${escapeHtml(activeRouteId)}')">
+              <i class="bi bi-arrow-right-square me-1"></i>${isActive ? "Na rota destino" : `Mover para ${escapeHtml(activeRoute ? activeRoute.id || "" : "")}`}
+            </button>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function giroRecolhaRouteSearchText(route, items) {
+      const routeParts = [
+        route.id,
+        route.operation,
+        route.seller,
+        route.manager,
+        route.visit_day,
+        route.city,
+        route.neighborhood_sequence,
+        Array.isArray(route.neighborhoods) ? route.neighborhoods.join(" ") : ""
+      ];
+      const itemParts = (items || []).flatMap(item => [
+        item.cod_pdv,
+        item.nome,
+        item.cidade,
+        item.bairro,
+        item.visit_day,
+        item.seller,
+        item.manager,
+        item.total_caixas,
+        item.gap_litrinho,
+        item.gap_inteira,
+        item.gap_litrao,
+        item.giro_litrinho,
+        item.giro_inteira,
+        item.giro_litrao,
+        giroMissingTypesText(item),
+        item.command
+      ]);
+      return normalizeTextForSearch(routeParts.concat(itemParts).join(" "));
+    }
+
+    function giroRecolhaRouteMetaText(route) {
+      return normalizeTextForSearch([
+        route.id,
+        route.operation,
+        route.seller,
+        route.manager,
+        route.visit_day,
+        route.city,
+        route.neighborhood_sequence,
+        Array.isArray(route.neighborhoods) ? route.neighborhoods.join(" ") : ""
+      ].join(" "));
+    }
+
+    function giroRecolhaRouteItemText(item) {
+      return normalizeTextForSearch([
+        item.cod_pdv,
+        item.nome,
+        item.cidade,
+        item.bairro,
+        item.visit_day,
+        item.seller,
+        item.manager,
+        item.total_caixas,
+        item.gap_litrinho,
+        item.gap_inteira,
+        item.gap_litrao,
+        item.giro_litrinho,
+        item.giro_inteira,
+        item.giro_litrao,
+        giroMissingTypesText(item),
+        item.command
+      ].join(" "));
+    }
+
+    function filterGiroRecolhaRoutes(routes) {
+      const filters = state.giroRecolhaRouteFilter || {};
+      const search = normalizeTextForSearch(filters.search || "");
+      const district = String(filters.district || "").trim();
+      const minGap = parseGiroRecolhaNumber(filters.minGap || "");
+      return (routes || []).map(route => {
+        const originalItems = Array.isArray(route.items) ? route.items : [];
+        let items = originalItems;
+        if (district) {
+          items = items.filter(item => String(item.bairro || "").trim() === district);
+        }
+        const routeMetaText = giroRecolhaRouteMetaText(route);
+        if (search && !routeMetaText.includes(search)) {
+          items = items.filter(item => giroRecolhaRouteItemText(item).includes(search));
+          if (!items.length) return null;
+        }
+        if (!items.length) {
+          if (route.manual && !district && !search && minGap <= 0) {
+            return {
+              ...route,
+              items: [],
+              pdvs: 0,
+              total_caixas: "0",
+              gap_total: "0",
+              neighborhoods: [],
+              neighborhood_sequence: ""
+            };
+          }
+          return null;
+        }
+        const visibleGap = items.reduce((sum, item) => sum + parseGiroRecolhaNumber(item.gap_caixas), 0);
+        const visibleBoxes = items.reduce((sum, item) => sum + parseGiroRecolhaNumber(item.total_caixas), 0);
+        if (minGap > 0 && visibleGap < minGap) return null;
+        const neighborhoods = [...new Set(items.map(item => String(item.bairro || "").trim()).filter(Boolean))];
+        return {
+          ...route,
+          items,
+          pdvs: items.length,
+          total_caixas: String(Math.trunc(visibleBoxes)),
+          gap_total: String(Math.trunc(visibleGap)),
+          neighborhoods,
+          neighborhood_sequence: neighborhoods.join(" -> ")
+        };
+      }).filter(Boolean);
+    }
+
+    function syncGiroRecolhaRouteDistrictOptions(routes) {
+      if (!E.giroRecolhaRouteDistrict) return;
+      const selected = String(state.giroRecolhaRouteFilter && state.giroRecolhaRouteFilter.district || "");
+      const districts = [...new Set((routes || []).flatMap(route => Array.isArray(route.items) ? route.items : []).map(item => String(item.bairro || "").trim()).filter(Boolean))].sort();
+      const hasSelected = selected && districts.includes(selected);
+      E.giroRecolhaRouteDistrict.innerHTML = [
+        '<option value="">Todos</option>',
+        ...(selected && !hasSelected ? [`<option value="${escapeHtml(selected)}">${escapeHtml(cleanDisplayText(selected))}</option>`] : []),
+        ...districts.map(item => `<option value="${escapeHtml(item)}">${escapeHtml(cleanDisplayText(item))}</option>`)
+      ].join("");
+      E.giroRecolhaRouteDistrict.value = selected && (hasSelected || selected) ? selected : "";
+      state.giroRecolhaRouteFilter.district = E.giroRecolhaRouteDistrict.value;
+    }
+
+    function disconnectGiroRouteResizeObserver() {
+      if (giroRouteResizeObserver) {
+        giroRouteResizeObserver.disconnect();
+        giroRouteResizeObserver = null;
+      }
+    }
+
+    function bindGiroRecolhaRouteResizers() {
+      disconnectGiroRouteResizeObserver();
+      if (typeof ResizeObserver === "undefined") return;
+      const nodes = document.querySelectorAll(".route-table-scroll[data-route-id]");
+      if (!nodes.length) return;
+      giroRouteResizeObserver = new ResizeObserver(entries => {
+        entries.forEach(entry => {
+          const routeId = entry.target && entry.target.dataset ? entry.target.dataset.routeId : "";
+          if (!routeId || !entry.contentRect || !entry.contentRect.height) return;
+          state.giroRecolhaRouteHeights[routeId] = clampGiroRecolhaRouteHeight(entry.contentRect.height);
+        });
+      });
+      nodes.forEach(node => giroRouteResizeObserver.observe(node));
+    }
+
+    function renderGiroRecolhaRoutes() {
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : { generated: false, total: 0, summary: {}, routes: [] };
+      const routes = Array.isArray(payload.routes) ? payload.routes : [];
+      const summary = payload.summary || {};
+      if (!payload.generated) {
+        disconnectGiroRouteResizeObserver();
+        renderGiroRecolhaBuilder([]);
+        if (E.giroRecolhaRouteTools) E.giroRecolhaRouteTools.classList.add("d-none");
+        if (E.giroRecolhaRouteCards) E.giroRecolhaRouteCards.innerHTML = "";
+        if (E.giroRecolhaRoutesContainer) {
+          E.giroRecolhaRoutesContainer.innerHTML = '<div class="text-center py-3 text-secondary border rounded-3">Ajuste os filtros e clique em Gerar rotas.</div>';
+        }
+        return;
+      }
+      if (E.giroRecolhaRouteTools) E.giroRecolhaRouteTools.classList.remove("d-none");
+      syncGiroRecolhaRouteDistrictOptions(routes);
+      const visibleRoutes = filterGiroRecolhaRoutes(routes);
+      const visiblePdvs = visibleRoutes.reduce((sum, route) => sum + (Array.isArray(route.items) ? route.items.length : 0), 0);
+      const visibleGap = visibleRoutes.reduce((sum, route) => sum + parseGiroRecolhaNumber(route.gap_total), 0);
+      const visibleBoxes = visibleRoutes.reduce((sum, route) => sum + parseGiroRecolhaNumber(route.total_caixas), 0);
+      if (E.giroRecolhaRouteCards) {
+        E.giroRecolhaRouteCards.innerHTML = [
+          ["Rotas", `${visibleRoutes.length}/${summary.rotas || routes.length || 0}`, "visiveis"],
+          ["PDVs", `${visiblePdvs}/${summary.pdvs || 0}`, "visiveis"],
+          ["Caixas", `${Math.trunc(visibleBoxes)}/${summary.total_caixas || "-"}`, "total visivel"],
+          ["Faltam", String(Math.trunc(visibleGap)), "caixas visiveis"]
+        ].map(([label, value, sub]) => `
+          <article class="recolha-dashboard-card">
+            <span class="label">${escapeHtml(label)}</span>
+            <span class="value">${escapeHtml(String(value))}</span>
+            <span class="sub">${escapeHtml(sub)}</span>
+          </article>
+        `).join("");
+      }
+      renderGiroRecolhaBuilder(routes);
+      if (!E.giroRecolhaRoutesContainer) return;
+      if (!routes.length) {
+        disconnectGiroRouteResizeObserver();
+        renderGiroRecolhaBuilder([]);
+        E.giroRecolhaRoutesContainer.innerHTML = '<div class="text-center py-3 text-secondary border rounded-3">Nenhuma rota sugerida nos filtros atuais.</div>';
+        return;
+      }
+      if (!visibleRoutes.length) {
+        disconnectGiroRouteResizeObserver();
+        E.giroRecolhaRoutesContainer.innerHTML = '<div class="text-center py-3 text-secondary border rounded-3">Nenhuma rota encontrada na pesquisa atual.</div>';
+        return;
+      }
+      E.giroRecolhaRoutesContainer.innerHTML = visibleRoutes.map(route => {
+        const items = Array.isArray(route.items) ? route.items : [];
+        const bairros = route.neighborhood_sequence || (Array.isArray(route.neighborhoods) && route.neighborhoods.length ? route.neighborhoods.join(" -> ") : "-");
+        const routeTypes = giroRouteMissingTypesText(items);
+        const routeHeight = clampGiroRecolhaRouteHeight(state.giroRecolhaRouteHeights && state.giroRecolhaRouteHeights[route.id]);
+        const mergeOptions = routes
+          .filter(candidate => String(candidate.id || "") !== String(route.id || ""))
+          .map(candidate => `<option value="${escapeHtml(candidate.id || "")}">${escapeHtml(giroRecolhaRouteLabel(candidate))}</option>`)
+          .join("");
+        const rows = items.map(item => `
+          <tr>
+            <td class="ps-3">${escapeHtml(item.sequence || "-")}</td>
+            <td>
+              <strong>${escapeHtml(cleanDisplayText(item.nome || "-"))}</strong>
+              <div class="small text-secondary">Op. ${escapeHtml(item.filial || "-")} | NB ${escapeHtml(item.cod_pdv || "-")} | ${escapeHtml(cleanDisplayText(item.cidade || "-"))} | ${escapeHtml(cleanDisplayText(item.bairro || "-"))} | Vend. ${escapeHtml(item.seller || "-")}</div>
+              <div class="small text-secondary">Tipos faltantes: ${escapeHtml(giroMissingTypesText(item))}</div>
+            </td>
+            <td>${escapeHtml(item.total_caixas || "0")} cx</td>
+            <td>${escapeHtml(item.gap_caixas || "0")} cx</td>
+            <td>${escapeHtml(item.faturamento_total || "R$ 0,00")}</td>
+            <td>${escapeHtml(item.media_faturamento_pedido || "R$ 0,00")}</td>
+            <td class="text-end pe-3">
+              <div class="d-flex gap-1 justify-content-end">
+                <button class="btn btn-outline-primary btn-sm" onclick="copyGiroRecolhaCommand('${escapeHtml(item.command || "")}')"><i class="bi bi-clipboard me-1"></i>Copiar</button>
+                <button class="btn btn-outline-danger btn-sm" onclick="removeGiroRecolhaRouteItem('${escapeHtml(route.id || "")}', '${escapeHtml(giroRecolhaPdvKey(item))}')"><i class="bi bi-x-lg"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join("");
+        return `
+          <article class="panel-card p-3 mb-2">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+              <div>
+                <h3 class="h6 fw-bold mb-1">${escapeHtml(route.id || "-")} | ${escapeHtml(cleanDisplayText(route.city || "-"))} | ${escapeHtml(cleanDisplayText(route.visit_day || "Sem dia"))}</h3>
+                <div class="small text-secondary">Operacao ${escapeHtml(route.operation || "-")} | Vendedores ${escapeHtml(route.seller || "-")} | GVs ${escapeHtml(route.manager || "-")}</div>
+                <div class="small text-secondary">Sequencia bairros: ${escapeHtml(cleanDisplayText(bairros))}</div>
+                <div class="small text-secondary">Tipos faltantes: ${escapeHtml(routeTypes)}</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="pill warn">${escapeHtml(String(route.pdvs || items.length || 0))} PDV(s)</span>
+                <span class="pill">Caixas ${escapeHtml(route.total_caixas || "0")} cx</span>
+                <span class="pill">Faltam ${escapeHtml(route.gap_total || "0")} cx</span>
+                <button class="btn btn-outline-success btn-sm" onclick="copyGiroRecolhaRoute('${escapeHtml(route.id || "")}')"><i class="bi bi-copy me-1"></i>Copiar rota</button>
+              </div>
+            </div>
+            <div class="row g-2 align-items-end mb-2">
+              <div class="col-md-9">
+                <label class="form-label small fw-semibold mb-1" for="giroRouteAddNb-${escapeHtml(route.id || "")}">Adicionar NB nesta rota</label>
+                <input type="text" inputmode="numeric" class="form-control form-control-sm" id="giroRouteAddNb-${escapeHtml(route.id || "")}" placeholder="Digite o NB do PDV">
+              </div>
+              <div class="col-md-3">
+                <button class="btn btn-outline-primary btn-sm w-100" onclick="addGiroRecolhaRouteItem('${escapeHtml(route.id || "")}')"><i class="bi bi-plus-circle me-1"></i>Adicionar</button>
+              </div>
+            </div>
+            <div class="table-scroll route-table-scroll" data-route-id="${escapeHtml(route.id || "")}" style="height: ${routeHeight}px;">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead>
+                  <tr class="text-uppercase small text-secondary">
+                    <th class="ps-3">Seq.</th>
+                    <th>PDV</th>
+                    <th>Caixas</th>
+                    <th>Faltam</th>
+                    <th>Fat. M-1</th>
+                    <th>Media pedido</th>
+                    <th class="text-end pe-3">Acao</th>
+                  </tr>
+                </thead>
+                <tbody>${rows || '<tr><td colspan="7" class="text-center py-3 text-secondary">Rota vazia. Use a montagem interativa ou digite um NB para adicionar.</td></tr>'}</tbody>
+              </table>
+            </div>
+            <div class="route-resize-handle" onpointerdown="startGiroRouteResize(event, '${escapeHtml(route.id || "")}')">
+              <i class="bi bi-grip-horizontal"></i>Arraste para ajustar altura
+            </div>
+            <div class="row g-2 align-items-end mt-2">
+              <div class="col-md-9">
+                <label class="form-label small fw-semibold mb-1" for="giroRouteMerge-${escapeHtml(route.id || "")}">Mesclar outra rota nesta</label>
+                <select class="form-select form-select-sm" id="giroRouteMerge-${escapeHtml(route.id || "")}" ${mergeOptions ? "" : "disabled"}>
+                  <option value="">${mergeOptions ? "Selecione a rota de origem" : "Nenhuma rota para mesclar"}</option>
+                  ${mergeOptions}
+                </select>
+              </div>
+              <div class="col-md-3">
+                <button class="btn btn-outline-success btn-sm w-100" onclick="mergeGiroRecolhaRoute('${escapeHtml(route.id || "")}')" ${mergeOptions ? "" : "disabled"}>
+                  <i class="bi bi-intersect me-1"></i>Mesclar
+                </button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+      bindGiroRecolhaRouteResizers();
+    }
+
+    async function syncGiroRecolha({ silent = true } = {}) {
+      updateTokens();
+      if (!hasPanelAuth()) {
+        if (!silent) addLog("Sessao do painel nao validada.", "warn");
+        return false;
+      }
+      try {
+        if (!state.panel || !state.panel.mode) await syncPanelSession();
+        const params = currentGiroRecolhaParams();
+        const [optionsPayload, slicerOptionsPayloads, payload] = await Promise.all([
+          req(`${CONFIG.endpoints.giroRecolha.options}?${giroRecolhaOptionsQueryString(params)}`, { timeoutMs: 45000 }),
+          loadGiroRecolhaSlicerOptions(params),
+          req(`${CONFIG.endpoints.giroRecolha.dashboard}?${giroRecolhaQueryString(params)}`, { timeoutMs: 45000 })
+        ]);
+        state.giroRecolhaOptions = optionsPayload && optionsPayload.options ? optionsPayload.options : emptyGiroRecolhaOptions();
+        state.giroRecolhaSlicerOptions = normalizeGiroRecolhaSlicerOptions(slicerOptionsPayloads, state.giroRecolhaOptions);
+        state.giroRecolha = payload && typeof payload === "object"
+          ? { total: Number(payload.total || 0), summary: payload.summary || {}, records: Array.isArray(payload.records) ? payload.records : [] }
+          : { total: 0, summary: {}, records: [] };
+        state.giroRecolhaRoutes = { generated: false, total: 0, summary: {}, routes: [] };
+        state.giroRecolhaBuilder = { activeRouteId: "", search: "" };
+        renderGiroRecolhaFilterOptions(params);
+        renderGiroRecolha();
+        renderGiroRecolhaRoutes();
+        if (!silent) addLog("Dashboard de giro para recolha atualizado.", "ok");
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao carregar dashboard de giro: ${err.message}`, "err");
+        renderGiroRecolha();
+        renderGiroRecolhaRoutes();
+        return false;
+      }
+    }
+
+    async function syncGiroRecolhaRoutes({ silent = true } = {}) {
+      updateTokens();
+      if (!hasPanelAuth()) {
+        if (!silent) addLog("Sessao do painel nao validada.", "warn");
+        return false;
+      }
+      try {
+        if (!state.panel || !state.panel.mode) await syncPanelSession();
+        const params = currentGiroRecolhaParams();
+        const payload = await req(`${CONFIG.endpoints.giroRecolha.routes}?${giroRecolhaRoutesQueryString(params)}`, { timeoutMs: 45000 });
+        state.giroRecolhaRoutes = payload && typeof payload === "object"
+          ? { generated: true, total: Number(payload.total || 0), summary: payload.summary || {}, routes: Array.isArray(payload.routes) ? payload.routes : [] }
+          : { generated: true, total: 0, summary: {}, routes: [] };
+        state.giroRecolhaBuilder.activeRouteId = state.giroRecolhaRoutes.routes.length ? String(state.giroRecolhaRoutes.routes[0].id || "") : "";
+        state.giroRecolhaBuilder.search = "";
+        if (E.giroRecolhaBlockSearch) E.giroRecolhaBlockSearch.value = "";
+        renderGiroRecolhaRoutes();
+        if (!silent) addLog("Rotas de recolha geradas.", "ok");
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao gerar rotas de recolha: ${err.message}`, "err");
+        renderGiroRecolhaRoutes();
+        return false;
+      }
+    }
+
+    async function writeTextToClipboard(text) {
+      const value = String(text || "");
+      if (!value.trim()) return false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(value);
+          return true;
+        }
+      } catch (_) {}
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      let copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch (_) {
+        copied = false;
+      }
+      textarea.remove();
+      return copied;
+    }
+
+    async function copyGiroRecolhaCommand(command) {
+      const text = String(command || "").trim();
+      if (!text) return;
+      if (await writeTextToClipboard(text)) {
+        addLog(`Comando copiado: ${text}`, "ok");
+      } else {
+        addLog(`Comando sugerido: ${text}`, "info");
+      }
+    }
+
+    async function copyCriticaCommand(command) {
+      const text = String(command || "").trim();
+      if (!text) return;
+      if (await writeTextToClipboard(text)) {
+        addLog(`Comando da critica copiado: ${text}`, "ok");
+      } else {
+        addLog(`Comando sugerido: ${text}`, "info");
+      }
+    }
+
+    function buildGiroRecolhaRouteCopyText(route) {
+      const items = Array.isArray(route && route.items) ? route.items : [];
+      const operations = routeGroupLabel(items.map(item => item.filial || item.operation), route.operation || "-");
+      const cities = routeGroupLabel(items.map(item => item.cidade || item.city), route.city || "-");
+      const visitDays = routeGroupLabel(items.map(item => item.visit_day), route.visit_day || "Sem dia");
+      const sellers = routeGroupLabel(items.map(item => item.seller), route.seller || "-");
+      const managers = routeGroupLabel(items.map(item => item.manager), route.manager || "-");
+      const bairros = [...new Set(items.map(item => String(item.bairro || "").trim()).filter(Boolean))].join(" -> ") || route.neighborhood_sequence || "-";
+      const routeTypes = giroRouteMissingTypesText(items);
+      const lines = [
+        `*Rota de recolha ${route.id || ""}*`.trim(),
+        `Cidade: ${cities} | Dia: ${visitDays}`,
+        `Operacao: ${operations} | Vendedor(es): ${sellers} | GV(s): ${managers}`,
+        `PDVs: ${items.length} | Caixas cliente: ${route.total_caixas || "0"} cx | Faltam: ${route.gap_total || "0"} cx`,
+        `Bairros: ${cleanDisplayText(bairros)}`,
+        `Tipos faltantes: ${routeTypes}`,
+        "",
+        "*Sequencia*"
+      ];
+      items.forEach(item => {
+        lines.push(
+          `${item.sequence || "-"}. ${cleanDisplayText(item.nome || "-")} | NB ${item.cod_pdv || "-"}`,
+          `   Op. ${item.filial || "-"} | ${cleanDisplayText(item.cidade || "-")} | ${cleanDisplayText(item.bairro || "-")} | Vend. ${item.seller || "-"}`,
+          `   Caixas cliente: ${item.total_caixas || "0"} cx | Faltam: ${item.gap_caixas || "0"} cx | Fat. M-1: ${item.faturamento_total || "R$ 0,00"}`,
+          `   Tipos: ${giroMissingTypesText(item)}`,
+          `   Comando: ${item.command || "-"}`
+        );
+      });
+      return lines.join("\n");
+    }
+
+    async function copyGiroRecolhaRoute(routeId) {
+      const visibleRoutes = currentVisibleGiroRecolhaRoutes();
+      const allRoutes = state.giroRecolhaRoutes && Array.isArray(state.giroRecolhaRoutes.routes) ? state.giroRecolhaRoutes.routes : [];
+      const route = visibleRoutes.find(item => String(item.id || "") === String(routeId || ""))
+        || allRoutes.find(item => String(item.id || "") === String(routeId || ""));
+      if (!route || !Array.isArray(route.items)) return;
+      const text = buildGiroRecolhaRouteCopyText(route);
+      if (await writeTextToClipboard(text)) {
+        addLog(`Rota ${route.id || ""} copiada.`, "ok");
+      } else {
+        addLog(`Nao foi possivel copiar a rota ${route.id || ""} automaticamente.`, "warn");
+      }
+    }
+
+    function removeGiroRecolhaRouteItem(routeId, pdvKey) {
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : null;
+      if (!payload || !Array.isArray(payload.routes)) return;
+      let removed = null;
+      payload.routes.forEach(route => {
+        if (String(route.id || "") !== String(routeId || "")) return;
+        const before = Array.isArray(route.items) ? route.items : [];
+        removed = before.find(item => giroRecolhaPdvKey(item) === pdvKey) || removed;
+        route.items = before.filter(item => giroRecolhaPdvKey(item) !== pdvKey);
+      });
+      recalcGiroRecolhaRoutesState();
+      renderGiroRecolhaRoutes();
+      if (removed) addLog(`PDV ${removed.cod_pdv || ""} removido da rota ${routeId}.`, "ok");
+    }
+
+    function addGiroRecolhaRouteItem(routeId) {
+      const input = document.getElementById(`giroRouteAddNb-${routeId}`);
+      const nb = input ? String(input.value || "").trim() : "";
+      if (!nb) {
+        addLog("Digite o NB do PDV para adicionar na rota.", "warn");
+        return;
+      }
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : null;
+      if (!payload || !Array.isArray(payload.routes)) return;
+      const targetRoute = payload.routes.find(route => String(route.id || "") === String(routeId || ""));
+      if (!targetRoute) return;
+      const candidate = findGiroRecolhaCandidateByNb(nb, targetRoute);
+      if (!candidate) {
+        addLog(`NB ${nb} nao encontrado nas oportunidades carregadas. Ajuste os filtros ou aumente o limite e atualize o giro.`, "warn");
+        return;
+      }
+      const pdvKey = giroRecolhaPdvKey(candidate);
+      if ((Array.isArray(targetRoute.items) ? targetRoute.items : []).some(item => giroRecolhaPdvKey(item) === pdvKey)) {
+        addLog(`NB ${candidate.cod_pdv || nb} ja esta na rota ${routeId}.`, "warn");
+        if (input) input.value = "";
+        return;
+      }
+      payload.routes.forEach(route => {
+        route.items = (Array.isArray(route.items) ? route.items : []).filter(item => giroRecolhaPdvKey(item) !== pdvKey);
+      });
+      targetRoute.items = [...(Array.isArray(targetRoute.items) ? targetRoute.items : []), candidate];
+      recalcGiroRecolhaRoutesState();
+      renderGiroRecolhaRoutes();
+      addLog(`NB ${candidate.cod_pdv || nb} adicionado na rota ${routeId}.`, "ok");
+    }
+
+    function csvEscape(value) {
+      const text = String(value == null ? "" : value).replace(/\r?\n/g, " ").trim();
+      return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function currentVisibleGiroRecolhaRoutes() {
+      const payload = state.giroRecolhaRoutes && typeof state.giroRecolhaRoutes === "object" ? state.giroRecolhaRoutes : { generated: false, routes: [] };
+      if (!payload.generated || !Array.isArray(payload.routes)) return [];
+      return filterGiroRecolhaRoutes(payload.routes);
+    }
+
+    function exportGiroRecolhaRoutesCsv() {
+      const routes = currentVisibleGiroRecolhaRoutes();
+      if (!routes.length) {
+        addLog("Nenhuma rota visivel para exportar.", "warn");
+        return;
+      }
+      const header = [
+        "rota",
+        "seq",
+        "operacao",
+        "cidade",
+        "dia_visita",
+        "bairro",
+        "vendedor",
+        "gv",
+        "nb",
+        "pdv",
+        "total_caixas",
+        "gap_caixas",
+        "faltam_litrinho",
+        "faltam_inteira",
+        "faltam_litrao",
+        "giro_litrinho",
+        "giro_inteira",
+        "giro_litrao",
+        "tipos_faltantes",
+        "media_pedido",
+        "faturamento_ultimo_mes",
+        "comando"
+      ];
+      const lines = [header.map(csvEscape).join(";")];
+      routes.forEach(route => {
+        (Array.isArray(route.items) ? route.items : []).forEach(item => {
+          lines.push([
+            route.id || "",
+            item.sequence || "",
+            item.filial || route.operation || "",
+            route.city || item.cidade || "",
+            route.visit_day || item.visit_day || "",
+            item.bairro || "",
+            item.seller || route.seller || "",
+            item.manager || route.manager || "",
+            item.cod_pdv || "",
+            cleanDisplayText(item.nome || ""),
+            item.total_caixas || "",
+            item.gap_caixas || "",
+            item.gap_litrinho || "",
+            item.gap_inteira || "",
+            item.gap_litrao || "",
+            item.giro_litrinho || "",
+            item.giro_inteira || "",
+            item.giro_litrao || "",
+            giroMissingTypesText(item),
+            item.media_faturamento_pedido || "",
+            item.faturamento_total || "",
+            item.command || ""
+          ].map(csvEscape).join(";"));
+        });
+      });
+      const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const blobUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+      anchor.href = blobUrl;
+      anchor.download = `rotas_recolha_${stamp}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(blobUrl);
+      addLog(`CSV de rotas exportado: ${formatNumber(routes.length)} rota(s).`, "ok");
+    }
+
     function normalizeRecolhaStatus(value) {
       const normalized = normalizeTextForSearch(cleanDisplayText(value)).replace(/\s+/g, " ");
       if (normalized === "recolhido") return "Recolhido";
@@ -2812,6 +5710,55 @@
       }
     }
 
+    async function exportRecolhasCsv() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      if (!state.panel || !state.panel.mode) {
+        try { await syncPanelSession(); }
+        catch (err) { addLog(`Falha ao validar token: ${err.message}`, "err"); return; }
+      }
+      const params = new URLSearchParams();
+      if (E.recolhasStartDate && E.recolhasStartDate.value) params.set("start_date", E.recolhasStartDate.value);
+      if (E.recolhasEndDate && E.recolhasEndDate.value) params.set("end_date", E.recolhasEndDate.value);
+      const url = `${CONFIG.api}${CONFIG.endpoints.recolhas.exportCsv}${params.toString() ? `?${params.toString()}` : ""}`;
+      const btn = E.recolhasExportBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exportando';
+      }
+      try {
+        const headers = {};
+        if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+        if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+        const response = await fetch(url, { credentials: "same-origin", headers });
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = matchedName && matchedName[1] ? matchedName[1] : "relatorio_recolhas.csv";
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog("Relatorio de recolhas exportado.", "ok");
+      } catch (err) {
+        addLog(`Falha ao exportar relatorio de recolhas: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
     async function importRecolhasCsv() {
       updateTokens();
       if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
@@ -2947,23 +5894,45 @@
       try {
         await syncPanelSession();
         const isAdmin = state.panel && state.panel.isAdmin;
-        const [statusPayload, historyPayload, usersPayload, recolhasPayload] = await Promise.all([
+        const giroParams = currentGiroRecolhaParams();
+        const [statusPayload, historyPayload, usersPayload, recolhasPayload, giroRecolhaOptionsPayload, giroRecolhaSlicerOptionsPayloads, giroRecolhaPayload] = await Promise.all([
           req(CONFIG.endpoints.import.status, { timeoutMs: 30000 }),
           req(CONFIG.endpoints.import.history, { timeoutMs: 30000 }),
           isAdmin ? req(CONFIG.endpoints.access.list, { timeoutMs: 30000 }) : Promise.resolve({ users: [] }),
-          req(CONFIG.endpoints.recolhas.list, { timeoutMs: 30000 })
+          req(CONFIG.endpoints.recolhas.list, { timeoutMs: 30000 }),
+          req(`${CONFIG.endpoints.giroRecolha.options}?${giroRecolhaOptionsQueryString(giroParams)}`, { timeoutMs: 45000 }),
+          loadGiroRecolhaSlicerOptions(giroParams),
+          req(`${CONFIG.endpoints.giroRecolha.dashboard}?${giroRecolhaQueryString(giroParams)}`, { timeoutMs: 45000 })
         ]);
         state.status = statusPayload || {};
         state.history = (historyPayload && historyPayload.history) ? historyPayload.history : [];
+        state.jobs = Array.isArray(state.status.jobs)
+          ? state.status.jobs
+          : ((historyPayload && Array.isArray(historyPayload.jobs)) ? historyPayload.jobs : []);
         state.accessUsers = (usersPayload && usersPayload.users) ? usersPayload.users : [];
         state.recolhas = recolhasPayload && typeof recolhasPayload === "object"
           ? { total: Number(recolhasPayload.total || 0), operations: Array.isArray(recolhasPayload.operations) ? recolhasPayload.operations : [] }
           : { total: 0, operations: [] };
+        state.giroRecolha = giroRecolhaPayload && typeof giroRecolhaPayload === "object"
+          ? { total: Number(giroRecolhaPayload.total || 0), summary: giroRecolhaPayload.summary || {}, records: Array.isArray(giroRecolhaPayload.records) ? giroRecolhaPayload.records : [] }
+          : { total: 0, summary: {}, records: [] };
+        state.giroRecolhaOptions = giroRecolhaOptionsPayload && giroRecolhaOptionsPayload.options
+          ? giroRecolhaOptionsPayload.options
+          : emptyGiroRecolhaOptions();
+        state.giroRecolhaSlicerOptions = normalizeGiroRecolhaSlicerOptions(giroRecolhaSlicerOptionsPayloads, state.giroRecolhaOptions);
+        state.giroRecolhaRoutes = { generated: false, total: 0, summary: {}, routes: [] };
         state.lastSyncAt = new Date();
         renderHistory();
+        renderJobs();
         renderGridPanels();
         renderAccess();
+        renderGiroRecolhaFilterOptions(giroParams);
+        renderGiroRecolha();
+        renderGiroRecolhaRoutes();
         renderRecolhas();
+        if (document.getElementById("criticaPane") && document.getElementById("criticaPane").classList.contains("active")) {
+          await syncCriticaDashboard({ silent: true });
+        }
         updateGeneralState();
         updateMetrics();
         if (isAdmin) {
@@ -2976,8 +5945,11 @@
       } catch (err) {
         addLog(`Falha ao atualizar: ${err.message}`, "err");
         renderHistory();
+        renderJobs();
         renderGridPanels();
         renderAccess();
+        renderGiroRecolha();
+        renderGiroRecolhaRoutes();
         renderRecolhas();
         updateGeneralState();
         updateMetrics();
@@ -2990,7 +5962,8 @@
 
     function updateGeneralState() {
       const running = Boolean(state.status && state.status.running);
-      if (running) { E.runningState.textContent = "Importacao em andamento"; E.runningState.className = "pill warn"; }
+      const activeJobs = state.status && Array.isArray(state.status.current_jobs) ? state.status.current_jobs : [];
+      if (running) { E.runningState.textContent = activeJobs.length > 1 ? `${activeJobs.length} importacoes em andamento` : "Importacao em andamento"; E.runningState.className = "pill warn"; }
       else { E.runningState.textContent = "Nenhuma importação ativa"; E.runningState.className = "pill ok"; }
       if (state.status && state.status.last_job && state.status.last_job.finished_at) {
         E.lastJobState.textContent = `Ultima carga: ${new Date(state.status.last_job.finished_at).toLocaleString()}`;
@@ -3006,25 +5979,46 @@
       const apiDs = toApiDataset(dsId);
       const statusItems = state.status && Array.isArray(state.status.items) ? state.status.items : [];
       const statusItem = statusItems.find(item => item.dataset === apiDs);
+      const activeJobs = state.status && Array.isArray(state.status.current_jobs) ? state.status.current_jobs : [];
+      const datasetRunning = activeJobs.some(job => String(job.dataset || "") === apiDs);
       return {
         import: statusItem && statusItem.last_import ? {
           batch_id: statusItem.last_import.batch_id,
           total_processed_rows: statusItem.last_import.total_rows,
           reference_date: statusItem.last_import.reference_date,
-          status: (state.status.running && state.status.current_dataset === apiDs) ? "in_progress" : "completed"
+          status: datasetRunning ? "in_progress" : "completed"
         } : null,
-        statusItem: statusItem || null
+        statusItem: statusItem || null,
+        activeJob: activeJobs.find(job => String(job.dataset || "") === apiDs) || null
       };
     }
 
-    function buildGrid() {
-      E.grid.innerHTML = CONFIG.datasets.map(ds => `
-        <article class="dataset-card" id="card-${ds.id}">
-          <header class="dataset-head d-flex justify-content-between align-items-center">
-            <h3 class="h6 mb-0 fw-bold"><i class="bi ${ds.icon} text-primary me-2"></i>${ds.name}</h3>
-            <div id="stat-${ds.id}"></div>
-          </header>
-          <div class="dataset-body">
+    function groupedDatasets(datasets) {
+      const groups = [];
+      (Array.isArray(datasets) ? datasets : CONFIG.datasets).forEach(ds => {
+        const name = ds.group || "Relatorios";
+        let group = groups.find(item => item.name === name);
+        if (!group) {
+          group = { name, note: ds.groupNote || "", items: [] };
+          groups.push(group);
+        }
+        if (!group.note && ds.groupNote) group.note = ds.groupNote;
+        group.items.push(ds);
+      });
+      return groups;
+    }
+
+    function datasetCardHtml(ds) {
+      const disabledBody = ds.disabled ? `
+            <div class="small text-secondary d-grid gap-1" id="meta-${ds.id}">${escapeHtml(ds.description || "Tabela operacional sem importacao ativa.")}</div>
+            <div id="val-${ds.id}">
+              <div class="source-box">
+                <div class="small text-secondary">Fonte local</div>
+                <div class="source-path">${escapeHtml(ds.sourcePath || "-")}</div>
+              </div>
+            </div>
+            <div class="d-grid gap-2" id="btns-${ds.id}"></div>
+      ` : `
             <div class="small text-secondary d-grid gap-1" id="meta-${ds.id}">Sem dados ainda.</div>
             <label class="form-label small fw-semibold mb-1">${(DATASET_UPLOAD_META[ds.id] || {}).label || "Arquivo(s) do Dataset"}
               <input
@@ -3041,15 +6035,45 @@
               <label class="form-label small fw-semibold mb-1">Data de Referencia
                 <input type="date" class="form-control form-control-sm" id="date-${ds.id}">
               </label>
-              <div class="form-text">Opcional. Se informar, essa data será gravada no lote importado.</div>
+              <div class="form-text">Opcional. Se informar, essa data sera gravada no lote importado.</div>
             </div>
             <div id="val-${ds.id}"></div>
             <div class="d-grid gap-2" id="btns-${ds.id}"></div>
-          </div>
+      `;
+      return `
+        <article class="dataset-card ${ds.disabled ? "is-disabled" : ""}" id="card-${ds.id}">
+          <header class="dataset-head d-flex justify-content-between align-items-center">
+            <h3 class="h6 mb-0 fw-bold"><i class="bi ${ds.icon} text-primary me-2"></i>${ds.name}</h3>
+            <div id="stat-${ds.id}"></div>
+          </header>
+          <div class="dataset-body">${disabledBody}</div>
         </article>
-      `).join("");
+      `;
+    }
 
-      CONFIG.datasets.forEach(ds => {
+    function renderDatasetGrid(container, datasets) {
+      if (!container) return;
+      container.innerHTML = groupedDatasets(datasets).map(group => `
+        <section class="dataset-group">
+          <div class="dataset-group-head">
+            <div>
+              <h3 class="dataset-group-title">${escapeHtml(group.name)}</h3>
+              ${group.note ? `<p class="dataset-group-note">${escapeHtml(group.note)}</p>` : ""}
+            </div>
+            <span class="badge text-bg-light border">${group.items.length} item(ns)</span>
+          </div>
+          <div class="dataset-grid">
+            ${group.items.map(datasetCardHtml).join("")}
+          </div>
+        </section>
+      `).join("");
+    }
+
+    function buildGrid() {
+      renderDatasetGrid(E.operationalGrid, CONFIG.datasets.filter(ds => ds.area === "operational"));
+      renderDatasetGrid(E.criticaGrid, CONFIG.datasets.filter(ds => ds.area === "critica"));
+      renderDatasetGrid(E.reportGrid, CONFIG.datasets.filter(ds => ds.area === "reports"));
+      CONFIG.datasets.filter(ds => !ds.disabled).forEach(ds => {
         const inp = document.getElementById(`file-${ds.id}`);
         const hint = document.getElementById(`filehint-${ds.id}`);
         const list = document.getElementById(`filelist-${ds.id}`);
@@ -3071,7 +6095,7 @@
         });
       });
 
-      CONFIG.datasets.forEach(ds => {
+      CONFIG.datasets.filter(ds => !ds.disabled).forEach(ds => {
         const fileInput = document.getElementById(`file-${ds.id}`);
         if (!fileInput) return;
         fileInput.addEventListener("change", (e) => {
@@ -3098,11 +6122,30 @@
         const card = document.getElementById(`card-${ds.id}`);
         if (card) card.classList.remove("is-loading");
 
+        if (ds.disabled) {
+          if (st) st.innerHTML = `<span class="badge text-bg-secondary">${escapeHtml(ds.badge || "Inativo")}</span>`;
+          if (meta) {
+            meta.innerHTML = `<div class="dataset-meta"><div><span class="label">Estado:</span><span class="value">Importacao nao habilitada</span></div><div><span class="label">Uso:</span><span class="value">${escapeHtml(ds.description || "Tabela operacional de apoio.")}</span></div></div>`;
+          }
+          if (valBox) {
+            valBox.innerHTML = `<div class="source-box"><div class="small text-secondary">Fonte local</div><div class="source-path">${escapeHtml(ds.sourcePath || "-")}</div></div>`;
+          }
+          if (btns) {
+            btns.innerHTML = '<button class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-lock me-1"></i>Sem importacao no painel</button>';
+          }
+          return;
+        }
+
         let statusUi = "<span class='badge text-bg-secondary'>Sem historico</span>";
         let metaHtml = "<div class='dataset-meta'><div><span class='label'>Estado:</span><span class='value'>Aguardando primeira importação</span></div></div>";
         let valHtml = "";
         const isBusy = state.datasetBusy[ds.id] === true;
         let buttonsHtml = `<button class="btn btn-outline-primary btn-sm" ${isBusy ? "disabled" : ""} onclick="validateCSV('${ds.id}')"><i class="bi bi-check2-circle me-1"></i>${isBusy ? "Processando" : "Validar"}</button><button class="btn btn-primary btn-sm" ${isBusy ? "disabled" : ""} onclick="startImport('${ds.id}')"><i class="bi bi-cloud-arrow-up me-1"></i>${isBusy ? "Aguarde" : "Importar"}</button>`;
+
+        if (s.activeJob) {
+          statusUi = `<span class="badge text-bg-warning">Em processamento</span>`;
+          metaHtml = `<div class="dataset-meta"><div><span class="label">Job:</span><span class="value">${escapeHtml(String(s.activeJob.job_id || "").substring(0, 12))}</span></div><div><span class="label">Estado:</span><span class="value">Processando no servidor</span></div></div>`;
+        }
 
         if (s.import) {
           const l = s.import;
@@ -3114,7 +6157,7 @@
 
         if (s.statusItem) {
           const source = s.statusItem.using_uploaded_source
-            ? "Upload ativo"
+            ? (s.statusItem.versioned_upload ? "Upload versionado ativo" : "Upload ativo")
             : (s.statusItem.requires_upload ? "Upload obrigatório" : "Arquivo padrão");
           valHtml += `<div class="source-box"><div class="small text-secondary">Fonte: <strong>${escapeHtml(source)}</strong></div><div class="source-path">${escapeHtml(s.statusItem.active_source_path || "-")}</div></div>`;
         }
@@ -3141,6 +6184,36 @@
         const importedAt = new Date(h.imported_at || h.created_at);
         const importedText = Number.isNaN(importedAt.getTime()) ? "-" : importedAt.toLocaleString();
         return `<tr><td class="ps-3"><strong>${escapeHtml(fromApiDataset(h.dataset || h.dataset_type || "-"))}</strong></td><td><span class="mono">${escapeHtml(String(h.batch_id || "").substring(0,8))}</span></td><td>${escapeHtml(h.total_rows || h.total_processed_rows || 0)}</td><td>${escapeHtml(h.reference_date || "--")}</td><td>${escapeHtml(importedText)}</td></tr>`;
+      }).join("");
+    }
+
+    function jobStatusBadge(status) {
+      const normalized = String(status || "").toLowerCase();
+      const map = {
+        queued: ["text-bg-secondary", "Em fila"],
+        running: ["text-bg-warning", "Rodando"],
+        completed: ["text-bg-success", "Concluido"],
+        failed: ["text-bg-danger", "Falhou"],
+        blocked: ["text-bg-danger", "Bloqueado"],
+        stale: ["text-bg-dark", "Antigo"]
+      };
+      const item = map[normalized] || ["text-bg-secondary", status || "-"];
+      return `<span class="badge ${escapeHtml(item[0])}">${escapeHtml(item[1])}</span>`;
+    }
+
+    function renderJobs() {
+      if (!E.jobsTable) return;
+      const jobs = Array.isArray(state.jobs) ? state.jobs : [];
+      if (!jobs.length) {
+        E.jobsTable.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-secondary">Sem jobs recentes</td></tr>';
+        return;
+      }
+      E.jobsTable.innerHTML = jobs.slice(0, 12).map(job => {
+        const updatedAt = new Date(job.updated_at || job.finished_at || job.started_at || job.created_at);
+        const updatedText = Number.isNaN(updatedAt.getTime()) ? "-" : updatedAt.toLocaleString();
+        const action = String(job.action || "") === "upload" ? "Upload" : "Import";
+        const error = String(job.error || "").trim();
+        return `<tr title="${escapeHtml(error)}"><td class="ps-3"><strong>${escapeHtml(action)}</strong><div class="small text-secondary mono">${escapeHtml(String(job.job_id || "").substring(0, 14))}</div></td><td>${escapeHtml(fromApiDataset(job.dataset || job.dataset_name || "-"))}</td><td>${jobStatusBadge(job.status)}</td><td>${escapeHtml(updatedText)}</td></tr>`;
       }).join("");
     }
 
@@ -3265,9 +6338,14 @@
       const timeoutAt = Date.now() + datasetTimeouts(dsId).importMs;
       while (Date.now() < timeoutAt) {
         const status = await req(CONFIG.endpoints.import.status, { timeoutMs: 30000 });
+        state.status = status || {};
+        state.jobs = Array.isArray(state.status.jobs) ? state.status.jobs : state.jobs;
+        renderJobs();
         const running = Boolean(status && status.running);
         const currentDataset = String(status && status.current_dataset ? status.current_dataset : "");
         const lastJob = status && status.last_job ? status.last_job : null;
+        const jobs = status && Array.isArray(status.jobs) ? status.jobs : [];
+        const currentJob = jobId ? jobs.find(job => String(job.job_id || "") === jobId) : null;
 
         if (running && currentDataset === apiDataset) {
           state.datasetValidation[dsId] = {
@@ -3278,12 +6356,22 @@
           renderGridPanels();
         }
 
+        if (currentJob) {
+          const currentStatus = String(currentJob.status || "").toLowerCase();
+          if (currentStatus === "completed") {
+            return { status: "completed" };
+          }
+          if (["failed", "blocked", "stale"].includes(currentStatus)) {
+            return { status: "failed", error: String(currentJob.error || currentStatus) };
+          }
+        }
+
         if (lastJob) {
           const sameJob = jobId ? String(lastJob.job_id || "") === jobId : String(lastJob.dataset || "") === apiDataset;
           if (sameJob && String(lastJob.status || "") === "completed") {
             return { status: "completed" };
           }
-          if (sameJob && String(lastJob.status || "") === "failed") {
+          if (sameJob && ["failed", "blocked", "stale"].includes(String(lastJob.status || "").toLowerCase())) {
             return { status: "failed", error: String(lastJob.error || "") };
           }
         }

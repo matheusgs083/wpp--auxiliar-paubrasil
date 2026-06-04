@@ -444,6 +444,8 @@ class PayipClient:
         search: str = "",
         due_date_start: str = "",
         due_date_end: str = "",
+        paid_date_start: str = "",
+        paid_date_end: str = "",
         created_at_start: str = "",
         created_at_end: str = "",
         filial: str = "",
@@ -461,12 +463,14 @@ class PayipClient:
             search=search,
             due_date_start=due_date_start,
             due_date_end=due_date_end,
+            paid_date_start=paid_date_start,
+            paid_date_end=paid_date_end,
             created_at_start=created_at_start,
             created_at_end=created_at_end,
             company_id=resolved_company_id,
         )
         logger.info(
-            "PayIP payments response status=%s page=%s page_size=%s company_id=%s filter_status=%s client_code=%s invoice=%s search=%s due=%s..%s created=%s..%s",
+            "PayIP payments response status=%s page=%s page_size=%s company_id=%s filter_status=%s client_code=%s invoice=%s search=%s due=%s..%s paid=%s..%s created=%s..%s",
             response.status_code,
             page,
             page_size,
@@ -477,6 +481,8 @@ class PayipClient:
             search or "-",
             due_date_start or "-",
             due_date_end or "-",
+            paid_date_start or "-",
+            paid_date_end or "-",
             created_at_start or "-",
             created_at_end or "-",
         )
@@ -494,6 +500,8 @@ class PayipClient:
                 search=search,
                 due_date_start=due_date_start,
                 due_date_end=due_date_end,
+                paid_date_start=paid_date_start,
+                paid_date_end=paid_date_end,
                 created_at_start=created_at_start,
                 created_at_end=created_at_end,
                 company_id=resolved_company_id,
@@ -786,6 +794,8 @@ class PayipClient:
         search: str = "",
         due_date_start: str = "",
         due_date_end: str = "",
+        paid_date_start: str = "",
+        paid_date_end: str = "",
         created_at_start: str = "",
         created_at_end: str = "",
     ) -> httpx.Response:
@@ -806,6 +816,10 @@ class PayipClient:
             params["dueDateStart"] = due_date_start
         if due_date_end:
             params["dueDateEnd"] = due_date_end
+        if paid_date_start:
+            params["paidDateStart"] = paid_date_start
+        if paid_date_end:
+            params["paidDateEnd"] = paid_date_end
         if created_at_start:
             params["createdAtStart"] = created_at_start
         if created_at_end:

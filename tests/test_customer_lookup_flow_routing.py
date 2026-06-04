@@ -33,6 +33,7 @@ from bot_api.services.recolha_request_service import RecolhaRequestService
 
 from tests.test_support import (
     StubComodatosService,
+    StubCriticaRnService,
     StubDocumentacaoPendenteService,
     StubGiroService,
     StubInadimplenciaService,
@@ -49,6 +50,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.query_service = StubQueryService(ready=True)
         self.inadimplencia_service = StubInadimplenciaService(ready=True)
         self.giro_service = StubGiroService(ready=True)
+        self.critica_service = StubCriticaRnService(ready=True)
         self.documentacao_service = StubDocumentacaoPendenteService(ready=True)
         self.prazo_limite_service = StubPrazoLimiteService(ready=True)
         self.payip_service = StubPayipPaymentsService()
@@ -56,6 +58,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             query_service=self.query_service,
             inadimplencia_service=self.inadimplencia_service,
             giro_service=self.giro_service,
+            critica_rn_service=self.critica_service,
             documentacao_pendente_service=self.documentacao_service,
             prazo_limite_service=self.prazo_limite_service,
             payip_payments_service=self.payip_service,
@@ -103,11 +106,135 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
                 ("2", "Nome do cliente"),
                 ("3", "CPF ou CNPJ"),
                 ("4", "Risco por dia"),
-                ("5", "Ver inadimplentes"),
+                ("5", "Vence amanha"),
+                ("6", "Vence em 2 dias"),
+                ("7", "Ver inadimplentes"),
             ],
         )
+        self.assertIn("Vence amanha: 0 cliente(s) | R$ 0,00", response.text)
+        self.assertIn("Vence em 2 dias: 0 cliente(s) | R$ 0,00", response.text)
         self.assertIn("inad segunda", response.footer)
         self.assertIn("inad santa maria", response.footer)
+
+    def test_handle_critica_hoje_uses_user_scope(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica hoje"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",), gv_vdes=("3_5",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("Critica RN | Hoje", response.text)
+        self.assertIn("Pedidos: 2", response.text)
+        self.assertEqual(self.critica_service.summary_calls[0]["allowed_sectors"], ["3_400"])
+        self.assertEqual(self.critica_service.summary_calls[0]["allowed_gv_vdes"], ["3_5"])
+
+    def test_handle_critica_menu_accepts_number_selection(self) -> None:
+        menu = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
+        )
+        self.assertEqual(menu.kind, "menu")
+
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="2"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("Critica RN | Possiveis problemas", response.text)
+        self.assertIn("Setor 400", response.text)
+        self.assertEqual(len(self.critica_service.problem_calls), 1)
+
+    def test_handle_critica_nb_searches_by_filial_and_nb(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica nb 3 18008"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("POSTO PAIZAO", response.text)
+        self.assertIn("Pedido 706840", response.text)
+        self.assertIn("Setor: 400", response.text)
+        self.assertEqual(self.critica_service.registration_calls[0]["filial"], "3")
+        self.assertEqual(self.critica_service.registration_calls[0]["cod_pdv"], "18008")
+        self.assertIsNone(self.critica_service.registration_calls[0]["target_date"])
+
+    def test_handle_critica_pdf_returns_document_media(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica pdf 03/06/2026"),
+            make_decision(allowed=True, roles=("gerente_vendas",), gv_vdes=("3_5",)),
+        )
+
+        self.assertEqual(response.kind, "media")
+        self.assertTrue(response.media_url.startswith("data:application/pdf;base64,"))
+        self.assertEqual(response.media_type, "document")
+        self.assertEqual(response.media_filename, "critica-rn-2026-06-03.pdf")
+        self.assertEqual(len(response.extra_media), 1)
+        self.assertEqual(response.extra_media[0].media_filename, "critica-rn-resumo-2026-06-03.pdf")
+        self.assertEqual(len(self.critica_service.pdf_report_calls), 1)
+        self.assertEqual(self.critica_service.pdf_report_calls[0]["limit"], 5000)
+
+    def test_handle_critica_denies_non_seller_and_non_gv_roles(self) -> None:
+        for role in ("financeiro", "admin", "diretor_comercial"):
+            with self.subTest(role=role):
+                response = self.flow.handle(
+                    IncomingMessage(sender=f"5511-{role}", text="critica pdf 03/06/2026"),
+                    make_decision(allowed=True, roles=(role,), gv_vdes=("dc:3",) if role == "diretor_comercial" else ()),
+                )
+
+                self.assertEqual(response.kind, "text")
+                self.assertIn("apenas para vendedores e gerentes de vendas", response.text)
+
+        self.assertEqual(len(self.critica_service.pdf_report_calls), 0)
+        self.assertEqual(len(self.critica_service.summary_calls), 0)
+        self.assertEqual(len(self.critica_service.problem_calls), 0)
+        self.assertEqual(len(self.critica_service.registration_calls), 0)
+
+    def test_handle_critica_existing_menu_session_denies_non_seller_and_non_gv(self) -> None:
+        self.flow.sessions["5511-financeiro-menu"] = LookupSession(step="awaiting_critica_action")
+
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-financeiro-menu", text="2"),
+            make_decision(allowed=True, roles=("financeiro",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("apenas para vendedores e gerentes de vendas", response.text)
+        self.assertEqual(len(self.critica_service.problem_calls), 0)
+
+    def test_handle_seller_inad_menu_due_tomorrow_lists_scope_clients(self) -> None:
+        sender = "5511-venc-amanha"
+        self.inadimplencia_service.client_summaries_in_scope = [
+            InadimplenciaClientSummary(
+                filial="3",
+                cod_pdv="111",
+                nome="Cliente Alpha",
+                title_count=1,
+                total_pendente="20,00",
+                planilha_atualizada_em="2026-04-15",
+            ),
+            InadimplenciaClientSummary(
+                filial="3",
+                cod_pdv="222",
+                nome="Cliente Beta",
+                title_count=1,
+                total_pendente="15,00",
+                planilha_atualizada_em="2026-04-15",
+            )
+        ]
+
+        self.flow.handle(
+            IncomingMessage(sender=sender, text="inad"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
+        )
+        response = self.flow.handle(
+            IncomingMessage(sender=sender, text="5"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
+        )
+
+        self.assertEqual(response.kind, "menu")
+        self.assertIn("vencem amanha", response.text)
+        self.assertEqual(self.inadimplencia_service.client_summaries_in_scope_calls[-1]["due_bucket"], "tomorrow")
 
     def test_handle_routes_natural_giro_phrase_to_search_menu(self) -> None:
         response = self.flow.handle(
@@ -1479,6 +1606,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             ("4", "Diagnostico PayIP"),
             ("5", "Emitir Cobranca"),
             ("6", "Extrato PayIP"),
+            ("7", "Buscar Valor/Dia"),
         ])
 
         status = self.flow.handle(IncomingMessage(sender=sender, text="4"), decision)
@@ -1570,6 +1698,85 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             self.payip_service.statement_resume_calls[-1],
             {"filial": "4", "date_start": "2026-05-01", "date_end": "2026-05-08"},
         )
+
+    def test_finance_payip_searches_amount_and_paid_day(self) -> None:
+        sender = "5511-fin-payip-amount-day"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        prompt = self.flow.handle(IncomingMessage(sender=sender, text="7"), decision)
+
+        self.assertEqual(prompt.kind, "text")
+        self.assertIn("valor recebido e o dia de pagamento", prompt.text)
+        self.assertEqual(self.flow.sessions[sender].step, "finance_payip_amount_day_awaiting_query")
+
+        result = self.flow.handle(IncomingMessage(sender=sender, text="3 0,99 13/04/2026"), decision)
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("PayIP | Valor e Dia", result.text)
+        self.assertIn(
+            "Revenda: 3 - Patos | Pagamento: 13/04/2026 | Valor: R$ 0,99 | Tolerancia: R$ 0,05",
+            result.text,
+        )
+        self.assertIn("Pagamento confirmado em: 13/04/2026", result.text)
+        self.assertIn("Nota Fiscal: 147478", result.text)
+        self.assertNotIn("Nota Fiscal: 147479", result.text)
+        self.assertIn("Quer fazer outra consulta do mesmo tipo? Envie SIM.", result.text)
+        self.assertEqual(
+            self.payip_service.amount_day_calls[-1],
+            {
+                "filial": "3",
+                "amount": "0.99",
+                "day": "2026-04-13",
+                "tolerance": "0.05",
+                "status": "",
+                "page_size": 100,
+                "max_pages": None,
+            },
+        )
+
+        repeat_prompt = self.flow.handle(IncomingMessage(sender=sender, text="SIM"), decision)
+
+        self.assertIn("valor recebido e o dia de pagamento", repeat_prompt.text)
+        self.assertEqual(self.flow.sessions[sender].step, "finance_payip_amount_day_awaiting_query")
+
+    def test_finance_payip_accepts_custom_amount_tolerance(self) -> None:
+        sender = "5511-fin-payip-amount-day-custom-tolerance"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        result = self.flow.handle(
+            IncomingMessage(sender=sender, text="valor 3 0,99 13/04/2026 tolerancia 0,10"),
+            decision,
+        )
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("Tolerancia: R$ 0,10", result.text)
+        self.assertEqual(self.payip_service.amount_day_calls[-1]["tolerance"], "0.10")
+
+    def test_finance_payip_amount_day_resumes_after_mfa(self) -> None:
+        sender = "5511-fin-payip-amount-day-mfa"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+        payip_service = StubPayipPaymentsService(require_mfa_once=True)
+        flow = make_flow(payip_payments_service=payip_service)
+
+        _ = flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        prompt = flow.handle(IncomingMessage(sender=sender, text="valor 3 0,99 13/04/2026"), decision)
+
+        self.assertEqual(prompt.kind, "text")
+        self.assertIn("Envie aqui o codigo atual do Google Authenticator", prompt.text)
+        self.assertEqual(flow.sessions[sender].step, "finance_payip_awaiting_mfa")
+        self.assertEqual(flow.sessions[sender].payip_pending_action, "amount_day")
+
+        result = flow.handle(IncomingMessage(sender=sender, text="123456"), decision)
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("PayIP | Valor e Dia", result.text)
+        self.assertEqual(payip_service.bootstrap_calls, ["123456"])
+        self.assertEqual(payip_service.amount_day_calls[-1]["day"], "2026-04-13")
 
     def test_finance_payip_statement_resume_resumes_after_mfa(self) -> None:
         sender = "5511-fin-payip-statement-mfa"
@@ -2107,7 +2314,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertIn("Faltam: 32", result.text)
         self.assertIn("Falta: Litrinho 20 | Inteira 12", result.text)
         self.assertIn("Atualizado em: 27/04/2026", result.text)
-        self.assertEqual(self.flow.sessions[sender].step, "idle")
+        self.assertEqual(self.flow.sessions[sender].step, "awaiting_post_result_navigation")
 
     def test_finance_alias_analise_runs_prazo_limite_name_lookup_directly(self) -> None:
         sender = "5511-fin-analise"
@@ -2460,7 +2667,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertIn("Jan: R$ 92.256,85", response.text)
         self.assertIn("Pedidos: 8 | Media por pedido: R$ 11.532,11", response.text)
         self.assertIn("Cliente: CLIENTE TESTE", response.text)
-        self.assertEqual(self.flow.sessions[sender].step, "idle")
+        self.assertEqual(self.flow.sessions[sender].step, "awaiting_post_result_navigation")
 
     def test_finance_alias_analise_cpf_runs_prazo_limite_document_lookup_directly(self) -> None:
         sender = "5511-fin-analise-cpf"
@@ -2539,7 +2746,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(self.prazo_limite_service.document_calls[0]["allowed_sectors"], None)
         self.assertEqual(self.query_service.document_calls, [])
         self.assertEqual(self.query_service.fantasia_calls, [])
-        self.assertEqual(self.flow.sessions[sender].step, "idle")
+        self.assertEqual(self.flow.sessions[sender].step, "awaiting_post_result_navigation")
 
     def test_finance_cpf_alias_runs_prazo_limite_document_lookup_directly(self) -> None:
         sender = "5511-fin-cpf-prazo"
@@ -4365,7 +4572,8 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
 
         self.assertEqual(second.kind, "text")
         self.assertIn("*Cliente Alfa*", second.text)
-        self.assertIn("NB: 222 | Revenda: 2", second.text)
+        self.assertIn("- Revenda: 2", second.text)
+        self.assertIn("- NB: 222", second.text)
         self.assertEqual(self.flow.sessions[sender].step, "awaiting_post_result_navigation")
 
     def test_handle_giro_por_cpf_opens_document_prompt(self) -> None:
@@ -4447,7 +4655,15 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertIsNone(self.giro_service.search_calls[0]["allowed_sectors"])
         self.assertIsNone(self.giro_service.search_calls[0]["allowed_gv_vdes"])
         self.assertIn(sender, self.flow.sessions)
-        self.assertEqual(self.flow.sessions[sender].step, "idle")
+        self.assertEqual(self.flow.sessions[sender].step, "awaiting_post_result_navigation")
+
+        repeat_prompt = self.flow.handle(
+            IncomingMessage(sender=sender, text="SIM"),
+            make_decision(allowed=True, sectors=("206",)),
+        )
+
+        self.assertIn("CPF ou CNPJ do cliente para consultar o giro", repeat_prompt.text)
+        self.assertEqual(self.flow.sessions[sender].step, "awaiting_document")
 
     def test_cliente_document_search_is_unrestricted_by_commercial_scope(self) -> None:
         sender = "5516-cliente-doc"
@@ -4680,9 +4896,43 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
 
         self.assertEqual(response.kind, "text")
         self.assertIn("*Santa Maria Farma*", response.text)
-        self.assertIn("NB: 111 | Revenda: 1", response.text)
+        self.assertIn("- Revenda: 1", response.text)
+        self.assertIn("- NB: 111", response.text)
         self.assertEqual(self.flow.sessions["5511"].step, "awaiting_post_result_navigation")
         self.assertEqual(self.inadimplencia_service.name_calls[0]["query_text"], "santa maria")
+
+    def test_handle_inad_registration_query_repeats_same_type_after_sim(self) -> None:
+        sender = "5511-inad-repeat"
+        decision = make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",))
+        self.inadimplencia_service.search_records = [
+            InadimplenciaRecord(
+                filial="3",
+                cod_pdv="18008",
+                nome="POSTO PAIZAO",
+                data_emissao="2026-05-20",
+                data_vencimento="2026-06-01",
+                valor_original="1530,91",
+                valor_pendente="1530,91",
+                valor_corrigido="1530,91",
+                dias="1",
+                planilha_atualizada_em="2026-06-01",
+            )
+        ]
+
+        result = self.flow.handle(IncomingMessage(sender=sender, text="inad 3 18008"), decision)
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("*POSTO PAIZAO*", result.text)
+        self.assertIn("- Revenda: 3", result.text)
+        self.assertIn("- NB: 18008", result.text)
+        self.assertIn("Quer fazer outra consulta do mesmo tipo? Envie SIM.", result.text)
+        self.assertEqual(self.flow.sessions[sender].step, "awaiting_post_result_navigation")
+
+        repeat_prompt = self.flow.handle(IncomingMessage(sender=sender, text="sim"), decision)
+
+        self.assertIn("Informe a revenda/filial para consultar a inadimplencia.", repeat_prompt.text)
+        self.assertEqual(self.flow.sessions[sender].step, "awaiting_filial")
+        self.assertEqual(self.flow.sessions[sender].search_context, "inadimplencia")
 
     def test_handle_abbreviated_inad_name_query_runs_lookup(self) -> None:
         self.inadimplencia_service.name_summaries = [
@@ -4717,7 +4967,8 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
 
         self.assertEqual(response.kind, "text")
         self.assertIn("*Santa Maria Farma*", response.text)
-        self.assertIn("NB: 111 | Revenda: 1", response.text)
+        self.assertIn("- Revenda: 1", response.text)
+        self.assertIn("- NB: 111", response.text)
         self.assertEqual(self.flow.sessions["5512"].step, "awaiting_post_result_navigation")
         self.assertEqual(self.inadimplencia_service.name_calls[0]["query_text"], "santa maria")
 
@@ -5063,7 +5314,8 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
 
         self.assertEqual(response.kind, "text")
         self.assertIn("*Cliente Lista*", response.text)
-        self.assertIn("NB: 222 | Revenda: 2", response.text)
+        self.assertIn("- Revenda: 2", response.text)
+        self.assertIn("- NB: 222", response.text)
         self.assertEqual(self.flow.sessions[sender].step, "awaiting_post_result_navigation")
 
     def test_handle_short_base_opens_clarification_menu(self) -> None:
@@ -5438,8 +5690,9 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
                     valor_original="80,00",
                     valor_pendente="80,00",
                     valor_corrigido="85,00",
-                    dias="8",
+                    dias="-8",
                     planilha_atualizada_em="11/04/2026",
+                    nota_fiscal="158043",
                 ),
                 InadimplenciaRecord(
                     filial="3",
@@ -5450,7 +5703,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
                     valor_original="65,00",
                     valor_pendente="65,00",
                     valor_corrigido="70,00",
-                    dias="7",
+                    dias="-7",
                     planilha_atualizada_em="11/04/2026",
                 ),
             ],
@@ -5461,14 +5714,19 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(response.kind, "text")
         self.assertIn("Diretoria | Cobranca", response.text)
         self.assertIn("*ESPET DO PAULO*", response.text)
-        self.assertIn("NB: 10237 | Revenda: 3", response.text)
+        self.assertIn("- Revenda: 3", response.text)
+        self.assertIn("- NB: 10237", response.text)
         self.assertIn("- Titulos: 2", response.text)
         self.assertIn("- Total pendente: R$ 145,00", response.text)
+        self.assertIn("- Total atrasado: R$ 155,00", response.text)
         self.assertIn("- Maior atraso: 8 dias", response.text)
-        self.assertIn("1) Venc: 09/04/2026 | Atraso: 8 dias", response.text)
-        self.assertIn("2) Venc: 10/04/2026 | Atraso: 7 dias", response.text)
-        self.assertIn("Valor: R$ 85,00", response.text)
-        self.assertIn("Valor: R$ 70,00", response.text)
+        self.assertIn("1) Vencido ha 8 dias", response.text)
+        self.assertIn("- NF: 158043", response.text)
+        self.assertIn("- Vencimento: 09/04/2026", response.text)
+        self.assertIn("2) Vencido ha 7 dias", response.text)
+        self.assertIn("- Vencimento: 10/04/2026", response.text)
+        self.assertIn("- Valor: R$ 85,00", response.text)
+        self.assertIn("- Valor: R$ 70,00", response.text)
 
     def test_handle_inadimplentes_da_base_then_textual_selection_opens_unique_client(self) -> None:
         sender = "5523"
@@ -5520,8 +5778,8 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
 
         self.assertEqual(second.kind, "text")
         self.assertIn("*Cliente Beta*", second.text)
-        self.assertIn("NB: 222 | Revenda: 2", second.text)
-        self.assertIn("NB: 222 | Revenda: 2", second.text)
+        self.assertIn("- Revenda: 2", second.text)
+        self.assertIn("- NB: 222", second.text)
         self.assertEqual(len(self.inadimplencia_service.client_summaries_in_scope_calls), 1)
         self.assertEqual(len(self.inadimplencia_service.search_calls), 1)
 
@@ -5745,8 +6003,8 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
 
         self.assertEqual(response.kind, "text")
         self.assertIn("*Cliente Beta*", response.text)
-        self.assertIn("NB: 222 | Revenda: 2", response.text)
-        self.assertIn("NB: 222 | Revenda: 2", response.text)
+        self.assertIn("- Revenda: 2", response.text)
+        self.assertIn("- NB: 222", response.text)
         self.assertEqual(len(self.inadimplencia_service.search_calls), 1)
         self.assertEqual(self.inadimplencia_service.search_calls[0]["filial"], "2")
         self.assertEqual(self.inadimplencia_service.search_calls[0]["cod_pdv"], "222")
@@ -5800,7 +6058,8 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
 
         self.assertEqual(response.kind, "text")
         self.assertIn("*Cliente Alfa*", response.text)
-        self.assertIn("NB: 111 | Revenda: 1", response.text)
+        self.assertIn("- Revenda: 1", response.text)
+        self.assertIn("- NB: 111", response.text)
         self.assertEqual(self.inadimplencia_service.search_calls[-1]["cod_pdv"], "111")
 
     def test_expired_session_prompts_for_context_again(self) -> None:

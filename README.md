@@ -118,6 +118,10 @@ Variaveis principais:
 - `BACKUP_ACCESS_SCHEMA`: schema salvo no backup operacional. Padrao recomendado: `bot_access`.
 - `BACKUP_INCLUDE_VOLUMES`: se `1`, inclui volumes da Evolution. Padrao recomendado: `0`.
 - `BACKUP_EXTERNAL_DIR`: segunda pasta de destino para espelhar o backup pronto.
+- `FULL_BACKUP_OUTPUT_DIR`: pasta de saida dos backups completos com dump full do PostgreSQL.
+- `FULL_BACKUP_RETENTION_COUNT`: quantidade de backups completos a manter.
+- `FULL_BACKUP_RETENTION_DAYS`: retencao por idade dos backups completos. `0` desativa corte por data.
+- `FULL_BACKUP_EXTERNAL_DIR`: segunda pasta de destino para espelhar o backup completo.
 - `STACK_MONITOR_MIN_FREE_GB`: espaco livre minimo esperado na VPS.
 - `STACK_ALERT_NUMBERS`: numeros que recebem alerta de falha do healthcheck.
 - `STACK_ALERT_COOLDOWN_MINUTES`: intervalo minimo entre alertas repetidos.
@@ -167,6 +171,7 @@ Mecanica adotada:
 - a nota fiscal e opcional na emissao e pode ser informada antes de confirmar com `nf 147478` ou removida com `sem nf`.
 - o NB/identificador ERP tambem e opcional no payload de emissao; o bot ainda pode usar o NB para localizar o cliente, mas antes de confirmar voce pode alterar com `nb 16883` ou remover com `sem nb`.
 - apos emitir uma cobranca PIX, o bot usa o `emv` retornado pela PayIP para enviar o copia e cola e gerar o QR Code localmente quando a API nao enviar `linkImage`; nao depende do `GET /v1/payments/{id}` para montar o PIX.
+- a busca por valor e dia usa `paidDateStart`/`paidDateEnd` no `GET /v1/payments` e valida localmente o JSON por `paidDate` e `amountPaid`, com tolerancia padrao de `R$ 0,05`; atalhos: `valor 3 0,99 13/04/2026` ou `valor 3 0,99 13/04/2026 tolerancia 0,10`.
 
 `PAYIP_MFA_CODE` deve ser usado apenas para iniciar uma sessao manualmente. Depois disso, o bot deve operar com `refresh_token` e cache.
 

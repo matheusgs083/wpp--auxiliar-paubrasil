@@ -299,16 +299,23 @@ class RecolhaRequestService:
             "total_csv": len(normalized_records),
         }
 
-    def export_csv_bytes(self, records: list[RecolhaRequestRecord] | None = None) -> bytes:
+    def export_csv_bytes(
+        self,
+        records: list[RecolhaRequestRecord] | None = None,
+        *,
+        include_meta: bool = False,
+    ) -> bytes:
         if records is None:
             with self._lock:
                 loaded_records = [_row_to_record(row) for row in self._read_rows()]
             records = [record for record in loaded_records if record is not None]
         output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=RECOLHA_SHEET_COLUMNS, delimiter=";")
+        fieldnames = RECOLHA_COLUMNS if include_meta else RECOLHA_SHEET_COLUMNS
+        writer = csv.DictWriter(output, fieldnames=fieldnames, delimiter=";")
         writer.writeheader()
         for record in records:
-            writer.writerow(record.to_sheet_row())
+            row = record.to_csv_row() if include_meta else record.to_sheet_row()
+            writer.writerow({column: str(row.get(column) or "") for column in fieldnames})
         return ("\ufeff" + output.getvalue()).encode("utf-8")
 
     def count_requests(self) -> int:

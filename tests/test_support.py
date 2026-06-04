@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -13,6 +15,7 @@ if str(ROOT) not in sys.path:
 from bot_api.security.access_control import AccessControl, AccessDecision
 from bot_api.integrations.payip_client import PayipError, PayipMfaRequired
 from bot_api.services.customer_lookup_flow import CustomerLookupFlow
+from bot_api.services.critica_rn_query_service import CriticaRnRecord, CriticaRnSummary
 from bot_api.services.recolha_request_service import RecolhaRequestService
 
 
@@ -278,6 +281,126 @@ class StubGiroService(StubStatusService):
         return list(self.zero_base_records)
 
 
+def make_critica_summary(**overrides: Any) -> CriticaRnSummary:
+    values: dict[str, Any] = {
+        "data_pedido": date(2026, 6, 3),
+        "row_count": 3,
+        "pedido_count": 2,
+        "client_count": 1,
+        "problem_row_count": 1,
+        "problem_pedido_count": 1,
+        "rows_with_critica": 1,
+        "duplicated_row_count": 0,
+        "price_alert_count": 1,
+        "missing_price_count": 0,
+        "total_pedido": Decimal("250.00"),
+        "planilha_atualizada_em": "2026-06-03",
+        "operations": ("Patos",),
+    }
+    values.update(overrides)
+    return CriticaRnSummary(**values)
+
+
+def make_critica_record(**overrides: Any) -> CriticaRnRecord:
+    values: dict[str, Any] = {
+        "filial": "3",
+        "pedido": "706840",
+        "data_pedido": date(2026, 6, 3),
+        "operacao": "1",
+        "cod_pdv": "18008",
+        "nome_pdv": "POSTO PAIZAO",
+        "setor": "400",
+        "seller_code": "3_400",
+        "manager_code": "3_5",
+        "status_pedido": "Normal",
+        "total_pedido": Decimal("120.00"),
+        "total_cliente": Decimal("120.00"),
+        "critica_text": "Fora de rota",
+        "produto_codigo": "2349",
+        "produto_descricao": "GCA PT2 CX6",
+        "quantidade": Decimal("2"),
+        "unid_venda": "cx",
+        "preco_unitario": Decimal("43.20"),
+        "preco_sem_adf": Decimal("43.20"),
+        "minimo_politica": Decimal("43.20"),
+        "tipo_movimento": "51",
+        "codigo_gv": "5",
+        "codigo_pgv": "2349",
+        "pedido_linhas": 2,
+        "pedido_produto_linhas": 1,
+        "pedido_produto_duplicado": False,
+        "produto_encontrado_dprecos": True,
+        "preco_status": "preco_caixa_fora_referencia",
+        "ttc_min": None,
+        "ttc_max": None,
+        "caixa_min": Decimal("40.00"),
+        "caixa_max": Decimal("42.00"),
+        "problemas": ("Critica RN: Fora de rota", "Preco caixa fora da DPrecos"),
+        "planilha_atualizada_em": "2026-06-03",
+        "operation_name": "Patos",
+    }
+    values.update(overrides)
+    return CriticaRnRecord(**values)
+
+
+class StubCriticaRnService(StubStatusService):
+    def __init__(
+        self,
+        *,
+        ready: bool = True,
+        summary: CriticaRnSummary | None = None,
+        records: list[CriticaRnRecord] | None = None,
+        problems: list[CriticaRnRecord] | None = None,
+        latest: date | None = None,
+    ) -> None:
+        super().__init__(ready=ready)
+        self.summary = summary or make_critica_summary()
+        self.records = list(records or [make_critica_record()])
+        self.problems = list(problems or self.records)
+        self.latest = latest if latest is not None else date(2026, 6, 3)
+        self.summary_calls: list[dict[str, Any]] = []
+        self.problem_calls: list[dict[str, Any]] = []
+        self.registration_calls: list[dict[str, Any]] = []
+        self.report_calls: list[dict[str, Any]] = []
+        self.pdf_report_calls: list[dict[str, Any]] = []
+        self.latest_calls: list[dict[str, Any]] = []
+
+    def get_summary(self, **kwargs: Any) -> CriticaRnSummary:
+        self.summary_calls.append(kwargs)
+        return self.summary
+
+    def list_problems(self, **kwargs: Any) -> list[CriticaRnRecord]:
+        self.problem_calls.append(kwargs)
+        return list(self.problems)
+
+    def search_by_registration(self, **kwargs: Any) -> list[CriticaRnRecord]:
+        self.registration_calls.append(kwargs)
+        filial = str(kwargs.get("filial") or "").strip()
+        cod_pdv = str(kwargs.get("cod_pdv") or "").strip()
+        return [
+            record
+            for record in self.records
+            if (not filial or record.filial == filial) and (not cod_pdv or record.cod_pdv == cod_pdv)
+        ]
+
+    def list_report_rows(self, **kwargs: Any) -> list[CriticaRnRecord]:
+        self.report_calls.append(kwargs)
+        return list(self.records)
+
+    def get_pdf_report(self, **kwargs: Any) -> Any:
+        self.pdf_report_calls.append(kwargs)
+        return SimpleNamespace(
+            summary=self.summary,
+            records=list(self.records),
+            pdf_bytes=b"%PDF-critica-detalhe",
+            summary_pdf_bytes=b"%PDF-critica-resumo",
+        )
+
+    def latest_date(self, **kwargs: Any) -> date | None:
+        self.latest_calls.append(kwargs)
+        return self.latest
+
+
 class StubDocumentacaoPendenteService(StubStatusService):
     def __init__(
         self,
@@ -401,6 +524,7 @@ class StubPayipPaymentsService:
         self.invoice_report_calls: list[dict[str, Any]] = []
         self.statement_resume_calls: list[dict[str, Any]] = []
         self.statement_export_calls: list[dict[str, Any]] = []
+        self.amount_day_calls: list[dict[str, Any]] = []
         self.bootstrap_calls: list[str] = []
 
     def status(self) -> dict[str, Any]:
@@ -432,6 +556,8 @@ class StubPayipPaymentsService:
         search: str = "",
         due_date_start: str = "",
         due_date_end: str = "",
+        paid_date_start: str = "",
+        paid_date_end: str = "",
         created_at_start: str = "",
         created_at_end: str = "",
         filial: str = "",
@@ -453,6 +579,10 @@ class StubPayipPaymentsService:
             call["due_date_start"] = due_date_start
         if due_date_end:
             call["due_date_end"] = due_date_end
+        if paid_date_start:
+            call["paid_date_start"] = paid_date_start
+        if paid_date_end:
+            call["paid_date_end"] = paid_date_end
         if created_at_start:
             call["created_at_start"] = created_at_start
         if created_at_end:
@@ -510,6 +640,65 @@ class StubPayipPaymentsService:
                 "3": "bdfee22b-ac11-4355-909a-54bd348c87cc",
                 "4": "aa11f5fe-38dd-4bf5-86e3-71d874cdc24c",
             }.get(filial or "3", ""),
+        )
+
+    def find_payments_by_amount_and_paid_date(
+        self,
+        *,
+        filial: str,
+        amount: Any,
+        day: Any,
+        tolerance: Any = Decimal("0.05"),
+        status: str = "",
+        page_size: int = 100,
+        max_pages: int | None = None,
+    ) -> Any:
+        if self.require_mfa_once:
+            self.require_mfa_once = False
+            raise PayipMfaRequired("MFA required")
+        self.amount_day_calls.append(
+            {
+                "filial": filial,
+                "amount": str(amount),
+                "day": str(day),
+                "tolerance": str(tolerance),
+                "status": status,
+                "page_size": page_size,
+                "max_pages": max_pages,
+            }
+        )
+        page = self.list_payments(
+            page=1,
+            page_size=page_size,
+            status=status,
+            paid_date_start=str(day),
+            paid_date_end=str(day),
+            filial=filial,
+        )
+        target = Decimal(str(amount).replace(",", "."))
+        amount_tolerance = Decimal(str(tolerance).replace(",", "."))
+        paid_items = tuple(
+            {
+                **item,
+                "amountPaid": item.get("amount"),
+                "paidDate": f"{day}T12:00:00.000Z",
+            }
+            for item in page.items
+        )
+        items = tuple(
+            item
+            for item in paid_items
+            if abs(Decimal(str(item.get("amountPaid")).replace(",", ".")) - target) <= amount_tolerance
+        )
+        return SimpleNamespace(
+            raw={"data": list(items)},
+            items=items,
+            items_count=len(items),
+            total_items=len(items),
+            page=1,
+            page_size=page_size,
+            filial=filial,
+            company_id=page.company_id,
         )
 
     def bootstrap_session(self, *, mfa_code: str) -> dict[str, Any]:
@@ -710,6 +899,7 @@ def make_flow(
     inadimplencia_service: StubInadimplenciaService | None = None,
     comodatos_service: StubComodatosService | None = None,
     giro_service: StubGiroService | None = None,
+    critica_rn_service: StubCriticaRnService | None = None,
     documentacao_pendente_service: StubDocumentacaoPendenteService | None = None,
     prazo_limite_service: StubPrazoLimiteService | None = None,
     payip_payments_service: StubPayipPaymentsService | None = None,
@@ -722,6 +912,7 @@ def make_flow(
         inadimplencia_service=inadimplencia_service or StubInadimplenciaService(),
         comodatos_service=comodatos_service or StubComodatosService(),
         giro_service=giro_service or StubGiroService(),
+        critica_rn_service=critica_rn_service or StubCriticaRnService(),
         documentacao_pendente_service=documentacao_pendente_service or StubDocumentacaoPendenteService(),
         prazo_limite_service=prazo_limite_service or StubPrazoLimiteService(),
         payip_payments_service=payip_payments_service or StubPayipPaymentsService(),

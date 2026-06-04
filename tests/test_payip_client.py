@@ -135,6 +135,194 @@ class PayipClientTests(unittest.TestCase):
         self.assertEqual(resume.date_end, "2026-05-08")
         self.assertEqual(resume.raw, {"balance": 10})
 
+    def test_service_searches_paid_day_and_filters_paid_amount_with_tolerance(self) -> None:
+        class FakePayipClient:
+            def __init__(self) -> None:
+                self.calls: list[dict] = []
+
+            def resolve_company_id(self, *, filial: str = "", company_id: str = "") -> str:
+                return company_id or {"4": "sume-company"}.get(filial, "patos-company")
+
+            def list_payments(self, **kwargs) -> dict:
+                self.calls.append(kwargs)
+                return {
+                    "data": [
+                        {"id": "pay-1", "amount": 9.99, "amountPaid": 0.99, "paidDate": "2026-04-13T12:00:00.000Z"},
+                        {"id": "pay-2", "amount": 0.99, "amountPaid": 1.99, "paidDate": "2026-04-13T13:00:00.000Z"},
+                        {"id": "pay-near", "amount": 9.99, "amountPaid": 1.04, "paidDate": "2026-04-13T13:30:00.000Z"},
+                        {
+                            "id": "pay-3",
+                            "amount": 0.01,
+                            "amountDetails": {"amountPaid": 0.99},
+                            "paidDate": "2026-04-13T14:00:00.000Z",
+                        },
+                    ],
+                    "total": 4,
+                    "page": 1,
+                    "pageSize": 100,
+                }
+
+        client = FakePayipClient()
+        service = PayipPaymentsService(client)  # type: ignore[arg-type]
+
+        page = service.find_payments_by_amount_and_paid_date(
+            filial="4",
+            amount=Decimal("0.99"),
+            day=date(2026, 4, 13),
+        )
+
+        self.assertEqual([item["id"] for item in page.items], ["pay-1", "pay-near", "pay-3"])
+        self.assertEqual(page.raw["tolerance"], "0.05")
+        self.assertEqual(page.raw["paid_date"], "2026-04-13")
+        self.assertEqual(page.company_id, "sume-company")
+        self.assertEqual(
+            client.calls[-1],
+            {
+                "page": 1,
+                "page_size": 100,
+                "status": "",
+                "paid_date_start": "2026-04-13",
+                "paid_date_end": "2026-04-13",
+                "filial": "4",
+                "company_id": "sume-company",
+            },
+        )
+
+    def test_service_allows_custom_amount_tolerance(self) -> None:
+        class FakePayipClient:
+            def resolve_company_id(self, *, filial: str = "", company_id: str = "") -> str:
+                return company_id or "patos-company"
+
+            def list_payments(self, **kwargs) -> dict:
+                return {
+                    "data": [
+                        {"id": "pay-near", "amountPaid": 10.09, "paidDate": "2026-04-13T12:00:00.000Z"},
+                        {"id": "pay-far", "amountPaid": 10.11, "paidDate": "2026-04-13T12:00:00.000Z"},
+                    ],
+                    "total": 2,
+                    "page": 1,
+                    "pageSize": 100,
+                }
+
+        service = PayipPaymentsService(FakePayipClient())  # type: ignore[arg-type]
+
+        page = service.find_payments_by_amount_and_paid_date(
+            filial="3",
+            amount=Decimal("10.00"),
+            day=date(2026, 4, 13),
+            tolerance=Decimal("0.10"),
+        )
+
+        self.assertEqual([item["id"] for item in page.items], ["pay-near"])
+        self.assertEqual(page.raw["tolerance"], "0.10")
+
+    def test_service_reads_all_pages_before_filtering_paid_day_and_amount(self) -> None:
+        class FakePayipClient:
+            def __init__(self) -> None:
+                self.pages: list[int] = []
+
+            def resolve_company_id(self, *, filial: str = "", company_id: str = "") -> str:
+                return company_id or "patos-company"
+
+            def list_payments(self, **kwargs) -> dict:
+                page = kwargs["page"]
+                self.pages.append(page)
+                items = {
+                    1: [
+                        {"id": "pay-1", "amountPaid": 10.00, "paidDate": "2026-04-13T12:00:00.000Z"},
+                        {"id": "pay-2", "amountPaid": 20.00, "paidDate": "2026-04-13T12:00:00.000Z"},
+                    ],
+                    2: [
+                        {"id": "pay-3", "amountPaid": 10.03, "paidDate": "2026-04-13T13:00:00.000Z"},
+                    ],
+                }[page]
+                return {"data": items, "total": 3, "page": page, "pageSize": 2}
+
+        client = FakePayipClient()
+        service = PayipPaymentsService(client)  # type: ignore[arg-type]
+
+        page = service.find_payments_by_amount_and_paid_date(
+            filial="3",
+            amount=Decimal("10.00"),
+            day=date(2026, 4, 13),
+            page_size=2,
+        )
+
+        self.assertEqual(client.pages, [1, 2])
+        self.assertEqual([item["id"] for item in page.items], ["pay-1", "pay-3"])
+
+    def test_service_compares_paid_date_in_fortaleza_timezone(self) -> None:
+        class FakePayipClient:
+            def resolve_company_id(self, *, filial: str = "", company_id: str = "") -> str:
+                return company_id or "patos-company"
+
+            def list_payments(self, **kwargs) -> dict:
+                return {
+                    "data": [
+                        {"id": "pay-local-day", "amountPaid": 10.00, "paidDate": "2026-04-14T01:00:00.000Z"},
+                        {"id": "pay-next-day", "amountPaid": 10.00, "paidDate": "2026-04-14T04:00:00.000Z"},
+                    ],
+                    "total": 2,
+                    "page": 1,
+                    "pageSize": 100,
+                }
+
+        service = PayipPaymentsService(FakePayipClient())  # type: ignore[arg-type]
+
+        page = service.find_payments_by_amount_and_paid_date(
+            filial="3",
+            amount=Decimal("10.00"),
+            day=date(2026, 4, 13),
+        )
+
+        self.assertEqual([item["id"] for item in page.items], ["pay-local-day"])
+
+    def test_payments_endpoint_sends_paid_date_period(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"data": [], "total": 0, "page": 1, "pageSize": 100})
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+            company_ids=(("4", "sume-company"),),
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(
+            base_url=config.base_url,
+            transport=httpx.MockTransport(handler),
+        )
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        client.list_payments(
+            filial="4",
+            page=1,
+            page_size=100,
+            paid_date_start="2026-04-13",
+            paid_date_end="2026-04-13",
+        )
+
+        self.assertEqual(requests[0].url.path, "/v1/payments")
+        self.assertEqual(requests[0].url.params["companyId"], "sume-company")
+        self.assertEqual(requests[0].url.params["paidDateStart"], "2026-04-13")
+        self.assertEqual(requests[0].url.params["paidDateEnd"], "2026-04-13")
+        self.assertNotIn("createdAtStart", requests[0].url.params)
+
     def test_statement_endpoints_use_three_distinct_routes_with_same_params(self) -> None:
         requests: list[httpx.Request] = []
 

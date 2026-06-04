@@ -45,6 +45,7 @@ class InadimplenciaRecord:
     valor_corrigido: str
     dias: str
     planilha_atualizada_em: str
+    nota_fiscal: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -787,7 +788,14 @@ class InadimplenciaQueryService:
                 i.valor_original,
                 i.valor_pendente,
                 i.valor_corrigido,
-                i.dias,
+                {days_sql} AS dias,
+                COALESCE(
+                    NULLIF(i.payload->>'Nota Fiscal', ''),
+                    NULLIF(i.payload->>'NF', ''),
+                    NULLIF(i.payload->>'NFe', ''),
+                    NULLIF(i.payload->>'Titulo', ''),
+                    ''
+                ) AS nota_fiscal,
                 COALESCE(b.reference_date::text, '') AS reference_date,
                 i.batch_imported_at
             FROM {schema}.inadimplencia_latest i
@@ -814,6 +822,7 @@ class InadimplenciaQueryService:
             nome_sql=_normalized_text_sql("i.nome"),
             fantasia_sql=_normalized_text_sql("d.nome_fantasia"),
             razao_sql=_normalized_text_sql("d.razao_social"),
+            days_sql=_days_to_due_sql("i.dias"),
             where=sql.SQL(" AND ").join(filters),
         )
         return self._fetch(query, params)
@@ -1362,7 +1371,14 @@ class InadimplenciaQueryService:
                 i.valor_original,
                 i.valor_pendente,
                 i.valor_corrigido,
-                i.dias,
+                {days_sql} AS dias,
+                COALESCE(
+                    NULLIF(i.payload->>'Nota Fiscal', ''),
+                    NULLIF(i.payload->>'NF', ''),
+                    NULLIF(i.payload->>'NFe', ''),
+                    NULLIF(i.payload->>'Titulo', ''),
+                    ''
+                ) AS nota_fiscal,
                 COALESCE(b.reference_date::text, '') AS reference_date,
                 i.batch_imported_at
             FROM {schema}.inadimplencia_latest i
@@ -1380,6 +1396,7 @@ class InadimplenciaQueryService:
             """
         ).format(
             schema=sql.Identifier(self.schema),
+            days_sql=_days_to_due_sql("i.dias"),
             where=where,
         )
 
@@ -1404,6 +1421,7 @@ class InadimplenciaQueryService:
                 valor_corrigido=_format_money(row["valor_corrigido"]),
                 dias=_format_days(row["dias"]),
                 planilha_atualizada_em=_format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
+                nota_fiscal=_normalize_invoice_number(str(row.get("nota_fiscal") or "")),
             )
             for row in rows
         ]
@@ -1690,13 +1708,26 @@ def _money_to_numeric_sql(field_name: str) -> sql.SQL:
     ).format(field=_code_field_sql(field_name))
 
 
-def _days_to_due_sql(field_name: str) -> sql.SQL:
-    return sql.SQL(
+def _days_to_due_sql(field_name: str, due_date_field_name: str = "i.data_vencimento") -> sql.SQL:
+    due_date_field = _code_field_sql(due_date_field_name)
+    imported_days_sql = sql.SQL(
         "CASE "
         "WHEN REGEXP_REPLACE(BTRIM(COALESCE({field}, '')), '[^0-9-]', '', 'g') = '' THEN NULL "
         "ELSE REGEXP_REPLACE(BTRIM(COALESCE({field}, '')), '[^0-9-]', '', 'g')::int "
         "END"
     ).format(field=_code_field_sql(field_name))
+    return sql.SQL(
+        "CASE "
+        "WHEN BTRIM(COALESCE({due_date_field}, '')) ~ '^[0-9]{{2}}/[0-9]{{2}}/[0-9]{{4}}$' "
+        "THEN (TO_DATE(BTRIM({due_date_field}), 'DD/MM/YYYY') - CURRENT_DATE)::int "
+        "WHEN BTRIM(COALESCE({due_date_field}, '')) ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$' "
+        "THEN (TO_DATE(BTRIM({due_date_field}), 'YYYY-MM-DD') - CURRENT_DATE)::int "
+        "ELSE {imported_days_sql} "
+        "END"
+    ).format(
+        due_date_field=due_date_field,
+        imported_days_sql=imported_days_sql,
+    )
 
 
 def _normalize_due_bucket(value: str | None) -> str:
@@ -1757,6 +1788,16 @@ def _format_days(value: Any) -> str:
         return raw
     normalized = digits.lstrip("0") or "0"
     return f"{sign}{normalized}"
+
+
+def _normalize_invoice_number(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    digits = "".join(char for char in raw if char.isdigit())
+    if digits:
+        return digits.lstrip("0") or "0"
+    return raw
 
 
 def _format_reference_date(reference_date: Any, batch_imported_at: Any) -> str:

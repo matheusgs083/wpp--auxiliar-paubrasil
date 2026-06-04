@@ -109,6 +109,42 @@ class GiroZeroBaseRecord:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class GiroRecolhaOpportunity:
+    filial: str
+    cod_pdv: str
+    nome: str
+    documento: str
+    revenda: str
+    setor: str
+    seller_code: str
+    manager_code: str
+    status_pdv: str
+    cidade: str
+    bairro: str
+    visit_day: str
+    total_caixas: str
+    real_caixas: str
+    gap_caixas: str
+    gap_litrinho: str
+    gap_inteira: str
+    gap_litrao: str
+    giro_litrinho: str
+    giro_inteira: str
+    giro_litrao: str
+    faturamento_total: str
+    pedidos_total: str
+    media_faturamento_pedido: str
+    percentual_pag_atraso: str
+    prazo_atual: str
+    cond_pag_atual: str
+    planilha_giro_atualizada_em: str
+    planilha_faturamento_atualizada_em: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 class GiroQueryService:
     def __init__(self, database_url: str, schema: str, connect_timeout_seconds: float = 3.0) -> None:
         self.database_url = database_url.strip()
@@ -591,6 +627,449 @@ class GiroQueryService:
                 rows = cur.fetchall()
         return [_row_to_giro_zero_base_record(row) for row in rows]
 
+    def list_recolha_opportunities(
+        self,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        limit: int = 200,
+        min_gap: Decimal | int | float | str = 1,
+        operation: str | list[str] | None = None,
+        city: str | list[str] | None = None,
+        district: str | list[str] | None = None,
+        seller: str | list[str] | None = None,
+        manager: str | list[str] | None = None,
+        visit_day: str | list[str] | None = None,
+        zero_only: bool = False,
+    ) -> list[GiroRecolhaOpportunity]:
+        status = self.status()
+        if not status["ready"]:
+            raise RuntimeError(status["last_error"] or "Base de giro indisponivel.")
+
+        filters: list[sql.Composed] = [
+            sql.SQL(
+                "("
+                "g.giro_litrinho IN ('NOK', 'ZERO') "
+                "OR g.giro_inteira IN ('NOK', 'ZERO') "
+                "OR g.giro_litrao IN ('NOK', 'ZERO')"
+                ")"
+            )
+        ]
+        if zero_only:
+            filters.append(
+                sql.SQL(
+                    "("
+                    "g.giro_litrinho = 'ZERO' "
+                    "OR g.giro_inteira = 'ZERO' "
+                    "OR g.giro_litrao = 'ZERO'"
+                    ")"
+                )
+            )
+        params: list[Any] = []
+        self._apply_access_filter(filters, params, _normalize_scope_values(allowed_sectors), _normalize_scope_values(allowed_gv_vdes))
+        outer_filters: list[sql.Composed] = [sql.SQL("gb.gap_caixas >= %s")]
+        min_gap_value = _parse_decimal(min_gap) or Decimal("0")
+        outer_params: list[Any] = [min_gap_value]
+
+        operation_filters = _normalize_scope_filter_values(operation)
+        if len(operation_filters) == 1:
+            outer_filters.append(sql.SQL("gb.filial = %s"))
+            outer_params.append(operation_filters[0])
+        elif operation_filters:
+            outer_filters.append(sql.SQL("gb.filial = ANY(%s::text[])"))
+            outer_params.append(operation_filters)
+
+        seller_filters = _normalize_scope_filter_values(seller)
+        if len(seller_filters) == 1:
+            outer_filters.append(sql.SQL("COALESCE(NULLIF(d.filial_setor_key, ''), gb.filial_setor_key, '') = %s"))
+            outer_params.append(seller_filters[0])
+        elif seller_filters:
+            outer_filters.append(sql.SQL("COALESCE(NULLIF(d.filial_setor_key, ''), gb.filial_setor_key, '') = ANY(%s::text[])"))
+            outer_params.append(seller_filters)
+
+        manager_filters = _normalize_scope_filter_values(manager)
+        if len(manager_filters) == 1:
+            outer_filters.append(sql.SQL("COALESCE(NULLIF(d.filial_gv_key, ''), gb.filial_gv_key, '') = %s"))
+            outer_params.append(manager_filters[0])
+        elif manager_filters:
+            outer_filters.append(sql.SQL("COALESCE(NULLIF(d.filial_gv_key, ''), gb.filial_gv_key, '') = ANY(%s::text[])"))
+            outer_params.append(manager_filters)
+
+        city_filters = _normalize_text_filter_values(city)
+        if len(city_filters) == 1:
+            outer_filters.append(sql.SQL("COALESCE(d.payload ->> 'Cidade', '') ILIKE %s"))
+            outer_params.append(f"%{city_filters[0]}%")
+        elif city_filters:
+            outer_filters.append(sql.SQL("BTRIM(COALESCE(d.payload ->> 'Cidade', '')) = ANY(%s::text[])"))
+            outer_params.append(city_filters)
+
+        district_filters = _normalize_text_filter_values(district)
+        if len(district_filters) == 1:
+            outer_filters.append(
+                sql.SQL("COALESCE(d.payload ->> 'Bairro', d.payload ->> 'BAIRRO', d.payload ->> 'bairro', '') ILIKE %s")
+            )
+            outer_params.append(f"%{district_filters[0]}%")
+        elif district_filters:
+            outer_filters.append(
+                sql.SQL("BTRIM(COALESCE(d.payload ->> 'Bairro', d.payload ->> 'BAIRRO', d.payload ->> 'bairro', '')) = ANY(%s::text[])")
+            )
+            outer_params.append(district_filters)
+
+        visit_day_filters = _normalize_visit_day_filter_values(visit_day)
+        if len(visit_day_filters) == 1:
+            outer_filters.append(
+                sql.SQL(
+                    "("
+                    "POSITION(%s IN UPPER(BTRIM(COALESCE(d.payload ->> 'Dia de Visita do VDE', '')))) > 0 "
+                    "OR UPPER(BTRIM(COALESCE(d.payload ->> 'Dia de Visita do VDE', ''))) = %s"
+                    ")"
+                )
+            )
+            outer_params.extend([visit_day_filters[0], visit_day_filters[0]])
+        elif visit_day_filters:
+            outer_filters.append(
+                sql.SQL(
+                    "EXISTS ("
+                    "SELECT 1 FROM unnest(%s::text[]) AS selected_visit_day(token) "
+                    "WHERE POSITION(selected_visit_day.token IN UPPER(BTRIM(COALESCE(d.payload ->> 'Dia de Visita do VDE', '')))) > 0 "
+                    "OR UPPER(BTRIM(COALESCE(d.payload ->> 'Dia de Visita do VDE', ''))) = selected_visit_day.token"
+                    ")"
+                )
+            )
+            outer_params.append(visit_day_filters)
+
+        params.extend(outer_params)
+        params.append(max(1, min(int(limit or 200), 1000)))
+
+        query = sql.SQL(
+            """
+            WITH giro_base AS (
+                SELECT
+                    g.*,
+                    (COALESCE(g.total_litrinho, 0) + COALESCE(g.total_inteira, 0) + COALESCE(g.total_litrao, 0)) AS total_caixas,
+                    (COALESCE(g.real_litrinho, 0) + COALESCE(g.real_inteira, 0) + COALESCE(g.real_litrao, 0)) AS real_caixas,
+                    (COALESCE(g.gap_litrinho, 0) + COALESCE(g.gap_inteira, 0) + COALESCE(g.gap_litrao, 0)) AS gap_caixas
+                FROM {schema}.giro_latest g
+                WHERE {where}
+            ),
+            prazo_agg AS (
+                SELECT
+                    pl.filial,
+                    pl.cod_pdv,
+                    SUM(COALESCE(pl.faturamento_com_pdv, 0)) AS faturamento_total,
+                    SUM(COALESCE(pl.pedidos, 0)) AS pedidos_total,
+                    MAX(NULLIF(pl.percentual_pag_atraso, '')) AS percentual_pag_atraso,
+                    MAX(NULLIF(pl.prazo_atual, '')) AS prazo_atual,
+                    MAX(NULLIF(pl.cond_pag_atual, '')) AS cond_pag_atual,
+                    COALESCE(MAX(pl.reference_date)::text, '') AS prazo_reference_date,
+                    MAX(pl.batch_imported_at) AS prazo_batch_imported_at
+                FROM {schema}.prazo_limite_latest pl
+                GROUP BY pl.filial, pl.cod_pdv
+            )
+            SELECT
+                gb.filial,
+                gb.nb,
+                COALESCE(NULLIF(d.nome_fantasia, ''), NULLIF(d.razao_social, ''), gb.fantasia, '') AS fantasia,
+                COALESCE(NULLIF(d.documento, ''), '') AS documento,
+                gb.setor,
+                gb.revenda,
+                COALESCE(NULLIF(d.filial_setor_key, ''), gb.filial_setor_key, '') AS filial_setor_key,
+                COALESCE(NULLIF(d.filial_gv_key, ''), gb.filial_gv_key, '') AS filial_gv_key,
+                COALESCE(NULLIF(d.status_pdv, ''), '') AS status_pdv,
+                COALESCE(d.payload ->> 'Cidade', '') AS cidade,
+                COALESCE(d.payload ->> 'Bairro', d.payload ->> 'BAIRRO', d.payload ->> 'bairro', '') AS bairro,
+                COALESCE(d.payload ->> 'Dia de Visita do VDE', '') AS visit_day,
+                gb.total_caixas,
+                gb.real_caixas,
+                gb.gap_caixas,
+                gb.gap_litrinho,
+                gb.gap_inteira,
+                gb.gap_litrao,
+                gb.giro_litrinho,
+                gb.giro_inteira,
+                gb.giro_litrao,
+                COALESCE(
+                    NULLIF(
+                        REPLACE(
+                            REPLACE(
+                                REGEXP_REPLACE(
+                                    COALESCE(
+                                        NULLIF(d.payload ->> 'Faturamento Total (M-1)', ''),
+                                        NULLIF(d.payload ->> 'Faturamento DH (M-1)', '')
+                                    ),
+                                    '[^0-9,.]',
+                                    '',
+                                    'g'
+                                ),
+                                '.',
+                                ''
+                            ),
+                            ',',
+                            '.'
+                        ),
+                        ''
+                    )::numeric,
+                    0
+                ) AS faturamento_total,
+                COALESCE(pa.pedidos_total, 0) AS pedidos_total,
+                CASE
+                    WHEN COALESCE(pa.pedidos_total, 0) > 0 THEN COALESCE(
+                        NULLIF(
+                            REPLACE(
+                                REPLACE(
+                                    REGEXP_REPLACE(
+                                        COALESCE(
+                                            NULLIF(d.payload ->> 'Faturamento Total (M-1)', ''),
+                                            NULLIF(d.payload ->> 'Faturamento DH (M-1)', '')
+                                        ),
+                                        '[^0-9,.]',
+                                        '',
+                                        'g'
+                                    ),
+                                    '.',
+                                    ''
+                                ),
+                                ',',
+                                '.'
+                            ),
+                            ''
+                        )::numeric,
+                        0
+                    ) / pa.pedidos_total
+                    ELSE 0
+                END AS media_faturamento_pedido,
+                COALESCE(pa.percentual_pag_atraso, '') AS percentual_pag_atraso,
+                COALESCE(pa.prazo_atual, '') AS prazo_atual,
+                COALESCE(pa.cond_pag_atual, '') AS cond_pag_atual,
+                COALESCE(gb.reference_date::text, '') AS giro_reference_date,
+                gb.batch_imported_at AS giro_batch_imported_at,
+                COALESCE(pa.prazo_reference_date, '') AS prazo_reference_date,
+                pa.prazo_batch_imported_at
+            FROM giro_base gb
+            LEFT JOIN prazo_agg pa
+              ON pa.filial = gb.filial
+             AND pa.cod_pdv = gb.nb
+            LEFT JOIN {schema}.dclientes_latest d
+              ON d.filial = gb.filial
+             AND d.cod_pdv = gb.nb
+            WHERE {outer_where}
+            ORDER BY
+                gb.gap_caixas DESC,
+                media_faturamento_pedido DESC,
+                faturamento_total DESC,
+                gb.filial,
+                gb.setor,
+                gb.nb
+            LIMIT %s
+            """
+        ).format(
+            schema=sql.Identifier(self.schema),
+            where=sql.SQL(" AND ").join(filters),
+            outer_where=sql.SQL(" AND ").join(outer_filters),
+        )
+
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                rows = cur.fetchall()
+        return [_row_to_recolha_opportunity(row) for row in rows]
+
+    def list_recolha_filter_options(
+        self,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        min_gap: Decimal | int | float | str = 1,
+        operation: str | list[str] | None = None,
+        city: str | list[str] | None = None,
+        district: str | list[str] | None = None,
+        seller: str | list[str] | None = None,
+        manager: str | list[str] | None = None,
+        visit_day: str | list[str] | None = None,
+        zero_only: bool = False,
+    ) -> dict[str, list[dict[str, str]]]:
+        status = self.status()
+        if not status["ready"]:
+            raise RuntimeError(status["last_error"] or "Base de giro indisponivel.")
+
+        filters: list[sql.Composed] = [
+            sql.SQL(
+                "("
+                "g.giro_litrinho IN ('NOK', 'ZERO') "
+                "OR g.giro_inteira IN ('NOK', 'ZERO') "
+                "OR g.giro_litrao IN ('NOK', 'ZERO')"
+                ")"
+            )
+        ]
+        if zero_only:
+            filters.append(
+                sql.SQL(
+                    "("
+                    "g.giro_litrinho = 'ZERO' "
+                    "OR g.giro_inteira = 'ZERO' "
+                    "OR g.giro_litrao = 'ZERO'"
+                    ")"
+                )
+            )
+        params: list[Any] = []
+        self._apply_access_filter(filters, params, _normalize_scope_values(allowed_sectors), _normalize_scope_values(allowed_gv_vdes))
+
+        option_filters: list[sql.Composed] = [sql.SQL("gap_caixas >= %s")]
+        min_gap_value = _parse_decimal(min_gap) or Decimal("0")
+        option_params: list[Any] = [min_gap_value]
+
+        operation_filters = _normalize_scope_filter_values(operation)
+        if len(operation_filters) == 1:
+            option_filters.append(sql.SQL("filial = %s"))
+            option_params.append(operation_filters[0])
+        elif operation_filters:
+            option_filters.append(sql.SQL("filial = ANY(%s::text[])"))
+            option_params.append(operation_filters)
+
+        seller_filters = _normalize_scope_filter_values(seller)
+        if len(seller_filters) == 1:
+            option_filters.append(sql.SQL("seller_code = %s"))
+            option_params.append(seller_filters[0])
+        elif seller_filters:
+            option_filters.append(sql.SQL("seller_code = ANY(%s::text[])"))
+            option_params.append(seller_filters)
+
+        manager_filters = _normalize_scope_filter_values(manager)
+        if len(manager_filters) == 1:
+            option_filters.append(sql.SQL("manager_code = %s"))
+            option_params.append(manager_filters[0])
+        elif manager_filters:
+            option_filters.append(sql.SQL("manager_code = ANY(%s::text[])"))
+            option_params.append(manager_filters)
+
+        city_filters = _normalize_text_filter_values(city)
+        if city_filters:
+            option_filters.append(sql.SQL("cidade = ANY(%s::text[])"))
+            option_params.append(city_filters)
+
+        district_filters = _normalize_text_filter_values(district)
+        if len(district_filters) == 1:
+            option_filters.append(sql.SQL("bairro = %s"))
+            option_params.append(district_filters[0])
+        elif district_filters:
+            option_filters.append(sql.SQL("bairro = ANY(%s::text[])"))
+            option_params.append(district_filters)
+
+        visit_day_filters = _normalize_visit_day_filter_values(visit_day)
+        if len(visit_day_filters) == 1:
+            option_filters.append(
+                sql.SQL(
+                    "("
+                    "POSITION(%s IN UPPER(BTRIM(COALESCE(visit_day, '')))) > 0 "
+                    "OR UPPER(BTRIM(COALESCE(visit_day, ''))) = %s"
+                    ")"
+                )
+            )
+            option_params.extend([visit_day_filters[0], visit_day_filters[0]])
+        elif visit_day_filters:
+            option_filters.append(
+                sql.SQL(
+                    "EXISTS ("
+                    "SELECT 1 FROM unnest(%s::text[]) AS selected_visit_day(token) "
+                    "WHERE POSITION(selected_visit_day.token IN UPPER(BTRIM(COALESCE(visit_day, '')))) > 0 "
+                    "OR UPPER(BTRIM(COALESCE(visit_day, ''))) = selected_visit_day.token"
+                    ")"
+                )
+            )
+            option_params.append(visit_day_filters)
+
+        params.extend(option_params)
+        query = sql.SQL(
+            """
+            WITH base AS (
+                SELECT
+                    g.filial,
+                    NULLIF(g.revenda, '') AS revenda,
+                    COALESCE(NULLIF(d.filial_setor_key, ''), g.filial_setor_key, '') AS seller_code,
+                    COALESCE(NULLIF(d.filial_gv_key, ''), g.filial_gv_key, '') AS manager_code,
+                    COALESCE(d.payload ->> 'Cidade', '') AS cidade,
+                    COALESCE(d.payload ->> 'Bairro', d.payload ->> 'BAIRRO', d.payload ->> 'bairro', '') AS bairro,
+                    COALESCE(d.payload ->> 'Dia de Visita do VDE', '') AS visit_day,
+                    (COALESCE(g.gap_litrinho, 0) + COALESCE(g.gap_inteira, 0) + COALESCE(g.gap_litrao, 0)) AS gap_caixas
+                FROM {schema}.giro_latest g
+                LEFT JOIN {schema}.dclientes_latest d
+                  ON d.filial = g.filial
+                 AND d.cod_pdv = g.nb
+                WHERE {where}
+            ),
+            filtered AS (
+                SELECT * FROM base WHERE {option_where}
+            )
+            SELECT
+                COALESCE((
+                    SELECT jsonb_agg(item ORDER BY item ->> 'value')
+                    FROM (
+                        SELECT DISTINCT jsonb_build_object(
+                            'value', filial,
+                            'label', filial || CASE WHEN BTRIM(COALESCE(revenda, '')) <> '' THEN ' - ' || revenda ELSE '' END
+                        ) AS item
+                        FROM filtered
+                        WHERE BTRIM(COALESCE(filial, '')) <> ''
+                    ) operation_items
+                ), '[]'::jsonb) AS operations,
+                COALESCE((
+                    SELECT jsonb_agg(item ORDER BY item ->> 'value')
+                    FROM (
+                        SELECT DISTINCT jsonb_build_object('value', seller_code, 'label', seller_code) AS item
+                        FROM filtered
+                        WHERE BTRIM(COALESCE(seller_code, '')) <> ''
+                    ) seller_items
+                ), '[]'::jsonb) AS sellers,
+                COALESCE((
+                    SELECT jsonb_agg(item ORDER BY item ->> 'value')
+                    FROM (
+                        SELECT DISTINCT jsonb_build_object('value', manager_code, 'label', manager_code) AS item
+                        FROM filtered
+                        WHERE BTRIM(COALESCE(manager_code, '')) <> ''
+                    ) manager_items
+                ), '[]'::jsonb) AS managers,
+                COALESCE((
+                    SELECT jsonb_agg(item ORDER BY item ->> 'label')
+                    FROM (
+                        SELECT DISTINCT jsonb_build_object('value', cidade, 'label', cidade) AS item
+                        FROM filtered
+                        WHERE BTRIM(COALESCE(cidade, '')) <> ''
+                    ) city_items
+                ), '[]'::jsonb) AS cities,
+                COALESCE((
+                    SELECT jsonb_agg(item ORDER BY item ->> 'label')
+                    FROM (
+                        SELECT DISTINCT jsonb_build_object('value', bairro, 'label', bairro) AS item
+                        FROM filtered
+                        WHERE BTRIM(COALESCE(bairro, '')) <> ''
+                    ) district_items
+                ), '[]'::jsonb) AS districts,
+                COALESCE((
+                    SELECT jsonb_agg(item ORDER BY item ->> 'label')
+                    FROM (
+                        SELECT DISTINCT jsonb_build_object('value', visit_day, 'label', visit_day) AS item
+                        FROM filtered
+                        WHERE BTRIM(COALESCE(visit_day, '')) <> ''
+                    ) visit_day_items
+                ), '[]'::jsonb) AS visit_days
+            """
+        ).format(
+            schema=sql.Identifier(self.schema),
+            where=sql.SQL(" AND ").join(filters),
+            option_where=sql.SQL(" AND ").join(option_filters),
+        )
+
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                row = cur.fetchone() or {}
+        return {
+            "operations": _normalize_option_items(row.get("operations")),
+            "sellers": _normalize_option_items(row.get("sellers")),
+            "managers": _normalize_option_items(row.get("managers")),
+            "cities": _normalize_option_items(row.get("cities")),
+            "districts": _normalize_option_items(row.get("districts")),
+            "visit_days": _normalize_option_items(row.get("visit_days")),
+        }
+
     def _execute_summary_query(
         self,
         *,
@@ -801,17 +1280,17 @@ def _row_to_scope_summary(row: dict[str, Any] | None) -> GiroScopeSummary:
             litrinho_ok_count=0,
             litrinho_nok_count=0,
             litrinho_zero_count=0,
-            litrinho_gap_total="0,00",
+            litrinho_gap_total="0",
             inteira_monitored_count=0,
             inteira_ok_count=0,
             inteira_nok_count=0,
             inteira_zero_count=0,
-            inteira_gap_total="0,00",
+            inteira_gap_total="0",
             litrao_monitored_count=0,
             litrao_ok_count=0,
             litrao_nok_count=0,
             litrao_zero_count=0,
-            litrao_gap_total="0,00",
+            litrao_gap_total="0",
             planilha_atualizada_em="-",
         )
     return GiroScopeSummary(**_scope_summary_kwargs(row))
@@ -826,17 +1305,17 @@ def _scope_summary_kwargs(row: dict[str, Any]) -> dict[str, Any]:
         "litrinho_ok_count": int(row.get("litrinho_ok_count") or 0),
         "litrinho_nok_count": int(row.get("litrinho_nok_count") or 0),
         "litrinho_zero_count": int(row.get("litrinho_zero_count") or 0),
-        "litrinho_gap_total": _format_money(row.get("litrinho_gap_total")),
+        "litrinho_gap_total": _format_box_quantity(row.get("litrinho_gap_total")),
         "inteira_monitored_count": int(row.get("inteira_monitored_count") or 0),
         "inteira_ok_count": int(row.get("inteira_ok_count") or 0),
         "inteira_nok_count": int(row.get("inteira_nok_count") or 0),
         "inteira_zero_count": int(row.get("inteira_zero_count") or 0),
-        "inteira_gap_total": _format_money(row.get("inteira_gap_total")),
+        "inteira_gap_total": _format_box_quantity(row.get("inteira_gap_total")),
         "litrao_monitored_count": int(row.get("litrao_monitored_count") or 0),
         "litrao_ok_count": int(row.get("litrao_ok_count") or 0),
         "litrao_nok_count": int(row.get("litrao_nok_count") or 0),
         "litrao_zero_count": int(row.get("litrao_zero_count") or 0),
-        "litrao_gap_total": _format_money(row.get("litrao_gap_total")),
+        "litrao_gap_total": _format_box_quantity(row.get("litrao_gap_total")),
         "planilha_atualizada_em": _format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
     }
 
@@ -848,6 +1327,32 @@ def _normalize_scope_values(values: list[str] | None) -> list[str]:
     seen: set[str] = set()
     for value in values:
         item = normalize_stored_scope_value(str(value or ""))
+        if item and item not in seen:
+            normalized.append(item)
+            seen.add(item)
+    return normalized
+
+
+def _normalize_text_filter_values(values: str | list[str] | tuple[str, ...] | None) -> list[str]:
+    if values is None:
+        return []
+    raw_values = values if isinstance(values, (list, tuple)) else [values]
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in raw_values:
+        for part in str(value or "").replace("|", ",").split(","):
+            item = " ".join(part.strip().split())
+            if item and item not in seen:
+                normalized.append(item)
+                seen.add(item)
+    return normalized
+
+
+def _normalize_scope_filter_values(values: str | list[str] | tuple[str, ...] | None) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in _normalize_text_filter_values(values):
+        item = normalize_stored_scope_value(value)
         if item and item not in seen:
             normalized.append(item)
             seen.add(item)
@@ -881,6 +1386,17 @@ def _normalize_visit_day_token(value: str) -> str:
     return visit_day_map.get(normalized, normalized)
 
 
+def _normalize_visit_day_filter_values(values: str | list[str] | tuple[str, ...] | None) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in _normalize_text_filter_values(values):
+        item = _normalize_visit_day_token(value)
+        if item and item not in seen:
+            normalized.append(item)
+            seen.add(item)
+    return normalized
+
+
 def _has_scope_values(values: list[str] | None) -> bool:
     return any(str(value or "").strip() for value in values or [])
 
@@ -906,24 +1422,39 @@ def _format_reference_date(reference_date: Any, batch_imported_at: Any) -> str:
 
 
 def _format_money(value: Any) -> str:
-    if value is None:
+    amount = _parse_decimal(value)
+    if amount is None:
         return "0,00"
+    return f"{amount:.2f}".replace(".", ",")
+
+
+def _format_box_quantity(value: Any) -> str:
+    amount = _parse_decimal(value)
+    if amount is None:
+        return "0"
+    return str(int(amount.to_integral_value()))
+
+
+def _parse_decimal(value: Any) -> Decimal | None:
+    if value is None:
+        return None
     if isinstance(value, Decimal):
-        return f"{value:.2f}".replace(".", ",")
+        return value
     if isinstance(value, (int, float)):
-        return f"{value:.2f}".replace(".", ",")
+        return Decimal(str(value))
     raw = str(value or "").strip()
     if not raw:
-        return "0,00"
+        return None
+    if raw.upper().startswith("R$"):
+        raw = raw[2:].strip()
     if "," in raw:
         cleaned = raw.replace(".", "").replace(",", ".").replace("+", "").strip()
     else:
         cleaned = raw.replace("+", "").strip()
     try:
-        amount = Decimal(cleaned)
+        return Decimal(cleaned)
     except (InvalidOperation, ValueError):
-        return raw
-    return f"{amount:.2f}".replace(".", ",")
+        return None
 
 
 def _row_to_client_record(row: dict[str, Any]) -> GiroClientRecord:
@@ -933,17 +1464,17 @@ def _row_to_client_record(row: dict[str, Any]) -> GiroClientRecord:
         nome=str(row.get("fantasia") or "").strip(),
         setor=normalize_stored_scope_value(str(row.get("setor") or "")),
         revenda=str(row.get("revenda") or "").strip(),
-        total_litrinho=_format_money(row.get("total_litrinho")),
-        real_litrinho=_format_money(row.get("real_litrinho")),
-        gap_litrinho=_format_money(row.get("gap_litrinho")),
+        total_litrinho=_format_box_quantity(row.get("total_litrinho")),
+        real_litrinho=_format_box_quantity(row.get("real_litrinho")),
+        gap_litrinho=_format_box_quantity(row.get("gap_litrinho")),
         giro_litrinho=str(row.get("giro_litrinho") or "-").strip() or "-",
-        total_inteira=_format_money(row.get("total_inteira")),
-        real_inteira=_format_money(row.get("real_inteira")),
-        gap_inteira=_format_money(row.get("gap_inteira")),
+        total_inteira=_format_box_quantity(row.get("total_inteira")),
+        real_inteira=_format_box_quantity(row.get("real_inteira")),
+        gap_inteira=_format_box_quantity(row.get("gap_inteira")),
         giro_inteira=str(row.get("giro_inteira") or "-").strip() or "-",
-        total_litrao=_format_money(row.get("total_litrao")),
-        real_litrao=_format_money(row.get("real_litrao")),
-        gap_litrao=_format_money(row.get("gap_litrao")),
+        total_litrao=_format_box_quantity(row.get("total_litrao")),
+        real_litrao=_format_box_quantity(row.get("real_litrao")),
+        gap_litrao=_format_box_quantity(row.get("gap_litrao")),
         giro_litrao=str(row.get("giro_litrao") or "-").strip() or "-",
         planilha_atualizada_em=_format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
     )
@@ -956,10 +1487,79 @@ def _row_to_giro_zero_base_record(row: dict[str, Any]) -> GiroZeroBaseRecord:
         nome=str(row.get("fantasia") or "").strip(),
         setor=normalize_stored_scope_value(str(row.get("setor") or "")),
         revenda=str(row.get("revenda") or "").strip(),
-        total_caixas=_format_money(row.get("total_caixas")),
-        gap_caixas=_format_money(row.get("gap_caixas")),
-        gap_litrinho=_format_money(row.get("gap_litrinho")),
-        gap_inteira=_format_money(row.get("gap_inteira")),
-        gap_litrao=_format_money(row.get("gap_litrao")),
+        total_caixas=_format_box_quantity(row.get("total_caixas")),
+        gap_caixas=_format_box_quantity(row.get("gap_caixas")),
+        gap_litrinho=_format_box_quantity(row.get("gap_litrinho")),
+        gap_inteira=_format_box_quantity(row.get("gap_inteira")),
+        gap_litrao=_format_box_quantity(row.get("gap_litrao")),
         planilha_atualizada_em=_format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
     )
+
+
+def _row_to_recolha_opportunity(row: dict[str, Any]) -> GiroRecolhaOpportunity:
+    return GiroRecolhaOpportunity(
+        filial=normalize_stored_scope_value(str(row.get("filial") or "")),
+        cod_pdv=normalize_stored_scope_value(str(row.get("nb") or "")),
+        nome=str(row.get("fantasia") or "").strip(),
+        documento=str(row.get("documento") or "").strip(),
+        revenda=str(row.get("revenda") or "").strip(),
+        setor=normalize_stored_scope_value(str(row.get("setor") or "")),
+        seller_code=normalize_stored_scope_value(str(row.get("filial_setor_key") or "")),
+        manager_code=normalize_stored_scope_value(str(row.get("filial_gv_key") or "")),
+        status_pdv=str(row.get("status_pdv") or "").strip(),
+        cidade=str(row.get("cidade") or "").strip(),
+        bairro=str(row.get("bairro") or "").strip(),
+        visit_day=str(row.get("visit_day") or "").strip(),
+        total_caixas=_format_box_quantity(row.get("total_caixas")),
+        real_caixas=_format_box_quantity(row.get("real_caixas")),
+        gap_caixas=_format_box_quantity(row.get("gap_caixas")),
+        gap_litrinho=_format_box_quantity(row.get("gap_litrinho")),
+        gap_inteira=_format_box_quantity(row.get("gap_inteira")),
+        gap_litrao=_format_box_quantity(row.get("gap_litrao")),
+        giro_litrinho=str(row.get("giro_litrinho") or "-").strip() or "-",
+        giro_inteira=str(row.get("giro_inteira") or "-").strip() or "-",
+        giro_litrao=str(row.get("giro_litrao") or "-").strip() or "-",
+        faturamento_total=_format_currency(row.get("faturamento_total")),
+        pedidos_total=_format_quantity(row.get("pedidos_total")),
+        media_faturamento_pedido=_format_currency(row.get("media_faturamento_pedido")),
+        percentual_pag_atraso=str(row.get("percentual_pag_atraso") or "-").strip() or "-",
+        prazo_atual=str(row.get("prazo_atual") or "-").strip() or "-",
+        cond_pag_atual=str(row.get("cond_pag_atual") or "-").strip() or "-",
+        planilha_giro_atualizada_em=_format_reference_date(row.get("giro_reference_date"), row.get("giro_batch_imported_at")),
+        planilha_faturamento_atualizada_em=_format_reference_date(row.get("prazo_reference_date"), row.get("prazo_batch_imported_at")),
+    )
+
+
+def _format_currency(value: Any) -> str:
+    return f"R$ {_format_money(value)}"
+
+
+def _format_quantity(value: Any) -> str:
+    amount = _parse_decimal(value)
+    if amount is None:
+        return "0"
+    if amount == amount.to_integral_value():
+        return str(int(amount))
+    normalized = format(amount.normalize(), "f").rstrip("0").rstrip(".")
+    return normalized.replace(".", ",") or "0"
+
+
+def _normalize_option_items(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    options: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        option_value = str(item.get("value") or "").strip()
+        if not option_value or option_value in seen:
+            continue
+        seen.add(option_value)
+        options.append(
+            {
+                "value": option_value,
+                "label": str(item.get("label") or option_value).strip() or option_value,
+            }
+        )
+    return options

@@ -58,6 +58,13 @@ class Settings:
     payip_token_cache_file: str
     payip_timeout_seconds: float
     payip_mfa_code: str
+    daily_route_broadcast_enabled: bool
+    daily_route_broadcast_time: str
+    daily_route_broadcast_timezone: str
+    daily_route_broadcast_check_interval_seconds: int
+    daily_route_broadcast_initial_delay_seconds: int
+    daily_route_broadcast_audiences: tuple[str, ...]
+    daily_route_broadcast_state_file: str
 
 
 def _strip_wrapping_quotes(value: str) -> str:
@@ -247,5 +254,24 @@ def get_settings() -> Settings:
         payip_mfa_code=(
             os.getenv("PAYIP_MFA_CODE", "").strip()
             or os.getenv("PAYMENTS_API_TOTP", "").strip()
+        ),
+        daily_route_broadcast_enabled=_parse_bool(os.getenv("DAILY_ROUTE_BROADCAST_ENABLED", "0"), default=False),
+        daily_route_broadcast_time=os.getenv("DAILY_ROUTE_BROADCAST_TIME", "07:00").strip() or "07:00",
+        daily_route_broadcast_timezone=(
+            os.getenv("DAILY_ROUTE_BROADCAST_TIMEZONE", "America/Fortaleza").strip()
+            or "America/Fortaleza"
+        ),
+        daily_route_broadcast_check_interval_seconds=max(
+            60,
+            int(os.getenv("DAILY_ROUTE_BROADCAST_CHECK_INTERVAL_SECONDS", "300")),
+        ),
+        daily_route_broadcast_initial_delay_seconds=max(
+            0,
+            int(os.getenv("DAILY_ROUTE_BROADCAST_INITIAL_DELAY_SECONDS", "20")),
+        ),
+        daily_route_broadcast_audiences=_parse_csv_tokens(os.getenv("DAILY_ROUTE_BROADCAST_AUDIENCES", "vendedor")),
+        daily_route_broadcast_state_file=(
+            os.getenv("DAILY_ROUTE_BROADCAST_STATE_FILE", "").strip()
+            or str(PROJECT_ROOT / "exports" / "scheduled_messages" / "daily_route_state.json")
         ),
     )

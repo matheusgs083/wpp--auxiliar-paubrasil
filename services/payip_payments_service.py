@@ -3,12 +3,15 @@ from __future__ import annotations
 import re
 from uuid import uuid4
 from dataclasses import dataclass
-from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 from bot_api.config import Settings
-from bot_api.integrations.payip_client import PayipClient, PayipConfig, summarize_collection_response
+from bot_api.integrations.payip_client import PayipClient, PayipConfig, PayipError, summarize_collection_response
+
+DEFAULT_PAYMENT_AMOUNT_TOLERANCE = Decimal("0.05")
+PAYIP_LOCAL_TIMEZONE = timezone(timedelta(hours=-3))
 
 
 @dataclass(frozen=True)
@@ -89,6 +92,8 @@ class PayipPaymentsService:
         search: str = "",
         due_date_start: str = "",
         due_date_end: str = "",
+        paid_date_start: str = "",
+        paid_date_end: str = "",
         created_at_start: str = "",
         created_at_end: str = "",
         filial: str = "",
@@ -103,6 +108,8 @@ class PayipPaymentsService:
             search=search,
             due_date_start=due_date_start,
             due_date_end=due_date_end,
+            paid_date_start=paid_date_start,
+            paid_date_end=paid_date_end,
             created_at_start=created_at_start,
             created_at_end=created_at_end,
             filial=filial,
@@ -117,6 +124,91 @@ class PayipPaymentsService:
             total_items=summary["total_items"],
             page=summary["page"] or page,
             page_size=summary["page_size"] or page_size,
+            filial=filial,
+            company_id=company_id,
+        )
+
+    def find_payments_by_amount_and_paid_date(
+        self,
+        *,
+        filial: str,
+        amount: Decimal | str | int | float,
+        day: date | str,
+        tolerance: Decimal | str | int | float = DEFAULT_PAYMENT_AMOUNT_TOLERANCE,
+        status: str = "",
+        page_size: int = 100,
+        max_pages: int | None = None,
+    ) -> PayipPaymentsPage:
+        normalized_amount = _payment_amount(amount)
+        if normalized_amount is None or normalized_amount <= 0:
+            raise PayipError("Valor PayIP invalido para busca")
+        normalized_tolerance = _payment_amount(tolerance)
+        if normalized_tolerance is None or normalized_tolerance < 0:
+            raise PayipError("Tolerancia PayIP invalida para busca")
+        normalized_day = _date_text(day)
+        if not normalized_day:
+            raise PayipError("Data PayIP invalida para busca")
+        try:
+            date.fromisoformat(normalized_day)
+        except ValueError as exc:
+            raise PayipError("Data PayIP invalida para busca") from exc
+
+        company_id = self.client.resolve_company_id(filial=filial)
+        safe_page_size = max(1, min(int(page_size or 100), 500))
+        safe_max_pages = max(1, int(max_pages)) if max_pages is not None else None
+        filtered_items: list[dict[str, Any]] = []
+        raw_pages: list[dict[str, Any]] = []
+        api_total_items: int | None = None
+        page = 1
+
+        while safe_max_pages is None or page <= safe_max_pages:
+            raw = self.client.list_payments(
+                page=page,
+                page_size=safe_page_size,
+                status=status,
+                paid_date_start=normalized_day,
+                paid_date_end=normalized_day,
+                filial=filial,
+                company_id=company_id,
+            )
+            raw_pages.append(raw)
+            summary = summarize_collection_response(raw)
+            if api_total_items is None:
+                api_total_items = summary["total_items"]
+
+            page_items = tuple(item for item in _extract_payment_items(raw) if isinstance(item, dict))
+            filtered_items.extend(
+                item
+                for item in page_items
+                if _payment_matches_paid_date(item, normalized_day)
+                and _payment_matches_paid_amount(item, normalized_amount, tolerance=normalized_tolerance)
+            )
+
+            current_page_size = summary["page_size"] or safe_page_size
+            current_page = summary["page"] or page
+            if not page_items:
+                break
+            if api_total_items is not None and current_page * current_page_size >= api_total_items:
+                break
+            if api_total_items is None and len(page_items) < safe_page_size:
+                break
+            page += 1
+
+        raw_result = {
+            "pages": raw_pages,
+            "api_total_items": api_total_items,
+            "filtered_count": len(filtered_items),
+            "amount": str(normalized_amount),
+            "tolerance": str(normalized_tolerance),
+            "paid_date": normalized_day,
+        }
+        return PayipPaymentsPage(
+            raw=raw_result,
+            items=tuple(filtered_items),
+            items_count=len(filtered_items),
+            total_items=len(filtered_items),
+            page=1,
+            page_size=safe_page_size,
             filial=filial,
             company_id=company_id,
         )
@@ -253,6 +345,115 @@ def _date_text(value: date | str) -> str:
     if isinstance(value, date):
         return value.isoformat()
     return str(value or "").strip()
+
+
+def _payment_amount(value: Decimal | str | int | float | None) -> Decimal | None:
+    parsed = _parse_decimal_value(value)
+    if parsed is None:
+        return None
+    return parsed.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _payment_matches_paid_amount(
+    item: dict[str, Any],
+    target_amount: Decimal,
+    *,
+    tolerance: Decimal = DEFAULT_PAYMENT_AMOUNT_TOLERANCE,
+) -> bool:
+    candidates = [item.get("amountPaid")]
+    amount_details = item.get("amountDetails")
+    if isinstance(amount_details, dict):
+        candidates.append(amount_details.get("amountPaid"))
+
+    parsed_candidates = [_payment_amount(candidate) for candidate in candidates]
+    parsed_candidates = [candidate for candidate in parsed_candidates if candidate is not None]
+    if parsed_candidates:
+        return any(abs(candidate - target_amount) <= tolerance for candidate in parsed_candidates)
+
+    return _payment_matches_charge_amount(item, target_amount, tolerance=tolerance)
+
+
+def _payment_matches_charge_amount(
+    item: dict[str, Any],
+    target_amount: Decimal,
+    *,
+    tolerance: Decimal = DEFAULT_PAYMENT_AMOUNT_TOLERANCE,
+) -> bool:
+    candidates = [item.get("amount")]
+    amount_details = item.get("amountDetails")
+    if isinstance(amount_details, dict):
+        candidates.extend([amount_details.get("amount"), amount_details.get("amountTotal")])
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        parsed = _payment_amount(candidate)
+        if parsed is not None and abs(parsed - target_amount) <= tolerance:
+            return True
+    return False
+
+
+def _payment_matches_paid_date(item: dict[str, Any], target_day: str) -> bool:
+    try:
+        parsed_target_day = date.fromisoformat(target_day)
+    except ValueError:
+        return False
+
+    for key in ("paidDate", "paymentDate", "paidAt"):
+        parsed = _parse_payip_datetime(item.get(key))
+        if parsed is not None and parsed.astimezone(PAYIP_LOCAL_TIMEZONE).date() == parsed_target_day:
+            return True
+    return False
+
+
+def _parse_payip_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _parse_decimal_value(value: Decimal | str | int | float | None) -> Decimal | None:
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, (int, float)):
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+    cleaned = (
+        raw.replace("R$", "")
+        .replace("r$", "")
+        .replace("%", "")
+        .replace(" ", "")
+        .replace("+", "")
+    )
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rfind(",") > cleaned.rfind("."):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "," in cleaned:
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    try:
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def _parse_client_record(item: Any) -> PayipClientRecord | None:

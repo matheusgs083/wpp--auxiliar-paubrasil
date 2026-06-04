@@ -49,6 +49,11 @@ from bot_api.services.comodatos_query_service import (
     ComodatoRecord,
     ComodatosQueryService,
 )
+from bot_api.services.critica_rn_query_service import (
+    CriticaRnQueryService,
+    CriticaRnRecord,
+    CriticaRnSummary,
+)
 from bot_api.services.giro_query_service import (
     GiroClientRecord,
     GiroFilialSummary,
@@ -71,7 +76,7 @@ from bot_api.services.prazo_limite_query_service import (
 )
 from bot_api.services.recolha_request_service import RecolhaRequestRecord, RecolhaRequestService
 from bot_api.integrations.payip_client import PayipError, PayipMfaRequired
-from bot_api.services.payip_payments_service import PayipPaymentsService
+from bot_api.services.payip_payments_service import DEFAULT_PAYMENT_AMOUNT_TOLERANCE, PayipPaymentsService
 from bot_api.services.inadimplencia_query_service import (
     InadimplenciaClientSummary,
     InadimplenciaFinanceManagementSummary,
@@ -137,6 +142,16 @@ PAYIP_ACTION_PENDING_CLIENT = "payip:action:pending_client"
 PAYIP_ACTION_CLIENT = "payip:action:client"
 PAYIP_ACTION_CREATE_CHARGE = "payip:action:create_charge"
 PAYIP_ACTION_STATEMENT = "payip:action:statement"
+PAYIP_ACTION_AMOUNT_DAY = "payip:action:amount_day"
+REPEAT_SEARCH_REGISTRATION = "repeat:search:registration"
+REPEAT_SEARCH_DOCUMENT = "repeat:search:document"
+REPEAT_SEARCH_NAME = "repeat:search:name"
+REPEAT_PAYIP_INVOICE = "repeat:payip:invoice"
+REPEAT_PAYIP_PENDING_CLIENT = "repeat:payip:pending_client"
+REPEAT_PAYIP_CLIENT = "repeat:payip:client"
+REPEAT_PAYIP_CREATE_CHARGE = "repeat:payip:create_charge"
+REPEAT_PAYIP_STATEMENT = "repeat:payip:statement"
+REPEAT_PAYIP_AMOUNT_DAY = "repeat:payip:amount_day"
 
 FINANCE_SUMMARY_TOTAL = "finance:summary:total"
 FINANCE_SUMMARY_BY_FILIAL = "finance:summary:by_filial"
@@ -249,6 +264,7 @@ class LookupSession:
     step: str = "idle"
     search_context: str = "cliente"
     return_menu: str = ""
+    repeat_action: str = ""
     filial: str = ""
     target_phone: str = ""
     current_name: str = ""
@@ -307,6 +323,9 @@ class LookupSession:
     payip_pending_status: str = ""
     payip_pending_date_start: str = ""
     payip_pending_date_end: str = ""
+    payip_pending_amount: str = ""
+    payip_pending_day: str = ""
+    payip_pending_tolerance: str = ""
     payip_pix_payloads: tuple[PayipPixPayload, ...] = ()
     payip_charge_filial: str = ""
     payip_charge_client_code: str = ""
@@ -401,6 +420,7 @@ class CustomerLookupFlow:
         access_control: AccessControl,
         payip_payments_service: PayipPaymentsService | None = None,
         recolha_request_service: RecolhaRequestService | None = None,
+        critica_rn_service: CriticaRnQueryService | None = None,
         session_ttl_minutes: int = 20,
     ) -> None:
         self.query_service = query_service
@@ -410,6 +430,7 @@ class CustomerLookupFlow:
         self.documentacao_pendente_service = documentacao_pendente_service
         self.prazo_limite_service = prazo_limite_service
         self.payip_payments_service = payip_payments_service
+        self.critica_rn_service = critica_rn_service
         self.recolha_request_service = recolha_request_service or RecolhaRequestService(
             Path("exports") / "recolhas" / "solicitacoes_recolha.csv"
         )
@@ -480,6 +501,43 @@ class CustomerLookupFlow:
                 decision=decision,
             )
 
+        if session.step == "awaiting_critica_action":
+            readiness_error = self._ensure_critica_rn_ready(decision)
+            if readiness_error is not None:
+                return readiness_error
+            selected_option = _select_interactive_option(
+                text=text,
+                normalized=normalized,
+                options=_build_critica_menu_response().options,
+            )
+            if selected_option is not None:
+                return self._handle_critica_command(
+                    sender=incoming.sender,
+                    session=session,
+                    text=selected_option.option_id,
+                    normalized=_normalize_choice(selected_option.option_id),
+                    decision=decision,
+                )
+            if _looks_like_critica_command(normalized):
+                return self._handle_critica_command(
+                    sender=incoming.sender,
+                    session=session,
+                    text=text,
+                    normalized=normalized,
+                    decision=decision,
+                )
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[incoming.sender] = session
+            menu = _build_critica_menu_response()
+            return OutgoingMessage(
+                kind=menu.kind,
+                title=menu.title,
+                text=f"Nao entendi essa opcao.\n\n{menu.text}",
+                footer=menu.footer,
+                button_text=menu.button_text,
+                options=menu.options,
+            )
+
         if session.step == "awaiting_intent_clarification":
             selected_option = _select_interactive_option(
                 text=text,
@@ -514,6 +572,12 @@ class CustomerLookupFlow:
                 return back_response
 
         if session.step == "awaiting_post_result_navigation" and normalized:
+            if _is_repeat_query_command(normalized):
+                return self._repeat_post_result_navigation(
+                    sender=incoming.sender,
+                    session=session,
+                    decision=decision,
+                )
             payip_pix_selection = _parse_payip_pix_selection(normalized)
             if payip_pix_selection is not None and session.payip_pix_payloads:
                 session.updated_at = datetime.now(timezone.utc)
@@ -522,6 +586,14 @@ class CustomerLookupFlow:
                     session.payip_pix_payloads,
                     selection=payip_pix_selection,
                     payip_payments_service=self.payip_payments_service,
+                )
+            if _looks_like_critica_command(normalized):
+                return self._handle_critica_command(
+                    sender=incoming.sender,
+                    session=session,
+                    text=text,
+                    normalized=normalized,
+                    decision=decision,
                 )
             if self._can_update_recolhas(decision) and _looks_like_recolha_update_request(normalized):
                 update_request = _parse_recolha_finance_update_request(text=text, normalized=normalized)
@@ -806,7 +878,6 @@ class CustomerLookupFlow:
                 )
             if session.search_context == "inadimplencia" and normalized in {
                 SEARCH_BY_INADIMPLENTES_BASE,
-                "5",
                 "inadimplentes da base",
                 "mostrar inadimplentes",
                 "ver inadimplentes",
@@ -830,6 +901,15 @@ class CustomerLookupFlow:
                     page_size=INADIMPLENCIA_PAGE_SIZE,
                     list_context=INADIMPLENCIA_CONTEXT_SCOPE_BASE,
                 )
+            if session.search_context == "inadimplencia":
+                due_bucket = _parse_finance_due_bucket(normalized)
+                if due_bucket in {"tomorrow", "in_two_days"}:
+                    return self._run_scoped_inadimplencia_due_bucket(
+                        sender=incoming.sender,
+                        session=session,
+                        decision=decision,
+                        due_bucket=due_bucket,
+                    )
             self.sessions[incoming.sender] = session
             return self._build_search_menu(
                 search_context=session.search_context,
@@ -905,6 +985,15 @@ class CustomerLookupFlow:
                     )
                 )
             return self._open_recolha_request(
+                sender=incoming.sender,
+                session=session,
+                text=text,
+                normalized=normalized,
+                decision=decision,
+            )
+
+        if _looks_like_critica_command(normalized):
+            return self._handle_critica_command(
                 sender=incoming.sender,
                 session=session,
                 text=text,
@@ -1420,16 +1509,9 @@ class CustomerLookupFlow:
         if session.step == "awaiting_filial":
             direct_lookup = _parse_direct_registration_lookup(text)
             if direct_lookup is not None:
-                if session.search_context == "comodato":
-                    self._remember_last_context(
-                        session,
-                        intent="comodato_client",
-                        search_context="comodato",
-                        client_filial=direct_lookup[0],
-                        client_cod_pdv=direct_lookup[1],
-                    )
-                self._reset_session(incoming.sender)
-                return self._run_registration_lookup(
+                return self._run_repeatable_registration_lookup(
+                    sender=incoming.sender,
+                    session=session,
                     decision=decision,
                     search_context=session.search_context,
                     filial=direct_lookup[0],
@@ -1454,16 +1536,9 @@ class CustomerLookupFlow:
         if session.step == "awaiting_cod_pdv":
             direct_lookup = _parse_direct_registration_lookup(text)
             if direct_lookup is not None:
-                if session.search_context == "comodato":
-                    self._remember_last_context(
-                        session,
-                        intent="comodato_client",
-                        search_context="comodato",
-                        client_filial=direct_lookup[0],
-                        client_cod_pdv=direct_lookup[1],
-                    )
-                self._reset_session(incoming.sender)
-                return self._run_registration_lookup(
+                return self._run_repeatable_registration_lookup(
+                    sender=incoming.sender,
+                    session=session,
                     decision=decision,
                     search_context=session.search_context,
                     filial=direct_lookup[0],
@@ -1475,16 +1550,9 @@ class CustomerLookupFlow:
                 return OutgoingMessage(
                     text=f"Me envie {_lookup_code_label(session.search_context)} ou os dois juntos, por exemplo: 3 6643."
                 )
-            if session.search_context == "comodato":
-                self._remember_last_context(
-                    session,
-                    intent="comodato_client",
-                    search_context="comodato",
-                    client_filial=session.filial,
-                    client_cod_pdv=cod_pdv,
-                )
-            self._reset_session(incoming.sender)
-            return self._run_registration_lookup(
+            return self._run_repeatable_registration_lookup(
+                sender=incoming.sender,
+                session=session,
                 decision=decision,
                 search_context=session.search_context,
                 filial=session.filial,
@@ -2502,7 +2570,9 @@ class CustomerLookupFlow:
             access_error = self._ensure_scoped_lookup_access(decision, search_context="cliente")
             if access_error is not None:
                 return access_error
-            return self._run_registration_lookup(
+            return self._run_repeatable_registration_lookup(
+                sender=incoming.sender,
+                session=session,
                 decision=decision,
                 search_context="cliente",
                 filial=direct_lookup[0],
@@ -2514,15 +2584,12 @@ class CustomerLookupFlow:
             readiness_error = self._ensure_search_context_ready("cliente", decision=decision)
             if readiness_error is not None:
                 return readiness_error
-            records = self.query_service.search_by_document(
-                document=direct_document,
-                limit=20,
-            )
-            return self._build_search_response(
-                records,
-                f"CPF/CNPJ {direct_document}",
+            session.search_context = "cliente"
+            return self._run_document_lookup(
+                sender=incoming.sender,
+                session=session,
                 decision=decision,
-                scope_restricted=False,
+                document=direct_document,
             )
 
         if normalized in {value for value in {MENU_SEARCH, search_shortcut, "buscar cliente", "buscar"} if value}:
@@ -2825,6 +2892,7 @@ class CustomerLookupFlow:
         decision: AccessDecision,
     ) -> OutgoingMessage | None:
         return_menu = session.return_menu
+        session.repeat_action = ""
         if not return_menu:
             self._reset_session(sender)
             return self._build_main_menu(decision)
@@ -3070,15 +3138,67 @@ class CustomerLookupFlow:
         self._reset_session(sender)
         return self._build_main_menu(decision)
 
+    def _repeat_post_result_navigation(
+        self,
+        sender: str,
+        session: LookupSession,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        repeat_action = session.repeat_action
+        if repeat_action:
+            session.return_menu = ""
+            session.repeat_action = ""
+
+        if repeat_action == REPEAT_SEARCH_REGISTRATION:
+            return self._activate_search_mode(sender, session, search_mode="registration")
+        if repeat_action == REPEAT_SEARCH_DOCUMENT:
+            return self._activate_search_mode(sender, session, search_mode="document")
+        if repeat_action == REPEAT_SEARCH_NAME:
+            return self._activate_search_mode(sender, session, search_mode="name")
+        if repeat_action == REPEAT_PAYIP_INVOICE:
+            session.step = "finance_payip_awaiting_invoice"
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[sender] = session
+            return self._build_payip_invoice_prompt()
+        if repeat_action in {REPEAT_PAYIP_PENDING_CLIENT, REPEAT_PAYIP_CLIENT}:
+            pending_only = repeat_action == REPEAT_PAYIP_PENDING_CLIENT
+            session.step = "finance_payip_awaiting_client_code"
+            session.payip_pending_status = "PENDING" if pending_only else ""
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[sender] = session
+            return self._build_payip_client_code_prompt(pending_only=pending_only)
+        if repeat_action == REPEAT_PAYIP_CREATE_CHARGE:
+            session.step = "finance_payip_charge_awaiting_client"
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[sender] = session
+            return self._build_payip_charge_client_prompt()
+        if repeat_action == REPEAT_PAYIP_STATEMENT:
+            session.step = "finance_payip_statement_awaiting_period"
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[sender] = session
+            return self._build_payip_statement_prompt()
+        if repeat_action == REPEAT_PAYIP_AMOUNT_DAY:
+            session.step = "finance_payip_amount_day_awaiting_query"
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[sender] = session
+            return self._build_payip_amount_day_prompt()
+
+        return self._resume_post_result_navigation(sender=sender, session=session, decision=decision)
+
     def _store_post_result_navigation(
         self,
         sender: str,
         session: LookupSession,
         *,
         return_menu: str,
+        repeat_action: str = "",
     ) -> None:
+        if not repeat_action and return_menu == "search_menu":
+            if session.step in {"awaiting_fantasia", "awaiting_fantasia_selection"}:
+                repeat_action = REPEAT_SEARCH_NAME
         session.step = "awaiting_post_result_navigation"
         session.return_menu = return_menu
+        session.repeat_action = repeat_action
         session.updated_at = datetime.now(timezone.utc)
         self.sessions[sender] = session
 
@@ -3089,14 +3209,20 @@ class CustomerLookupFlow:
         outgoing: OutgoingMessage,
         *,
         return_menu: str,
+        repeat_action: str = "",
     ) -> OutgoingMessage:
-        self._store_post_result_navigation(sender, session, return_menu=return_menu)
+        self._store_post_result_navigation(
+            sender,
+            session,
+            return_menu=return_menu,
+            repeat_action=repeat_action,
+        )
         if outgoing.kind != "text":
             return outgoing
 
         normalized_text = _normalize_choice(outgoing.text)
         hint = _result_hint_text(allow_back=True)
-        if "envie a ou ant" in normalized_text:
+        if _normalize_choice(hint) in normalized_text:
             return outgoing
         text = _strip_result_hint(outgoing.text)
         if text:
@@ -3202,6 +3328,15 @@ class CustomerLookupFlow:
                 page=1,
                 page_size=INADIMPLENCIA_PAGE_SIZE,
                 list_context=INADIMPLENCIA_CONTEXT_SCOPE_BASE,
+            )
+
+        if option_id in {FINANCE_DUE_TOMORROW, FINANCE_DUE_IN_TWO_DAYS} and session.search_context == "inadimplencia":
+            due_bucket = "tomorrow" if option_id == FINANCE_DUE_TOMORROW else "in_two_days"
+            return self._run_scoped_inadimplencia_due_bucket(
+                sender=sender,
+                session=session,
+                decision=decision,
+                due_bucket=due_bucket,
             )
 
         if option_id == SEARCH_BY_VISIT_DAY:
@@ -3566,6 +3701,7 @@ class CustomerLookupFlow:
         decision: AccessDecision,
         *,
         document: str,
+        return_menu: str = "search_menu",
     ) -> OutgoingMessage:
         normalized_document = _normalize_document(document)
         if not normalized_document:
@@ -3587,8 +3723,13 @@ class CustomerLookupFlow:
                     client_cod_pdv=records[0].cod_pdv,
                     client_name=records[0].nome,
                 )
-            self._reset_session(sender)
-            return self._build_inadimplencia_response(records, f"CPF/CNPJ {normalized_document}")
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                self._build_inadimplencia_response(records, f"CPF/CNPJ {normalized_document}"),
+                return_menu=return_menu,
+                repeat_action=REPEAT_SEARCH_DOCUMENT,
+            )
         if session.search_context == "comodato":
             records = self.comodatos_service.search_by_document(
                 document=normalized_document,
@@ -3605,8 +3746,13 @@ class CustomerLookupFlow:
                     client_cod_pdv=records[0].cod_pdv,
                     client_name=records[0].nome,
                 )
-            self._reset_session(sender)
-            return self._build_comodato_response(records, f"CPF/CNPJ {normalized_document}")
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                self._build_comodato_response(records, f"CPF/CNPJ {normalized_document}"),
+                return_menu=return_menu,
+                repeat_action=REPEAT_SEARCH_DOCUMENT,
+            )
         if session.search_context == "giro":
             records = self._search_giro_by_document(normalized_document)
             if records:
@@ -3618,11 +3764,16 @@ class CustomerLookupFlow:
                     client_cod_pdv=records[0].cod_pdv,
                     client_name=records[0].nome,
                 )
-            self._reset_session(sender)
-            return self._build_giro_response(
-                records,
-                f"CPF/CNPJ {normalized_document}",
-                scope_restricted=False,
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                self._build_giro_response(
+                    records,
+                    f"CPF/CNPJ {normalized_document}",
+                    scope_restricted=False,
+                ),
+                return_menu=return_menu,
+                repeat_action=REPEAT_SEARCH_DOCUMENT,
             )
         if session.search_context == "documentacao":
             base_records = self.query_service.search_by_document(
@@ -3651,11 +3802,16 @@ class CustomerLookupFlow:
                     client_cod_pdv=documentacao_records[0].cod_pdv,
                     client_name=documentacao_records[0].nome,
                 )
-            self._reset_session(sender)
-            return self._build_documentacao_pendente_response(
-                documentacao_records,
-                f"CPF/CNPJ {normalized_document}",
-                scope_restricted=False,
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                self._build_documentacao_pendente_response(
+                    documentacao_records,
+                    f"CPF/CNPJ {normalized_document}",
+                    scope_restricted=False,
+                ),
+                return_menu=return_menu,
+                repeat_action=REPEAT_SEARCH_DOCUMENT,
             )
         if session.search_context == "prazo_limite":
             prazo_limite_records = self.prazo_limite_service.search_by_document(
@@ -3673,12 +3829,17 @@ class CustomerLookupFlow:
                     client_cod_pdv=prazo_limite_records[0].cod_pdv,
                     client_name=prazo_limite_records[0].nome,
                 )
-            self._reset_session(sender)
-            return self._build_prazo_limite_response(
-                prazo_limite_records,
-                f"CPF/CNPJ {normalized_document}",
-                decision=decision,
-                scope_restricted=False,
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                self._build_prazo_limite_response(
+                    prazo_limite_records,
+                    f"CPF/CNPJ {normalized_document}",
+                    decision=decision,
+                    scope_restricted=False,
+                ),
+                return_menu=return_menu,
+                repeat_action=REPEAT_SEARCH_DOCUMENT,
             )
         records = self.query_service.search_by_document(
             document=normalized_document,
@@ -3695,12 +3856,17 @@ class CustomerLookupFlow:
                 client_cod_pdv=records[0].cod_pdv,
                 client_name=records[0].nome_fantasia or records[0].razao_social,
             )
-        self._reset_session(sender)
-        return self._build_search_response(
-            records,
-            f"CPF/CNPJ {normalized_document}",
-            decision=decision,
-            scope_restricted=False,
+        return self._with_post_result_navigation(
+            sender,
+            session,
+            self._build_search_response(
+                records,
+                f"CPF/CNPJ {normalized_document}",
+                decision=decision,
+                scope_restricted=False,
+            ),
+            return_menu=return_menu,
+            repeat_action=REPEAT_SEARCH_DOCUMENT,
         )
 
     def _apply_visit_day_selection(
@@ -4957,6 +5123,9 @@ class CustomerLookupFlow:
         session.payip_pending_status = ""
         session.payip_pending_date_start = ""
         session.payip_pending_date_end = ""
+        session.payip_pending_amount = ""
+        session.payip_pending_day = ""
+        session.payip_pending_tolerance = ""
         session.payip_pix_payloads = ()
         session.payip_charge_filial = ""
         session.payip_charge_client_code = ""
@@ -5682,6 +5851,7 @@ class CustomerLookupFlow:
                     cod_pdv=session.last_client_cod_pdv,
                 ),
                 return_menu="main",
+                repeat_action=REPEAT_SEARCH_REGISTRATION,
             )
 
         if option_id == CLARIFY_SCOPE_INADIMPLENCIA_LIST:
@@ -6203,6 +6373,47 @@ class CustomerLookupFlow:
             empty_text=bucket_meta["empty"],
         )
 
+    def _run_scoped_inadimplencia_due_bucket(
+        self,
+        sender: str,
+        session: LookupSession,
+        decision: AccessDecision,
+        *,
+        due_bucket: str,
+    ) -> OutgoingMessage:
+        access_error = self._ensure_scoped_lookup_access(decision, search_context="inadimplencia")
+        if access_error is not None:
+            self.sessions[sender] = session
+            return access_error
+
+        scope_label = self._inadimplencia_scope_label(decision)
+        bucket_meta = {
+            "in_two_days": {
+                "header": f"Esses sao os clientes que vencem em 2 dias da {scope_label}.",
+                "empty": (
+                    f"Nao encontrei clientes com vencimento em 2 dias na {scope_label}.\n"
+                    "Escolha outra faixa ou envie MENU."
+                ),
+            },
+            "tomorrow": {
+                "header": f"Esses sao os clientes que vencem amanha da {scope_label}.",
+                "empty": (
+                    f"Nao encontrei clientes com vencimento para amanha na {scope_label}.\n"
+                    "Escolha outra faixa ou envie MENU."
+                ),
+            },
+        }[due_bucket]
+        return self._open_inadimplencia_summary_selection(
+            sender=sender,
+            session=session,
+            decision=decision,
+            order_by="total_pendente",
+            due_bucket=due_bucket,
+            header_text=bucket_meta["header"],
+            empty_text=bucket_meta["empty"],
+            list_context=INADIMPLENCIA_CONTEXT_SCOPE_BASE,
+        )
+
     def _open_finance_summary_menu(
         self,
         *,
@@ -6359,16 +6570,9 @@ class CustomerLookupFlow:
                 self.sessions[sender] = session
                 return access_error
         if request.filial and request.cod_pdv:
-            if session.search_context == "comodato":
-                self._remember_last_context(
-                    session,
-                    intent="comodato_client",
-                    search_context="comodato",
-                    client_filial=request.filial,
-                    client_cod_pdv=request.cod_pdv,
-                )
-            self._reset_session(sender)
-            return self._run_registration_lookup(
+            return self._run_repeatable_registration_lookup(
+                sender=sender,
+                session=session,
                 decision=decision,
                 search_context=session.search_context,
                 filial=request.filial,
@@ -7764,6 +7968,7 @@ class CustomerLookupFlow:
                 "finance_payip_awaiting_client_code",
                 "finance_payip_awaiting_client_code_all",
                 "finance_payip_awaiting_client_filter",
+                "finance_payip_amount_day_awaiting_query",
                 "finance_payip_statement_awaiting_period",
                 "finance_payip_charge_awaiting_client",
                 "finance_payip_charge_awaiting_amount",
@@ -7883,6 +8088,16 @@ class CustomerLookupFlow:
                     date_end=session.payip_pending_date_end,
                     mfa_code=mfa_code,
                 )
+            if session.payip_pending_action == "amount_day":
+                return self._run_payip_amount_day_search(
+                    sender=sender,
+                    session=session,
+                    filial=session.payip_pending_filial,
+                    amount=session.payip_pending_amount,
+                    day=session.payip_pending_day,
+                    tolerance=session.payip_pending_tolerance,
+                    mfa_code=mfa_code,
+                )
             return self._run_payip_login_test(
                 sender=sender,
                 session=session,
@@ -7969,6 +8184,21 @@ class CustomerLookupFlow:
                 session=session,
                 client_code=session.payip_pending_client_code,
                 filial=session.payip_pending_filial,
+            )
+
+        if session.step == "finance_payip_amount_day_awaiting_query":
+            query = _parse_payip_amount_day_query(text)
+            if not query[0] or query[1] is None or query[2] is None or query[4]:
+                session.updated_at = datetime.now(timezone.utc)
+                self.sessions[sender] = session
+                return self._build_payip_amount_day_prompt(invalid_selection=True)
+            return self._run_payip_amount_day_search(
+                sender=sender,
+                session=session,
+                filial=query[0],
+                amount=query[1],
+                day=query[2],
+                tolerance=query[3],
             )
 
         if session.step == "finance_payip_statement_awaiting_period":
@@ -8199,6 +8429,7 @@ class CustomerLookupFlow:
                         session=session,
                         decision=decision,
                         document=request.document,
+                        return_menu="finance_menu",
                     )
                 if request.filial and request.cod_pdv:
                     self._prepare_search_session(session, search_context="prazo_limite")
@@ -8208,12 +8439,14 @@ class CustomerLookupFlow:
                         search_context="prazo_limite",
                     )
                     self.sessions[sender] = session
-                    self._reset_session(sender)
-                    return self._run_registration_lookup(
+                    return self._run_repeatable_registration_lookup(
+                        sender=sender,
+                        session=session,
                         decision=decision,
                         search_context="prazo_limite",
                         filial=request.filial,
                         cod_pdv=request.cod_pdv,
+                        return_menu="finance_menu",
                     )
                 if request.query_text:
                     self._prepare_search_session(session, search_context="prazo_limite")
@@ -8256,9 +8489,28 @@ class CustomerLookupFlow:
                             "Esse menu de pagamentos PayIP esta liberado apenas para financeiro e administracao.\n"
                             "Se quiser voltar, envie MENU."
                         )
-                    )
+                )
                 payip_action = _parse_payip_action(normalized)
                 statement_query = _parse_payip_statement_query(text)
+                amount_day_query = _parse_payip_amount_day_query(text)
+                if payip_action == "amount_day" and amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4]:
+                    return self._run_payip_amount_day_search(
+                        sender=sender,
+                        session=session,
+                        filial=amount_day_query[0],
+                        amount=amount_day_query[1],
+                        day=amount_day_query[2],
+                        tolerance=amount_day_query[3],
+                    )
+                if not payip_action and amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4]:
+                    return self._run_payip_amount_day_search(
+                        sender=sender,
+                        session=session,
+                        filial=amount_day_query[0],
+                        amount=amount_day_query[1],
+                        day=amount_day_query[2],
+                        tolerance=amount_day_query[3],
+                    )
                 if payip_action == "statement" and statement_query[0] and not statement_query[3]:
                     return self._run_payip_statement_resume(
                         sender=sender,
@@ -8470,6 +8722,16 @@ class CustomerLookupFlow:
             client_code = _extract_payip_client_code_query(text)
             filial = _extract_payip_filial_query(text)
             statement_query = _parse_payip_statement_query(text)
+            amount_day_query = _parse_payip_amount_day_query(text)
+            if action == "amount_day" and amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4] and normalized not in {PAYIP_ACTION_AMOUNT_DAY, "7"}:
+                return self._run_payip_amount_day_search(
+                    sender=sender,
+                    session=session,
+                    filial=amount_day_query[0],
+                    amount=amount_day_query[1],
+                    day=amount_day_query[2],
+                    tolerance=amount_day_query[3],
+                )
             if action == "invoice" and invoice and normalized not in {PAYIP_ACTION_SEARCH_INVOICE, "1", "3"}:
                 return self._run_payip_invoice_search(
                     sender=sender,
@@ -8520,6 +8782,15 @@ class CustomerLookupFlow:
                     filial=statement_query[0],
                     date_start=statement_query[1],
                     date_end=statement_query[2],
+                )
+            if not action and amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4]:
+                return self._run_payip_amount_day_search(
+                    sender=sender,
+                    session=session,
+                    filial=amount_day_query[0],
+                    amount=amount_day_query[1],
+                    day=amount_day_query[2],
+                    tolerance=amount_day_query[3],
                 )
             if not action and invoice:
                 return self._run_payip_invoice_search(
@@ -8576,6 +8847,25 @@ class CustomerLookupFlow:
                 session.updated_at = datetime.now(timezone.utc)
                 self.sessions[sender] = session
                 return self._build_payip_charge_client_prompt()
+            if action == "amount_day":
+                if amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4]:
+                    return self._run_payip_amount_day_search(
+                        sender=sender,
+                        session=session,
+                        filial=amount_day_query[0],
+                        amount=amount_day_query[1],
+                        day=amount_day_query[2],
+                        tolerance=amount_day_query[3],
+                    )
+                session.step = "finance_payip_amount_day_awaiting_query"
+                session.payip_pending_action = ""
+                session.payip_pending_filial = ""
+                session.payip_pending_amount = ""
+                session.payip_pending_day = ""
+                session.payip_pending_tolerance = ""
+                session.updated_at = datetime.now(timezone.utc)
+                self.sessions[sender] = session
+                return self._build_payip_amount_day_prompt(invalid_selection=amount_day_query[4])
             if action == "statement":
                 if normalized in {PAYIP_ACTION_STATEMENT, "6"}:
                     session.step = "finance_payip_statement_awaiting_period"
@@ -8750,6 +9040,405 @@ class CustomerLookupFlow:
             list_context=list_context,
         )
 
+    def _handle_critica_command(
+        self,
+        *,
+        sender: str,
+        session: LookupSession,
+        text: str,
+        normalized: str,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        readiness_error = self._ensure_critica_rn_ready(decision)
+        if readiness_error is not None:
+            return readiness_error
+
+        action = _parse_critica_action(normalized)
+        parsed_date, date_was_explicit = _parse_critica_target_date(normalized)
+        if action == "menu":
+            session.step = "awaiting_critica_action"
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[sender] = session
+            return _build_critica_menu_response()
+
+        if action == "nb":
+            filial, cod_pdv = _parse_critica_nb_query(normalized)
+            if not cod_pdv:
+                return OutgoingMessage(
+                    text=(
+                        "Informe o NB para consultar a critica RN.\n"
+                        "Exemplos:\n"
+                        "- critica nb 3 18008\n"
+                        "- critica nb 18008"
+                    )
+                )
+            target_date = parsed_date if date_was_explicit else None
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                self._build_critica_nb_response(
+                    filial=filial,
+                    cod_pdv=cod_pdv,
+                    target_date=target_date,
+                    decision=decision,
+                ),
+                return_menu="main",
+            )
+
+        target_date = parsed_date or datetime.now(LOCAL_TIMEZONE).date()
+        if action == "problems":
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                self._build_critica_problems_response(
+                    target_date=target_date,
+                    decision=decision,
+                ),
+                return_menu="main",
+            )
+        if action == "pdf":
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                self._build_critica_pdf_response(
+                    target_date=target_date,
+                    decision=decision,
+                ),
+                return_menu="main",
+            )
+        return self._with_post_result_navigation(
+            sender,
+            session,
+            self._build_critica_summary_response(
+                target_date=target_date,
+                decision=decision,
+                title="Critica RN | Hoje" if "hoje" in set(normalized.replace(":", " ").split()) else "Critica RN",
+            ),
+            return_menu="main",
+        )
+
+    def _ensure_critica_rn_ready(self, decision: AccessDecision) -> OutgoingMessage | None:
+        area_decision = self._decision_for_area(decision, "cliente")
+        if not area_decision.allowed:
+            return self._build_area_access_denied_response("cliente")
+        if not self._can_use_critica(decision):
+            return OutgoingMessage(
+                text=(
+                    "Critica RN\n\n"
+                    "Essa consulta esta liberada apenas para vendedores e gerentes de vendas."
+                )
+            )
+        if self.critica_rn_service is None:
+            return OutgoingMessage(
+                text=(
+                    "A consulta de critica RN ainda nao esta configurada no bot.\n"
+                    "Suba a planilha no painel admin e tente novamente."
+                )
+            )
+        status = self.critica_rn_service.status()
+        if not status.get("ready"):
+            return OutgoingMessage(
+                text=(
+                    "No momento, eu nao consegui acessar a base de critica RN.\n"
+                    f"Detalhe: {status.get('last_error') or 'base indisponivel'}"
+                )
+            )
+        return None
+
+    def _build_critica_summary_response(
+        self,
+        *,
+        target_date: date,
+        decision: AccessDecision,
+        title: str,
+    ) -> OutgoingMessage:
+        assert self.critica_rn_service is not None
+        try:
+            summary = self.critica_rn_service.get_summary(
+                target_date=target_date,
+                allowed_sectors=self._allowed_sectors(decision),
+                allowed_gv_vdes=self._allowed_gv_vdes(decision),
+            )
+        except Exception:
+            logger.exception("Falha ao consultar resumo da critica RN")
+            return OutgoingMessage(text="Nao consegui consultar a critica RN agora.")
+
+        if summary.row_count <= 0:
+            return self._build_empty_critica_response(target_date=target_date, decision=decision)
+
+        lines = [
+            title,
+            "",
+            f"Data: {_format_display_date(target_date.isoformat())}",
+            f"Atualizado em: {_format_display_date(summary.planilha_atualizada_em)}",
+            "",
+            "Resumo:",
+            f"- Pedidos: {summary.pedido_count}",
+            f"- Clientes: {summary.client_count}",
+            f"- Itens: {summary.row_count}",
+            f"- Pedidos com problema: {summary.problem_pedido_count}",
+            f"- Linhas com problema: {summary.problem_row_count}",
+            f"- Valor dos pedidos: {_format_currency_brl(summary.total_pedido)}",
+            f"- Total HL: {_format_quantity(summary.total_hectolitros)}",
+            (
+                "- Cestas HL: "
+                f"NAB TT {_format_quantity(summary.nab_tt_hectolitros)} | "
+                f"High End {_format_quantity(summary.high_end_hectolitros)} | "
+                f"Cerveja TT {_format_quantity(summary.cerveja_tt_hectolitros)}"
+            ),
+            (
+                "- Cestas HL: "
+                f"Refri Zero {_format_quantity(summary.refri_zero_hectolitros)} | "
+                f"Cerveja RGB {_format_quantity(summary.cerveja_rgb_hectolitros)} | "
+                f"Cerveja OW {_format_quantity(summary.cerveja_ow_hectolitros)}"
+            ),
+            f"- Marketplace TT HL: {_format_quantity(summary.marketplace_tt_hectolitros)}",
+        ]
+        if summary.operations:
+            lines.append(f"- Operacoes: {', '.join(summary.operations)}")
+        lines.extend(
+            [
+                "",
+                "Possiveis problemas:",
+                f"- Ocorrencias do relatorio: {summary.rows_with_critica}",
+                f"- Produto duplicado no pedido: {summary.duplicated_row_count}",
+                f"- Preco divergente: {summary.price_alert_count}",
+                f"- Produto sem DPrecos: {summary.missing_price_count}",
+                f"- Pedido acima da media: {summary.order_avg_alert_count}",
+                f"- Cliente inadimplente: {summary.inadimplente_count}",
+                f"- Multipack fora da segmentacao: {summary.multipack_violation_count}",
+                f"- Mapa 1 / buffer: {summary.map_buffer_count}",
+                f"- Mapa fora do vendedor: {summary.map_outside_count}",
+                f"- Cond. pag. divergente: {summary.cond_divergence_count}",
+                f"- Estouro de limite: {summary.limit_alert_count}",
+                "",
+                "Atalhos:",
+                "- critica problemas",
+                "- critica nb 3 18008",
+                "- critica pdf",
+            ]
+        )
+        return OutgoingMessage(text="\n".join(lines))
+
+    def _build_critica_problems_response(
+        self,
+        *,
+        target_date: date,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        assert self.critica_rn_service is not None
+        try:
+            summary = self.critica_rn_service.get_summary(
+                target_date=target_date,
+                allowed_sectors=self._allowed_sectors(decision),
+                allowed_gv_vdes=self._allowed_gv_vdes(decision),
+            )
+            records = self.critica_rn_service.list_problems(
+                target_date=target_date,
+                allowed_sectors=self._allowed_sectors(decision),
+                allowed_gv_vdes=self._allowed_gv_vdes(decision),
+                limit=12,
+            )
+        except Exception:
+            logger.exception("Falha ao listar problemas da critica RN")
+            return OutgoingMessage(text="Nao consegui listar os problemas da critica RN agora.")
+
+        if summary.row_count <= 0:
+            return self._build_empty_critica_response(target_date=target_date, decision=decision)
+        if not records:
+            return OutgoingMessage(
+                text=(
+                    "Critica RN | Possiveis problemas\n\n"
+                    f"Data: {_format_display_date(target_date.isoformat())}\n"
+                    "Nao encontrei problemas nos pedidos desse filtro.\n\n"
+                    "Para gerar o PDF completo, envie critica pdf."
+                )
+            )
+
+        lines = [
+            "Critica RN | Possiveis problemas",
+            "",
+            f"Data: {_format_display_date(target_date.isoformat())}",
+            (
+                f"Resumo: {summary.problem_row_count} linha(s) com problema "
+                f"em {summary.problem_pedido_count} pedido(s)."
+            ),
+            "",
+        ]
+        for index, record in enumerate(records, start=1):
+            lines.extend(_format_critica_problem_block(record, index=index))
+            if index != len(records):
+                lines.append("")
+        remaining = summary.problem_row_count - len(records)
+        if remaining > 0:
+            lines.extend(
+                [
+                    "",
+                    f"Mostrei {len(records)} de {summary.problem_row_count} linha(s) com problema.",
+                    "Para ver tudo, envie critica pdf.",
+                ]
+            )
+        return OutgoingMessage(text="\n".join(lines))
+
+    def _build_critica_nb_response(
+        self,
+        *,
+        filial: str,
+        cod_pdv: str,
+        target_date: date | None,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        assert self.critica_rn_service is not None
+        try:
+            records = self.critica_rn_service.search_by_registration(
+                filial=filial,
+                cod_pdv=cod_pdv,
+                target_date=target_date,
+                allowed_sectors=self._allowed_sectors(decision),
+                allowed_gv_vdes=self._allowed_gv_vdes(decision),
+                limit=250,
+            )
+        except Exception:
+            logger.exception("Falha ao consultar critica RN por NB")
+            return OutgoingMessage(text="Nao consegui consultar esse NB na critica RN agora.")
+
+        if not records:
+            suffix = f" na revenda {filial}" if filial else ""
+            date_suffix = f" em {_format_display_date(target_date.isoformat())}" if target_date else ""
+            return OutgoingMessage(
+                text=(
+                    "Critica RN | NB\n\n"
+                    f"Nao encontrei itens para o NB {cod_pdv}{suffix}{date_suffix} dentro do seu acesso."
+                )
+            )
+
+        first = records[0]
+        pedido_totals: dict[tuple[str, str], Decimal] = {}
+        for record in records:
+            pedido_totals[(record.filial, record.pedido)] = record.total_pedido
+        problem_count = sum(1 for record in records if record.possui_problema)
+        total_pedidos = sum(pedido_totals.values(), Decimal("0"))
+        lines = [
+            "Critica RN | NB",
+            "",
+            first.nome_pdv or f"NB {cod_pdv}",
+            f"Operacao: {_format_critica_operation_name(first)} | Revenda: {first.filial} | NB: {first.cod_pdv} | Setor: {first.setor or '-'}",
+        ]
+        if target_date:
+            lines.append(f"Data: {_format_display_date(target_date.isoformat())}")
+        else:
+            dates = sorted({record.data_pedido.isoformat() for record in records if record.data_pedido})
+            if dates:
+                lines.append(f"Data(s): {', '.join(_format_display_date(item) for item in dates[:3])}")
+        lines.extend(
+            [
+                "",
+                "Resumo:",
+                f"- Pedidos: {len(pedido_totals)}",
+                f"- Itens: {len(records)}",
+                f"- Linhas com problema: {problem_count}",
+                f"- Valor dos pedidos: {_format_currency_brl(total_pedidos)}",
+                "",
+                "Itens:",
+            ]
+        )
+
+        current_key: tuple[str, str] | None = None
+        shown = 0
+        for record in records[:24]:
+            key = (record.filial, record.pedido)
+            if key != current_key:
+                current_key = key
+                lines.append("")
+                lines.append(
+                    (
+                        f"Pedido {record.pedido} | {_format_display_date(record.data_pedido.isoformat() if record.data_pedido else '')} "
+                        f"| {record.status_pedido or '-'} | Total {_format_currency_brl(record.total_pedido)}"
+                    )
+                )
+            lines.append(_format_critica_item_line(record))
+            shown += 1
+
+        if len(records) > shown:
+            lines.extend(
+                [
+                    "",
+                    f"Mostrei {shown} de {len(records)} item(ns).",
+                    "Para o relatorio completo do dia, envie critica pdf.",
+                ]
+            )
+        return OutgoingMessage(text="\n".join(lines))
+
+    def _build_critica_pdf_response(
+        self,
+        *,
+        target_date: date,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        assert self.critica_rn_service is not None
+        try:
+            report = self.critica_rn_service.get_pdf_report(
+                target_date=target_date,
+                allowed_sectors=self._allowed_sectors(decision),
+                allowed_gv_vdes=self._allowed_gv_vdes(decision),
+                limit=5000,
+            )
+            summary = report.summary
+            if summary.row_count <= 0:
+                return self._build_empty_critica_response(target_date=target_date, decision=decision)
+            pdf_bytes = report.pdf_bytes
+            summary_pdf_bytes = report.summary_pdf_bytes
+        except Exception:
+            logger.exception("Falha ao gerar PDF da critica RN")
+            return OutgoingMessage(text="Nao consegui gerar o PDF da critica RN agora.")
+
+        filename = f"critica-rn-{target_date.isoformat()}.pdf"
+        summary_filename = f"critica-rn-resumo-{target_date.isoformat()}.pdf"
+        text = (
+            "Critica RN | PDF\n\n"
+            f"Data: {_format_display_date(target_date.isoformat())}\n"
+            f"Pedidos: {summary.pedido_count} | Itens: {summary.row_count} | Problemas: {summary.problem_row_count}\n"
+            "Enviei o PDF completo e o PDF resumido.\n\n"
+            f"{_result_hint_text(allow_back=True)}"
+        )
+        return OutgoingMessage(
+            text=text,
+            kind="media",
+            media_url=_build_pdf_data_url(pdf_bytes),
+            media_type="document",
+            media_caption=f"Critica RN {_format_display_date(target_date.isoformat())}",
+            media_filename=filename,
+            extra_media=(
+                MediaAttachment(
+                    media_url=_build_pdf_data_url(summary_pdf_bytes),
+                    media_type="document",
+                    media_caption=f"Critica RN Resumo {_format_display_date(target_date.isoformat())}",
+                    media_filename=summary_filename,
+                ),
+            ),
+        )
+
+    def _build_empty_critica_response(self, *, target_date: date, decision: AccessDecision) -> OutgoingMessage:
+        assert self.critica_rn_service is not None
+        latest_text = ""
+        try:
+            latest = self.critica_rn_service.latest_date(
+                allowed_sectors=self._allowed_sectors(decision),
+                allowed_gv_vdes=self._allowed_gv_vdes(decision),
+            )
+            if latest is not None:
+                latest_text = f"\nUltima data encontrada no seu acesso: {_format_display_date(latest.isoformat())}."
+        except Exception:
+            latest_text = ""
+        return OutgoingMessage(
+            text=(
+                "Critica RN\n\n"
+                f"Nao encontrei pedidos para {_format_display_date(target_date.isoformat())} dentro do seu acesso."
+                f"{latest_text}\n\n"
+                "Envie critica para ver as opcoes."
+            )
+        )
+
     def _is_admin(self, decision: AccessDecision) -> bool:
         return ROLE_ADMIN in decision.roles
 
@@ -8785,6 +9474,9 @@ class CustomerLookupFlow:
             or self._is_gerente_vendas(decision)
             or self._is_diretor_comercial(decision)
         )
+
+    def _can_use_critica(self, decision: AccessDecision) -> bool:
+        return self._is_vendedor(decision) or self._is_gerente_vendas(decision)
 
     def _can_update_recolhas(self, decision: AccessDecision) -> bool:
         return self._can_use_finance_menu(decision)
@@ -9369,6 +10061,25 @@ class CustomerLookupFlow:
                     )
                 )
                 next_shortcut += 1
+            if decision is not None and self._is_vendedor(decision):
+                options.append(
+                    InteractiveOption(
+                        option_id=FINANCE_DUE_TOMORROW,
+                        title="Vence amanha",
+                        description="Clientes com vencimento para amanha",
+                        shortcut=str(next_shortcut),
+                    )
+                )
+                next_shortcut += 1
+                options.append(
+                    InteractiveOption(
+                        option_id=FINANCE_DUE_IN_TWO_DAYS,
+                        title="Vence em 2 dias",
+                        description="Clientes que vencem em 2 dias",
+                        shortcut=str(next_shortcut),
+                    )
+                )
+                next_shortcut += 1
             options.append(
                 InteractiveOption(
                     option_id=SEARCH_BY_INADIMPLENTES_BASE,
@@ -9462,17 +10173,28 @@ class CustomerLookupFlow:
         if not self._has_unrestricted_lookup_access(decision) and not self._can_access_sectors(decision):
             return ""
 
+        allowed_sectors = self._allowed_sectors(decision)
+        allowed_gv_vdes = self._allowed_gv_vdes(decision)
         try:
-            client_count = self.inadimplencia_service.count_clients_in_scope(
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
+            summary = self.inadimplencia_service.get_finance_summary(
+                allowed_sectors=allowed_sectors,
+                allowed_gv_vdes=allowed_gv_vdes,
             )
         except RuntimeError:
             return ""
 
         if self._has_unrestricted_lookup_access(decision):
-            return f"Inadimplentes da base total: {client_count} cliente(s)."
-        return f"Inadimplentes da sua base: {client_count} cliente(s)."
+            scope_label = "base total"
+        elif self._is_vendedor(decision):
+            scope_label = "carteira"
+        else:
+            scope_label = "sua base"
+        lines = [
+            f"Cobranca da {scope_label}: {summary.client_count} inadimplentes | R$ {summary.total_pendente}",
+            f"Vence amanha: {summary.due_tomorrow_count} cliente(s) | R$ {summary.due_tomorrow_total}",
+            f"Vence em 2 dias: {summary.due_in_two_days_count} cliente(s) | R$ {summary.due_in_two_days_total}",
+        ]
+        return "\n".join(lines)
 
     def _inadimplencia_scope_label(self, decision: AccessDecision) -> str:
         if self._has_unrestricted_lookup_access(decision):
@@ -9607,12 +10329,20 @@ class CustomerLookupFlow:
                 shortcut="6",
             )
         )
+        options.append(
+            InteractiveOption(
+                option_id=PAYIP_ACTION_AMOUNT_DAY,
+                title="Buscar Valor/Dia",
+                description="Cobrancas pagas por valor",
+                shortcut="7",
+            )
+        )
         return OutgoingMessage(
             kind="menu",
             title="Pagamentos PayIP",
             text=text,
             footer=(
-                "Atalhos: nf 3 147478, nb 3 17581 pendentes, nb 4 17581 todos, extrato 4 01/05/2026 08/05/2026. "
+                "Atalhos: nf 3 147478, nb 3 17581 pendentes, nb 4 17581 todos, extrato 4 01/05/2026 08/05/2026, valor 3 0,99 13/04/2026 tolerancia 0,10. "
                 "Use A ou ANT para voltar."
             ),
             button_text="Escolher",
@@ -9669,6 +10399,9 @@ class CustomerLookupFlow:
         session.payip_pending_filial = ""
         session.payip_pending_date_start = ""
         session.payip_pending_date_end = ""
+        session.payip_pending_amount = ""
+        session.payip_pending_day = ""
+        session.payip_pending_tolerance = ""
         session.payip_pix_payloads = ()
         try:
             outgoing = self._build_payip_login_test_response(mfa_code=mfa_code)
@@ -9874,6 +10607,163 @@ class CustomerLookupFlow:
         )
         return OutgoingMessage(text="\n".join(lines))
 
+    def _build_payip_amount_day_prompt(self, invalid_selection: bool = False) -> OutgoingMessage:
+        lines = []
+        if invalid_selection:
+            lines.append("Informe uma filial, um valor e uma data valida.")
+            lines.append("")
+        lines.extend(
+            [
+                "Informe a filial, o valor recebido e o dia de pagamento para buscar cobrancas na PayIP.",
+                "Exemplo: 3 0,99 13/04/2026",
+                "Tolerancia padrao: R$ 0,05. Para alterar: 3 0,99 13/04/2026 tolerancia 0,10",
+                self._payip_filial_hint(),
+                "",
+                "Para voltar, envie A ou ANT.",
+            ]
+        )
+        return OutgoingMessage(text="\n".join(lines))
+
+    def _run_payip_amount_day_search(
+        self,
+        *,
+        sender: str,
+        session: LookupSession,
+        filial: str,
+        amount: Decimal | str | int | float | None,
+        day: date | str | None,
+        tolerance: Decimal | str | int | float | None = None,
+        mfa_code: str = "",
+    ) -> OutgoingMessage:
+        normalized_filial = _resolve_payip_filial(filial)
+        normalized_amount = _parse_decimal_text(amount)
+        normalized_day = _coerce_payip_statement_date(day)
+        normalized_tolerance = (
+            _parse_decimal_text(tolerance)
+            if str(tolerance or "").strip()
+            else DEFAULT_PAYMENT_AMOUNT_TOLERANCE
+        )
+        if (
+            not normalized_filial
+            or normalized_amount is None
+            or normalized_amount <= 0
+            or normalized_day is None
+            or normalized_tolerance is None
+            or normalized_tolerance < 0
+        ):
+            session.step = "finance_payip_amount_day_awaiting_query"
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[sender] = session
+            return self._build_payip_amount_day_prompt(invalid_selection=True)
+
+        mfa_bootstrapped = False
+        try:
+            if self.payip_payments_service is None:
+                raise RuntimeError(
+                    "PayIP ainda nao esta configurada. Configure PAYIP_BASE_URL, PAYIP_USERNAME, "
+                    "PAYIP_PASSWORD e PAYIP_COMPANY_IDS no .env."
+                )
+            if mfa_code:
+                self.payip_payments_service.bootstrap_session(mfa_code=mfa_code)
+                mfa_bootstrapped = True
+            page = self.payip_payments_service.find_payments_by_amount_and_paid_date(
+                filial=normalized_filial,
+                amount=normalized_amount,
+                day=normalized_day,
+                tolerance=normalized_tolerance,
+            )
+        except PayipMfaRequired:
+            session.step = "finance_payip_awaiting_mfa"
+            session.payip_pending_action = "amount_day"
+            session.payip_pending_filial = normalized_filial
+            session.payip_pending_amount = _decimal_cache_text(normalized_amount)
+            session.payip_pending_day = normalized_day.isoformat()
+            session.payip_pending_tolerance = _decimal_cache_text(normalized_tolerance)
+            session.updated_at = datetime.now(timezone.utc)
+            self.sessions[sender] = session
+            return self._build_payip_mfa_prompt(
+                context=(
+                    f"valor {_format_currency_brl(normalized_amount)} em "
+                    f"{normalized_day.strftime('%d/%m/%Y')} | Tolerancia: {_format_currency_brl(normalized_tolerance)} | "
+                    f"Revenda: {_format_filial_label(normalized_filial)}"
+                )
+            )
+        except PayipError as exc:
+            if mfa_code and not mfa_bootstrapped:
+                session.step = "finance_payip_awaiting_mfa"
+                session.payip_pending_action = "amount_day"
+                session.payip_pending_filial = normalized_filial
+                session.payip_pending_amount = _decimal_cache_text(normalized_amount)
+                session.payip_pending_day = normalized_day.isoformat()
+                session.payip_pending_tolerance = _decimal_cache_text(normalized_tolerance)
+                session.updated_at = datetime.now(timezone.utc)
+                self.sessions[sender] = session
+                return self._build_payip_mfa_prompt(
+                    invalid_selection=True,
+                    detail=_short_error_text(str(exc)),
+                    context=(
+                        f"valor {_format_currency_brl(normalized_amount)} em "
+                        f"{normalized_day.strftime('%d/%m/%Y')} | Tolerancia: {_format_currency_brl(normalized_tolerance)} | "
+                        f"Revenda: {_format_filial_label(normalized_filial)}"
+                    ),
+                )
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                OutgoingMessage(
+                    text=(
+                        "Nao consegui consultar a PayIP por valor e dia agora.\n"
+                        f"Detalhe: {_short_error_text(str(exc))}"
+                    )
+                ),
+                return_menu="finance_payip_menu",
+                repeat_action=REPEAT_PAYIP_AMOUNT_DAY,
+            )
+        except RuntimeError as exc:
+            return self._with_post_result_navigation(
+                sender,
+                session,
+                OutgoingMessage(
+                    text=(
+                        "Nao consegui consultar a PayIP por valor e dia agora.\n"
+                        f"Detalhe: {_short_error_text(str(exc))}"
+                    )
+                ),
+                return_menu="finance_payip_menu",
+                repeat_action=REPEAT_PAYIP_AMOUNT_DAY,
+            )
+
+        session.payip_pending_action = ""
+        session.payip_pending_filial = ""
+        session.payip_pending_amount = ""
+        session.payip_pending_day = ""
+        session.payip_pending_tolerance = ""
+        session.payip_pix_payloads = _extract_payip_pix_payloads(
+            page.items,
+            filial=normalized_filial,
+            company_id=getattr(page, "company_id", ""),
+        )
+        criteria = (
+            f"Revenda: {_format_filial_label(normalized_filial)} | "
+            f"Pagamento: {normalized_day.strftime('%d/%m/%Y')} | "
+            f"Valor: {_format_currency_brl(normalized_amount)} | "
+            f"Tolerancia: {_format_currency_brl(normalized_tolerance)}"
+        )
+        return self._with_post_result_navigation(
+            sender,
+            session,
+            self._build_payip_payments_response(
+                title="PayIP | Valor e Dia",
+                page=page,
+                criteria=criteria,
+                empty_text=(
+                    "Nao encontrei cobrancas pagas nesse dia dentro da tolerancia informada nessa revenda."
+                ),
+            ),
+            return_menu="finance_payip_menu",
+            repeat_action=REPEAT_PAYIP_AMOUNT_DAY,
+        )
+
     def _run_payip_statement_resume(
         self,
         *,
@@ -9956,6 +10846,7 @@ class CustomerLookupFlow:
                     )
                 ),
                 return_menu="finance_payip_menu",
+                repeat_action=REPEAT_PAYIP_STATEMENT,
             )
         except RuntimeError as exc:
             return self._with_post_result_navigation(
@@ -9968,6 +10859,7 @@ class CustomerLookupFlow:
                     )
                 ),
                 return_menu="finance_payip_menu",
+                repeat_action=REPEAT_PAYIP_STATEMENT,
             )
 
         session.payip_pending_action = ""
@@ -9987,6 +10879,7 @@ class CustomerLookupFlow:
                 export_errors=export_errors,
             ),
             return_menu="finance_payip_menu",
+            repeat_action=REPEAT_PAYIP_STATEMENT,
         )
 
     def _load_payip_statement_exports(
@@ -10338,6 +11231,7 @@ class CustomerLookupFlow:
             session,
             outgoing,
             return_menu="finance_payip_menu",
+            repeat_action=REPEAT_PAYIP_CREATE_CHARGE,
         )
 
     def _build_payip_charge_create_error_response(
@@ -10551,6 +11445,7 @@ class CustomerLookupFlow:
         status: str = "",
         mfa_code: str = "",
     ) -> OutgoingMessage:
+        repeat_action = _payip_repeat_action(action)
         mfa_bootstrapped = False
         try:
             operation_mfa_code = mfa_code
@@ -10604,6 +11499,7 @@ class CustomerLookupFlow:
                     )
                 ),
                 return_menu="finance_payip_menu",
+                repeat_action=repeat_action,
             )
         except RuntimeError as exc:
             return self._with_post_result_navigation(
@@ -10616,6 +11512,7 @@ class CustomerLookupFlow:
                     )
                 ),
                 return_menu="finance_payip_menu",
+                repeat_action=repeat_action,
             )
 
         session.payip_pending_action = ""
@@ -10623,6 +11520,9 @@ class CustomerLookupFlow:
         session.payip_pending_client_code = ""
         session.payip_pending_filial = ""
         session.payip_pending_status = ""
+        session.payip_pending_amount = ""
+        session.payip_pending_day = ""
+        session.payip_pending_tolerance = ""
         session.payip_pix_payloads = _extract_payip_pix_payloads(
             page.items,
             filial=filial,
@@ -10645,6 +11545,7 @@ class CustomerLookupFlow:
                 empty_text=empty_text,
             ),
                 return_menu="finance_payip_menu",
+                repeat_action=repeat_action,
             )
 
     def _open_payip_client_filter_or_search(
@@ -15038,6 +15939,37 @@ class CustomerLookupFlow:
         ):
             lines.append(f"- {label}: {value or '-'}")
 
+    def _run_repeatable_registration_lookup(
+        self,
+        *,
+        sender: str,
+        session: LookupSession,
+        decision: AccessDecision,
+        search_context: str,
+        filial: str,
+        cod_pdv: str,
+        return_menu: str = "search_menu",
+    ) -> OutgoingMessage:
+        self._remember_last_context(
+            session,
+            intent=f"{search_context}_client",
+            search_context=search_context,
+            client_filial=filial,
+            client_cod_pdv=cod_pdv,
+        )
+        return self._with_post_result_navigation(
+            sender,
+            session,
+            self._run_registration_lookup(
+                decision=decision,
+                search_context=search_context,
+                filial=filial,
+                cod_pdv=cod_pdv,
+            ),
+            return_menu=return_menu,
+            repeat_action=REPEAT_SEARCH_REGISTRATION,
+        )
+
     def _run_registration_lookup(
         self,
         decision: AccessDecision,
@@ -15208,17 +16140,24 @@ class CustomerLookupFlow:
             )
 
         total_pendente = _sum_money_values(record.valor_pendente for record in records)
+        total_atrasado = _sum_money_values(
+            record.valor_corrigido or record.valor_pendente
+            for record in records
+            if _inadimplencia_days_value(record.dias) is not None and _inadimplencia_days_value(record.dias) < 0
+        )
         first = records[0]
         lines = [
             "Diretoria | Cobranca" if compact else "Inadimplencia",
             "",
             f"*{first.nome or '-'}*",
-            f"NB: {first.cod_pdv or '-'} | Revenda: {first.filial or '-'}",
+            f"- Revenda: {first.filial or '-'}",
+            f"- NB: {first.cod_pdv or '-'}",
             "",
             "*Resumo:*",
             f"- Titulos: {len(records)}",
             f"- Total pendente: {_format_inadimplencia_money(total_pendente)}",
-            f"- Maior atraso: {_max_inadimplencia_days_label(records)}",
+            f"- Total atrasado: {_format_inadimplencia_money(total_atrasado)}",
+            f"- {_format_inadimplencia_summary_timing_label(records)}",
             f"- Atualizado em: {_format_display_date(first.planilha_atualizada_em or '-')}",
             "",
             "*Titulos:*",
@@ -15226,13 +16165,12 @@ class CustomerLookupFlow:
 
         for index, record in enumerate(records, start=1):
             lines.append("")
-            lines.append(
-                f"{index}) Venc: {_format_display_date(record.data_vencimento or '-')} | "
-                f"Atraso: {_format_inadimplencia_days_label(record.dias)}"
-            )
+            lines.append(f"{index}) {_format_inadimplencia_timing_label(record.dias).capitalize()}")
+            lines.append(f"- NF: {record.nota_fiscal or '-'}")
+            lines.append(f"- Vencimento: {_format_display_date(record.data_vencimento or '-')}")
             if not compact:
-                lines.append(f"Emissao: {_format_display_date(record.data_emissao or '-')}")
-            lines.append(f"Valor: {_format_inadimplencia_money(record.valor_corrigido or record.valor_pendente)}")
+                lines.append(f"- Emissao: {_format_display_date(record.data_emissao or '-')}")
+            lines.append(f"- Valor: {_format_inadimplencia_money(record.valor_corrigido or record.valor_pendente)}")
 
         lines.append("")
         lines.append(_result_hint_text(allow_back=compact))
@@ -15757,6 +16695,108 @@ def _is_payip_pdf_not_ready_error(value: str) -> bool:
         "arquivo ainda nao foi criado" in normalized
         or "tente novamente" in normalized
     )
+
+
+def _parse_payip_amount_day_query(
+    text: str,
+) -> tuple[str, Decimal | None, date | None, Decimal | None, bool]:
+    raw = str(text or "").strip()
+    if not raw:
+        return "", None, None, None, False
+
+    date_matches = list(
+        re.finditer(
+            r"(?<!\d)(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)(?!\d)",
+            raw,
+        )
+    )
+    parsed_dates = [_parse_payip_statement_date_token(match.group(1)) for match in date_matches]
+    invalid_date = any(item is None for item in parsed_dates)
+    valid_dates = [item for item in parsed_dates if item is not None]
+    if len(valid_dates) > 1:
+        invalid_date = True
+
+    text_without_dates = raw
+    for match in reversed(date_matches):
+        text_without_dates = text_without_dates[: match.start()] + " " + text_without_dates[match.end() :]
+
+    normalized = _normalize_choice(text_without_dates)
+    tokens = _normalized_tokens(normalized)
+    if not valid_dates:
+        today = datetime.now(LOCAL_TIMEZONE).date()
+        if "hoje" in tokens:
+            valid_dates = [today]
+        elif "ontem" in tokens:
+            valid_dates = [today - timedelta(days=1)]
+
+    filial = _extract_payip_filial_query(text_without_dates)
+    if not filial:
+        for number in re.findall(r"\b\d{1,2}\b", text_without_dates):
+            candidate = _normalize_filial(number)
+            if candidate in FILIAL_LABELS:
+                filial = candidate
+                break
+
+    amount_text = text_without_dates
+    tolerance, tolerance_match, invalid_tolerance = _extract_payip_amount_day_tolerance(amount_text)
+    if tolerance_match is not None:
+        amount_text = amount_text[: tolerance_match.start()] + " " + amount_text[tolerance_match.end() :]
+    if filial:
+        amount_text = re.sub(
+            rf"\b(?:filial|revenda)?\s*0*{re.escape(filial)}\b",
+            " ",
+            amount_text,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    amount_text = re.sub(
+        r"\b(?:payip|valor|dia|pagamento|pagamentos|pago|pagos|paga|pagas|cobrancas?|buscar|busca|por|do|da|de|na|no|filial|revenda)\b",
+        " ",
+        amount_text,
+        flags=re.IGNORECASE,
+    )
+    amount = _extract_payip_amount_search_value(amount_text)
+    return (
+        filial,
+        amount,
+        valid_dates[0] if len(valid_dates) == 1 else None,
+        tolerance,
+        invalid_date or invalid_tolerance,
+    )
+
+
+def _extract_payip_amount_day_tolerance(
+    text: str,
+) -> tuple[Decimal | None, re.Match[str] | None, bool]:
+    match = re.search(
+        r"\b(?:tolerancia|tol|margem)\s*(?:de|:|=)?\s*(R\$\s*)?(-?\d+(?:[.,]\d{1,2})?)",
+        str(text or ""),
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None, None, False
+    tolerance = _parse_decimal_text(match.group(2))
+    return tolerance, match, tolerance is None or tolerance < 0
+
+
+def _extract_payip_amount_search_value(text: str) -> Decimal | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    matches = [
+        match.group(0).strip()
+        for match in re.finditer(
+            r"(?:R\$\s*)?\d{1,3}(?:\.\d{3})+,\d{1,2}|(?:R\$\s*)?\d+[,.]\d{1,2}|(?:R\$\s*)?\b\d+\b",
+            raw,
+            flags=re.IGNORECASE,
+        )
+    ]
+    preferred = [item for item in matches if "r$" in item.lower() or "," in item or "." in item]
+    for candidate in preferred + matches:
+        amount = _parse_decimal_text(candidate)
+        if amount is not None:
+            return amount
+    return None
 
 
 def _parse_payip_statement_query(text: str) -> tuple[str, date | None, date | None, bool]:
@@ -16807,6 +17847,7 @@ def _format_payip_payment_block(payment: dict[str, Any], *, index: int | None = 
 
     invoice = _payip_text(_payip_value(payment, "invoice"))
     created_at = _format_payip_datetime(_payip_value(payment, "createdAt"))
+    paid_date = _format_payip_datetime(_payip_value(payment, "paidDate"))
     due_date = _format_payip_date(_payip_value(payment, "dueDate"))
     client_code = _payip_text(_payip_value(payment, "client", "code"))
     client_name = _payip_text(
@@ -16820,6 +17861,8 @@ def _format_payip_payment_block(payment: dict[str, Any], *, index: int | None = 
     lines.append(f"Nota Fiscal: {invoice}")
     lines.append(f"Cliente: {client_name} | NB {client_code}")
     lines.append(f"Emissao: {created_at} | Vencimento: {due_date}")
+    if paid_date and paid_date != "-":
+        lines.append(f"Pagamento confirmado em: {paid_date}")
     lines.append(f"Status: {_format_payip_status(payment)}")
     lines.append(f"Valor: {amount} | Pago: {amount_paid}")
     lines.append(f"Pagamento: {payment_label}")
@@ -16938,8 +17981,15 @@ def _payip_text(value: Any) -> str:
 
 def _result_hint_text(*, allow_back: bool = False) -> str:
     if allow_back:
-        return "Se quiser voltar, envie A ou ANT.\nSe preferir começar de novo, envie MENU."
-    return "Se quiser fazer outra consulta, envie MENU."
+        return (
+            "Quer fazer outra consulta do mesmo tipo? Envie SIM.\n"
+            "Se quiser voltar, envie A ou ANT.\n"
+            "Se preferir comecar de novo, envie MENU."
+        )
+    return (
+        "Quer fazer outra consulta do mesmo tipo? Envie SIM.\n"
+        "Se preferir comecar de novo, envie MENU."
+    )
 
 
 def _strip_result_hint(text: str) -> str:
@@ -16947,7 +17997,10 @@ def _strip_result_hint(text: str) -> str:
     for hint in (
         _result_hint_text(allow_back=True),
         _result_hint_text(allow_back=False),
+        "Se quiser fazer outra consulta, envie MENU.",
+        "Se quiser tentar outra consulta, envie MENU.",
         "Se quiser continuar, envie MENU.",
+        "Se quiser voltar, envie A ou ANT.\nSe preferir começar de novo, envie MENU.",
         "Se quiser voltar, envie A ou ANT.\nSe preferir, envie MENU.",
     ):
         if value.endswith(hint):
@@ -16965,6 +18018,26 @@ def _normalize_choice(text: str) -> str:
     return value
 
 
+def _is_repeat_query_command(normalized_text: str) -> bool:
+    return normalized_text in {
+        "sim",
+        "s",
+        "nova",
+        "nova consulta",
+        "outra consulta",
+        "consultar novamente",
+        "repetir consulta",
+    }
+
+
+def _payip_repeat_action(action: str) -> str:
+    return {
+        "invoice": REPEAT_PAYIP_INVOICE,
+        "pending_client": REPEAT_PAYIP_PENDING_CLIENT,
+        "client": REPEAT_PAYIP_CLIENT,
+    }.get(str(action or "").strip(), "")
+
+
 def _normalize_filial(text: str) -> str:
     digits = "".join(char for char in str(text or "") if char.isdigit())
     if not digits:
@@ -16977,6 +18050,142 @@ def _normalize_cod_pdv(text: str) -> str:
     if not digits:
         return ""
     return digits.lstrip("0") or "0"
+
+
+def _looks_like_critica_command(normalized_text: str) -> bool:
+    text = str(normalized_text or "").strip()
+    return text == "critica" or text.startswith("critica ") or text.startswith("critica:")
+
+
+def _parse_critica_action(normalized_text: str) -> str:
+    text = str(normalized_text or "").strip()
+    tokens = set(text.replace(":", " ").split())
+    if text in {"critica", "critica rn", "critica pedidos", "critica pedido", "menu critica"}:
+        return "menu"
+    if tokens & {"pdf", "completo", "completa", "relatorio"}:
+        return "pdf"
+    if tokens & {"problema", "problemas", "possivel", "possiveis", "divergencia", "divergencias"}:
+        return "problems"
+    if "nb" in tokens or "pdv" in tokens:
+        return "nb"
+    _parsed_date, date_was_explicit = _parse_critica_target_date(text)
+    filial, cod_pdv = _parse_critica_nb_query(text)
+    if cod_pdv and (filial or not date_was_explicit):
+        return "nb"
+    return "summary"
+
+
+def _parse_critica_target_date(normalized_text: str) -> tuple[date | None, bool]:
+    text = str(normalized_text or "").strip()
+    tokens = set(text.replace(":", " ").split())
+    if "hoje" in tokens:
+        return datetime.now(LOCAL_TIMEZONE).date(), True
+    if "ontem" in tokens:
+        return datetime.now(LOCAL_TIMEZONE).date() - timedelta(days=1), True
+    date_match = re.search(r"\b(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)\b", text)
+    if date_match:
+        parsed = _parse_payip_statement_date_token(date_match.group(1))
+        if parsed is not None:
+            return parsed, True
+    return None, False
+
+
+def _parse_critica_nb_query(normalized_text: str) -> tuple[str, str]:
+    text = _strip_critica_date_tokens(normalized_text)
+    text = re.sub(
+        r"\b(?:critica|rn|nb|pdv|cliente|pedido|pedidos|hoje|ontem|problema|problemas|possivel|possiveis|pdf|completo|completa|relatorio)\b",
+        " ",
+        text,
+    )
+    numbers = [normalize_numeric_code(item) for item in re.findall(r"\d+", text)]
+    numbers = [item for item in numbers if item]
+    if len(numbers) >= 2:
+        return numbers[0], numbers[1]
+    if len(numbers) == 1:
+        return "", numbers[0]
+    return "", ""
+
+
+def _strip_critica_date_tokens(normalized_text: str) -> str:
+    text = str(normalized_text or "")
+    text = re.sub(r"\b\d{4}-\d{2}-\d{2}\b", " ", text)
+    text = re.sub(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b", " ", text)
+    return text
+
+
+def _build_critica_menu_response() -> OutgoingMessage:
+    return OutgoingMessage(
+        kind="menu",
+        title="Critica RN",
+        text=(
+            "Critica RN\n\n"
+            "Use os atalhos conforme a necessidade:\n"
+            "- critica hoje\n"
+            "- critica problemas\n"
+            "- critica nb 3 18008\n"
+            "- critica pdf\n\n"
+            "Tambem aceito data: critica pdf 02/06/2026."
+        ),
+        footer="Escolha uma opcao ou envie o atalho completo.",
+        options=(
+            InteractiveOption(
+                option_id="critica hoje",
+                title="Critica hoje",
+                description="Resumo dos pedidos do dia",
+                shortcut="1",
+            ),
+            InteractiveOption(
+                option_id="critica problemas",
+                title="Problemas",
+                description="Lista os possiveis problemas",
+                shortcut="2",
+            ),
+            InteractiveOption(
+                option_id="critica pdf",
+                title="Gerar PDF",
+                description="Relatorio completo do RN",
+                shortcut="3",
+            ),
+        ),
+    )
+
+
+def _format_critica_operation_name(record: CriticaRnRecord) -> str:
+    operation_name = str(record.operation_name or record.filial or "").strip()
+    movement_name = str(record.movement_operation_name or "").strip()
+    if operation_name and movement_name:
+        return f"{operation_name} | {movement_name}"
+    return operation_name or movement_name or "-"
+
+
+def _format_critica_problem_block(record: CriticaRnRecord, *, index: int) -> list[str]:
+    problem_text = "; ".join(record.problemas) or "OK"
+    produto = f"{record.produto_codigo} - {record.produto_descricao or '-'}"
+    return [
+        f"{index}) Pedido {record.pedido} | Operacao {_format_critica_operation_name(record)} | Revenda {record.filial} | NB {record.cod_pdv} | Setor {record.setor or '-'}",
+        record.nome_pdv or "-",
+        f"Total pedido: {_format_currency_brl(record.total_pedido)} | Status: {record.status_pedido or '-'}",
+        f"Produto: {_truncate_text(produto, 80)}",
+        f"Qtd: {_format_quantity(record.quantidade)} {record.unid_venda} | Preco: {_format_currency_brl(record.preco_unitario)}",
+        f"Problema: {problem_text}",
+    ]
+
+
+def _format_critica_item_line(record: CriticaRnRecord) -> str:
+    produto = f"{record.produto_codigo} {record.produto_descricao or ''}".strip()
+    status = "; ".join(record.problemas) if record.problemas else "OK"
+    return (
+        f"- {_truncate_text(produto, 54)} | "
+        f"{_format_quantity(record.quantidade)} {record.unid_venda} | "
+        f"{_format_currency_brl(record.preco_unitario)} | Total {_format_currency_brl(record.total_pedido)} | {status}"
+    )
+
+
+def _truncate_text(value: str, max_length: int) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= max_length:
+        return text
+    return text[: max(0, max_length - 3)].rstrip() + "..."
 
 
 def _normalize_document(text: str) -> str:
@@ -17737,6 +18946,20 @@ def _parse_payip_action(normalized_text: str) -> str:
     }:
         return "statement"
     if normalized_text in {
+        PAYIP_ACTION_AMOUNT_DAY,
+        "7",
+        "valor e dia",
+        "valor por dia",
+        "buscar valor dia",
+        "buscar valor por dia",
+        "buscar por valor e dia",
+        "cobrancas por valor",
+        "cobranca por valor",
+        "cobrancas por valor e dia",
+        "cobranca por valor e dia",
+    }:
+        return "amount_day"
+    if normalized_text in {
         PAYIP_ACTION_CREATE_CHARGE,
         "5",
         "emitir cobranca",
@@ -17830,6 +19053,10 @@ def _parse_payip_action(normalized_text: str) -> str:
         {"todos", "todo", "buscar", "consultar"} & tokens
     ):
         return "client"
+    if "valor" in tokens and (
+        {"dia", "pagamento", "pagamentos", "pago", "pagos", "paga", "pagas", "cobranca", "cobrancas"} & tokens
+    ):
+        return "amount_day"
     if {"emitir", "criar", "gerar", "nova", "novo"} & tokens and {"cobranca", "cobrancas"} & tokens:
         return "create_charge"
     if {"extrato", "movimentacao", "movimentacoes", "movimentos"} & tokens:
@@ -20027,9 +21254,13 @@ def _format_inadimplencia_money(value: Decimal | str | int | float | None) -> st
 
 
 def _format_inadimplencia_days_label(value: Decimal | str | int | float | None) -> str:
-    amount = _parse_decimal_text(value)
+    amount = _inadimplencia_days_value(value)
     if amount is None:
         return "-"
+    return _format_inadimplencia_days_amount(amount)
+
+
+def _format_inadimplencia_days_amount(amount: Decimal) -> str:
     if amount == amount.to_integral_value():
         days = int(amount)
         return "1 dia" if days == 1 else f"{days} dias"
@@ -20037,15 +21268,39 @@ def _format_inadimplencia_days_label(value: Decimal | str | int | float | None) 
     return f"{formatted.replace('.', ',')} dias"
 
 
-def _max_inadimplencia_days_label(records: list[InadimplenciaRecord]) -> str:
-    max_days: Decimal | None = None
+def _format_inadimplencia_timing_label(value: Decimal | str | int | float | None) -> str:
+    amount = _inadimplencia_days_value(value)
+    if amount is None:
+        return "-"
+    if amount < 0:
+        return f"vencido ha {_format_inadimplencia_days_amount(abs(amount))}"
+    if amount == 0:
+        return "vence hoje"
+    return f"vence em {_format_inadimplencia_days_amount(amount)}"
+
+
+def _inadimplencia_days_value(value: Decimal | str | int | float | None) -> Decimal | None:
+    return _parse_decimal_text(value)
+
+
+def _format_inadimplencia_summary_timing_label(records: list[InadimplenciaRecord]) -> str:
+    max_overdue: Decimal | None = None
+    nearest_due: Decimal | None = None
     for record in records:
-        amount = _parse_decimal_text(record.dias)
+        amount = _inadimplencia_days_value(record.dias)
         if amount is None:
             continue
-        if max_days is None or amount > max_days:
-            max_days = amount
-    return _format_inadimplencia_days_label(max_days)
+        if amount < 0:
+            overdue_days = abs(amount)
+            if max_overdue is None or overdue_days > max_overdue:
+                max_overdue = overdue_days
+        elif nearest_due is None or amount < nearest_due:
+            nearest_due = amount
+    if max_overdue is not None:
+        return f"Maior atraso: {_format_inadimplencia_days_amount(max_overdue)}"
+    if nearest_due is not None:
+        return f"Proximo vencimento: {_format_inadimplencia_timing_label(nearest_due)}"
+    return "Situacao: -"
 
 
 def _format_prazo_percent(value: str) -> str:
