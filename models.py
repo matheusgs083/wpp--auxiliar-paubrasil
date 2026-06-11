@@ -9,6 +9,7 @@ class IncomingMessage:
     text: str
     channel: str = "evolution"
     message_id: str = ""
+    reply_targets: tuple[str, ...] = ()
     raw: dict = field(default_factory=dict)
 
 

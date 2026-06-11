@@ -43,6 +43,7 @@ class Settings:
     denied_unregistered_reply_cooldown_minutes: int
     admin_api_token: str
     finance_panel_tokens: tuple[tuple[str, tuple[str, ...]], ...]
+    critica_panel_tokens: tuple[tuple[str, tuple[str, ...]], ...]
     admin_upload_max_file_size_mb: int
     admin_upload_max_file_count: int
     reports_database_url: str
@@ -138,7 +139,11 @@ def _parse_key_value_pairs(value: str | None) -> tuple[tuple[str, str], ...]:
     return tuple(pairs)
 
 
-def _parse_finance_panel_tokens(value: str | None) -> tuple[tuple[str, tuple[str, ...]], ...]:
+def _parse_scoped_panel_tokens(
+    value: str | None,
+    *,
+    allow_all_scope: bool = False,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
     if value is None:
         return ()
     mappings: list[tuple[str, tuple[str, ...]]] = []
@@ -154,6 +159,11 @@ def _parse_finance_panel_tokens(value: str | None) -> tuple[tuple[str, tuple[str
         filial_codes = []
         seen: set[str] = set()
         for raw_code in raw_filiais.replace(";", "|").split("|"):
+            raw_text = str(raw_code or "").strip().lower()
+            if allow_all_scope and raw_text in {"*", "all", "todos", "todas"}:
+                filial_codes = ["*"]
+                seen = {"*"}
+                break
             digits = "".join(char for char in str(raw_code or "") if char.isdigit())
             normalized = digits.lstrip("0") or ("0" if digits else "")
             if normalized and normalized not in seen:
@@ -162,6 +172,14 @@ def _parse_finance_panel_tokens(value: str | None) -> tuple[tuple[str, tuple[str
         if panel_token and filial_codes:
             mappings.append((panel_token, tuple(filial_codes)))
     return tuple(mappings)
+
+
+def _parse_finance_panel_tokens(value: str | None) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    return _parse_scoped_panel_tokens(value, allow_all_scope=False)
+
+
+def _parse_critica_panel_tokens(value: str | None) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    return _parse_scoped_panel_tokens(value, allow_all_scope=True)
 
 
 def get_settings() -> Settings:
@@ -206,6 +224,7 @@ def get_settings() -> Settings:
         ),
         admin_api_token=os.getenv("ADMIN_API_TOKEN", "").strip(),
         finance_panel_tokens=_parse_finance_panel_tokens(os.getenv("FINANCE_PANEL_TOKENS", "")),
+        critica_panel_tokens=_parse_critica_panel_tokens(os.getenv("CRITICA_PANEL_TOKENS", "")),
         admin_upload_max_file_size_mb=max(0, int(os.getenv("ADMIN_UPLOAD_MAX_FILE_SIZE_MB", "0"))),
         admin_upload_max_file_count=max(1, int(os.getenv("ADMIN_UPLOAD_MAX_FILE_COUNT", "20"))),
         reports_database_url=(os.getenv("REPORTS_DATABASE_URL", "").strip() or os.getenv("ACCESS_DATABASE_URL", "").strip()),

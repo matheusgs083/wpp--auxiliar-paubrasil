@@ -44,7 +44,10 @@ services:
       start_period: 5s
 
   evolution-api:
-    image: evoapicloud/evolution-api:v2.3.7
+    build:
+      context: .
+      dockerfile: deploy/evolution/Dockerfile
+    image: bot-api-evolution:v2.3.7-tctoken
     container_name: evolution-api
     restart: unless-stopped
     depends_on:
@@ -126,6 +129,7 @@ services:
       DENIED_UNREGISTERED_REPLY_COOLDOWN_MINUTES: ${DENIED_UNREGISTERED_REPLY_COOLDOWN_MINUTES:-720}
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
       FINANCE_PANEL_TOKENS: ${FINANCE_PANEL_TOKENS:-}
+      CRITICA_PANEL_TOKENS: ${CRITICA_PANEL_TOKENS:-}
       ADMIN_UPLOAD_MAX_FILE_SIZE_MB: ${ADMIN_UPLOAD_MAX_FILE_SIZE_MB:-300}
       ADMIN_UPLOAD_MAX_FILE_COUNT: ${ADMIN_UPLOAD_MAX_FILE_COUNT:-20}
       REPORTS_RUNTIME_DATABASE_URL: postgresql://${BOT_REPORTS_DATABASE_USER:-bot_reports_read}:${BOT_REPORTS_DATABASE_PASSWORD:?BOT_REPORTS_DATABASE_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-evolution}

@@ -38,20 +38,21 @@ class EvolutionClient:
     def enabled(self) -> bool:
         return bool(self.config.base_url and self.config.instance)
 
-    def send(self, number: str, message: OutgoingMessage) -> None:
+    def send(self, number: str, message: OutgoingMessage, *, reply_targets: tuple[str, ...] = ()) -> None:
         # Menus ficam sempre em texto para evitar falhas interativas na Evolution.
         if message.kind == "menu":
-            self.send_text(number=number, text=self._menu_fallback_text(message))
+            self.send_text(number=number, text=self._menu_fallback_text(message), reply_targets=reply_targets)
             return
         if message.kind == "media" and message.media_url:
             if message.text.strip():
-                self.send_text(number=number, text=message.text)
+                self.send_text(number=number, text=message.text, reply_targets=reply_targets)
             self._send_media_with_fallback(
                 number=number,
                 media_url=message.media_url,
                 media_type=message.media_type or "image",
                 caption=message.media_caption,
                 filename=message.media_filename,
+                reply_targets=reply_targets,
                 data_url_fallback_suffix="Use a mensagem enviada acima como referencia.",
             )
             for attachment in message.extra_media:
@@ -61,11 +62,12 @@ class EvolutionClient:
                     media_type=attachment.media_type or "document",
                     caption=attachment.media_caption,
                     filename=attachment.media_filename,
+                    reply_targets=reply_targets,
                 )
             return
         if message.extra_media:
             if message.text.strip():
-                self.send_text(number=number, text=message.text)
+                self.send_text(number=number, text=message.text, reply_targets=reply_targets)
             for attachment in message.extra_media:
                 self._send_media_with_fallback(
                     number=number,
@@ -73,82 +75,91 @@ class EvolutionClient:
                     media_type=attachment.media_type or "document",
                     caption=attachment.media_caption,
                     filename=attachment.media_filename,
+                    reply_targets=reply_targets,
                 )
             return
-        self.send_text(number=number, text=message.text)
+        self.send_text(number=number, text=message.text, reply_targets=reply_targets)
 
-    def send_text(self, number: str, text: str) -> None:
+    def send_text(self, number: str, text: str, *, reply_targets: tuple[str, ...] = ()) -> None:
         if not self.enabled:
             raise RuntimeError("EVOLUTION_BASE_URL e EVOLUTION_INSTANCE sao obrigatorios para envio.")
 
         path = self.config.send_path.format(instance=self.config.instance)
         url = f"{self.config.base_url}{path}"
+        clean_text = str(text or "").strip()
+        if not clean_text:
+            raise RuntimeError("Texto vazio para envio pela Evolution.")
 
-        payload_variants = [
-            {"number": number, "text": text},
-            {"number": number, "textMessage": {"text": text}},
-        ]
+        payload_variants = _text_payload_variants(number=number, text=clean_text, reply_targets=reply_targets)
 
-        last_error: str | None = None
+        errors: list[str] = []
         with httpx.Client(timeout=self.config.timeout_seconds) as client:
             for payload in payload_variants:
-                response = client.post(url, headers=self._headers(), content=json.dumps(payload, ensure_ascii=False))
+                response = client.post(url, headers=self._headers(), json=payload)
                 if 200 <= response.status_code < 300:
                     return
-                last_error = f"{response.status_code} {response.text}"
+                errors.append(f"{response.status_code} {response.text}")
 
-        raise RuntimeError(f"Falha ao enviar mensagem para Evolution: {last_error}")
+        raise RuntimeError(f"Falha ao enviar mensagem para Evolution: {' | '.join(errors)}")
 
-    def send_list(self, number: str, message: OutgoingMessage) -> None:
+    def send_list(self, number: str, message: OutgoingMessage, *, reply_targets: tuple[str, ...] = ()) -> None:
         if not self.enabled:
             raise RuntimeError("EVOLUTION_BASE_URL e EVOLUTION_INSTANCE sao obrigatorios para envio.")
 
         path = self.config.list_path.format(instance=self.config.instance)
         url = f"{self.config.base_url}{path}"
-        payload = {
-            "number": number,
-            "title": message.title or "Consulta de Clientes",
-            "description": message.text,
-            "buttonText": message.button_text or "Escolher",
-            "footerText": message.footer,
-            "sections": [
+        payloads = []
+        for recipient in _recipient_candidates(number=number, reply_targets=reply_targets):
+            payloads.append(
                 {
-                    "title": "Opcoes",
-                    "rows": [
+                    "number": recipient,
+                    "title": message.title or "Consulta de Clientes",
+                    "description": message.text,
+                    "buttonText": message.button_text or "Escolher",
+                    "footerText": message.footer,
+                    "sections": [
                         {
-                            "title": option.title,
-                            "description": option.description,
-                            "rowId": option.option_id,
+                            "title": "Opcoes",
+                            "rows": [
+                                {
+                                    "title": option.title,
+                                    "description": option.description,
+                                    "rowId": option.option_id,
+                                }
+                                for option in message.options
+                            ],
                         }
-                        for option in message.options
                     ],
                 }
-            ],
-        }
-        self._post_json(url, payload)
+            )
+        self._post_json(url, payloads)
 
-    def send_buttons(self, number: str, message: OutgoingMessage) -> None:
+    def send_buttons(self, number: str, message: OutgoingMessage, *, reply_targets: tuple[str, ...] = ()) -> None:
         if not self.enabled:
             raise RuntimeError("EVOLUTION_BASE_URL e EVOLUTION_INSTANCE sao obrigatorios para envio.")
 
         path = self.config.buttons_path.format(instance=self.config.instance)
         url = f"{self.config.base_url}{path}"
-        payload = {
-            "number": number,
-            "title": message.title or "Consulta de Clientes",
-            "description": message.text,
-            "footer": message.footer,
-            "buttons": [
+        payloads = []
+        for recipient in _recipient_candidates(number=number, reply_targets=reply_targets):
+            payloads.append(
                 {
-                    "type": "reply",
-                    "title": option.title,
-                    "displayText": option.title,
-                    "id": option.option_id,
+                    "number": recipient,
+                    "title": message.title or "Consulta de Clientes",
+                    "description": message.text,
+                    "footer": message.footer,
+                    "buttons": [
+                        {
+                            "type": "reply",
+                            "title": option.title,
+                            "displayText": option.title,
+                            "id": option.option_id,
+                        }
+                        for option in message.options[:3]
+                    ],
                 }
-                for option in message.options[:3]
-            ],
-        }
-        self._post_json(url, payload)
+            )
+        self._post_json(url, payloads)
 
     def send_media(
         self,
@@ -158,6 +169,7 @@ class EvolutionClient:
         media_type: str = "image",
         caption: str = "",
         filename: str = "",
+        reply_targets: tuple[str, ...] = (),
     ) -> None:
         if not self.enabled:
             raise RuntimeError("EVOLUTION_BASE_URL e EVOLUTION_INSTANCE sao obrigatorios para envio.")
@@ -172,6 +184,7 @@ class EvolutionClient:
             media_type=normalized_media_type,
             caption=caption,
             filename=media_filename,
+            reply_targets=reply_targets,
         )
 
         last_error: str | None = None
@@ -184,12 +197,15 @@ class EvolutionClient:
 
         raise RuntimeError(f"Falha ao enviar midia para Evolution: {last_error}")
 
-    def _post_json(self, url: str, payload: dict[str, Any]) -> None:
+    def _post_json(self, url: str, payloads: list[dict[str, Any]]) -> None:
         with httpx.Client(timeout=self.config.timeout_seconds) as client:
-            response = client.post(url, headers=self._headers(), content=json.dumps(payload, ensure_ascii=False))
-        if 200 <= response.status_code < 300:
-            return
-        raise RuntimeError(f"Falha ao enviar payload interativo: {response.status_code} {response.text}")
+            errors: list[str] = []
+            for payload in payloads:
+                response = client.post(url, headers=self._headers(), content=json.dumps(payload, ensure_ascii=False))
+                if 200 <= response.status_code < 300:
+                    return
+                errors.append(f"{response.status_code} {response.text}")
+        raise RuntimeError(f"Falha ao enviar payload interativo: {' | '.join(errors)}")
 
     def _send_media_with_fallback(
         self,
@@ -199,6 +215,7 @@ class EvolutionClient:
         media_type: str,
         caption: str,
         filename: str,
+        reply_targets: tuple[str, ...],
         data_url_fallback_suffix: str = "Tente novamente mais tarde.",
     ) -> None:
         try:
@@ -208,6 +225,7 @@ class EvolutionClient:
                 media_type=media_type,
                 caption=caption,
                 filename=filename,
+                reply_targets=reply_targets,
             )
         except RuntimeError as exc:
             logger.warning("Falha ao enviar midia pela Evolution: %s", exc)
@@ -215,7 +233,7 @@ class EvolutionClient:
                 fallback_text = f"{caption or 'Midia'} nao pode ser enviada agora. {data_url_fallback_suffix}"
             else:
                 fallback_text = f"{caption or 'Midia'}: {media_url}".strip()
-            self.send_text(number=number, text=fallback_text)
+            self.send_text(number=number, text=fallback_text, reply_targets=reply_targets)
 
     def _menu_fallback_text(self, message: OutgoingMessage) -> str:
         lines = []
@@ -264,15 +282,20 @@ def extract_incoming_message(payload: dict[str, Any]) -> IncomingMessage | None:
         return None
 
     sender_candidates = [
+        data.get("key", {}).get("remoteJidAlt") if isinstance(data.get("key"), dict) else None,
         data.get("key", {}).get("remoteJid") if isinstance(data.get("key"), dict) else None,
+        data.get("key", {}).get("participantAlt") if isinstance(data.get("key"), dict) else None,
         data.get("key", {}).get("participant") if isinstance(data.get("key"), dict) else None,
+        data.get("remoteJidAlt"),
+        data.get("remoteJid"),
+        data.get("participantAlt"),
         data.get("participant"),
         data.get("from"),
         nested_message.get("from") if isinstance(nested_message, dict) else None,
         data.get("sender"),
         payload.get("sender"),
     ]
-    sender = next((candidate for candidate in sender_candidates if isinstance(candidate, str) and candidate.strip()), "")
+    sender = _select_sender(sender_candidates)
     sender = _normalize_sender(sender)
 
     text_candidates = [
@@ -316,15 +339,35 @@ def extract_incoming_message(payload: dict[str, Any]) -> IncomingMessage | None:
         if isinstance(data.get("key"), dict)
         else None
     ) or nested_message.get("id") or data.get("id") or ""
-    return IncomingMessage(sender=sender, text=text.strip(), channel="evolution", message_id=message_id, raw=payload)
+    reply_targets = _extract_reply_targets(data=data, nested_message=nested_message, payload=payload)
+    return IncomingMessage(
+        sender=sender,
+        text=text.strip(),
+        channel="evolution",
+        message_id=message_id,
+        reply_targets=reply_targets,
+        raw=payload,
+    )
 
 
 def _normalize_sender(sender: str) -> str:
     normalized = str(sender or "").strip()
-    for suffix in ("@s.whatsapp.net", "@g.us"):
+    for suffix in ("@s.whatsapp.net", "@g.us", "@lid"):
         if normalized.endswith(suffix):
             normalized = normalized[: -len(suffix)]
     return normalized
+
+
+def _select_sender(candidates: list[Any]) -> str:
+    values = [str(candidate or "").strip() for candidate in candidates if str(candidate or "").strip()]
+    phone_candidates = [
+        value
+        for value in values
+        if value.endswith("@s.whatsapp.net") or (_normalize_sender(value).isdigit() and not value.endswith("@lid"))
+    ]
+    if phone_candidates:
+        return phone_candidates[0]
+    return values[0] if values else ""
 
 
 def _default_media_filename(media_type: str) -> str:
@@ -347,6 +390,7 @@ def _media_payload_variants(
     media_type: str,
     caption: str,
     filename: str,
+    reply_targets: tuple[str, ...],
 ) -> list[dict[str, Any]]:
     normalized_media_type = str(media_type or "image").strip().lower() or "image"
     media_value = str(media_url or "").strip()
@@ -354,59 +398,102 @@ def _media_payload_variants(
     mimetype = mimetype or _default_mimetype(normalized_media_type)
 
     variants: list[dict[str, Any]] = []
-    if raw_base64:
-        variants.extend(
-            [
-                {
-                    "number": number,
-                    "mediatype": normalized_media_type,
-                    "mimetype": mimetype,
-                    "media": raw_base64,
-                    "caption": caption,
-                    "fileName": filename,
-                },
-                {
-                    "number": number,
-                    "mediaType": normalized_media_type,
-                    "mimetype": mimetype,
-                    "media": raw_base64,
-                    "caption": caption,
-                    "fileName": filename,
-                },
-                {
-                    "number": number,
-                    "mediaMessage": {
+    for recipient in _recipient_candidates(number=number, reply_targets=reply_targets):
+        if raw_base64:
+            variants.extend(
+                [
+                    {
+                        "number": recipient,
                         "mediatype": normalized_media_type,
                         "mimetype": mimetype,
                         "media": raw_base64,
                         "caption": caption,
                         "fileName": filename,
                     },
+                    {
+                        "number": recipient,
+                        "mediaType": normalized_media_type,
+                        "mimetype": mimetype,
+                        "media": raw_base64,
+                        "caption": caption,
+                        "fileName": filename,
+                    },
+                    {
+                        "number": recipient,
+                        "mediaMessage": {
+                            "mediatype": normalized_media_type,
+                            "mimetype": mimetype,
+                            "media": raw_base64,
+                            "caption": caption,
+                            "fileName": filename,
+                        },
+                    },
+                ]
+            )
+
+        variants.extend(
+            [
+                {
+                    "number": recipient,
+                    "mediatype": normalized_media_type,
+                    "mimetype": mimetype,
+                    "media": media_value,
+                    "caption": caption,
+                    "fileName": filename,
+                },
+                {
+                    "number": recipient,
+                    "mediaType": normalized_media_type,
+                    "mimetype": mimetype,
+                    "media": media_value,
+                    "caption": caption,
+                    "fileName": filename,
                 },
             ]
         )
-
-    variants.extend(
-        [
-            {
-                "number": number,
-                "mediatype": normalized_media_type,
-                "mimetype": mimetype,
-                "media": media_value,
-                "caption": caption,
-                "fileName": filename,
-            },
-            {
-                "number": number,
-                "mediaType": normalized_media_type,
-                "mimetype": mimetype,
-                "media": media_value,
-                "caption": caption,
-                "fileName": filename,
-            },
-        ]
-    )
     return variants
+
+
+def _text_payload_variants(*, number: str, text: str, reply_targets: tuple[str, ...]) -> list[dict[str, Any]]:
+    return [{"number": recipient, "text": text} for recipient in _recipient_candidates(number=number, reply_targets=reply_targets)]
+
+
+def _extract_reply_targets(*, data: dict[str, Any], nested_message: dict[str, Any], payload: dict[str, Any]) -> tuple[str, ...]:
+    key = data.get("key") if isinstance(data.get("key"), dict) else {}
+    candidates = [
+        key.get("remoteJid"),
+        key.get("remoteJidAlt"),
+        key.get("participant"),
+        key.get("participantAlt"),
+        data.get("remoteJid"),
+        data.get("remoteJidAlt"),
+        data.get("participant"),
+        data.get("participantAlt"),
+        nested_message.get("from"),
+        data.get("from"),
+        payload.get("sender"),
+    ]
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+    return tuple(normalized)
+
+
+def _recipient_candidates(*, number: str, reply_targets: tuple[str, ...]) -> tuple[str, ...]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for candidate in (*reply_targets, number, _normalize_sender(number)):
+        value = str(candidate or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        candidates.append(value)
+    return tuple(candidates)
 
 
 def _split_data_url(value: str) -> tuple[str, str]:

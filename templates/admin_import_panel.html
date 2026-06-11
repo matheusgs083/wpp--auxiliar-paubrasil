@@ -195,7 +195,21 @@
     body[data-theme="dark"] .pill.warn, body[data-theme="dark"] .validation-panel.warn { background: rgba(180, 83, 9, 0.18); }
     body[data-theme="dark"] .validation-panel.err, body[data-theme="dark"] .critica-problem-badge, body[data-theme="dark"] .critica-recommendation { background: rgba(185, 28, 28, 0.18); }
     body[data-theme="dark"] .power-slicer-panel { background: var(--surface); }
+    .flow-gateway { display: grid; gap: 0.75rem; margin-bottom: 0.85rem; padding: 0.75rem; }
+    .flow-gateway-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+    .flow-gateway-title { margin: 0; color: var(--ink-900); font-size: 0.86rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+    .flow-gateway-current { color: var(--ink-500); font-size: 0.8rem; font-weight: 700; }
+    .flow-grid { display: grid; grid-template-columns: repeat(6, minmax(135px, 1fr)); gap: 0.55rem; }
+    .flow-path { min-height: 86px; display: grid; grid-template-columns: 30px 1fr; align-items: start; gap: 0.55rem; padding: 0.72rem; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-700); background: var(--surface); text-align: left; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease; }
+    .flow-path:hover { border-color: var(--brand-600); background: var(--surface-soft); }
+    .flow-path.is-active { border-color: var(--brand-700); background: linear-gradient(180deg, var(--brand-100), var(--surface)); box-shadow: 0 0 0 3px var(--focus); }
+    .flow-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; color: #fff; background: var(--brand-700); }
+    .flow-title { display: block; color: var(--ink-900); font-size: 0.86rem; font-weight: 800; line-height: 1.15; }
+    .flow-desc { display: block; margin-top: 0.18rem; color: var(--ink-500); font-size: 0.74rem; font-weight: 650; line-height: 1.25; }
+    .flow-meta { display: inline-flex; align-items: center; width: fit-content; margin-top: 0.42rem; padding: 0.16rem 0.4rem; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-500); background: var(--surface-soft); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
+    body[data-theme="dark"] .flow-path.is-active { background: linear-gradient(180deg, rgba(37, 99, 235, 0.28), var(--surface)); }
     @media (max-width: 1200px) { .metric-grid, .usage-metric-grid, .recolha-dashboard-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
+    @media (max-width: 1200px) { .flow-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); } }
     @media (max-width: 900px) { .recolha-insights { grid-template-columns: 1fr; } }
     @media (max-width: 768px) {
       .layout { width: calc(100% - 0.75rem); padding-top: 0.55rem; }
@@ -210,6 +224,9 @@
       pre#logPanel { height: 340px; max-height: 340px; }
       .nav-pills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .nav-fill .nav-item, .nav-fill > .nav-link { flex: initial; }
+      .flow-gateway-head { align-items: flex-start; flex-direction: column; }
+      .flow-grid { grid-template-columns: 1fr; }
+      .flow-path { min-height: 74px; }
     }
   </style>
 </head>
@@ -262,6 +279,42 @@
         <span class="pill" id="runningState" role="status">Nenhuma importação ativa</span>
         <span class="pill" id="lastJobState" role="status">Sem execução recente</span>
         <span class="pill" id="authState" role="status">Aguardando token</span>
+      </div>
+    </section>
+
+    <section class="panel-card flow-gateway" id="flowNav" aria-labelledby="flowNavTitle">
+      <div class="flow-gateway-head">
+        <div>
+          <h2 class="flow-gateway-title" id="flowNavTitle">Caminhos rápidos</h2>
+          <div class="form-text">Entre direto na rotina do dia sem procurar dentro das abas.</div>
+        </div>
+        <span class="flow-gateway-current" id="activeFlowLabel">Operação diária</span>
+      </div>
+      <div class="flow-grid">
+        <button type="button" class="flow-path is-active" data-flow-target="operationsTab" data-flow-label="Operação diária" aria-pressed="true">
+          <span class="flow-icon"><i class="bi bi-sliders"></i></span>
+          <span><span class="flow-title">Operação</span><span class="flow-desc">Acessos, disparos, importações e histórico.</span><span class="flow-meta">Rotina</span></span>
+        </button>
+        <button type="button" class="flow-path" data-flow-target="operationalTablesTab" data-flow-label="Tabelas operacionais" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-table"></i></span>
+          <span><span class="flow-title">Tabelas</span><span class="flow-desc">Bases auxiliares de setores, preços e produtos.</span><span class="flow-meta">Base</span></span>
+        </button>
+        <button type="button" class="flow-path" data-flow-target="criticaTab" data-flow-label="Crítica comercial" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-clipboard-data"></i></span>
+          <span><span class="flow-title">Crítica</span><span class="flow-desc">Problemas por pedido, filtros e uploads por operação.</span><span class="flow-meta">Análise</span></span>
+        </button>
+        <button type="button" class="flow-path" data-flow-target="recolhasTab" data-flow-label="Recolhas financeiras" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-truck"></i></span>
+          <span><span class="flow-title">Recolhas</span><span class="flow-desc">CSV financeiro, baixas e acompanhamento por filial.</span><span class="flow-meta">Financeiro</span></span>
+        </button>
+        <button type="button" class="flow-path" data-flow-target="giroRecolhaTab" data-flow-label="Giro e rotas" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-signpost-split"></i></span>
+          <span><span class="flow-title">Giro</span><span class="flow-desc">Clientes com giro baixo e montagem de rotas.</span><span class="flow-meta">Prioridade</span></span>
+        </button>
+        <button type="button" class="flow-path" data-flow-target="usageEvolutionTab" data-flow-label="Uso do bot" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-whatsapp"></i></span>
+          <span><span class="flow-title">Uso Evolution</span><span class="flow-desc">Volume, bloqueios, eventos e exportação.</span><span class="flow-meta">Monitor</span></span>
+        </button>
       </div>
     </section>
 
@@ -382,12 +435,12 @@
 
         <section class="panel-card p-3 mb-3" id="broadcastPanel">
           <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
-            <h2 class="h6 fw-bold mb-0"><i class="bi bi-send-check me-2 text-primary"></i>Disparo por filial</h2>
+            <h2 class="h6 fw-bold mb-0"><i class="bi bi-send-check me-2 text-primary"></i>Disparo por operacao</h2>
             <span class="pill" id="broadcastStatus">Aguardando dados</span>
           </div>
           <div class="row g-2 align-items-end">
             <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="broadcastFilial">Filial</label>
+              <label class="form-label small fw-semibold mb-1" for="broadcastFilial">Operacao</label>
               <select id="broadcastFilial" class="form-select">
                 <option value="">Carregando...</option>
               </select>
@@ -593,6 +646,8 @@
             <div class="d-flex flex-wrap gap-2 align-items-center">
               <span class="pill" id="criticaDashboardCount">Aguardando dados</span>
               <button class="btn btn-outline-primary btn-sm" id="criticaDashboardRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar critica</button>
+              <button class="btn btn-outline-success btn-sm" id="criticaSectorPdfBtn"><i class="bi bi-file-earmark-pdf me-1"></i>PDF setor</button>
+              <button class="btn btn-outline-secondary btn-sm" id="criticaSectorSummaryPdfBtn"><i class="bi bi-file-earmark-text me-1"></i>Resumo setor</button>
             </div>
           </div>
           <div class="row g-2 align-items-end mb-3">
@@ -1012,6 +1067,13 @@
             <article class="usage-card"><div class="title">Eventos Totais</div><div class="value" id="usageMetricEvents">--</div></article>
           </div>
 
+          <div class="usage-metric-grid mb-3">
+            <article class="usage-card"><div class="title">Interações por Função</div><div class="value" id="usageMetricFeatureInteractions">--</div></article>
+            <article class="usage-card"><div class="title">Usuários Rastreados</div><div class="value" id="usageMetricFeatureUsers">--</div></article>
+            <article class="usage-card"><div class="title">Funções Usadas</div><div class="value" id="usageMetricFeatureCount">--</div></article>
+            <article class="usage-card"><div class="title">Função Líder</div><div class="value" id="usageMetricFeatureTop">--</div></article>
+          </div>
+
           <div class="row g-3 mb-1">
             <div class="col-xl-7">
               <div class="border rounded-3 p-3 h-100">
@@ -1035,6 +1097,77 @@
                       </tr>
                     </thead>
                     <tbody id="usageTopNumbersBody">
+                      <tr><td colspan="4" class="text-center py-3 text-secondary">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-xl-5">
+              <div class="border rounded-3 p-3 h-100">
+                <h3 class="h6 fw-bold mb-2"><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>Funções Mais Usadas</h3>
+                <div class="table-scroll" style="max-height: 240px;">
+                  <table class="table table-sm table-hover align-middle mb-0">
+                    <thead>
+                      <tr class="text-uppercase small text-secondary">
+                        <th scope="col">Função</th>
+                        <th scope="col" class="text-end">Interações</th>
+                        <th scope="col" class="text-end">Usuários</th>
+                      </tr>
+                    </thead>
+                    <tbody id="usageFunctionSummaryBody">
+                      <tr><td colspan="3" class="text-center py-3 text-secondary">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="col-xl-7">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="d-flex flex-wrap gap-2 align-items-end justify-content-between mb-2">
+                  <h3 class="h6 fw-bold mb-0"><i class="bi bi-people me-2 text-primary"></i>Número x Função</h3>
+                  <div class="d-flex flex-wrap gap-2 align-items-end">
+                    <div>
+                      <label class="form-label small fw-semibold mb-1" for="usageFunctionWindow">Período</label>
+                      <select id="usageFunctionWindow" class="form-select form-select-sm" aria-label="Período do acesso às funções">
+                        <option value="1">1 dia</option>
+                        <option value="7" selected>7 dias</option>
+                        <option value="15">15 dias</option>
+                        <option value="30">30 dias</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="form-label small fw-semibold mb-1" for="usageFunctionDateFrom">De</label>
+                      <input id="usageFunctionDateFrom" type="date" class="form-control form-control-sm" aria-label="Data inicial do acesso as funcoes">
+                    </div>
+                    <div>
+                      <label class="form-label small fw-semibold mb-1" for="usageFunctionDateTo">Ate</label>
+                      <input id="usageFunctionDateTo" type="date" class="form-control form-control-sm" aria-label="Data final do acesso as funcoes">
+                    </div>
+                    <div>
+                      <label class="form-label small fw-semibold mb-1" for="usageFunctionFilter">Funcao</label>
+                      <select id="usageFunctionFilter" class="form-select form-select-sm" aria-label="Filtro de funcao">
+                        <option value="">Todas</option>
+                      </select>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm" id="usageFunctionRefreshBtn"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
+                    <button class="btn btn-outline-success btn-sm" id="usageFunctionExportBtn"><i class="bi bi-download me-1"></i>Exportar CSV</button>
+                  </div>
+                </div>
+                <div class="table-scroll" style="max-height: 240px;">
+                  <table class="table table-sm table-hover align-middle mb-0">
+                    <thead>
+                      <tr class="text-uppercase small text-secondary">
+                        <th scope="col">Usuário</th>
+                        <th scope="col" class="text-end">Interações</th>
+                        <th scope="col" class="text-end">Funções</th>
+                        <th scope="col">Detalhe</th>
+                      </tr>
+                    </thead>
+                    <tbody id="usageFunctionUsersBody">
                       <tr><td colspan="4" class="text-center py-3 text-secondary">Carregando...</td></tr>
                     </tbody>
                   </table>
@@ -1132,7 +1265,8 @@
         },
         usage: {
           evolution: "/api/admin/usage/evolution",
-          evolutionReport: "/api/admin/usage/evolution/report"
+          evolutionReport: "/api/admin/usage/evolution/report",
+          evolutionFunctionsReport: "/api/admin/usage/evolution/functions/report"
         },
         broadcast: {
           options: "/api/admin/broadcast/options",
@@ -1154,7 +1288,8 @@
           routes: "/api/admin/giro/recolha-routes"
         },
         critica: {
-          dashboard: "/api/admin/critica/dashboard"
+          dashboard: "/api/admin/critica/dashboard",
+          pdf: "/api/admin/critica/pdf"
         }
       },
       roles: {
@@ -1168,6 +1303,7 @@
         { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2", area: "operational", group: "Tabelas operacionais", groupNote: "Apoio interno para escopo, usuarios e tabelas auxiliares." },
         { id: "DPrecos", name: "Tabela de Precos", icon: "bi-tags", area: "operational", group: "Tabelas operacionais" },
         { id: "dOperacoes", name: "Tabela de Operacoes", icon: "bi-list-columns", area: "operational", group: "Tabelas operacionais" },
+        { id: "dCondicoes", name: "Tabela de Condicoes", icon: "bi-receipt", area: "operational", group: "Tabelas operacionais" },
         { id: "dProdutos", name: "Cadastro de Produtos", icon: "bi-boxes", area: "operational", group: "Produtos", groupNote: "Dimensoes auxiliares para enriquecer regras e analises por produto." },
         { id: "ProdutoCestas", name: "Cesta de Produtos", icon: "bi-collection", area: "operational", group: "Produtos" },
         { id: "dClientes", name: "Carteira de Clientes", icon: "bi-person-badge", area: "reports", group: "Relatorios de negocio", groupNote: "Bases usadas diretamente nas consultas e dashboards do bot." },
@@ -1191,7 +1327,18 @@
     const state = {
       logs: [], history: [], jobs: [], status: null,
       tokens: { api: "", admin: "" },
-      panel: { mode: "", isAdmin: false, filiais: [], canBroadcast: true },
+      panel: {
+        mode: "",
+        isAdmin: false,
+        filiais: [],
+        canBroadcast: true,
+        canImport: true,
+        canImportCritica: true,
+        canManageRecolhas: true,
+        canViewGiro: true,
+        canViewCritica: true,
+        canViewUsage: true
+      },
       accessUsers: [], accessEditing: null, lastSyncAt: null,
       evolutionUsage: null,
       broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
@@ -1213,6 +1360,7 @@
       dSetores: "dsetores",
       DPrecos: "dprecos",
       dOperacoes: "doperacoes",
+      dCondicoes: "dcondicoes",
       dProdutos: "dprodutos",
       ProdutoCestas: "produto_cestas",
       dClientes: "dclientes",
@@ -1234,6 +1382,7 @@
       dSetores: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
       DPrecos: { accept: ".xlsx,.xlsm,.csv", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm) ou CSV." },
       dOperacoes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
+      dCondicoes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione o arquivo dCondicoes.csv." },
       dProdutos: { accept: ".csv", mode: "single", label: "CSV de Produtos", emptyHint: "Selecione o arquivo 01.11.CSV." },
       ProdutoCestas: { accept: ".xlsx,.xlsm,.csv", mode: "single", label: "Cesta de Produtos", emptyHint: "Selecione o arquivo Cesta de Produtos.xlsx." },
       dClientes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
@@ -1258,6 +1407,8 @@
 
     const E = {
       main: document.getElementById("mainContent"),
+      flowNav: document.getElementById("flowNav"),
+      activeFlowLabel: document.getElementById("activeFlowLabel"),
       log: document.getElementById("logPanel"),
       apiToken: document.getElementById("apiToken"),
       apiTokenField: document.getElementById("apiTokenField"),
@@ -1284,9 +1435,17 @@
       metricRunning: document.getElementById("metricRunning"),
       metricLastSync: document.getElementById("metricLastSync"),
       usageWindow: document.getElementById("usageWindow"),
+      usageFunctionWindow: document.getElementById("usageFunctionWindow"),
+      usageFunctionDateFrom: document.getElementById("usageFunctionDateFrom"),
+      usageFunctionDateTo: document.getElementById("usageFunctionDateTo"),
+      usageFunctionFilter: document.getElementById("usageFunctionFilter"),
       usageExportReportBtn: document.getElementById("usageExportReportBtn"),
+      usageFunctionRefreshBtn: document.getElementById("usageFunctionRefreshBtn"),
+      usageFunctionExportBtn: document.getElementById("usageFunctionExportBtn"),
       usageDailyBars: document.getElementById("usageDailyBars"),
       usageTopNumbersBody: document.getElementById("usageTopNumbersBody"),
+      usageFunctionSummaryBody: document.getElementById("usageFunctionSummaryBody"),
+      usageFunctionUsersBody: document.getElementById("usageFunctionUsersBody"),
       usageBreakdownBody: document.getElementById("usageBreakdownBody"),
       usageRecentBody: document.getElementById("usageRecentBody"),
       usageMetricMessages: document.getElementById("usageMetricMessages"),
@@ -1297,6 +1456,10 @@
       usageMetricDeniedSent: document.getElementById("usageMetricDeniedSent"),
       usageMetricDeniedSuppressed: document.getElementById("usageMetricDeniedSuppressed"),
       usageMetricEvents: document.getElementById("usageMetricEvents"),
+      usageMetricFeatureInteractions: document.getElementById("usageMetricFeatureInteractions"),
+      usageMetricFeatureUsers: document.getElementById("usageMetricFeatureUsers"),
+      usageMetricFeatureCount: document.getElementById("usageMetricFeatureCount"),
+      usageMetricFeatureTop: document.getElementById("usageMetricFeatureTop"),
       accessEditorCard: document.getElementById("accessEditorCard"),
       allowedUsersCard: document.getElementById("allowedUsersCard"),
       allowedUsersContainer: document.getElementById("allowedUsersContainer"),
@@ -1368,6 +1531,8 @@
       giroRecolhaBody: document.getElementById("giroRecolhaBody"),
       criticaDashboardCount: document.getElementById("criticaDashboardCount"),
       criticaDashboardRefreshBtn: document.getElementById("criticaDashboardRefreshBtn"),
+      criticaSectorPdfBtn: document.getElementById("criticaSectorPdfBtn"),
+      criticaSectorSummaryPdfBtn: document.getElementById("criticaSectorSummaryPdfBtn"),
       criticaDashboardClearBtn: document.getElementById("criticaDashboardClearBtn"),
       criticaDate: document.getElementById("criticaDate"),
       criticaOperation: document.getElementById("criticaOperation"),
@@ -1549,9 +1714,57 @@
       }
     }
 
+    function flowPathButtons() {
+      return E.flowNav ? Array.from(E.flowNav.querySelectorAll("[data-flow-target]")) : [];
+    }
+
+    function updateFlowNavigation(activeTabId) {
+      const buttons = flowPathButtons();
+      buttons.forEach(button => {
+        const targetId = String(button.dataset.flowTarget || "");
+        const targetTab = document.getElementById(targetId);
+        const isHidden = Boolean(targetTab && targetTab.parentElement && targetTab.parentElement.style.display === "none");
+        const isActive = targetId === activeTabId && !isHidden;
+        button.hidden = isHidden;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        if (isActive && E.activeFlowLabel) {
+          E.activeFlowLabel.textContent = button.dataset.flowLabel || button.textContent.trim();
+        }
+      });
+    }
+
+    function setupFlowNavigation() {
+      const buttons = flowPathButtons();
+      if (!buttons.length) return;
+
+      buttons.forEach(button => {
+        button.addEventListener("click", () => {
+          const targetId = String(button.dataset.flowTarget || "");
+          const targetTab = document.getElementById(targetId);
+          if (!targetTab || targetTab.parentElement.style.display === "none" || !window.bootstrap) return;
+          bootstrap.Tab.getOrCreateInstance(targetTab).show();
+          updateFlowNavigation(targetId);
+          const paneSelector = targetTab.getAttribute("data-bs-target");
+          const pane = paneSelector ? document.querySelector(paneSelector) : null;
+          window.setTimeout(() => {
+            if (pane) pane.focus({ preventScroll: true });
+          }, 120);
+        });
+      });
+
+      document.querySelectorAll("#adminTabs button[data-bs-toggle='tab']").forEach(tab => {
+        tab.addEventListener("shown.bs.tab", event => updateFlowNavigation(event.target.id));
+      });
+
+      const activeTab = document.querySelector("#adminTabs .nav-link.active");
+      updateFlowNavigation(activeTab ? activeTab.id : "operationsTab");
+    }
+
     function init() {
       applyTheme(localStorage.getItem("bot_admin_theme") || "dark");
       setupRecolhasPane();
+      setupFlowNavigation();
 
       localStorage.removeItem("bot_api_token");
       localStorage.removeItem("bot_admin_token");
@@ -1568,6 +1781,7 @@
       renderCriticaDashboard();
       renderRecolhas();
       setupAllowedUsersCardSizing();
+      ensureUsageFunctionDateRange();
 
       document.getElementById("refreshBtn").addEventListener("click", syncAll);
       E.themeToggle.addEventListener("click", toggleTheme);
@@ -1580,6 +1794,15 @@
       document.getElementById("usageRefreshBtn").addEventListener("click", () => syncEvolutionUsage({ silent: false }));
       if (E.usageExportReportBtn) {
         E.usageExportReportBtn.addEventListener("click", exportEvolutionAverageReport);
+      }
+      if (E.usageFunctionRefreshBtn) {
+        E.usageFunctionRefreshBtn.addEventListener("click", () => syncEvolutionFunctionUsage({ silent: false }));
+      }
+      if (E.usageFunctionExportBtn) {
+        E.usageFunctionExportBtn.addEventListener("click", exportEvolutionFunctionUsageReport);
+      }
+      if (E.usageFunctionFilter) {
+        E.usageFunctionFilter.addEventListener("change", () => renderEvolutionFunctionUsage(state.evolutionUsage));
       }
       if (E.broadcastPreviewBtn) E.broadcastPreviewBtn.addEventListener("click", previewBroadcast);
       if (E.broadcastRunBtn) E.broadcastRunBtn.addEventListener("click", runBroadcast);
@@ -1614,6 +1837,8 @@
       if (E.giroRecolhaBlockSearch) E.giroRecolhaBlockSearch.addEventListener("input", updateGiroRecolhaBlockSearch);
       if (E.giroRecolhaNewRouteBtn) E.giroRecolhaNewRouteBtn.addEventListener("click", createGiroRecolhaManualRoute);
       if (E.criticaDashboardRefreshBtn) E.criticaDashboardRefreshBtn.addEventListener("click", () => syncCriticaDashboard({ silent: false }));
+      if (E.criticaSectorPdfBtn) E.criticaSectorPdfBtn.addEventListener("click", () => exportCriticaSectorPdf({ summaryOnly: false }));
+      if (E.criticaSectorSummaryPdfBtn) E.criticaSectorSummaryPdfBtn.addEventListener("click", () => exportCriticaSectorPdf({ summaryOnly: true }));
       if (E.criticaDashboardClearBtn) E.criticaDashboardClearBtn.addEventListener("click", clearCriticaDashboardFilters);
       setupCriticaDashboardSlicerEvents();
       [E.criticaDate, E.criticaLimit, E.criticaOnlyProblems]
@@ -1990,23 +2215,87 @@
         filiais: Array.isArray(payload && payload.filiais) ? payload.filiais.map(String) : [],
         canBroadcast: payload && Object.prototype.hasOwnProperty.call(payload, "can_broadcast")
           ? Boolean(payload.can_broadcast)
-          : true
+          : true,
+        canImport: payload && Object.prototype.hasOwnProperty.call(payload, "can_import")
+          ? Boolean(payload.can_import)
+          : true,
+        canImportCritica: payload && Object.prototype.hasOwnProperty.call(payload, "can_import_critica")
+          ? Boolean(payload.can_import_critica)
+          : true,
+        canManageRecolhas: payload && Object.prototype.hasOwnProperty.call(payload, "can_manage_recolhas")
+          ? Boolean(payload.can_manage_recolhas)
+          : true,
+        canViewGiro: payload && Object.prototype.hasOwnProperty.call(payload, "can_view_giro")
+          ? Boolean(payload.can_view_giro)
+          : true,
+        canViewCritica: payload && Object.prototype.hasOwnProperty.call(payload, "can_view_critica")
+          ? Boolean(payload.can_view_critica)
+          : true,
+        canViewUsage: payload && Object.prototype.hasOwnProperty.call(payload, "can_view_usage")
+          ? Boolean(payload.can_view_usage)
+          : Boolean(payload && payload.is_admin)
       };
       applyPanelPermissions();
       return state.panel;
     }
 
+    function setPanelTabVisible(tabId, visible) {
+      const tab = document.getElementById(tabId);
+      if (tab && tab.parentElement) tab.parentElement.style.display = visible ? "" : "none";
+    }
+
+    function showPanelTab(tabId) {
+      const tab = document.getElementById(tabId);
+      if (!tab) return;
+      if (window.bootstrap) {
+        bootstrap.Tab.getOrCreateInstance(tab).show();
+        return;
+      }
+      document.querySelectorAll("#adminTabs .nav-link").forEach(item => item.classList.remove("active"));
+      document.querySelectorAll(".tab-pane").forEach(item => item.classList.remove("show", "active"));
+      tab.classList.add("active");
+      const paneSelector = tab.getAttribute("data-bs-target");
+      const pane = paneSelector ? document.querySelector(paneSelector) : null;
+      if (pane) pane.classList.add("show", "active");
+    }
+
     function applyPanelPermissions() {
       const isFinance = state.panel && state.panel.mode === "financeiro" && !state.panel.isAdmin;
-      const adminOnlyDisplay = isFinance ? "none" : "";
+      const isCritica = state.panel && state.panel.mode === "critica" && !state.panel.isAdmin;
+      const adminOnlyDisplay = state.panel && state.panel.isAdmin ? "" : "none";
       const broadcastDisplay = state.panel && state.panel.canBroadcast === false ? "none" : "";
       if (E.accessEditorCard) E.accessEditorCard.style.display = adminOnlyDisplay;
       if (E.allowedUsersCard) E.allowedUsersCard.style.display = adminOnlyDisplay;
+      if (E.accessUsersFilter && E.accessUsersFilter.parentElement) E.accessUsersFilter.parentElement.style.display = adminOnlyDisplay;
       if (E.broadcastPanel) E.broadcastPanel.style.display = broadcastDisplay;
       if (E.usageEvolutionTab && E.usageEvolutionTab.parentElement) {
-        E.usageEvolutionTab.parentElement.style.display = adminOnlyDisplay;
+        E.usageEvolutionTab.parentElement.style.display = state.panel && state.panel.canViewUsage ? "" : "none";
       }
-      if (isFinance) {
+      setPanelTabVisible("operationsTab", !isCritica);
+      setPanelTabVisible("operationalTablesTab", !isCritica);
+      setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
+      setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
+      setPanelTabVisible("giroRecolhaTab", Boolean(state.panel && state.panel.canViewGiro));
+      updateFlowNavigation(document.querySelector("#adminTabs .nav-link.active")?.id || "operationsTab");
+      const activeTab = document.querySelector("#adminTabs .nav-link.active");
+      if (isCritica && activeTab && activeTab.id !== "criticaTab") {
+        showPanelTab("criticaTab");
+        updateFlowNavigation("criticaTab");
+      } else if (activeTab && activeTab.parentElement && activeTab.parentElement.style.display === "none") {
+        const firstVisible = Array.from(document.querySelectorAll("#adminTabs .nav-link"))
+          .find(tab => tab.parentElement && tab.parentElement.style.display !== "none");
+        if (firstVisible) {
+          showPanelTab(firstVisible.id);
+          updateFlowNavigation(firstVisible.id);
+        }
+      }
+      if (isCritica) {
+        const filiais = state.panel.filiais && state.panel.filiais.length
+          ? state.panel.filiais.map(item => item === "*" ? "todas" : item).join(", ")
+          : "-";
+        E.authState.textContent = `APR Critica: ${filiais}`;
+        E.authState.className = "pill ok";
+      } else if (isFinance) {
         const activeUsagePane = document.getElementById("usageEvolutionPane");
         if (activeUsagePane && activeUsagePane.classList.contains("active")) {
           const operationsTab = document.getElementById("operationsTab");
@@ -2026,6 +2315,43 @@
       const raw = Number(E.usageWindow && E.usageWindow.value ? E.usageWindow.value : 7);
       if (!Number.isFinite(raw)) return 7;
       return Math.max(1, Math.min(30, Math.trunc(raw)));
+    }
+
+    function getUsageFunctionWindowDays() {
+      const raw = Number(E.usageFunctionWindow && E.usageFunctionWindow.value ? E.usageFunctionWindow.value : getUsageWindowDays());
+      if (!Number.isFinite(raw)) return getUsageWindowDays();
+      return Math.max(1, Math.min(30, Math.trunc(raw)));
+    }
+
+    function formatDateInputValue(date) {
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function ensureUsageFunctionDateRange() {
+      if (E.usageFunctionWindow && E.usageFunctionWindow.parentElement) {
+        E.usageFunctionWindow.parentElement.style.display = "none";
+      }
+      const today = new Date();
+      const defaultFrom = new Date(today);
+      defaultFrom.setDate(today.getDate() - 6);
+      if (E.usageFunctionDateFrom && !E.usageFunctionDateFrom.value) {
+        E.usageFunctionDateFrom.value = formatDateInputValue(defaultFrom);
+      }
+      if (E.usageFunctionDateTo && !E.usageFunctionDateTo.value) {
+        E.usageFunctionDateTo.value = formatDateInputValue(today);
+      }
+    }
+
+    function getUsageFunctionDateParams() {
+      ensureUsageFunctionDateRange();
+      const dateFrom = E.usageFunctionDateFrom ? String(E.usageFunctionDateFrom.value || "").trim() : "";
+      const dateTo = E.usageFunctionDateTo ? String(E.usageFunctionDateTo.value || "").trim() : "";
+      if (!dateFrom || !dateTo) throw new Error("Informe data inicial e final.");
+      if (dateFrom > dateTo) throw new Error("Data inicial nao pode ser maior que a final.");
+      return { dateFrom, dateTo };
     }
 
     function escapeHtml(value) {
@@ -2073,11 +2399,21 @@
       setUsageMetric(E.usageMetricDeniedSent, "--");
       setUsageMetric(E.usageMetricDeniedSuppressed, "--");
       setUsageMetric(E.usageMetricEvents, "--");
+      setUsageMetric(E.usageMetricFeatureInteractions, "--");
+      setUsageMetric(E.usageMetricFeatureUsers, "--");
+      setUsageMetric(E.usageMetricFeatureCount, "--");
+      setUsageMetric(E.usageMetricFeatureTop, "--");
       if (E.usageDailyBars) {
         E.usageDailyBars.innerHTML = '<div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div>';
       }
       if (E.usageTopNumbersBody) {
         E.usageTopNumbersBody.innerHTML = '<tr><td colspan="4" class="py-3"><div class="skeleton skeleton-line"></div></td></tr>';
+      }
+      if (E.usageFunctionSummaryBody) {
+        E.usageFunctionSummaryBody.innerHTML = '<tr><td colspan="3" class="py-3"><div class="skeleton skeleton-line"></div></td></tr>';
+      }
+      if (E.usageFunctionUsersBody) {
+        E.usageFunctionUsersBody.innerHTML = '<tr><td colspan="4" class="py-3"><div class="skeleton skeleton-line"></div></td></tr>';
       }
       if (E.usageBreakdownBody) {
         E.usageBreakdownBody.innerHTML = '<tr><td colspan="3" class="py-3"><div class="skeleton skeleton-line"></div></td></tr>';
@@ -2100,8 +2436,14 @@
         setUsageMetric(E.usageMetricDeniedSent, "--");
         setUsageMetric(E.usageMetricDeniedSuppressed, "--");
         setUsageMetric(E.usageMetricEvents, "--");
+        setUsageMetric(E.usageMetricFeatureInteractions, "--");
+        setUsageMetric(E.usageMetricFeatureUsers, "--");
+        setUsageMetric(E.usageMetricFeatureCount, "--");
+        setUsageMetric(E.usageMetricFeatureTop, "--");
         if (E.usageDailyBars) E.usageDailyBars.innerHTML = '<div class="small text-secondary">Sem dados de uso disponiveis para o Evolution.</div>';
         if (E.usageTopNumbersBody) E.usageTopNumbersBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Sem dados</td></tr>';
+        if (E.usageFunctionSummaryBody) E.usageFunctionSummaryBody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-secondary">Sem dados</td></tr>';
+        if (E.usageFunctionUsersBody) E.usageFunctionUsersBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Sem dados</td></tr>';
         if (E.usageBreakdownBody) E.usageBreakdownBody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-secondary">Sem dados</td></tr>';
         if (E.usageRecentBody) E.usageRecentBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Sem dados</td></tr>';
         return;
@@ -2115,6 +2457,27 @@
       setUsageMetric(E.usageMetricDeniedSent, formatNumber(summary.denied_reply_sent));
       setUsageMetric(E.usageMetricDeniedSuppressed, formatNumber(summary.denied_reply_suppressed));
       setUsageMetric(E.usageMetricEvents, formatNumber(summary.total_events));
+      const functionUsageSummary = payload && payload.function_usage_summary && typeof payload.function_usage_summary === "object"
+        ? payload.function_usage_summary
+        : null;
+      setUsageMetric(
+        E.usageMetricFeatureInteractions,
+        formatNumber(functionUsageSummary && functionUsageSummary.tracked_interactions)
+      );
+      setUsageMetric(
+        E.usageMetricFeatureUsers,
+        formatNumber(functionUsageSummary && functionUsageSummary.tracked_users)
+      );
+      setUsageMetric(
+        E.usageMetricFeatureCount,
+        formatNumber(functionUsageSummary && functionUsageSummary.functions_used)
+      );
+      setUsageMetric(
+        E.usageMetricFeatureTop,
+        functionUsageSummary && functionUsageSummary.top_function_label
+          ? functionUsageSummary.top_function_label
+          : "--"
+      );
 
       const daily = Array.isArray(payload.daily_messages) ? payload.daily_messages : [];
       const maxMessages = daily.reduce((maxValue, item) => {
@@ -2176,6 +2539,51 @@
         }
       }
 
+      const functionSummary = Array.isArray(payload.function_summary) ? payload.function_summary : [];
+      if (E.usageFunctionSummaryBody) {
+        if (!functionSummary.length) {
+          E.usageFunctionSummaryBody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-secondary">Sem funcoes rastreadas</td></tr>';
+        } else {
+          E.usageFunctionSummaryBody.innerHTML = functionSummary.map(item => `
+            <tr>
+              <td><strong>${escapeHtml(item.label || item.feature_code || "-")}</strong></td>
+              <td class="text-end">${formatNumber(item.total)}</td>
+              <td class="text-end">${formatNumber(item.unique_numbers)}</td>
+            </tr>
+          `).join("");
+        }
+      }
+
+      const numberFunctionUsage = Array.isArray(payload.number_function_usage) ? payload.number_function_usage : [];
+      if (E.usageFunctionUsersBody) {
+        if (!numberFunctionUsage.length) {
+          E.usageFunctionUsersBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Sem rastreio por funcao no periodo</td></tr>';
+        } else {
+          E.usageFunctionUsersBody.innerHTML = numberFunctionUsage.map(item => {
+            const rawPhone = String(item.phone_number || "");
+            const phone = formatPhoneForUi(rawPhone);
+            const displayName = String(item.display_name || phone || "-");
+            const showPhone = phone && displayName !== phone;
+            const features = Array.isArray(item.features) ? item.features : [];
+            const badges = features.length
+              ? features.map(feature => `<span class="badge rounded-pill text-bg-light border me-1 mb-1">${escapeHtml(feature.label || feature.feature_code || "-")}: ${formatNumber(feature.total)}</span>`).join("")
+              : '<span class="text-secondary small">Sem detalhe</span>';
+            return `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(displayName)}</strong>
+                  ${showPhone ? `<div class="small mono text-secondary">${escapeHtml(phone)}</div>` : ""}
+                </td>
+                <td class="text-end">${formatNumber(item.total)}</td>
+                <td class="text-end">${formatNumber(item.unique_functions)}</td>
+                <td>${badges}</td>
+              </tr>
+            `;
+          }).join("");
+        }
+      }
+      renderEvolutionFunctionUsage(payload);
+
       const breakdown = Array.isArray(payload.event_breakdown) ? payload.event_breakdown : [];
       if (E.usageBreakdownBody) {
         if (!breakdown.length) {
@@ -2209,6 +2617,118 @@
       }
     }
 
+    function renderEvolutionFunctionUsage(payload) {
+      const source = payload && typeof payload === "object" ? payload : {};
+      const functionSummary = Array.isArray(source.function_summary) ? source.function_summary : [];
+      const previousFunction = E.usageFunctionFilter ? String(E.usageFunctionFilter.value || "") : "";
+      const availableFunctions = new Set(functionSummary.map(item => String(item.feature_code || "").trim()).filter(Boolean));
+      const selectedFunction = availableFunctions.has(previousFunction) ? previousFunction : "";
+      if (E.usageFunctionFilter) {
+        const options = [
+          '<option value="">Todas</option>',
+          ...functionSummary.map(item => {
+            const code = String(item.feature_code || "").trim();
+            const label = String(item.label || code || "-").trim();
+            return `<option value="${escapeHtml(code)}"${code === selectedFunction ? " selected" : ""}>${escapeHtml(label)}</option>`;
+          })
+        ];
+        E.usageFunctionFilter.innerHTML = options.join("");
+      }
+      const rawNumberFunctionUsage = Array.isArray(source.number_function_usage) ? source.number_function_usage : [];
+      const numberFunctionUsage = selectedFunction
+        ? rawNumberFunctionUsage.map(item => {
+            if (!item || typeof item !== "object") return null;
+            const features = Array.isArray(item.features)
+              ? item.features.filter(feature => feature && String(feature.feature_code || "").trim() === selectedFunction)
+              : [];
+            if (!features.length) return null;
+            const selectedTotal = features.reduce((sum, feature) => sum + Number(feature.total || 0), 0);
+            return {
+              ...item,
+              total: selectedTotal,
+              unique_functions: features.length,
+              features
+            };
+          }).filter(Boolean)
+        : rawNumberFunctionUsage;
+      const selectedSummary = selectedFunction
+        ? functionSummary.find(item => String(item.feature_code || "").trim() === selectedFunction)
+        : null;
+      const functionUsageSummary = source.function_usage_summary && typeof source.function_usage_summary === "object"
+        ? source.function_usage_summary
+        : null;
+      const metricInteractions = selectedFunction
+        ? (selectedSummary ? selectedSummary.total : 0)
+        : (functionUsageSummary && functionUsageSummary.tracked_interactions);
+      const metricUsers = selectedFunction
+        ? numberFunctionUsage.length
+        : (functionUsageSummary && functionUsageSummary.tracked_users);
+      const metricFunctions = selectedFunction
+        ? (selectedSummary ? 1 : 0)
+        : (functionUsageSummary && functionUsageSummary.functions_used);
+      const metricTop = selectedFunction
+        ? (selectedSummary ? (selectedSummary.label || selectedSummary.feature_code || "--") : "--")
+        : (functionUsageSummary && functionUsageSummary.top_function_label ? functionUsageSummary.top_function_label : "--");
+      setUsageMetric(
+        E.usageMetricFeatureInteractions,
+        formatNumber(metricInteractions)
+      );
+      setUsageMetric(
+        E.usageMetricFeatureUsers,
+        formatNumber(metricUsers)
+      );
+      setUsageMetric(
+        E.usageMetricFeatureCount,
+        formatNumber(metricFunctions)
+      );
+      setUsageMetric(
+        E.usageMetricFeatureTop,
+        metricTop
+      );
+
+      if (E.usageFunctionSummaryBody) {
+        if (!functionSummary.length) {
+          E.usageFunctionSummaryBody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-secondary">Sem funcoes rastreadas</td></tr>';
+        } else {
+          E.usageFunctionSummaryBody.innerHTML = functionSummary.map(item => `
+            <tr${String(item.feature_code || "").trim() === selectedFunction ? ' class="table-primary"' : ""}>
+              <td><strong>${escapeHtml(item.label || item.feature_code || "-")}</strong></td>
+              <td class="text-end">${formatNumber(item.total)}</td>
+              <td class="text-end">${formatNumber(item.unique_numbers)}</td>
+            </tr>
+          `).join("");
+        }
+      }
+
+      if (E.usageFunctionUsersBody) {
+        if (!numberFunctionUsage.length) {
+          E.usageFunctionUsersBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Sem rastreio por funcao no periodo</td></tr>';
+        } else {
+          E.usageFunctionUsersBody.innerHTML = numberFunctionUsage.map(item => {
+            const rawPhone = String(item.phone_number || "");
+            const phone = formatPhoneForUi(rawPhone);
+            const displayName = String(item.display_name || phone || "-");
+            const showPhone = phone && displayName !== phone;
+            const features = Array.isArray(item.features) ? item.features : [];
+            const badges = features.length
+              ? features.map(feature => `<span class="badge rounded-pill text-bg-light border me-1 mb-1">${escapeHtml(feature.label || feature.feature_code || "-")}: ${formatNumber(feature.total)}</span>`).join("")
+              : '<span class="text-secondary small">Sem detalhe</span>';
+            return `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(displayName)}</strong>
+                  ${showPhone ? `<div class="small mono text-secondary">${escapeHtml(phone)}</div>` : ""}
+                </td>
+                <td class="text-end">${formatNumber(item.total)}</td>
+                <td class="text-end">${formatNumber(item.unique_functions)}</td>
+                <td>${badges}</td>
+              </tr>
+            `;
+          }).join("");
+        }
+      }
+    }
+
     async function syncEvolutionUsage({ silent = true } = {}) {
       if (state.panel && state.panel.mode === "financeiro" && !state.panel.isAdmin) {
         state.evolutionUsage = null;
@@ -2231,6 +2751,53 @@
         if (state.evolutionUsage === null) renderEvolutionUsage();
         if (!silent) addLog(`Falha ao consultar uso do Evolution: ${err.message}`, "warn");
         return false;
+      }
+    }
+
+    async function syncEvolutionFunctionUsage({ silent = false } = {}) {
+      if (state.panel && state.panel.mode === "financeiro" && !state.panel.isAdmin) {
+        renderEvolutionFunctionUsage(null);
+        return false;
+      }
+      if (!hasPanelAuth()) {
+        if (!silent) addLog("Sessao do painel nao validada.", "warn");
+        return false;
+      }
+
+      let dateParams;
+      try {
+        dateParams = getUsageFunctionDateParams();
+      } catch (err) {
+        if (!silent) addLog(err.message, "warn");
+        return false;
+      }
+      const days = getUsageWindowDays();
+      const btn = E.usageFunctionRefreshBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Atualizando';
+      }
+      try {
+        const query = `days=${days}&date_from=${encodeURIComponent(dateParams.dateFrom)}&date_to=${encodeURIComponent(dateParams.dateTo)}`;
+        const payload = await req(`${CONFIG.endpoints.usage.evolution}?${query}`, { timeoutMs: 30000 });
+        state.evolutionUsage = {
+          ...(state.evolutionUsage && typeof state.evolutionUsage === "object" ? state.evolutionUsage : {}),
+          function_usage_summary: payload.function_usage_summary,
+          function_summary: payload.function_summary,
+          number_function_usage: payload.number_function_usage
+        };
+        renderEvolutionFunctionUsage(payload);
+        if (!silent) addLog(`Uso por funcao atualizado (${dateParams.dateFrom} ate ${dateParams.dateTo}).`, "ok");
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao consultar uso por funcao: ${err.message}`, "warn");
+        return false;
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
       }
     }
 
@@ -2287,6 +2854,76 @@
         addLog(`Relatório exportado com sucesso (${days} dia(s)).`, "ok");
       } catch (err) {
         addLog(`Falha ao exportar relatório: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function exportEvolutionFunctionUsageReport() {
+      updateTokens();
+      if (state.panel && state.panel.mode === "financeiro" && !state.panel.isAdmin) {
+        addLog("Uso Evolution fica disponivel apenas para admin.", "warn");
+        return;
+      }
+      if (!hasPanelAuth()) {
+        addLog("Sessao do painel nao validada.", "warn");
+        return;
+      }
+
+      const btn = E.usageFunctionExportBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exportando';
+      }
+
+      let dateParams;
+      try {
+        dateParams = getUsageFunctionDateParams();
+      } catch (err) {
+        addLog(err.message, "warn");
+        return;
+      }
+      const days = getUsageWindowDays();
+      const limit = 5000;
+      const featureCode = E.usageFunctionFilter ? String(E.usageFunctionFilter.value || "").trim() : "";
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+
+      try {
+        const featureParam = featureCode ? `&feature=${encodeURIComponent(featureCode)}` : "";
+        const response = await fetch(
+          `${CONFIG.api}${CONFIG.endpoints.usage.evolutionFunctionsReport}?days=${days}&date_from=${encodeURIComponent(dateParams.dateFrom)}&date_to=${encodeURIComponent(dateParams.dateTo)}&limit=${limit}${featureParam}`,
+          { method: "GET", headers, credentials: "same-origin" }
+        );
+
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"([^\"]+)\"/i);
+        const filename = matchedName && matchedName[1]
+          ? matchedName[1]
+          : `numero_x_funcao_evolution_${dateParams.dateFrom}_a_${dateParams.dateTo}.csv`;
+
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog(`Numero x funcao exportado com sucesso (${dateParams.dateFrom} ate ${dateParams.dateTo}).`, "ok");
+      } catch (err) {
+        addLog(`Falha ao exportar numero x funcao: ${err.message}`, "err");
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -2397,7 +3034,12 @@
     function renderBroadcastOptions() {
       if (E.broadcastAction) {
         const selectedAction = E.broadcastAction.value;
-        const actions = Array.isArray(state.broadcast.actions) ? state.broadcast.actions : [];
+        const selectedAudience = E.broadcastAudience ? E.broadcastAudience.value || "vendedor" : "vendedor";
+        const actions = (Array.isArray(state.broadcast.actions) ? state.broadcast.actions : [])
+          .filter(item => {
+            const audiences = Array.isArray(item.target_audiences) ? item.target_audiences : [];
+            return !audiences.length || audiences.includes(selectedAudience);
+          });
         E.broadcastAction.innerHTML = actions.length
           ? actions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("")
           : '<option value="">Sem mensagens disponiveis</option>';
@@ -2438,8 +3080,8 @@
           .map(item => ({ ...item, audience_total: Number(item[selectedAudience] || 0) }))
           .filter(item => item.audience_total > 0);
         E.broadcastFilial.innerHTML = filiais.length
-          ? filiais.map(item => `<option value="${escapeHtml(item.filial)}">Filial ${escapeHtml(item.filial)} (${formatNumber(item.audience_total)})</option>`).join("")
-          : '<option value="">Sem filiais cadastradas</option>';
+          ? filiais.map(item => `<option value="${escapeHtml(item.filial)}">Operacao ${escapeHtml(item.filial)} (${formatNumber(item.audience_total)})</option>`).join("")
+          : '<option value="">Sem operacoes cadastradas</option>';
         if (selectedFilial && filiais.some(item => String(item.filial) === selectedFilial)) E.broadcastFilial.value = selectedFilial;
       }
 
@@ -2510,7 +3152,10 @@
             <input class="form-check-input broadcast-recipient-check" type="checkbox" value="${escapeHtml(item.phone_number || "")}" checked aria-label="Selecionar ${escapeHtml(item.name || item.phone_number || "destinatario")}">
           </td>
           <td><strong>${escapeHtml(item.name || "-")}</strong></td>
-          <td><span class="badge text-bg-light border">${escapeHtml(item.role || "-")}</span></td>
+          <td>
+            <span class="badge text-bg-light border">${escapeHtml(item.role || "-")}</span>
+            ${item.shortcut ? `<div class="small mono text-secondary mt-1">${escapeHtml(item.shortcut)}</div>` : ""}
+          </td>
           <td><span class="mono">${escapeHtml(formatPhoneForUi(item.phone_number || ""))}</span></td>
         </tr>
       `).join("");
@@ -2524,7 +3169,7 @@
       updateTokens();
       if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
       const payload = currentBroadcastRequest();
-      if (!payload.filial || !payload.action) { addLog("Escolha a filial e a mensagem do disparo.", "warn"); return; }
+      if (!payload.filial || !payload.action) { addLog("Escolha a operacao e a mensagem do disparo.", "warn"); return; }
       if (payload.target_mode === "specific" && !payload.target_number.trim()) {
         addLog("Informe o numero especifico para teste.", "warn");
         return;
@@ -2581,7 +3226,7 @@
       payload.selected_numbers = checkedNumbers;
       const targetLabel = preview.target_mode === "specific"
         ? `o numero ${formatPhoneForUi(preview.target_number || "")}`
-        : `${total} destinatario(s) selecionado(s) da filial ${preview.filial}`;
+        : `${total} destinatario(s) selecionado(s) da operacao ${preview.filial}`;
       const dayLabel = preview.supports_day ? ` (${preview.day_label})` : "";
       const confirmed = await askConfirmation(`Disparar "${preview.action_label}${dayLabel}" para ${targetLabel}?`);
       if (!confirmed) return;
@@ -2901,6 +3546,94 @@
       return query.toString();
     }
 
+    function resolveCriticaSectorExportScope() {
+      const params = currentCriticaDashboardParams();
+      const sectors = Array.isArray(params.sector) ? params.sector.filter(Boolean) : [];
+      if (sectors.length !== 1) throw new Error("Selecione um unico setor nos filtros da critica.");
+      const operations = Array.isArray(params.operation) ? params.operation.filter(Boolean) : [];
+      if (operations.length === 1) {
+        return { operation: operations[0], sector: sectors[0], date: params.date || "" };
+      }
+      const options = state.criticaDashboard && state.criticaDashboard.options ? state.criticaDashboard.options : {};
+      const matchingOperations = Array.isArray(options.operations)
+        ? options.operations
+            .map(item => String(item && item.value || "").trim())
+            .filter(Boolean)
+        : [];
+      if (matchingOperations.length === 1) {
+        return { operation: matchingOperations[0], sector: sectors[0], date: params.date || "" };
+      }
+      throw new Error("Selecione uma unica operacao junto com o setor para gerar o PDF.");
+    }
+
+    async function exportCriticaSectorPdf({ summaryOnly = false } = {}) {
+      updateTokens();
+      if (!hasPanelAuth()) {
+        addLog("Sessao do painel nao validada.", "warn");
+        return;
+      }
+
+      let scope;
+      try {
+        scope = resolveCriticaSectorExportScope();
+      } catch (err) {
+        addLog(err.message, "warn");
+        return;
+      }
+
+      const btn = summaryOnly ? E.criticaSectorSummaryPdfBtn : E.criticaSectorPdfBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = summaryOnly
+          ? '<span class="spinner-border spinner-border-sm me-1"></span>Gerando resumo'
+          : '<span class="spinner-border spinner-border-sm me-1"></span>Gerando PDF';
+      }
+
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+
+      try {
+        const query = new URLSearchParams();
+        query.set("operation", scope.operation);
+        query.set("sector", scope.sector);
+        if (scope.date) query.set("date", scope.date);
+        if (summaryOnly) query.set("summary_only", "1");
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.critica.pdf}?${query.toString()}`, {
+          method: "GET",
+          headers,
+          credentials: "same-origin"
+        });
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"([^\"]+)\"/i);
+        const filename = matchedName && matchedName[1]
+          ? matchedName[1]
+          : `critica-rn-setor-${scope.operation}-${scope.sector}${summaryOnly ? "-resumo" : ""}.pdf`;
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog(`${summaryOnly ? "Resumo" : "PDF"} da critica exportado para operacao ${scope.operation} setor ${scope.sector}.`, "ok");
+      } catch (err) {
+        addLog(`Falha ao exportar critica do setor: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
     function renderCriticaFilterOptions(previousParams = currentCriticaDashboardParams()) {
       CRITICA_DASHBOARD_SLICERS.forEach(def => {
         setCriticaSlicerSelection(def, previousParams[def.key], { sync: false, clearDependents: false });
@@ -2970,13 +3703,14 @@
           ["Pedidos analisados", summary.pedidos || orders.length, `${formatNumber(summary.pedidos_base || summary.pedidos || 0)} na base da data`],
           ["Com problema", summary.pedidos_com_problema || 0, `${summary.taxa_problema || "0,0%"} dos filtros`],
           ["Valor total", summary.valor_total || "R$ 0,00", `Ticket ${summary.ticket_medio || "R$ 0,00"}`],
+          ["Peso total", summary.peso_total || "0,00", "soma dos pedidos"],
           ["Total HL", summary.total_hectolitros || "0,00", "fator hecto x quantidade"],
           ["NAB TT HL", summary.nab_tt_hectolitros || "0,00", "cesta de produtos"],
           ["High End HL", summary.high_end_hectolitros || "0,00", "cesta de produtos"],
           ["Cerveja TT HL", summary.cerveja_tt_hectolitros || "0,00", "cesta de produtos"],
           ["Refri Zero HL", summary.refri_zero_hectolitros || "0,00", "cesta de produtos"],
           ["Cerveja RGB/OW HL", `${summary.cerveja_rgb_hectolitros || "0,00"} / ${summary.cerveja_ow_hectolitros || "0,00"}`, "RGB / OW"],
-          ["Marketplace TT HL", summary.marketplace_tt_hectolitros || "0,00", "cesta de produtos"],
+          ["Marketplace TT R$", summary.marketplace_tt_faturamento || "R$ 0,00", "faturamento da cesta"],
           ["Maior problema", summary.maior_problema || "-", "por quantidade de pedidos"]
         ].map(([label, value, sub]) => `
           <article class="recolha-dashboard-card">
@@ -3003,12 +3737,15 @@
         const products = Array.isArray(order.problem_products) && order.problem_products.length
           ? `<div class="small text-secondary mt-1">Produtos: ${escapeHtml(cleanDisplayText(order.problem_products.slice(0, 3).join(" | ")))}</div>`
           : "";
+        const orderMeta = [`Peso pedido ${order.peso_pedido || "0,00"}`];
+        if (order.cond_pagamento) orderMeta.push(`Cond. pag. ${cleanDisplayText(order.cond_pagamento)}`);
         return `
           <tr>
             <td class="ps-3">
               <strong>${escapeHtml(order.pedido || "-")}</strong>
               <div class="small text-secondary">Operacao ${escapeHtml(order.filial || "-")} | Setor ${escapeHtml(order.setor || "-")} | GV ${escapeHtml(order.manager || "-")}</div>
               <div class="small text-secondary">NB ${escapeHtml(order.cod_pdv || "-")} | ${escapeHtml(cleanDisplayText(order.nome_pdv || "-"))}</div>
+              <div class="small text-secondary">${escapeHtml(orderMeta.join(" | "))}</div>
             </td>
             <td>
               ${criticaProblemBadges(order)}
@@ -5070,6 +5807,39 @@
       addLog("Atualizando painel...", "info");
       try {
         await syncPanelSession();
+        const isCritica = state.panel && state.panel.mode === "critica" && !state.panel.isAdmin;
+        if (isCritica) {
+          const [statusPayload, historyPayload] = await Promise.all([
+            req(CONFIG.endpoints.import.status, { timeoutMs: 30000 }),
+            req(CONFIG.endpoints.import.history, { timeoutMs: 30000 })
+          ]);
+          state.status = statusPayload || {};
+          state.history = (historyPayload && historyPayload.history) ? historyPayload.history : [];
+          state.jobs = Array.isArray(state.status.jobs)
+            ? state.status.jobs
+            : ((historyPayload && Array.isArray(historyPayload.jobs)) ? historyPayload.jobs : []);
+          state.accessUsers = [];
+          state.recolhas = { total: 0, operations: [] };
+          state.giroRecolha = { total: 0, summary: {}, records: [] };
+          state.giroRecolhaOptions = emptyGiroRecolhaOptions();
+          state.giroRecolhaSlicerOptions = emptyGiroRecolhaOptions();
+          state.giroRecolhaRoutes = { generated: false, total: 0, summary: {}, routes: [] };
+          state.lastSyncAt = new Date();
+          renderHistory();
+          renderJobs();
+          renderGridPanels();
+          renderAccess();
+          renderGiroRecolha();
+          renderGiroRecolhaRoutes();
+          renderRecolhas();
+          renderEvolutionUsage();
+          renderBroadcastOptions();
+          await syncCriticaDashboard({ silent: true });
+          updateGeneralState();
+          updateMetrics();
+          addLog("Atualizacao da critica concluida.", "ok");
+          return;
+        }
         const isAdmin = state.panel && state.panel.isAdmin;
         const giroParams = currentGiroRecolhaParams();
         const [statusPayload, historyPayload, usersPayload, recolhasPayload, giroRecolhaOptionsPayload, giroRecolhaSlicerOptionsPayloads, giroRecolhaPayload] = await Promise.all([

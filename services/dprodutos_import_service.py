@@ -38,6 +38,7 @@ OPTIONAL_HEADERS = {
     "grupo_remuneracao",
     "ean",
     "fator_hecto",
+    "peso_bruto",
     "familia_embalagem_siv",
     "codigo_produto_sap",
     "ncm",
@@ -64,6 +65,11 @@ HEADER_ALIASES = {
     "gruporemuneracao": "grupo_remuneracao",
     "ean": "ean",
     "fatorhecto": "fator_hecto",
+    "pesobruto": "peso_bruto",
+    "pesobrutokg": "peso_bruto",
+    "pesobrutoemkg": "peso_bruto",
+    "pesokg": "peso_bruto",
+    "peso": "peso_bruto",
     "famembalagemsiv": "familia_embalagem_siv",
     "familiaembalagemsiv": "familia_embalagem_siv",
     "codigoprodutosap": "codigo_produto_sap",
@@ -124,6 +130,7 @@ class DProdutosRow:
     grupo_remuneracao: str
     ean: str
     fator_hecto: Decimal
+    peso_bruto: Decimal
     familia_embalagem_siv: str
     codigo_produto_sap: str
     ncm: str
@@ -274,6 +281,7 @@ class DProdutosImportService:
                         grupo_remuneracao VARCHAR(64) NOT NULL DEFAULT '',
                         ean VARCHAR(64) NOT NULL DEFAULT '',
                         fator_hecto NUMERIC(18, 6) NOT NULL DEFAULT 0,
+                        peso_bruto NUMERIC(18, 6) NOT NULL DEFAULT 0,
                         familia_embalagem_siv TEXT NOT NULL DEFAULT '',
                         codigo_produto_sap VARCHAR(64) NOT NULL DEFAULT '',
                         ncm VARCHAR(64) NOT NULL DEFAULT '',
@@ -291,6 +299,11 @@ class DProdutosImportService:
             cur.execute(
                 sql.SQL(
                     "ALTER TABLE {}.dprodutos_snapshot ADD COLUMN IF NOT EXISTS fator_hecto NUMERIC(18, 6) NOT NULL DEFAULT 0"
+                ).format(sql.Identifier(self.schema))
+            )
+            cur.execute(
+                sql.SQL(
+                    "ALTER TABLE {}.dprodutos_snapshot ADD COLUMN IF NOT EXISTS peso_bruto NUMERIC(18, 6) NOT NULL DEFAULT 0"
                 ).format(sql.Identifier(self.schema))
             )
             cur.execute(
@@ -336,6 +349,72 @@ class DProdutosImportService:
                                                 payload ->> 'Fator Hecto Comercial',
                                                 payload ->> 'FatorHecto',
                                                 payload ->> 'Fator_Hecto',
+                                                ''
+                                            )
+                                        ),
+                                        'R$',
+                                        ''
+                                    ),
+                                    '.',
+                                    ''
+                                ),
+                                ',',
+                                '.'
+                            ),
+                            ''
+                        ),
+                        '0'
+                    )::numeric <> 0
+                    """
+                ).format(sql.Identifier(self.schema))
+            )
+            cur.execute(
+                sql.SQL(
+                    """
+                    UPDATE {}.dprodutos_snapshot
+                    SET peso_bruto = COALESCE(
+                        NULLIF(
+                            REPLACE(
+                                REPLACE(
+                                    REPLACE(
+                                        BTRIM(
+                                            COALESCE(
+                                                payload ->> 'Peso Bruto',
+                                                payload ->> 'Peso bruto',
+                                                payload ->> 'Peso Bruto KG',
+                                                payload ->> 'Peso Bruto Kg',
+                                                payload ->> 'Peso KG',
+                                                payload ->> 'Peso',
+                                                ''
+                                            )
+                                        ),
+                                        'R$',
+                                        ''
+                                    ),
+                                    '.',
+                                    ''
+                                ),
+                                ',',
+                                '.'
+                            ),
+                            ''
+                        ),
+                        '0'
+                    )::numeric
+                    WHERE COALESCE(peso_bruto, 0) = 0
+                      AND COALESCE(
+                        NULLIF(
+                            REPLACE(
+                                REPLACE(
+                                    REPLACE(
+                                        BTRIM(
+                                            COALESCE(
+                                                payload ->> 'Peso Bruto',
+                                                payload ->> 'Peso bruto',
+                                                payload ->> 'Peso Bruto KG',
+                                                payload ->> 'Peso Bruto Kg',
+                                                payload ->> 'Peso KG',
+                                                payload ->> 'Peso',
                                                 ''
                                             )
                                         ),
@@ -416,6 +495,7 @@ class DProdutosImportService:
                 grupo_remuneracao,
                 ean,
                 fator_hecto,
+                peso_bruto,
                 familia_embalagem_siv,
                 codigo_produto_sap,
                 ncm,
@@ -425,7 +505,7 @@ class DProdutosImportService:
                 subtipo,
                 payload
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
         ).format(sql.Identifier(self.schema))
         params = [
@@ -445,6 +525,7 @@ class DProdutosImportService:
                 row.grupo_remuneracao,
                 row.ean,
                 row.fator_hecto,
+                row.peso_bruto,
                 row.familia_embalagem_siv,
                 row.codigo_produto_sap,
                 row.ncm,
@@ -480,6 +561,7 @@ class DProdutosImportService:
                 s.grupo,
                 s.grupo_remuneracao,
                 s.ean,
+                s.peso_bruto,
                 s.familia_embalagem_siv,
                 s.codigo_produto_sap,
                 s.ncm,
@@ -544,6 +626,7 @@ def _load_dprodutos_rows(path: Path) -> list[DProdutosRow]:
                 grupo_remuneracao=_clean_code(row.get(header_map.get("grupo_remuneracao", ""), "")),
                 ean=_clean_code(row.get(header_map.get("ean", ""), "")),
                 fator_hecto=_parse_decimal_value(row.get(header_map.get("fator_hecto", ""), "")),
+                peso_bruto=_parse_decimal_value(row.get(header_map.get("peso_bruto", ""), "")),
                 familia_embalagem_siv=_clean_text(row.get(header_map.get("familia_embalagem_siv", ""), "")),
                 codigo_produto_sap=_clean_code(row.get(header_map.get("codigo_produto_sap", ""), "")),
                 ncm=_clean_code(row.get(header_map.get("ncm", ""), "")),

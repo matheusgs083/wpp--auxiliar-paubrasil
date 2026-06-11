@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from inspect import signature
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -134,16 +134,18 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
         )
         self.assertEqual(menu.kind, "menu")
+        self.assertIn("Resumo rapido por mensagem", menu.text)
+        self.assertNotIn("critica nb 3 18008", menu.text)
+        self.assertEqual([(option.shortcut, option.title) for option in menu.options], [("1", "Critica hoje"), ("2", "PDF geral")])
 
         response = self.flow.handle(
             IncomingMessage(sender="5511", text="2"),
             make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
         )
 
-        self.assertEqual(response.kind, "text")
-        self.assertIn("Critica RN | Possiveis problemas", response.text)
-        self.assertIn("Setor 400", response.text)
-        self.assertEqual(len(self.critica_service.problem_calls), 1)
+        self.assertEqual(response.kind, "media")
+        self.assertTrue(response.media_url.startswith("data:application/pdf;base64,"))
+        self.assertEqual(len(self.critica_service.pdf_report_calls), 1)
 
     def test_handle_critica_nb_searches_by_filial_and_nb(self) -> None:
         response = self.flow.handle(
@@ -153,11 +155,30 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
 
         self.assertEqual(response.kind, "text")
         self.assertIn("POSTO PAIZAO", response.text)
-        self.assertIn("Pedido 706840", response.text)
         self.assertIn("Setor: 400", response.text)
+        self.assertIn("Pedidos:", response.text)
+        self.assertIn("Peso 25,00", response.text)
+        self.assertIn("Cond. Pag. PROMO 21 DIAS", response.text)
+        self.assertIn("Detalhes em PDF:", response.text)
+        self.assertIn("critica nb pdf 3 18008", response.text)
         self.assertEqual(self.critica_service.registration_calls[0]["filial"], "3")
         self.assertEqual(self.critica_service.registration_calls[0]["cod_pdv"], "18008")
         self.assertIsNone(self.critica_service.registration_calls[0]["target_date"])
+
+    def test_handle_critica_nb_pdf_returns_document_media(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica nb pdf 3 18008"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
+        )
+
+        self.assertEqual(response.kind, "media")
+        self.assertTrue(response.media_url.startswith("data:application/pdf;base64,"))
+        self.assertEqual(response.media_filename, "critica-rn-nb-3-18008.pdf")
+        self.assertEqual(len(response.extra_media), 1)
+        self.assertEqual(response.extra_media[0].media_filename, "critica-rn-nb-3-18008-resumo.pdf")
+        self.assertEqual(len(self.critica_service.registration_pdf_calls), 1)
+        self.assertEqual(self.critica_service.registration_pdf_calls[0]["filial"], "3")
+        self.assertEqual(self.critica_service.registration_pdf_calls[0]["cod_pdv"], "18008")
 
     def test_handle_critica_pdf_returns_document_media(self) -> None:
         response = self.flow.handle(
@@ -173,6 +194,66 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(response.extra_media[0].media_filename, "critica-rn-resumo-2026-06-03.pdf")
         self.assertEqual(len(self.critica_service.pdf_report_calls), 1)
         self.assertEqual(self.critica_service.pdf_report_calls[0]["limit"], 5000)
+
+    def test_handle_critica_pdf_setor_for_gv_filters_to_requested_sector(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica pdf setor 400 03/06/2026"),
+            make_decision(allowed=True, roles=("gerente_vendas",), gv_vdes=("3_5",)),
+        )
+
+        self.assertEqual(response.kind, "media")
+        self.assertEqual(response.media_filename, "critica-rn-setor-3-400-2026-06-03.pdf")
+        self.assertEqual(len(response.extra_media), 1)
+        self.assertEqual(response.extra_media[0].media_filename, "critica-rn-setor-3-400-2026-06-03-resumo.pdf")
+        self.assertEqual(self.critica_service.report_calls[0]["target_date"], date(2026, 6, 3))
+        self.assertEqual(self.critica_service.pdf_report_calls[-1]["allowed_sectors"], ["3_400"])
+        self.assertIsNone(self.critica_service.pdf_report_calls[-1]["allowed_gv_vdes"])
+
+    def test_handle_critica_pdf_gv_returns_manager_summary(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica pdf gv 03/06/2026"),
+            make_decision(allowed=True, roles=("gerente_vendas",), gv_vdes=("3_5",)),
+        )
+
+        self.assertEqual(response.kind, "media")
+        self.assertEqual(response.media_filename, "critica-rn-gv-resumo-2026-06-03.pdf")
+        self.assertEqual(len(response.extra_media), 0)
+        self.assertEqual(len(self.critica_service.gv_summary_pdf_calls), 1)
+        self.assertEqual(self.critica_service.gv_summary_pdf_calls[0]["allowed_gv_vdes"], ["5"])
+
+    def test_handle_critica_pdf_gv_expands_same_manager_across_filiais(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica pdf gv 03/06/2026"),
+            make_decision(allowed=True, roles=("gerente_vendas",), gv_vdes=("3_5", "4_5", "51_5")),
+        )
+
+        self.assertEqual(response.kind, "media")
+        self.assertEqual(response.media_filename, "critica-rn-gv-resumo-2026-06-03.pdf")
+        self.assertEqual(len(self.critica_service.gv_summary_pdf_calls), 1)
+        self.assertEqual(self.critica_service.gv_summary_pdf_calls[0]["allowed_gv_vdes"], ["5"])
+
+    def test_handle_critica_pdf_gv_without_date_uses_current_base_all_filiais(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica pdf gv"),
+            make_decision(allowed=True, roles=("gerente_vendas",), gv_vdes=("3_5", "4_5")),
+        )
+
+        self.assertEqual(response.kind, "media")
+        self.assertEqual(response.media_filename, "critica-rn-gv-resumo-2026-06-03.pdf")
+        self.assertEqual(len(self.critica_service.gv_summary_pdf_calls), 1)
+        self.assertIsNone(self.critica_service.gv_summary_pdf_calls[0]["target_date"])
+        self.assertIsNone(self.critica_service.gv_summary_pdf_calls[0]["allowed_sectors"])
+        self.assertEqual(self.critica_service.gv_summary_pdf_calls[0]["allowed_gv_vdes"], ["5"])
+
+    def test_handle_critica_pdf_gv_denies_seller(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica pdf gv 03/06/2026"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("apenas para GV", response.text)
+        self.assertEqual(len(self.critica_service.gv_summary_pdf_calls), 0)
 
     def test_handle_critica_denies_non_seller_and_non_gv_roles(self) -> None:
         for role in ("financeiro", "admin", "diretor_comercial"):
@@ -4697,6 +4778,41 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertIn("*Cliente Cadastro*", response.text)
         self.assertIsNone(self.query_service.document_calls[0]["allowed_sectors"])
         self.assertIsNone(self.query_service.document_calls[0]["allowed_gv_vdes"])
+
+    def test_direct_buscar_cliente_por_cnpj_uses_cliente_document_lookup(self) -> None:
+        sender = "5516-cliente-cnpj"
+        decision = make_decision(allowed=True, roles=("financeiro", "vendedor"), sectors=("3_206",))
+        self.query_service.document_records = [
+            DClienteRecord(
+                filial="3",
+                cod_pdv="6643",
+                razao_social="Cliente CNPJ LTDA",
+                nome_fantasia="Cliente CNPJ",
+                telefone="",
+                dia_visita="",
+                vendedor="206",
+                status="ativo",
+                cidade="Patos",
+                cond_pag_atual="A vista",
+                limite_credito="1000",
+                total_pendente="0,00",
+                total_comodatos_pendentes=0,
+                ultima_atualizacao_tabela="2026-04-09",
+            )
+        ]
+
+        response = self.flow.handle(
+            IncomingMessage(sender=sender, text="buscar cliente por cnpj 12345678000199"),
+            decision,
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("*Cliente CNPJ*", response.text)
+        self.assertEqual(self.flow.sessions[sender].step, "awaiting_post_result_navigation")
+        self.assertEqual(self.query_service.document_calls[0]["document"], "12345678000199")
+        self.assertIsNone(self.query_service.document_calls[0]["allowed_sectors"])
+        self.assertIsNone(self.query_service.document_calls[0]["allowed_gv_vdes"])
+        self.assertEqual(self.giro_service.search_calls, [])
 
     def test_handle_bare_resumo_with_multiple_roles_opens_clarification_menu(self) -> None:
         response = self.flow.handle(

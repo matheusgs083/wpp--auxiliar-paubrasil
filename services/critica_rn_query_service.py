@@ -37,9 +37,9 @@ FILIAL_OPERATION_LABELS = {
 PRICE_TOLERANCE_OP1 = Decimal("0.03")
 PRICE_TOLERANCE_DEFAULT = Decimal("0.12")
 B2B_PRICE_TOLERANCE = Decimal("0.60")
+NON_SALE_PRICE_TOLERANCE = Decimal("0.60")
 B2B_PRICE_ORIGINS = {"B2BG", "B2BGA"}
-ORDER_AVG_ALERT_RATIO = Decimal("1.35")
-ORDER_AVG_ALERT_MIN_DELTA = Decimal("150")
+ORDER_AVG_ALERT_RATIO = Decimal("2.0")
 REPORT_CACHE_TTL_SECONDS = 300.0
 PDF_CACHE_TTL_SECONDS = 600.0
 REPORT_CACHE_MAX_ENTRIES = 32
@@ -49,7 +49,27 @@ CRITICA_PDF_CACHE_TABLE = "critica_pdf_cache"
 PDF_SCOPE_SECTOR = "setor"
 PDF_SCOPE_GV = "gv"
 REPORT_SESSION_WORK_MEM = "64MB"
-CRITICA_PDF_CACHE_VERSION = "v2-marketplace-tt"
+CRITICA_PDF_CACHE_VERSION = "v26-portrait-critica-product-name"
+PDF_THEME = {
+    "page_bg": "#F5F6F8",
+    "panel_bg": "#FFFFFF",
+    "panel_bg_alt": "#F8F9FA",
+    "header_bg": "#E7E9ED",
+    "border": "#D3D7DD",
+    "border_strong": "#C6CBD3",
+    "text_primary": "#1F2933",
+    "text_muted": "#4B5563",
+    "accent": "#40566D",
+    "accent_soft": "#EEF2F6",
+    "warning_bg": "#FFF7E8",
+    "warning_border": "#E8C98E",
+    "warning_text": "#6B5A3C",
+    "danger": "#B42318",
+    "danger_bg": "#FFF1F0",
+    "danger_bg_soft": "#FFF7F6",
+    "danger_border": "#F0A6A1",
+    "ok_text": "#1F2933",
+}
 
 
 @dataclass(frozen=True)
@@ -67,6 +87,7 @@ class CriticaRnSummary:
     total_pedido: Decimal
     planilha_atualizada_em: str
     operations: tuple[str, ...] = ()
+    peso_total: Decimal = Decimal("0")
     total_hectolitros: Decimal = Decimal("0")
     nab_tt_hectolitros: Decimal = Decimal("0")
     high_end_hectolitros: Decimal = Decimal("0")
@@ -75,6 +96,7 @@ class CriticaRnSummary:
     cerveja_rgb_hectolitros: Decimal = Decimal("0")
     cerveja_ow_hectolitros: Decimal = Decimal("0")
     marketplace_tt_hectolitros: Decimal = Decimal("0")
+    marketplace_tt_faturamento: Decimal = Decimal("0")
     duplicated_pedido_count: int = 0
     order_avg_alert_count: int = 0
     inadimplente_count: int = 0
@@ -89,6 +111,7 @@ class CriticaRnSummary:
         payload["data_pedido"] = self.data_pedido.isoformat() if self.data_pedido else ""
         for field_name in (
             "total_pedido",
+            "peso_total",
             "total_hectolitros",
             "nab_tt_hectolitros",
             "high_end_hectolitros",
@@ -97,6 +120,7 @@ class CriticaRnSummary:
             "cerveja_rgb_hectolitros",
             "cerveja_ow_hectolitros",
             "marketplace_tt_hectolitros",
+            "marketplace_tt_faturamento",
         ):
             payload[field_name] = str(payload.get(field_name) or "0")
         payload["operations"] = list(self.operations)
@@ -140,6 +164,8 @@ class CriticaRnRecord:
     problemas: tuple[str, ...]
     planilha_atualizada_em: str
     operation_name: str = ""
+    produto_peso_bruto: Decimal = Decimal("0")
+    peso_item: Decimal = Decimal("0")
     pedido_cliente_duplicado: bool = False
     duplicate_order_numbers: tuple[str, ...] = ()
     duplicate_order_refs: tuple[str, ...] = ()
@@ -148,6 +174,7 @@ class CriticaRnRecord:
     mapa_codigo: str = ""
     vendedor_codigo: str = ""
     area_codigo: str = ""
+    cond_pag_pedido_codigo: str = ""
     cond_pag_pedido: str = ""
     forma_pagto: str = ""
     prazo_dias: str = ""
@@ -159,6 +186,7 @@ class CriticaRnRecord:
     ocorrencia_2: str = ""
     te_codigo: str = ""
     client_segment: str = ""
+    client_cond_pag_atual_codigo: str = ""
     client_cond_pag_atual: str = ""
     client_media_faturamento_3m: Decimal = Decimal("0")
     client_limite_credito: Decimal = Decimal("0")
@@ -202,6 +230,8 @@ class CriticaRnRecord:
         payload["data_pedido"] = self.data_pedido.isoformat() if self.data_pedido else ""
         for field_name in (
             "total_pedido",
+            "produto_peso_bruto",
+            "peso_item",
             "total_cliente",
             "quantidade",
             "preco_unitario",
@@ -244,6 +274,8 @@ class CriticaRnOrderRecord:
     nome_pdv: str
     status_pedido: str
     total_pedido: Decimal
+    peso_pedido: Decimal
+    cond_pag_pedido: str
     problem_labels: tuple[str, ...]
     problem_item_count: int
     item_count: int
@@ -456,6 +488,69 @@ class CriticaRnQueryService:
             records=list(report.records),
             pdf_bytes=report.pdf_bytes,
             summary_pdf_bytes=report.summary_pdf_bytes,
+        )
+
+    def build_pdf_report_for_records(self, records: list[CriticaRnRecord]) -> CriticaRnPdfReport:
+        summary = _summarize_records(records)
+        if summary.row_count <= 0:
+            return CriticaRnPdfReport(summary=summary, records=list(records), pdf_bytes=b"", summary_pdf_bytes=b"")
+        return CriticaRnPdfReport(
+            summary=summary,
+            records=list(records),
+            pdf_bytes=build_critica_rn_pdf(summary=summary, records=records),
+            summary_pdf_bytes=build_critica_rn_summary_pdf(summary=summary, records=records),
+        )
+
+    def get_pdf_report_by_registration(
+        self,
+        *,
+        cod_pdv: str,
+        filial: str = "",
+        target_date: date | None = None,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        limit: int = 300,
+    ) -> CriticaRnPdfReport:
+        records = self.search_by_registration(
+            cod_pdv=cod_pdv,
+            filial=filial,
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+            limit=limit,
+        )
+        return self.build_pdf_report_for_records(records)
+
+    def get_gv_summary_pdf(
+        self,
+        *,
+        target_date: date,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        limit: int = 50000,
+    ) -> CriticaRnPdfReport:
+        data = self.get_report_data(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+            limit=limit,
+        )
+        if data.summary.row_count <= 0 and _uses_legacy_gv_scope_only(allowed_gv_vdes):
+            access_filters, access_params = self._build_access_filter_parts(allowed_sectors, allowed_gv_vdes)
+            records = self._list_records_from_relation(
+                relation="critica_rn_latest",
+                filters=access_filters,
+                params=access_params,
+                limit=limit,
+            )
+            data = CriticaRnReportData(summary=_summarize_records(records), records=records)
+        if data.summary.row_count <= 0:
+            return CriticaRnPdfReport(summary=data.summary, records=data.records, pdf_bytes=b"", summary_pdf_bytes=b"")
+        return CriticaRnPdfReport(
+            summary=data.summary,
+            records=data.records,
+            pdf_bytes=build_critica_rn_gv_summary_pdf(summary=data.summary, records=data.records),
+            summary_pdf_bytes=b"",
         )
 
     def get_summary(
@@ -796,6 +891,7 @@ class CriticaRnQueryService:
         operator = "=" if relation == "critica_rn_latest" else "LIKE"
         dependency_datasets = [
             "dclientes",
+            "dcondicoes",
             "doperacoes",
             "dprecos",
             "dprodutos",
@@ -934,6 +1030,50 @@ class CriticaRnQueryService:
                     client_keys={(record.filial, record.cod_pdv) for record in records},
                 )
         records = _annotate_duplicate_client_orders(records, context_records=duplicate_context_records)
+        records = _annotate_duplicate_products_by_price(records)
+        records = _annotate_client_total_above_average(records)
+        records.sort(
+            key=lambda record: (
+                0 if record.possui_problema else 1,
+                int(record.filial or "0") if str(record.filial or "").isdigit() else 999,
+                record.operation_name,
+                record.pedido,
+                record.cod_pdv,
+                record.produto_codigo,
+            )
+        )
+        return records
+
+    def _list_records_from_relation(
+        self,
+        *,
+        relation: str,
+        filters: list[sql.Composed],
+        params: list[Any],
+        limit: int,
+        duplicate_context_filters: list[sql.Composed] | None = None,
+        duplicate_context_params: list[Any] | None = None,
+    ) -> list[CriticaRnRecord]:
+        query_params = list(params)
+        query_params.append(max(1, min(int(limit or 1), 50000)))
+        with self._connect(row_factory=dict_row) as conn:
+            query = self._build_records_query(conn=conn, relation=relation, filters=filters)
+            with conn.cursor() as cur:
+                cur.execute(query, query_params)
+                rows = cur.fetchall()
+            records = [_row_to_record(row) for row in rows]
+            duplicate_context_records = records
+            if duplicate_context_filters is not None and records:
+                duplicate_context_records = self._fetch_duplicate_context_records(
+                    conn=conn,
+                    relation=relation,
+                    filters=duplicate_context_filters,
+                    params=duplicate_context_params or [],
+                    client_keys={(record.filial, record.cod_pdv) for record in records},
+                )
+        records = _annotate_duplicate_client_orders(records, context_records=duplicate_context_records)
+        records = _annotate_duplicate_products_by_price(records)
+        records = _annotate_client_total_above_average(records)
         records.sort(
             key=lambda record: (
                 0 if record.possui_problema else 1,
@@ -1014,6 +1154,7 @@ class CriticaRnQueryService:
             _dprodutos_reference_cte(self.schema, conn),
             _produto_cesta_metrics_cte(self.schema, conn),
             _doperacoes_reference_cte(self.schema, conn),
+            _dcondicoes_reference_cte(self.schema, conn),
             _dclientes_reference_cte(self.schema, conn),
             _prazo_media_cte(self.schema, conn),
             _inad_stats_cte(self.schema, conn),
@@ -1039,6 +1180,7 @@ class CriticaRnQueryService:
                 c.critica_text,
                 c.produto_codigo,
                 COALESCE(NULLIF(c.produto_dprecos, ''), NULLIF(c.payload ->> 'Nome Produto', ''), NULLIF(c.payload ->> 'Produto', '')) AS produto_dprecos,
+                COALESCE(NULLIF(c.payload ->> 'Nome Produto', ''), NULLIF(c.payload ->> 'Produto', ''), NULLIF(c.produto_dprecos, '')) AS produto_descricao_pdf,
                 COALESCE(NULLIF(c.payload ->> 'Nome Produto', ''), NULLIF(c.payload ->> 'Produto', '')) AS nome_produto_original,
                 c.quantidade,
                 c.unid_venda,
@@ -1063,7 +1205,8 @@ class CriticaRnQueryService:
                 COALESCE(NULLIF(c.payload ->> 'Mapa', ''), '') AS mapa_codigo,
                 COALESCE(NULLIF(c.payload ->> 'Cod. Vendedor', ''), '') AS vendedor_codigo,
                 COALESCE(NULLIF(c.payload ->> 'Cod. Area', ''), '') AS area_codigo,
-                COALESCE(NULLIF(c.payload ->> 'Cond Pgto', ''), '') AS cond_pag_pedido,
+                COALESCE(NULLIF(c.payload ->> 'Cond Pgto', ''), '') AS cond_pag_pedido_codigo,
+                COALESCE(NULLIF(dcp.descricao, ''), NULLIF(c.payload ->> 'Cond Pgto', ''), '') AS cond_pag_pedido,
                 COALESCE(NULLIF(c.payload ->> 'Forma Pgto', ''), '') AS forma_pgto,
                 COALESCE(NULLIF(c.payload ->> 'Prazo em Dias', ''), '') AS prazo_dias,
                 COALESCE(NULLIF(c.payload ->> 'DS Segmento Cerveja', ''), '') AS segmento_cerveja,
@@ -1079,6 +1222,7 @@ class CriticaRnQueryService:
                 dp.frio_preco,
                 dp.ttc_preco,
                 COALESCE(prod.fator_hecto, 0) AS produto_fator_hecto,
+                COALESCE(prod.peso_bruto, 0) AS produto_peso_bruto,
                 COALESCE(pcm.cesta_nab_tt, FALSE) AS cesta_nab_tt,
                 COALESCE(pcm.cesta_high_end, FALSE) AS cesta_high_end,
                 COALESCE(pcm.cesta_cerveja_tt, FALSE) AS cesta_cerveja_tt,
@@ -1088,7 +1232,8 @@ class CriticaRnQueryService:
                 COALESCE(pcm.cesta_marketplace_tt, FALSE) AS cesta_marketplace_tt,
                 COALESCE(dop.nome_operacao, '') AS movement_operation_name,
                 COALESCE(d.segmento_nge, '') AS client_segment,
-                COALESCE(d.cond_pag_atual, '') AS client_cond_pag_atual,
+                COALESCE(d.cond_pag_atual, '') AS client_cond_pag_atual_codigo,
+                COALESCE(NULLIF(dcc.descricao, ''), COALESCE(d.cond_pag_atual, ''), '') AS client_cond_pag_atual,
                 COALESCE(d.media_faturamento_3m, '') AS client_media_faturamento_3m,
                 COALESCE(d.limite_credito, '') AS client_limite_credito,
                 COALESCE(d.limite_usado, '') AS client_limite_usado,
@@ -1112,9 +1257,13 @@ class CriticaRnQueryService:
               ON pcm.codigo = c.produto_codigo
             LEFT JOIN doperacoes_ref dop
               ON dop.tipo_movimento = COALESCE(NULLIF(LTRIM(COALESCE(c.tipo_movimento, ''), '0'), ''), '0')
+            LEFT JOIN dcondicoes_ref dcp
+              ON dcp.filial_condicao_key = {pedido_condicao_key_sql}
             LEFT JOIN dclientes_ref d
               ON d.filial = c.filial
              AND d.cod_pdv = c.cod_pdv
+            LEFT JOIN dcondicoes_ref dcc
+              ON dcc.filial_condicao_key = {cliente_condicao_key_sql}
             LEFT JOIN prazo_media_ref pm
               ON pm.filial = c.filial
              AND pm.cod_pdv = c.cod_pdv
@@ -1129,6 +1278,12 @@ class CriticaRnQueryService:
             ctes=sql.SQL(",\n").join(ctes),
             schema=sql.Identifier(self.schema),
             relation=sql.Identifier(relation),
+            pedido_condicao_key_sql=sql.SQL(
+                "CONCAT(COALESCE(c.filial, ''), '_', {codigo_sql})"
+            ).format(codigo_sql=_normalized_code_sql(sql.SQL("c.payload ->> 'Cond Pgto'"))),
+            cliente_condicao_key_sql=sql.SQL(
+                "CONCAT(COALESCE(c.filial, ''), '_', {codigo_sql})"
+            ).format(codigo_sql=_normalized_code_sql(sql.SQL("d.cond_pag_atual"))),
             where_clause=_where_clause(filters),
         )
 
@@ -1151,7 +1306,7 @@ class CriticaRnQueryService:
     ) -> None:
         filial_codes = partition_filial_scopes(allowed_sectors)
         sector_keys, _legacy_sector_codes = partition_sector_scopes(allowed_sectors)
-        gv_keys, dc_keys, _legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
+        gv_keys, dc_keys, legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
         scope_filters: list[sql.Composed] = []
         if filial_codes:
             scope_filters.append(sql.SQL("COALESCE(c.filial, '') = ANY(%s)"))
@@ -1162,6 +1317,18 @@ class CriticaRnQueryService:
         if gv_keys:
             scope_filters.append(sql.SQL("COALESCE(c.filial_gv_key, '') = ANY(%s)"))
             params.append(gv_keys)
+        if legacy_gv_codes:
+            normalized_filial_gv_suffix = sql.SQL(
+                "COALESCE(NULLIF(LTRIM(REGEXP_REPLACE(SPLIT_PART(COALESCE(c.filial_gv_key, ''), '_', 2), '\\D+', '', 'g'), '0'), ''), '0')"
+            )
+            normalized_codigo_gv = _normalized_code_sql(sql.SQL("c.codigo_gv"))
+            scope_filters.append(
+                sql.SQL("({codigo_gv} = ANY(%s) OR {filial_gv_suffix} = ANY(%s))").format(
+                    codigo_gv=normalized_codigo_gv,
+                    filial_gv_suffix=normalized_filial_gv_suffix,
+                )
+            )
+            params.extend([legacy_gv_codes, legacy_gv_codes])
         dc_scope_keys = [value[len("dc:") :] if value.startswith("dc:") else value for value in dc_keys]
         if dc_scope_keys:
             scope_filters.append(sql.SQL("COALESCE(c.filial_dc_key, '') = ANY(%s)"))
@@ -1237,13 +1404,13 @@ def build_critica_rn_pdf(
     records: list[CriticaRnRecord],
     generated_at: datetime | None = None,
 ) -> bytes:
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
     generated_at = generated_at or datetime.now()
     buffer = io.BytesIO()
-    page_size = landscape(A4)
+    page_size = A4
     doc = SimpleDocTemplate(
         buffer,
         pagesize=page_size,
@@ -1290,13 +1457,13 @@ def build_critica_rn_summary_pdf(
     records: list[CriticaRnRecord],
     generated_at: datetime | None = None,
 ) -> bytes:
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
     generated_at = generated_at or datetime.now()
     buffer = io.BytesIO()
-    page_size = landscape(A4)
+    page_size = A4
     doc = SimpleDocTemplate(
         buffer,
         pagesize=page_size,
@@ -1310,10 +1477,25 @@ def build_critica_rn_summary_pdf(
     elements: list[Any] = [
         Paragraph("RESUMO DA CRITICA", styles["section"]),
         _summary_table(summary, records, styles["table_header"], styles["table_cell"]),
-        Spacer(1, 4),
-        Paragraph("INDICADORES DE PROBLEMA", styles["section"]),
-        _problem_table(summary, styles["table_header"], styles["table_cell"]),
     ]
+    if records:
+        elements.extend(
+            [
+                PageBreak(),
+                Paragraph("PRODUTOS DO RELATORIO", styles["section"]),
+                _product_summary_table(records, styles),
+                PageBreak(),
+            ]
+        )
+    else:
+        elements.append(Spacer(1, 4))
+    elements.extend(
+        [
+            Spacer(1, 4),
+            Paragraph("INDICADORES DE PROBLEMA", styles["section"]),
+            _problem_table(summary, styles["table_header"], styles["table_cell"]),
+        ]
+    )
 
     order_records = _build_order_records(records)
     if order_records:
@@ -1330,6 +1512,54 @@ def build_critica_rn_summary_pdf(
             page_size=page_size,
             generated_at=generated_at,
             title="Critica dos Pedidos - Resumo",
+            summary=summary,
+            records=records,
+        )
+
+    doc.build(elements, onFirstPage=draw_page_header, onLaterPages=draw_page_header)
+    return buffer.getvalue()
+
+
+def build_critica_rn_gv_summary_pdf(
+    *,
+    summary: CriticaRnSummary,
+    records: list[CriticaRnRecord],
+    generated_at: datetime | None = None,
+) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    generated_at = generated_at or datetime.now()
+    buffer = io.BytesIO()
+    page_size = A4
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=page_size,
+        leftMargin=9 * mm,
+        rightMargin=9 * mm,
+        topMargin=34 * mm,
+        bottomMargin=12 * mm,
+    )
+    styles = _build_report_pdf_styles("CriticaGvResumo")
+    elements: list[Any] = [
+        Paragraph("RESUMO GERENCIAL DA CRITICA", styles["section"]),
+        _summary_table(summary, records, styles["table_header"], styles["table_cell"]),
+        Spacer(1, 4),
+        Paragraph("INDICADORES DE PROBLEMA", styles["section"]),
+        _problem_table(summary, styles["table_header"], styles["table_cell"]),
+        Spacer(1, 4),
+        Paragraph("RESUMO POR SETOR", styles["section"]),
+        _gv_sector_summary_table(records, styles),
+    ]
+
+    def draw_page_header(canvas: Any, doc_obj: Any) -> None:
+        _draw_report_page_header(
+            canvas,
+            doc_obj,
+            page_size=page_size,
+            generated_at=generated_at,
+            title="Critica dos Pedidos - Resumo GV",
             summary=summary,
             records=records,
         )
@@ -1379,28 +1609,31 @@ def _summary_table(summary: CriticaRnSummary, records: list[CriticaRnRecord], he
             Paragraph(_format_money(summary.total_pedido), value_style),
         ],
         [
+            Paragraph("Peso Total", header_style),
             Paragraph("Total HL", header_style),
             Paragraph("NAB TT HL", header_style),
             Paragraph("High End HL", header_style),
-            Paragraph("Cerveja TT HL", header_style),
         ],
         [
+            Paragraph(_format_decimal(summary.peso_total), value_style),
             Paragraph(_format_decimal(summary.total_hectolitros), value_style),
             Paragraph(_format_decimal(summary.nab_tt_hectolitros), value_style),
             Paragraph(_format_decimal(summary.high_end_hectolitros), value_style),
-            Paragraph(_format_decimal(summary.cerveja_tt_hectolitros), value_style),
         ],
         [
+            Paragraph("Cerveja TT HL", header_style),
             Paragraph("Refri Zero HL", header_style),
-            Paragraph("Cerveja RGB HL", header_style),
-            Paragraph("Cerveja OW HL", header_style),
-            Paragraph("Marketplace TT HL", header_style),
+            Paragraph("RGB / OW HL", header_style),
+            Paragraph("Marketplace TT R$", header_style),
         ],
         [
+            Paragraph(_format_decimal(summary.cerveja_tt_hectolitros), value_style),
             Paragraph(_format_decimal(summary.refri_zero_hectolitros), value_style),
-            Paragraph(_format_decimal(summary.cerveja_rgb_hectolitros), value_style),
-            Paragraph(_format_decimal(summary.cerveja_ow_hectolitros), value_style),
-            Paragraph(_format_decimal(summary.marketplace_tt_hectolitros), value_style),
+            Paragraph(
+                f"{_format_decimal(summary.cerveja_rgb_hectolitros)} / {_format_decimal(summary.cerveja_ow_hectolitros)}",
+                value_style,
+            ),
+            Paragraph(_format_money(summary.marketplace_tt_faturamento), value_style),
         ],
         [
             Paragraph("Pedidos c/ Problema", header_style),
@@ -1415,16 +1648,8 @@ def _summary_table(summary: CriticaRnSummary, records: list[CriticaRnRecord], he
             Paragraph(_alert_count_markup(summary.duplicated_row_count), value_style),
         ],
     ]
-    table = Table(rows, colWidths=[64.75 * mm, 64.75 * mm, 64.75 * mm, 64.75 * mm])
-    extra_commands: list[tuple[Any, ...]] = []
-    if has_problem_counts:
-        extra_commands.extend(
-            [
-                ("BACKGROUND", (0, 9), (-1, 9), colors.HexColor("#fff7f7")),
-                ("BOX", (0, 8), (-1, 9), 0.35, colors.HexColor("#f04438")),
-            ]
-        )
-    table.setStyle(_report_table_style(header_row_indexes=(0, 2, 4, 6, 8), extra_commands=tuple(extra_commands)))
+    table = Table(rows, colWidths=[48 * mm, 48 * mm, 48 * mm, 48 * mm])
+    table.setStyle(_report_table_style(header_row_indexes=(0, 2, 4, 6, 8), grid=True))
     return table
 
 
@@ -1441,7 +1666,6 @@ def _problem_table(summary: CriticaRnSummary, header_style: Any, value_style: An
         ("Produto sem DPrecos", summary.missing_price_count),
         ("Pedido acima da media", summary.order_avg_alert_count),
         ("Cliente inadimplente", summary.inadimplente_count),
-        ("Multipack fora da segmentacao", summary.multipack_violation_count),
         ("Mapa 1 / buffer", summary.map_buffer_count),
         ("Mapa fora do vendedor", summary.map_outside_count),
         ("Cond. pag. divergente", summary.cond_divergence_count),
@@ -1455,7 +1679,6 @@ def _problem_table(summary: CriticaRnSummary, header_style: Any, value_style: An
             Paragraph("Pedidos", header_style),
         ]
     ]
-    commands: list[tuple[Any, ...]] = []
     for index in range(0, len(metrics), 2):
         left_label, left_value = metrics[index]
         if index + 1 < len(metrics):
@@ -1471,11 +1694,145 @@ def _problem_table(summary: CriticaRnSummary, header_style: Any, value_style: An
                 Paragraph("" if right_value == "" else _alert_count_markup(right_value), value_style),
             ]
         )
-        if _has_positive_count(left_value) or _has_positive_count(right_value):
-            commands.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#fff7f7")))
-    table = Table(rows, colWidths=[101 * mm, 28 * mm, 101 * mm, 29 * mm])
-    table.setStyle(_report_table_style(header_row_indexes=(0,), extra_commands=tuple(commands)))
+    table = Table(rows, colWidths=[72 * mm, 24 * mm, 72 * mm, 24 * mm])
+    table.setStyle(_report_table_style(header_row_indexes=(0,), grid=True))
     return table
+
+
+def _build_product_summary_rows(records: list[CriticaRnRecord]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for record in records:
+        code = str(record.produto_codigo or "").strip()
+        name = str(record.produto_descricao or record.nome_produto_original or "-").strip() or "-"
+        key = (code, name)
+        entry = grouped.setdefault(
+            key,
+            {
+                "codigo": code,
+                "nome": name,
+                "quantidade": Decimal("0"),
+                "hectolitros": Decimal("0"),
+                "faturamento": Decimal("0"),
+                "peso": Decimal("0"),
+            },
+        )
+        entry["quantidade"] += record.quantidade or Decimal("0")
+        entry["hectolitros"] += record.hectolitros or Decimal("0")
+        entry["faturamento"] += _record_item_revenue(record)
+        entry["peso"] += record.peso_item or Decimal("0")
+
+    rows = list(grouped.values())
+    rows.sort(key=lambda item: (_normalize_token(item["nome"]), _sort_key_numeric_text(item["codigo"])))
+    return rows
+
+
+def _product_summary_table(records: list[CriticaRnRecord], styles: dict[str, Any]) -> Any:
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Table
+
+    rows: list[list[Any]] = [
+        [
+            Paragraph("Produto", styles["table_header"]),
+            Paragraph("Quantidade", styles["table_header"]),
+            Paragraph("Hecto", styles["table_header"]),
+            Paragraph("Faturamento", styles["table_header"]),
+            Paragraph("Peso", styles["table_header"]),
+        ]
+    ]
+    for item in _build_product_summary_rows(records):
+        product_name = f"{item['codigo']} {item['nome']}".strip()
+        rows.append(
+            [
+                Paragraph(_escape(product_name), styles["table_cell_bold"]),
+                Paragraph(_escape(_format_decimal(item["quantidade"])), styles["table_cell_bold_right"]),
+                Paragraph(_escape(_format_decimal(item["hectolitros"])), styles["table_cell_bold_right"]),
+                Paragraph(_escape(_format_money(item["faturamento"])), styles["table_cell_bold_right"]),
+                Paragraph(_escape(_format_decimal(item["peso"])), styles["table_cell_bold_right"]),
+            ]
+        )
+
+    table = Table(
+        rows,
+        repeatRows=1,
+        colWidths=[96 * mm, 22 * mm, 20 * mm, 31 * mm, 23 * mm],
+        splitByRow=1,
+    )
+    table.setStyle(_report_table_style(header_row_indexes=(0,), grid=True))
+    return table
+
+
+def _gv_sector_summary_table(records: list[CriticaRnRecord], styles: dict[str, Any]) -> Any:
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Table
+
+    rows: list[list[Any]] = [
+        [
+            Paragraph("Setor", styles["table_header"]),
+            Paragraph("Pedidos", styles["table_header"]),
+            Paragraph("Clientes", styles["table_header"]),
+            Paragraph("Valor", styles["table_header"]),
+            Paragraph("Peso", styles["table_header"]),
+            Paragraph("HL", styles["table_header"]),
+            Paragraph("Ped. c/ Prob.", styles["table_header"]),
+            Paragraph("Principais indicadores", styles["table_header"]),
+        ]
+    ]
+    grouped: dict[str, list[CriticaRnRecord]] = {}
+    for record in records:
+        grouped.setdefault(record.seller_code or f"{record.filial}_{record.setor}" or record.setor or "-", []).append(record)
+
+    for sector_key in sorted(grouped, key=_sort_key_numeric_text):
+        sector_records = grouped[sector_key]
+        sector_summary = _summarize_records(sector_records)
+        labels = _sector_problem_summary_labels(sector_summary)
+        rows.append(
+            [
+                Paragraph(_escape(_format_sector_key_for_pdf(sector_key, sector_records)), styles["table_cell_bold"]),
+                Paragraph(_escape(str(sector_summary.pedido_count)), styles["table_cell_bold_right"]),
+                Paragraph(_escape(str(sector_summary.client_count)), styles["table_cell_bold_right"]),
+                Paragraph(_escape(_format_money(sector_summary.total_pedido)), styles["table_cell_bold_right"]),
+                Paragraph(_escape(_format_decimal(sector_summary.peso_total)), styles["table_cell_bold_right"]),
+                Paragraph(_escape(_format_decimal(sector_summary.total_hectolitros)), styles["table_cell_bold_right"]),
+                Paragraph(_alert_count_markup(sector_summary.problem_pedido_count), styles["table_cell_bold_right"]),
+                Paragraph(_summary_problem_markup(labels) if labels else "OK", styles["occurrence"] if labels else styles["table_cell"]),
+            ]
+        )
+
+    table = Table(
+        rows,
+        repeatRows=1,
+        colWidths=[18 * mm, 15 * mm, 16 * mm, 25 * mm, 19 * mm, 16 * mm, 19 * mm, 64 * mm],
+        splitByRow=1,
+    )
+    table.setStyle(_report_table_style(header_row_indexes=(0,), grid=True))
+    return table
+
+
+def _format_sector_key_for_pdf(sector_key: str, records: list[CriticaRnRecord]) -> str:
+    split = sector_key.split("_", 1)
+    if len(split) == 2 and split[1]:
+        return f"{split[0]}/{split[1]}"
+    first = records[0] if records else None
+    if first and first.filial and first.setor:
+        return f"{first.filial}/{first.setor}"
+    return sector_key or "-"
+
+
+def _sector_problem_summary_labels(summary: CriticaRnSummary) -> tuple[str, ...]:
+    metrics = [
+        ("Ocorrencias", summary.rows_with_critica),
+        ("Pedido duplicado", summary.duplicated_pedido_count),
+        ("Produto duplicado", summary.duplicated_row_count),
+        ("Preco", summary.price_alert_count),
+        ("Sem DPrecos", summary.missing_price_count),
+        ("Acima da media", summary.order_avg_alert_count),
+        ("Inadimplente", summary.inadimplente_count),
+        ("Buffer", summary.map_buffer_count),
+        ("Mapa fora", summary.map_outside_count),
+        ("Cond. divergente", summary.cond_divergence_count),
+        ("Estouro limite", summary.limit_alert_count),
+    ]
+    return tuple(f"{label}: {count}" for label, count in metrics if count)
 
 
 def _detail_report_tables(records: list[CriticaRnRecord], styles: dict[str, Any]) -> list[Any]:
@@ -1499,9 +1856,10 @@ def _ordered_detail_groups(records: list[CriticaRnRecord]) -> list[list[CriticaR
         grouped.values(),
         key=lambda items: (
             0 if any(item.possui_problema for item in items) else 1,
+            _order_movement_group_sort_key(items[0]),
             int(items[0].filial or "0") if str(items[0].filial or "").isdigit() else 999,
-            items[0].pedido,
             items[0].cod_pdv,
+            items[0].pedido,
         ),
     )
 
@@ -1516,7 +1874,6 @@ def _detail_report_table_from_groups(ordered_groups: list[list[CriticaRnRecord]]
             Paragraph("Pedido", styles["table_header"]),
             Paragraph("UNB/NB", styles["table_header"]),
             Paragraph("Cliente", styles["table_header"]),
-            Paragraph("Set", styles["table_header"]),
             Paragraph("Tipo", styles["table_header"]),
             Paragraph("SC", styles["table_header"]),
             Paragraph("Ori", styles["table_header"]),
@@ -1537,56 +1894,60 @@ def _detail_report_table_from_groups(ordered_groups: list[list[CriticaRnRecord]]
         if movement != current_movement:
             current_movement = movement
             row_index = len(rows)
-            rows.append([Paragraph(_escape(movement), styles["movement"])] + [""] * 12)
+            rows.append([Paragraph(_escape(movement), styles["movement"])] + [""] * 11)
             commands.extend(
                 [
                     ("SPAN", (0, row_index), (-1, row_index)),
-                    ("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#f6f8fa")),
-                    ("LINEABOVE", (0, row_index), (-1, row_index), 0.5, colors.HexColor("#8c959f")),
-                    ("LINEBELOW", (0, row_index), (-1, row_index), 0.25, colors.HexColor("#d0d7de")),
+                    ("BACKGROUND", (0, row_index), (-1, row_index), _theme_color("panel_bg_alt")),
                     ("TOPPADDING", (0, row_index), (-1, row_index), 4),
                     ("BOTTOMPADDING", (0, row_index), (-1, row_index), 3),
                 ]
             )
-        for index, record in enumerate(items):
+        client_lines = _order_client_pdf_lines(first, items)
+        detail_row_count = max(len(items), len(client_lines))
+        for index in range(detail_row_count):
+            record = items[index] if index < len(items) else None
             row_index = len(rows)
+            item_problem_hint = _compact_problem_hint(record) if record is not None else ""
             rows.append(
                 [
-                    Paragraph(_escape(record.pedido if index == 0 else ""), styles["table_cell"]),
-                    Paragraph(_escape(f"{record.filial}/{record.cod_pdv}" if index == 0 else ""), styles["table_cell"]),
-                    Paragraph(_escape(_truncate(record.nome_pdv or "-", 26) if index == 0 else ""), styles["table_cell"]),
-                    Paragraph(_escape(record.setor if index == 0 else ""), styles["table_cell"]),
-                    Paragraph(_escape(_movement_display(record.operation_name, record.movement_operation_name) if index == 0 else ""), styles["table_cell"]),
-                    Paragraph(_escape(_truncate(record.client_segment or record.segmento_cerveja or "-", 10) if index == 0 else ""), styles["table_cell"]),
-                    Paragraph(_escape(_truncate(record.origem_pedido or "-", 5) if index == 0 else ""), styles["table_cell"]),
-                    Paragraph(_escape(f"{record.produto_codigo} {_truncate(record.produto_descricao or '-', 28)}"), styles["table_cell"]),
-                    Paragraph(_escape(_format_decimal(record.quantidade)), styles["table_cell_right"]),
-                    Paragraph(_escape(record.unid_venda or "-"), styles["table_cell"]),
-                    Paragraph(_escape(_format_money_raw(record.preco_unitario)), styles["table_cell_right"]),
-                    Paragraph(_escape(_format_money_raw(record.preco_sem_adf)), styles["table_cell_right"]),
+                    Paragraph((_escape(first.pedido) if index == 0 and first.pedido else ""), styles["table_cell_bold"]),
+                    Paragraph((_escape(first.cod_pdv) if index == 0 and first.cod_pdv else ""), styles["table_cell_bold"]),
+                    Paragraph(client_lines[index] if index < len(client_lines) else "", styles["table_cell_bold"]),
                     Paragraph(
-                        _alert_hint_markup(_compact_problem_hint(record)) if record.possui_problema else "",
-                        styles["table_alert"] if record.possui_problema else styles["table_cell"],
+                        (
+                            _escape(_movement_display(first.operation_name, first.movement_operation_name))
+                            if index == 0
+                            else ""
+                        ),
+                        styles["table_cell_bold"],
+                    ),
+                    Paragraph(
+                        (
+                            _escape(_truncate(first.client_segment or first.segmento_cerveja or "-", 10))
+                            if index == 0
+                            else ""
+                        ),
+                        styles["table_cell_bold"],
+                    ),
+                    Paragraph(
+                        (_escape(_truncate(first.origem_pedido or "-", 5)) if index == 0 else ""),
+                        styles["table_cell_bold"],
+                    ),
+                    Paragraph(
+                        _product_pdf_markup(record) if record is not None else "",
+                        styles["table_cell_bold"],
+                    ),
+                    Paragraph(_escape(_format_decimal(record.quantidade)) if record is not None else "", styles["table_cell_bold_right"]),
+                    Paragraph(_nowrap_markup(record.unid_venda or "-") if record is not None else "", styles["table_cell_bold"]),
+                    Paragraph(_escape(_format_money_raw(record.preco_unitario)) if record is not None else "", styles["table_cell_bold_right"]),
+                    Paragraph(_escape(_format_money_raw(record.preco_sem_adf)) if record is not None else "", styles["table_cell_bold_right"]),
+                    Paragraph(
+                        _alert_hint_markup(item_problem_hint) if item_problem_hint else "",
+                        styles["table_alert"] if item_problem_hint else styles["table_cell"],
                     ),
                 ]
             )
-            if record.possui_problema:
-                commands.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#fff7f7")))
-
-        info_index = len(rows)
-        rows.append(
-            [
-                Paragraph(
-                    _escape(
-                        f"Setor do Pedido: {first.setor or '-'}      "
-                        f"Valor do Pedido (R$): {_format_money_raw(first.total_pedido)}"
-                    ),
-                    styles["table_cell"],
-                )
-            ]
-            + [""] * 12
-        )
-        commands.append(("SPAN", (0, info_index), (-1, info_index)))
 
         problem_labels = _build_order_problem_labels(items)
         if problem_labels:
@@ -1598,32 +1959,31 @@ def _detail_report_table_from_groups(ordered_groups: list[list[CriticaRnRecord]]
                         styles["occurrence"],
                     )
                 ]
-                + [""] * 12
+                + [""] * 11
             )
             commands.extend(
                 [
                     ("SPAN", (0, problem_index), (-1, problem_index)),
-                    ("BACKGROUND", (0, problem_index), (-1, problem_index), colors.HexColor("#fff0f0")),
-                    ("BOX", (0, problem_index), (-1, problem_index), 0.45, colors.HexColor("#d92d20")),
-                    ("TOPPADDING", (0, problem_index), (-1, problem_index), 4),
-                    ("BOTTOMPADDING", (0, problem_index), (-1, problem_index), 4),
+                    ("BACKGROUND", (0, problem_index), (-1, problem_index), _theme_color("danger_bg")),
+                    ("BOX", (0, problem_index), (-1, problem_index), 0.35, _theme_color("danger_border")),
+                    ("TOPPADDING", (0, problem_index), (-1, problem_index), 2),
+                    ("BOTTOMPADDING", (0, problem_index), (-1, problem_index), 2),
                 ]
             )
 
         spacer_index = len(rows)
-        rows.append([""] * 13)
+        rows.append([""] * 12)
         commands.extend(
             [
                 ("SPAN", (0, spacer_index), (-1, spacer_index)),
-                ("BOTTOMPADDING", (0, spacer_index), (-1, spacer_index), 5),
-                ("LINEBELOW", (0, spacer_index), (-1, spacer_index), 0.25, colors.HexColor("#c9cdd3")),
+                ("BOTTOMPADDING", (0, spacer_index), (-1, spacer_index), 2),
             ]
         )
 
     table = Table(
         rows,
         repeatRows=1,
-        colWidths=[15 * mm, 16 * mm, 36 * mm, 9 * mm, 21 * mm, 18 * mm, 9 * mm, 50 * mm, 9 * mm, 8 * mm, 16 * mm, 16 * mm, 55 * mm],
+        colWidths=[12 * mm, 13 * mm, 42 * mm, 11 * mm, 9 * mm, 8 * mm, 38 * mm, 8 * mm, 10 * mm, 14 * mm, 14 * mm, 13 * mm],
         splitByRow=1,
     )
     table.setStyle(_report_table_style(header_row_indexes=(0,), extra_commands=tuple(commands)))
@@ -1651,6 +2011,7 @@ def _detail_items_table(records: list[CriticaRnRecord], header_style: Any, value
         ]
     ]
     for record in records:
+        item_problem_labels = _item_specific_problem_labels(record)
         rows.append(
             [
                 Paragraph(_escape(record.pedido), value_style),
@@ -1658,19 +2019,19 @@ def _detail_items_table(records: list[CriticaRnRecord], header_style: Any, value
                 Paragraph(_escape(record.setor or "-"), value_style),
                 Paragraph(_escape(f"{record.filial} / {record.cod_pdv}"), value_style),
                 Paragraph(_escape(_truncate(record.nome_pdv or "-", 32)), value_style),
-                Paragraph(_escape(f"{record.produto_codigo} {_truncate(record.produto_descricao or '-', 34)}"), value_style),
+                Paragraph(_escape(f"{record.produto_codigo} {record.produto_descricao or '-'}"), value_style),
                 Paragraph(_escape(_format_decimal(record.quantidade)), value_style),
                 Paragraph(_escape(record.unid_venda or "-"), value_style),
                 Paragraph(_escape(_format_money(record.preco_unitario)), value_style),
                 Paragraph(_escape(_format_money(record.preco_sem_adf)), value_style),
                 Paragraph(_escape(_format_money(record.total_pedido)), value_style),
-                Paragraph(_escape("; ".join(record.problemas) or "OK"), value_style),
+                Paragraph(_escape("; ".join(item_problem_labels) or ""), value_style),
             ]
         )
     table = Table(
         rows,
         repeatRows=1,
-        colWidths=[15 * mm, 25 * mm, 12 * mm, 18 * mm, 30 * mm, 50 * mm, 10 * mm, 9 * mm, 16 * mm, 16 * mm, 18 * mm, 40 * mm],
+        colWidths=[12 * mm, 18 * mm, 10 * mm, 15 * mm, 27 * mm, 39 * mm, 8 * mm, 7 * mm, 12 * mm, 12 * mm, 14 * mm, 18 * mm],
     )
     table.setStyle(_report_table_style(header_row_indexes=(0,)))
     return table
@@ -1714,6 +2075,8 @@ def _detail_report_text(records: list[CriticaRnRecord]) -> str:
                 f"{_format_money_raw(record.preco_unitario):>9} {_format_money_raw(record.preco_sem_adf):>8} {problem_hint:<20}"
             )
         lines.append(f"         Setor do Pedido: {first.setor or '-'}")
+        lines.append(f"         Peso do Pedido: {_format_decimal(_order_weight(items))}")
+        lines.append(f"         Cond. Pag.: {first.cond_pag_pedido or '-'}")
         lines.append(f"         Valor do Pedido (R$): {_format_money_raw(first.total_pedido)}")
         order_problem_text = "; ".join(_build_order_problem_labels(items)) or "-"
         lines.append(f"         Ocorrencias: {order_problem_text}")
@@ -1744,13 +2107,16 @@ def _detail_order_table(order_records: list[CriticaRnOrderRecord], styles: dict[
         row_index = len(rows)
         rows.append(
             [
-                Paragraph(_escape(order.pedido), styles["table_cell"]),
-                Paragraph(_escape(_movement_display(order.operation_name, order.movement_operation_name)), styles["table_cell"]),
-                Paragraph(_escape(order.setor or "-"), styles["table_cell"]),
-                Paragraph(_escape(f"{order.filial} / {order.cod_pdv}"), styles["table_cell"]),
-                Paragraph(_escape(_truncate(order.nome_pdv or "-", 42)), styles["table_cell"]),
-                Paragraph(_escape(order.status_pedido or "-"), styles["table_cell"]),
-                Paragraph(_escape(_format_money(order.total_pedido)), styles["table_cell"]),
+                Paragraph(_escape(order.pedido), styles["table_cell_bold"]),
+                Paragraph(
+                    _escape(_movement_display(order.operation_name, order.movement_operation_name)),
+                    styles["table_cell_bold"],
+                ),
+                Paragraph(_escape(order.setor or "-"), styles["table_cell_bold"]),
+                Paragraph(_escape(order.cod_pdv), styles["table_cell_bold"]),
+                Paragraph(_summary_order_client_markup(order), styles["table_cell_bold"]),
+                Paragraph(_escape(order.status_pedido or "-"), styles["table_cell_bold"]),
+                Paragraph(_nowrap_markup(_format_money(order.total_pedido)), styles["table_cell_bold"]),
                 Paragraph(
                     _summary_problem_markup(order.problem_labels) if has_problem else "OK",
                     styles["occurrence"] if has_problem else styles["table_cell"],
@@ -1760,17 +2126,30 @@ def _detail_order_table(order_records: list[CriticaRnOrderRecord], styles: dict[
         if has_problem:
             commands.extend(
                 [
-                    ("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#fff7f7")),
-                    ("BOX", (7, row_index), (7, row_index), 0.35, colors.HexColor("#f04438")),
+                    ("BACKGROUND", (7, row_index), (7, row_index), _theme_color("danger_bg")),
+                    ("BOX", (7, row_index), (7, row_index), 0.35, _theme_color("danger_border")),
                     ("LEFTPADDING", (7, row_index), (7, row_index), 4),
                     ("RIGHTPADDING", (7, row_index), (7, row_index), 4),
                     ("TOPPADDING", (7, row_index), (7, row_index), 4),
                     ("BOTTOMPADDING", (7, row_index), (7, row_index), 4),
                 ]
             )
-    table = Table(rows, repeatRows=1, colWidths=[18 * mm, 30 * mm, 12 * mm, 20 * mm, 40 * mm, 18 * mm, 20 * mm, 101 * mm])
-    table.setStyle(_report_table_style(header_row_indexes=(0,), extra_commands=tuple(commands)))
+    table = Table(rows, repeatRows=1, colWidths=[15 * mm, 21 * mm, 11 * mm, 16 * mm, 34 * mm, 16 * mm, 17 * mm, 62 * mm])
+    table.setStyle(_report_table_style(header_row_indexes=(0,), extra_commands=tuple(commands), grid=True))
     return table
+
+
+def _summary_order_client_markup(order: CriticaRnOrderRecord) -> str:
+    lines = [_escape(_truncate(order.nome_pdv or "-", 42))]
+    if order.peso_pedido > 0:
+        lines.append(
+            f'<font color="{PDF_THEME["text_primary"]}">{_nowrap_markup(f"Peso do Pedido(Kg):{_format_decimal(order.peso_pedido)}")}</font>'
+        )
+    if order.cond_pag_pedido:
+        lines.append(
+            f'<font color="{PDF_THEME["text_primary"]}">{_nowrap_markup(f"Cond.Pag.:{_truncate(order.cond_pag_pedido, 40)}")}</font>'
+        )
+    return "<br/>".join(lines)
 
 
 def _build_report_pdf_styles(prefix: str) -> dict[str, Any]:
@@ -1784,103 +2163,134 @@ def _build_report_pdf_styles(prefix: str) -> dict[str, Any]:
             f"{prefix}Section",
             parent=styles["Heading2"],
             fontName="Helvetica-Bold",
-            fontSize=8.4,
-            leading=9.2,
+            fontSize=9.8,
+            leading=10.7,
             alignment=TA_LEFT,
             spaceBefore=4,
             spaceAfter=2,
+            textColor=_theme_color("accent"),
         ),
         "table_header": ParagraphStyle(
             f"{prefix}TableHeader",
             parent=styles["BodyText"],
             fontName="Courier-Bold",
-            fontSize=6.1,
-            leading=6.8,
+            fontSize=7.0,
+            leading=7.8,
             alignment=TA_LEFT,
+            textColor=_theme_color("text_primary"),
         ),
         "table_cell": ParagraphStyle(
             f"{prefix}TableCell",
             parent=styles["BodyText"],
-            fontName="Courier",
-            fontSize=5.8,
-            leading=6.5,
+            fontName="Courier-Bold",
+            fontSize=6.7,
+            leading=7.5,
             alignment=TA_LEFT,
+            textColor=_theme_color("text_primary"),
         ),
         "table_cell_right": ParagraphStyle(
             f"{prefix}TableCellRight",
             parent=styles["BodyText"],
-            fontName="Courier",
-            fontSize=5.8,
-            leading=6.5,
+            fontName="Courier-Bold",
+            fontSize=6.7,
+            leading=7.5,
             alignment=2,
+            textColor=_theme_color("text_primary"),
+        ),
+        "table_cell_bold": ParagraphStyle(
+            f"{prefix}TableCellBold",
+            parent=styles["BodyText"],
+            fontName="Courier-Bold",
+            fontSize=7.0,
+            leading=7.8,
+            alignment=TA_LEFT,
+            textColor=_theme_color("text_primary"),
+        ),
+        "table_cell_bold_right": ParagraphStyle(
+            f"{prefix}TableCellBoldRight",
+            parent=styles["BodyText"],
+            fontName="Courier-Bold",
+            fontSize=7.0,
+            leading=7.8,
+            alignment=2,
+            textColor=_theme_color("text_primary"),
         ),
         "table_alert": ParagraphStyle(
             f"{prefix}TableAlert",
             parent=styles["BodyText"],
             fontName="Courier-Bold",
-            fontSize=5.8,
-            leading=6.7,
+            fontSize=7.0,
+            leading=7.9,
             alignment=TA_LEFT,
-            textColor=colors.HexColor("#b42318"),
+            textColor=_theme_color("danger"),
         ),
         "movement": ParagraphStyle(
             f"{prefix}Movement",
             parent=styles["BodyText"],
             fontName="Courier-Bold",
-            fontSize=6.2,
-            leading=7.0,
+            fontSize=7.4,
+            leading=8.2,
             alignment=TA_LEFT,
+            textColor=_theme_color("accent"),
         ),
         "occurrence": ParagraphStyle(
             f"{prefix}Occurrence",
             parent=styles["BodyText"],
-            fontName="Courier",
-            fontSize=6.0,
-            leading=7.8,
+            fontName="Courier-Bold",
+            fontSize=7.0,
+            leading=8.4,
             alignment=TA_LEFT,
-            textColor=colors.HexColor("#24292f"),
+            textColor=_theme_color("text_primary"),
         ),
         "mono": ParagraphStyle(
             f"{prefix}Mono",
             parent=styles["Code"],
-            fontName="Courier",
-            fontSize=5.8,
-            leading=7.0,
+            fontName="Courier-Bold",
+            fontSize=6.8,
+            leading=7.8,
             alignment=TA_LEFT,
             spaceAfter=0,
             spaceBefore=0,
+            textColor=_theme_color("text_primary"),
         ),
         "note": ParagraphStyle(
             f"{prefix}Note",
             parent=styles["BodyText"],
-            fontName="Helvetica",
-            fontSize=6.5,
-            leading=7.2,
+            fontName="Helvetica-Bold",
+            fontSize=7.2,
+            leading=8.0,
             alignment=TA_LEFT,
+            textColor=_theme_color("text_muted"),
         ),
     }
 
 
-def _report_table_style(*, header_row_indexes: tuple[int, ...], extra_commands: tuple[tuple[Any, ...], ...] = ()) -> Any:
-    from reportlab.lib import colors
+def _report_table_style(
+    *,
+    header_row_indexes: tuple[int, ...],
+    extra_commands: tuple[tuple[Any, ...], ...] = (),
+    grid: bool = False,
+) -> Any:
     from reportlab.platypus import TableStyle
 
     commands: list[tuple[Any, ...]] = [
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d0d7de")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 2),
         ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.6),
+        ("BACKGROUND", (0, 0), (-1, -1), _theme_color("panel_bg")),
     ]
-    for row_index in header_row_indexes:
-        commands.extend(
-            [
-                ("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#f0f3f6")),
-                ("LINEABOVE", (0, row_index), (-1, row_index), 0.6, colors.HexColor("#8c959f")),
-                ("LINEBELOW", (0, row_index), (-1, row_index), 0.6, colors.HexColor("#8c959f")),
-            ]
-        )
+    if grid:
+        commands.append(("ROWBACKGROUNDS", (0, 0), (-1, -1), [_theme_color("panel_bg"), _theme_color("panel_bg_alt")]))
+        commands.append(("GRID", (0, 0), (-1, -1), 0.25, _theme_color("border")))
+        for header_row_index in header_row_indexes:
+            commands.extend(
+                [
+                    ("BACKGROUND", (0, header_row_index), (-1, header_row_index), _theme_color("header_bg")),
+                    ("LINEBELOW", (0, header_row_index), (-1, header_row_index), 0.4, _theme_color("border_strong")),
+                ]
+            )
     commands.extend(extra_commands)
     return TableStyle(commands)
 
@@ -1895,6 +2305,7 @@ def _draw_report_page_header(
     summary: CriticaRnSummary,
     records: list[CriticaRnRecord],
 ) -> None:
+    from reportlab.lib import colors
     from reportlab.lib.units import mm
 
     width, height = page_size
@@ -1904,13 +2315,22 @@ def _draw_report_page_header(
         f"Data Pedido: {_format_date(summary.data_pedido)}      "
         f"Pedidos: {summary.pedido_count}      "
         f"Valor: {_format_money(summary.total_pedido)}      "
+        f"Peso: {_format_decimal(summary.peso_total)}      "
         f"HL: {_format_decimal(summary.total_hectolitros)}"
     )
     canvas.saveState()
+    canvas.setFillColor(_theme_color("page_bg"))
+    canvas.rect(0, 0, width, height, fill=1, stroke=0)
+    canvas.setFillColor(_theme_color("panel_bg"))
+    canvas.rect(7 * mm, height - 30 * mm, width - 14 * mm, 23 * mm, fill=1, stroke=0)
+    canvas.setStrokeColor(_theme_color("border_strong"))
+    canvas.rect(7 * mm, height - 30 * mm, width - 14 * mm, 23 * mm, fill=0, stroke=1)
+    canvas.setFillColor(_theme_color("text_primary"))
     canvas.setFont("Helvetica", 7)
     canvas.drawString(9 * mm, height - 9 * mm, "PW02041R-l-Bot API")
     canvas.drawCentredString(width / 2, height - 9 * mm, title)
     canvas.drawRightString(width - 9 * mm, height - 9 * mm, generated_at.strftime("%d/%m/%Y"))
+    canvas.setFillColor(_theme_color("text_muted"))
     canvas.setFont("Helvetica", 6.5)
     canvas.drawString(9 * mm, height - 13 * mm, "Distribuidora de Bebidas Pau Brasil LTDA")
     canvas.drawRightString(width - 9 * mm, height - 13 * mm, f"Pag. {doc_obj.page}")
@@ -1918,6 +2338,7 @@ def _draw_report_page_header(
     canvas.drawRightString(width - 9 * mm, height - 17 * mm, generated_at.strftime("%H:%M"))
     canvas.drawString(9 * mm, height - 21 * mm, _truncate(f"Operacao(s): {operations_text} | Setor(es): {sectors_text}", 112))
     canvas.drawString(9 * mm, height - 25 * mm, _truncate(stats_line, 112))
+    canvas.setStrokeColor(_theme_color("accent"))
     canvas.line(9 * mm, height - 28 * mm, width - 9 * mm, height - 28 * mm)
     canvas.restoreState()
 
@@ -1976,6 +2397,13 @@ def _resolve_pdf_cache_scope(
     return None
 
 
+def _uses_legacy_gv_scope_only(allowed_gv_vdes: list[str] | tuple[str, ...] | None) -> bool:
+    if not allowed_gv_vdes:
+        return False
+    gv_keys, dc_keys, legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
+    return bool(legacy_gv_codes) and not gv_keys and not dc_keys
+
+
 def _summary_from_cache_payload(payload: dict[str, Any]) -> CriticaRnSummary:
     data_pedido_raw = str(payload.get("data_pedido") or "").strip()
     data_pedido = date.fromisoformat(data_pedido_raw) if data_pedido_raw else None
@@ -1993,6 +2421,7 @@ def _summary_from_cache_payload(payload: dict[str, Any]) -> CriticaRnSummary:
         total_pedido=_decimal(payload.get("total_pedido")),
         planilha_atualizada_em=str(payload.get("planilha_atualizada_em") or "-"),
         operations=tuple(str(value) for value in payload.get("operations") or () if str(value or "").strip()),
+        peso_total=_decimal(payload.get("peso_total")),
         total_hectolitros=_decimal(payload.get("total_hectolitros")),
         nab_tt_hectolitros=_decimal(payload.get("nab_tt_hectolitros")),
         high_end_hectolitros=_decimal(payload.get("high_end_hectolitros")),
@@ -2001,6 +2430,7 @@ def _summary_from_cache_payload(payload: dict[str, Any]) -> CriticaRnSummary:
         cerveja_rgb_hectolitros=_decimal(payload.get("cerveja_rgb_hectolitros")),
         cerveja_ow_hectolitros=_decimal(payload.get("cerveja_ow_hectolitros")),
         marketplace_tt_hectolitros=_decimal(payload.get("marketplace_tt_hectolitros")),
+        marketplace_tt_faturamento=_decimal(payload.get("marketplace_tt_faturamento")),
         duplicated_pedido_count=int(payload.get("duplicated_pedido_count") or 0),
         order_avg_alert_count=int(payload.get("order_avg_alert_count") or 0),
         inadimplente_count=int(payload.get("inadimplente_count") or 0),
@@ -2023,14 +2453,17 @@ def _movement_display(operation_name: str, movement_operation_name: str) -> str:
 
 
 def _compact_problem_hint(record: CriticaRnRecord) -> str:
-    if not record.problemas:
+    item_labels = _item_specific_problem_labels(record)
+    if not item_labels:
         return ""
-    first = str(record.problemas[0] or "").strip()
+    first = str(item_labels[0] or "").strip()
     lowered = _normalize_token(first)
     if "possivel pedido duplicado" in lowered:
         return "Ped. duplicado"
     if "produto repetido" in lowered:
         return "Prod. duplicado"
+    if "falta" in lowered:
+        return "Falta"
     if "ocorrencia do relatorio" in lowered or "ocorrencia complementar" in lowered:
         return "Ocorrencia"
     if "preco" in lowered:
@@ -2046,6 +2479,40 @@ def _compact_problem_hint(record: CriticaRnRecord) -> str:
     return first
 
 
+def _item_specific_problem_labels(record: CriticaRnRecord) -> tuple[str, ...]:
+    return _dedupe_labels([label for label in record.problemas if _is_item_specific_problem_label(label)])
+
+
+def _is_item_specific_problem_label(label: str) -> bool:
+    normalized = _normalize_token(label)
+    if not normalized:
+        return False
+    if (
+        ("ocorrencia do relatorio" in normalized or "ocorrencia complementar" in normalized)
+        and "falta" in normalized
+    ):
+        return True
+    general_prefixes = (
+        "ocorrencia do relatorio",
+        "ocorrencia complementar",
+        "possivel pedido duplicado",
+        "pedido acima da media",
+        "cliente com",
+        "pedido em buffer",
+        "pedido digitado fora",
+        "com este pedido",
+        "condicao de pagamento",
+    )
+    if normalized.startswith(general_prefixes):
+        return False
+    return (
+        normalized.startswith("produto ")
+        or "produto repetido" in normalized
+        or "preco" in normalized
+        or "dprecos" in normalized
+    )
+
+
 def _build_order_problem_labels(records: list[CriticaRnRecord]) -> tuple[str, ...]:
     labels: list[str] = []
     for record in records:
@@ -2053,11 +2520,20 @@ def _build_order_problem_labels(records: list[CriticaRnRecord]) -> tuple[str, ..
     return _dedupe_labels(labels)
 
 
+def _nowrap_markup(value: Any) -> str:
+    return _escape(str(value or "")).replace(" ", "&#160;")
+
+
+def _product_pdf_markup(record: CriticaRnRecord) -> str:
+    product_name = f"{record.produto_codigo} {record.produto_descricao or '-'}".strip()
+    return f'<font size="6.2">{_nowrap_markup(_truncate(product_name, 34))}</font>'
+
+
 def _alert_hint_markup(value: str) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    return f'<font color="#b42318"><b>{_escape(text)}</b></font>'
+    return f'<font color="{PDF_THEME["danger"]}"><b>{_escape(text)}</b></font>'
 
 
 def _has_positive_count(value: Any) -> bool:
@@ -2093,19 +2569,20 @@ def _occurrence_markup(labels: tuple[str, ...]) -> str:
     if not labels:
         return ""
     rendered = [_problem_label_markup(label) for label in labels]
-    return '<font color="#b42318"><b>Ocorrencias:</b></font><br/>' + "<br/>".join(rendered)
+    return f'<font color="{PDF_THEME["danger"]}"><b>Ocorrencias:</b></font><br/>' + "<br/>".join(rendered)
 
 
 def _problem_label_markup(label: str) -> str:
     text = str(label or "").strip()
     if not text:
         return ""
-    if ": " in text:
-        prefix, reason = text.split(": ", 1)
-        if prefix.startswith("Produto "):
-            return f'<b>{_escape(prefix)}:</b> <font color="#b42318"><b>{_escape(reason)}</b></font>'
-        return f'<font color="#b42318"><b>{_escape(prefix)}:</b></font> {_escape(reason)}'
-    return f'<font color="#b42318"><b>{_escape(text)}</b></font>'
+    return f'<font color="{PDF_THEME["danger"]}"><b>{_escape(text)}</b></font>'
+
+
+def _theme_color(name: str) -> Any:
+    from reportlab.lib import colors
+
+    return colors.HexColor(PDF_THEME[name])
 
 
 def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
@@ -2137,20 +2614,28 @@ def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
     quantidade = _decimal(row.get("quantidade"))
     fator_hecto = _decimal(row.get("produto_fator_hecto"))
     hectolitros = fator_hecto * quantidade
+    produto_peso_bruto = _decimal(row.get("produto_peso_bruto"))
+    peso_item = produto_peso_bruto * quantidade
     valor_estouro_limite = _decimal(row.get("valor_estouro_limite_text"))
     mapa_codigo = normalize_stored_scope_value(str(row.get("mapa_codigo") or ""))
     vendedor_codigo = normalize_stored_scope_value(
         str(row.get("vendedor_codigo") or row.get("setor") or row.get("codigo_gv") or "")
     )
     map_status = _map_status(mapa_codigo=mapa_codigo, vendedor_codigo=vendedor_codigo)
-    cond_pag_pedido = normalize_stored_scope_value(str(row.get("cond_pag_pedido") or ""))
-    client_cond_pag_atual = normalize_stored_scope_value(str(row.get("client_cond_pag_atual") or ""))
+    cond_pag_pedido_codigo = normalize_stored_scope_value(
+        str(row.get("cond_pag_pedido_codigo") or row.get("cond_pag_pedido") or "")
+    )
+    client_cond_pag_atual_codigo = normalize_stored_scope_value(
+        str(row.get("client_cond_pag_atual_codigo") or row.get("client_cond_pag_atual") or "")
+    )
+    cond_pag_pedido = str(row.get("cond_pag_pedido") or row.get("cond_pag_pedido_codigo") or "").strip()
+    client_cond_pag_atual = str(row.get("client_cond_pag_atual") or row.get("client_cond_pag_atual_codigo") or "").strip()
     allow_credit_and_condition_checks = _supports_credit_and_condition_checks(tipo_movimento)
     cond_divergente = bool(
         allow_credit_and_condition_checks
-        and cond_pag_pedido
-        and client_cond_pag_atual
-        and cond_pag_pedido != client_cond_pag_atual
+        and cond_pag_pedido_codigo
+        and client_cond_pag_atual_codigo
+        and cond_pag_pedido_codigo != client_cond_pag_atual_codigo
     )
     price_reference, price_reference_label = _resolve_price_reference(
         filial=filial,
@@ -2169,11 +2654,7 @@ def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
         actual_price=_decimal(row.get("preco_unitario")),
         reference_price=price_reference,
     )
-    order_above_average = bool(
-        avg_order_value_3m > 0
-        and total_pedido >= (avg_order_value_3m * ORDER_AVG_ALERT_RATIO)
-        and (total_pedido - avg_order_value_3m) >= ORDER_AVG_ALERT_MIN_DELTA
-    )
+    order_above_average = False
     computed_limit_exceeded = Decimal("0")
     if allow_credit_and_condition_checks and client_limite_credito > 0:
         computed_limit_exceeded = max((client_limite_usado + total_pedido) - client_limite_credito, Decimal("0"))
@@ -2196,7 +2677,7 @@ def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
         total_cliente=_decimal(row.get("total_cliente")),
         critica_text=str(row.get("critica_text") or "").strip(),
         produto_codigo=normalize_stored_scope_value(str(row.get("produto_codigo") or "")),
-        produto_descricao=str(row.get("produto_dprecos") or "").strip(),
+        produto_descricao=str(row.get("produto_descricao_pdf") or row.get("produto_dprecos") or "").strip(),
         quantidade=quantidade,
         unid_venda=str(row.get("unid_venda") or "").strip(),
         preco_unitario=_decimal(row.get("preco_unitario")),
@@ -2217,11 +2698,14 @@ def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
         problemas=(),
         planilha_atualizada_em=_format_updated_at(row.get("reference_date"), row.get("batch_imported_at")),
         operation_name=FILIAL_OPERATION_LABELS.get(filial, filial),
+        produto_peso_bruto=produto_peso_bruto,
+        peso_item=peso_item,
         movement_operation_name=str(row.get("movement_operation_name") or "").strip(),
         nome_produto_original=str(row.get("nome_produto_original") or "").strip(),
         mapa_codigo=mapa_codigo,
         vendedor_codigo=vendedor_codigo,
         area_codigo=normalize_stored_scope_value(str(row.get("area_codigo") or "")),
+        cond_pag_pedido_codigo=cond_pag_pedido_codigo,
         cond_pag_pedido=cond_pag_pedido,
         forma_pagto=str(row.get("forma_pgto") or "").strip(),
         prazo_dias=str(row.get("prazo_dias") or "").strip(),
@@ -2233,6 +2717,7 @@ def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
         ocorrencia_2=str(row.get("ocorrencia_2") or "").strip(),
         te_codigo=normalize_stored_scope_value(str(row.get("te_codigo") or "")),
         client_segment=str(row.get("client_segment") or "").strip(),
+        client_cond_pag_atual_codigo=client_cond_pag_atual_codigo,
         client_cond_pag_atual=client_cond_pag_atual,
         client_media_faturamento_3m=_decimal(row.get("client_media_faturamento_3m")),
         client_limite_credito=client_limite_credito,
@@ -2360,6 +2845,81 @@ def _annotate_duplicate_client_orders(
     return annotated
 
 
+def _annotate_duplicate_products_by_price(records: list[CriticaRnRecord]) -> list[CriticaRnRecord]:
+    if not records:
+        return records
+
+    grouped: dict[tuple[str, str, str, str], list[CriticaRnRecord]] = {}
+    for record in records:
+        if not record.filial or not record.pedido:
+            continue
+        product_key = normalize_stored_scope_value(record.produto_codigo) or _normalize_token(
+            record.produto_descricao or record.nome_produto_original
+        )
+        if not product_key:
+            continue
+        grouped.setdefault((record.filial, record.pedido, product_key, _normalize_token(record.unid_venda)), []).append(record)
+
+    duplicate_keys: set[tuple[str, str, str, str]] = set()
+    for key, items in grouped.items():
+        if len(items) < 2:
+            continue
+        prices = [item.preco_unitario for item in items if item.preco_unitario is not None]
+        same_price = len(set(_decimal_signature(price) for price in prices)) < len(prices)
+        extreme_delta = False
+        positive_prices = [price for price in prices if price > 0]
+        if len(positive_prices) >= 2:
+            min_price = min(positive_prices)
+            max_price = max(positive_prices)
+            extreme_delta = min_price > 0 and ((max_price - min_price) / min_price) >= NON_SALE_PRICE_TOLERANCE
+        if same_price or extreme_delta:
+            duplicate_keys.add(key)
+
+    if not duplicate_keys:
+        return [replace(record, pedido_produto_duplicado=False) for record in records]
+
+    annotated: list[CriticaRnRecord] = []
+    for record in records:
+        product_key = normalize_stored_scope_value(record.produto_codigo) or _normalize_token(
+            record.produto_descricao or record.nome_produto_original
+        )
+        key = (record.filial, record.pedido, product_key, _normalize_token(record.unid_venda))
+        is_duplicate = key in duplicate_keys
+        updated = replace(record, pedido_produto_duplicado=is_duplicate)
+        merged_labels = _dedupe_labels(list(updated.problemas) + list(_build_problem_labels(updated)))
+        annotated.append(replace(updated, problemas=merged_labels))
+    return annotated
+
+
+def _annotate_client_total_above_average(records: list[CriticaRnRecord]) -> list[CriticaRnRecord]:
+    if not records:
+        return records
+
+    order_totals_by_client: dict[tuple[str, str], dict[tuple[str, str], Decimal]] = {}
+    for record in records:
+        if not record.filial or not record.cod_pdv or not record.pedido:
+            continue
+        client_key = (record.filial, record.cod_pdv)
+        pedido_key = (record.filial, record.pedido)
+        order_totals_by_client.setdefault(client_key, {})[pedido_key] = record.total_pedido
+
+    client_total_by_key = {
+        client_key: sum(order_totals.values(), Decimal("0"))
+        for client_key, order_totals in order_totals_by_client.items()
+    }
+
+    annotated: list[CriticaRnRecord] = []
+    for record in records:
+        client_key = (record.filial, record.cod_pdv)
+        client_total = client_total_by_key.get(client_key, record.total_cliente)
+        order_above_average = bool(
+            record.avg_order_value_3m > 0 and client_total >= (record.avg_order_value_3m * ORDER_AVG_ALERT_RATIO)
+        )
+        updated = replace(record, total_cliente=client_total, order_above_average=order_above_average, problemas=())
+        annotated.append(replace(updated, problemas=_build_problem_labels(updated)))
+    return annotated
+
+
 def _order_product_composition_signature(records: list[CriticaRnRecord]) -> tuple[tuple[str, str, str], ...]:
     totals: dict[tuple[str, str], Decimal] = {}
     for record in records:
@@ -2427,11 +2987,7 @@ def _summarize_records(records: list[CriticaRnRecord]) -> CriticaRnSummary:
         lambda record: not record.produto_encontrado_dprecos and not _is_b2b_price_origin(record),
     )
     order_avg_alert_keys = _order_keys_with(records, lambda record: record.order_above_average)
-    inadimplente_order_keys = _order_keys_with(records, lambda record: record.inad_total_vencido > 0)
-    multipack_violation_order_keys = _order_keys_with(
-        records,
-        lambda record: record.multipack_item and not record.multipack_allowed,
-    )
+    inadimplente_order_keys = _order_keys_with(records, _record_has_overdue_inad)
     map_buffer_order_keys = _order_keys_with(records, lambda record: record.map_status == "buffer")
     map_outside_order_keys = _order_keys_with(records, lambda record: record.map_status == "fora")
     cond_divergence_order_keys = _order_keys_with(records, lambda record: record.cond_divergente)
@@ -2460,6 +3016,7 @@ def _summarize_records(records: list[CriticaRnRecord]) -> CriticaRnSummary:
             default="-",
         ),
         operations=operations,
+        peso_total=sum((record.peso_item for record in records), Decimal("0")),
         total_hectolitros=total_hectolitros,
         nab_tt_hectolitros=sum((record.hectolitros for record in records if record.cesta_nab_tt), Decimal("0")),
         high_end_hectolitros=sum((record.hectolitros for record in records if record.cesta_high_end), Decimal("0")),
@@ -2467,15 +3024,37 @@ def _summarize_records(records: list[CriticaRnRecord]) -> CriticaRnSummary:
         refri_zero_hectolitros=sum((record.hectolitros for record in records if record.cesta_refri_zero), Decimal("0")),
         cerveja_rgb_hectolitros=sum((record.hectolitros for record in records if record.cesta_cerveja_rgb), Decimal("0")),
         cerveja_ow_hectolitros=sum((record.hectolitros for record in records if record.cesta_cerveja_ow), Decimal("0")),
-        marketplace_tt_hectolitros=sum((record.hectolitros for record in records if record.cesta_marketplace_tt), Decimal("0")),
+        marketplace_tt_faturamento=sum((_record_item_revenue(record) for record in records if record.cesta_marketplace_tt), Decimal("0")),
         order_avg_alert_count=len(order_avg_alert_keys),
         inadimplente_count=len(inadimplente_order_keys),
-        multipack_violation_count=len(multipack_violation_order_keys),
+        multipack_violation_count=0,
         map_buffer_count=len(map_buffer_order_keys),
         map_outside_count=len(map_outside_order_keys),
         cond_divergence_count=len(cond_divergence_order_keys),
         limit_alert_count=len(limit_alert_order_keys),
     )
+
+
+def _record_item_revenue(record: CriticaRnRecord) -> Decimal:
+    return (record.quantidade or Decimal("0")) * (record.preco_unitario or Decimal("0"))
+
+
+def _order_weight(records: list[CriticaRnRecord]) -> Decimal:
+    return sum((record.peso_item for record in records), Decimal("0"))
+
+
+def _order_client_pdf_lines(record: CriticaRnRecord, order_records: list[CriticaRnRecord]) -> list[str]:
+    order_weight = _order_weight(order_records)
+    return [
+        _escape(_truncate(record.nome_pdv or "-", 28)),
+        _nowrap_markup(f"Valor do Pedido(R$):{_format_money_raw(record.total_pedido)}"),
+        _nowrap_markup(f"Peso do Pedido(Kg):{_format_decimal(order_weight)}"),
+        _nowrap_markup(f"Cond.Pag.:{_truncate(record.cond_pag_pedido or '-', 28)}"),
+    ]
+
+
+def _order_client_pdf_markup(record: CriticaRnRecord, order_records: list[CriticaRnRecord]) -> str:
+    return "<br/>".join(_order_client_pdf_lines(record, order_records))
 
 
 def _order_keys_with(records: list[CriticaRnRecord], predicate: Any) -> set[tuple[str, str]]:
@@ -2513,12 +3092,10 @@ def _build_problem_labels(record: CriticaRnRecord) -> tuple[str, ...]:
         labels.append("Produto sem referencia na DPrecos")
     if record.order_above_average:
         labels.append(
-            f"Pedido acima da media do cliente: pedido {_format_money(record.total_pedido)}; media {_format_money(record.avg_order_value_3m)}"
+            f"Cliente acima da media de compra: total em pedidos {_format_money(record.total_cliente)}; media {_format_money(record.avg_order_value_3m)}"
         )
-    if record.inad_total_vencido > 0:
+    if _record_has_overdue_inad(record):
         labels.append(f"Cliente com {_format_money(record.inad_total_vencido)} vencido em aberto")
-    if record.multipack_item and not record.multipack_allowed:
-        labels.append(f"Cliente do segmento {record.client_segment or '-'} comprando multipack")
     if record.map_status == "buffer":
         labels.append("Pedido em buffer (mapa 1)")
     elif record.map_status == "fora":
@@ -2536,6 +3113,10 @@ def _build_problem_labels(record: CriticaRnRecord) -> tuple[str, ...]:
     return _dedupe_labels(labels)
 
 
+def _record_has_overdue_inad(record: CriticaRnRecord) -> bool:
+    return record.inad_total_vencido > 0 and int(record.inad_titulos_vencidos or 0) > 0
+
+
 def _has_price_alert(record: CriticaRnRecord) -> bool:
     if record.price_reference is None or record.price_reference <= 0:
         return False
@@ -2545,16 +3126,51 @@ def _has_price_alert(record: CriticaRnRecord) -> bool:
 
 
 def _should_report_price_problem(record: CriticaRnRecord) -> bool:
-    if _is_b2b_price_origin(record):
-        return record.price_delta_pct is not None and abs(record.price_delta_pct) >= B2B_PRICE_TOLERANCE
     if record.price_delta_pct is None:
         return True
+    if not _is_sale_order(record):
+        return abs(record.price_delta_pct) >= NON_SALE_PRICE_TOLERANCE
+    if _is_b2b_price_origin(record):
+        return abs(record.price_delta_pct) >= B2B_PRICE_TOLERANCE
     tolerance = PRICE_TOLERANCE_OP1 if record.filial == "1" else PRICE_TOLERANCE_DEFAULT
     return abs(record.price_delta_pct) >= tolerance
 
 
 def _is_b2b_price_origin(record: CriticaRnRecord) -> bool:
     return str(record.origem_pedido or "").strip().upper() in B2B_PRICE_ORIGINS
+
+
+def _movement_search_text(record: CriticaRnRecord) -> str:
+    return _normalize_token(
+        " ".join(
+            [
+                str(record.tipo_movimento or ""),
+                str(record.operation_name or ""),
+                str(record.movement_operation_name or ""),
+                str(record.status_pedido or ""),
+            ]
+        )
+    )
+
+
+def _is_bonus_order(record: CriticaRnRecord) -> bool:
+    return "bonif" in _movement_search_text(record)
+
+
+def _is_sale_order(record: CriticaRnRecord) -> bool:
+    tipo_movimento = normalize_stored_scope_value(str(record.tipo_movimento or ""))
+    if tipo_movimento == "51":
+        return True
+    movement_text = _movement_search_text(record)
+    return "venda" in movement_text and not _is_bonus_order(record)
+
+
+def _order_movement_group_sort_key(record: CriticaRnRecord) -> int:
+    if _is_bonus_order(record):
+        return 2
+    if _is_sale_order(record):
+        return 0
+    return 1
 
 
 def _price_alert_label(record: CriticaRnRecord) -> str:
@@ -2753,11 +3369,17 @@ def _build_order_records(records: list[CriticaRnRecord]) -> list[CriticaRnOrderR
                 "nome_pdv": record.nome_pdv,
                 "status_pedido": record.status_pedido,
                 "total_pedido": record.total_pedido,
+                "peso_pedido": Decimal("0"),
+                "cond_pagamentos": [],
                 "problem_labels": [],
                 "problem_item_count": 0,
                 "item_count": 0,
             },
         )
+        entry["peso_pedido"] += record.peso_item
+        cond_pag_pedido = str(record.cond_pag_pedido or "").strip()
+        if cond_pag_pedido and cond_pag_pedido not in entry["cond_pagamentos"]:
+            entry["cond_pagamentos"].append(cond_pag_pedido)
         entry["item_count"] += 1
         if record.possui_problema:
             entry["problem_item_count"] += 1
@@ -2776,6 +3398,8 @@ def _build_order_records(records: list[CriticaRnRecord]) -> list[CriticaRnOrderR
                 nome_pdv=entry["nome_pdv"],
                 status_pedido=entry["status_pedido"],
                 total_pedido=entry["total_pedido"],
+                peso_pedido=entry["peso_pedido"],
+                cond_pag_pedido=" | ".join(entry["cond_pagamentos"]),
                 problem_labels=_dedupe_labels(entry["problem_labels"]),
                 problem_item_count=int(entry["problem_item_count"]),
                 item_count=int(entry["item_count"]),
@@ -2784,13 +3408,31 @@ def _build_order_records(records: list[CriticaRnRecord]) -> list[CriticaRnOrderR
     result.sort(
         key=lambda item: (
             0 if item.problem_labels else 1,
+            _order_record_movement_group_sort_key(item),
             int(item.filial or "0") if str(item.filial or "").isdigit() else 999,
             item.operation_name,
-            item.pedido,
             item.cod_pdv,
+            item.pedido,
         )
     )
     return result
+
+
+def _order_record_movement_group_sort_key(order: CriticaRnOrderRecord) -> int:
+    search_text = _normalize_token(
+        " ".join(
+            [
+                str(order.operation_name or ""),
+                str(order.movement_operation_name or ""),
+                str(order.status_pedido or ""),
+            ]
+        )
+    )
+    if "bonif" in search_text:
+        return 2
+    if "venda" in search_text:
+        return 0
+    return 1
 
 
 def _where_clause(filters: list[sql.Composed]) -> sql.Composed:
@@ -2839,12 +3481,14 @@ def _dprodutos_reference_cte(schema: str, conn: Any) -> sql.Composed:
             dprodutos_ref AS (
                 SELECT
                     NULL::text AS codigo,
-                    NULL::numeric AS fator_hecto
+                    NULL::numeric AS fator_hecto,
+                    NULL::numeric AS peso_bruto
                 WHERE FALSE
             )
             """
-        )
+    )
     has_fator_hecto_column = _relation_column_exists(conn, schema, "dprodutos_latest", "fator_hecto")
+    has_peso_bruto_column = _relation_column_exists(conn, schema, "dprodutos_latest", "peso_bruto")
     has_payload_column = _relation_column_exists(conn, schema, "dprodutos_latest", "payload")
     if has_payload_column:
         payload_fator_sql = _localized_numeric_sql(
@@ -2860,25 +3504,52 @@ def _dprodutos_reference_cte(schema: str, conn: Any) -> sql.Composed:
                 """
             )
         )
+        payload_peso_sql = _localized_numeric_sql(
+            sql.SQL(
+                """
+                COALESCE(
+                    payload ->> 'Peso Bruto',
+                    payload ->> 'Peso bruto',
+                    payload ->> 'Peso Bruto KG',
+                    payload ->> 'Peso Bruto Kg',
+                    payload ->> 'Peso KG',
+                    payload ->> 'Peso',
+                    ''
+                )
+                """
+            )
+        )
     else:
         payload_fator_sql = sql.SQL("0::numeric")
+        payload_peso_sql = sql.SQL("0::numeric")
     if has_fator_hecto_column:
         fator_sql = sql.SQL("COALESCE(NULLIF(COALESCE(fator_hecto, 0), 0), {payload_fator}, 0)").format(
             payload_fator=payload_fator_sql
         )
     else:
         fator_sql = payload_fator_sql
+    if has_peso_bruto_column:
+        peso_sql = sql.SQL("COALESCE(NULLIF(COALESCE(peso_bruto, 0), 0), {payload_peso}, 0)").format(
+            payload_peso=payload_peso_sql
+        )
+    else:
+        peso_sql = payload_peso_sql
     return sql.SQL(
         """
         dprodutos_ref AS (
             SELECT
                 codigo,
-                MAX({fator_sql}) AS fator_hecto
+                MAX({fator_sql}) AS fator_hecto,
+                MAX({peso_sql}) AS peso_bruto
             FROM {}.dprodutos_latest
             GROUP BY codigo
         )
         """
-    ).format(sql.Identifier(schema), fator_sql=fator_sql)
+    ).format(
+        sql.Identifier(schema),
+        fator_sql=fator_sql,
+        peso_sql=peso_sql,
+    )
 
 
 def _produto_cesta_metrics_cte(schema: str, conn: Any) -> sql.Composed:
@@ -2944,6 +3615,32 @@ def _doperacoes_reference_cte(schema: str, conn: Any) -> sql.Composed:
             ) src
             WHERE nome_operacao <> ''
             ORDER BY normalized_tipo_movimento, LENGTH(nome_operacao), nome_operacao
+        )
+        """
+    ).format(sql.Identifier(schema))
+
+
+def _dcondicoes_reference_cte(schema: str, conn: Any) -> sql.Composed:
+    if not _relation_exists(conn, schema, "dcondicoes_latest"):
+        return sql.SQL(
+            """
+            dcondicoes_ref AS (
+                SELECT
+                    NULL::text AS filial_condicao_key,
+                    NULL::text AS descricao
+                WHERE FALSE
+            )
+            """
+        )
+    return sql.SQL(
+        """
+        dcondicoes_ref AS (
+            SELECT DISTINCT ON (filial_condicao_key)
+                filial_condicao_key,
+                descricao
+            FROM {}.dcondicoes_latest
+            WHERE COALESCE(filial_condicao_key, '') <> ''
+            ORDER BY filial_condicao_key, LENGTH(COALESCE(descricao, '')), descricao
         )
         """
     ).format(sql.Identifier(schema))
@@ -3043,22 +3740,22 @@ def _inad_stats_cte(schema: str, conn: Any) -> sql.Composed:
             """
         )
     valor_sql = _localized_numeric_sql(sql.SQL("valor_pendente"))
-    dias_sql = _localized_integer_sql(sql.SQL("dias"))
+    days_to_due_sql = _inad_days_to_due_sql(sql.SQL("i.dias"), sql.SQL("i.data_vencimento"))
     return sql.SQL(
         """
         inad_stats_ref AS (
             SELECT
-                unb AS filial,
-                cliente AS cod_pdv,
+                i.unb AS filial,
+                i.cliente AS cod_pdv,
                 COALESCE(SUM({valor_sql}), 0) AS inad_total_aberto,
-                COALESCE(SUM(CASE WHEN {dias_sql} > 0 THEN {valor_sql} ELSE 0 END), 0) AS inad_total_vencido,
+                COALESCE(SUM(CASE WHEN {days_to_due_sql} < 0 THEN {valor_sql} ELSE 0 END), 0) AS inad_total_vencido,
                 COUNT(*)::int AS inad_titulos_abertos,
-                COUNT(*) FILTER (WHERE {dias_sql} > 0)::int AS inad_titulos_vencidos
-            FROM {}.inadimplencia_latest
-            GROUP BY unb, cliente
+                COUNT(*) FILTER (WHERE {days_to_due_sql} < 0)::int AS inad_titulos_vencidos
+            FROM {}.inadimplencia_latest i
+            GROUP BY i.unb, i.cliente
         )
         """
-    ).format(sql.Identifier(schema), valor_sql=valor_sql, dias_sql=dias_sql)
+    ).format(sql.Identifier(schema), valor_sql=valor_sql, days_to_due_sql=days_to_due_sql)
 
 
 def _localized_numeric_sql(expression: sql.Composed) -> sql.Composed:
@@ -3067,10 +3764,34 @@ def _localized_numeric_sql(expression: sql.Composed) -> sql.Composed:
     ).format(expr=expression)
 
 
+def _normalized_code_sql(expression: sql.Composed) -> sql.Composed:
+    return sql.SQL(
+        "COALESCE(NULLIF(LTRIM(REGEXP_REPLACE(BTRIM(COALESCE({expr}::text, '')), '[^0-9]', '', 'g'), '0'), ''), '0')"
+    ).format(expr=expression)
+
+
 def _localized_integer_sql(expression: sql.Composed) -> sql.Composed:
     return sql.SQL(
         "COALESCE(NULLIF(REGEXP_REPLACE(BTRIM(COALESCE({expr}::text, '')), '[^0-9-]', '', 'g'), ''), '0')::int"
     ).format(expr=expression)
+
+
+def _inad_days_to_due_sql(days_expression: sql.Composed, due_date_expression: sql.Composed) -> sql.Composed:
+    imported_days_sql = sql.SQL(
+        "CASE "
+        "WHEN REGEXP_REPLACE(BTRIM(COALESCE({days_expr}::text, '')), '[^0-9-]', '', 'g') = '' THEN NULL "
+        "ELSE REGEXP_REPLACE(BTRIM(COALESCE({days_expr}::text, '')), '[^0-9-]', '', 'g')::int "
+        "END"
+    ).format(days_expr=days_expression)
+    return sql.SQL(
+        "CASE "
+        "WHEN BTRIM(COALESCE({due_expr}::text, '')) ~ '^[0-9]{{2}}/[0-9]{{2}}/[0-9]{{4}}$' "
+        "THEN (TO_DATE(BTRIM({due_expr}::text), 'DD/MM/YYYY') - CURRENT_DATE)::int "
+        "WHEN BTRIM(COALESCE({due_expr}::text, '')) ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$' "
+        "THEN (TO_DATE(BTRIM({due_expr}::text), 'YYYY-MM-DD') - CURRENT_DATE)::int "
+        "ELSE {imported_days_sql} "
+        "END"
+    ).format(due_expr=due_date_expression, imported_days_sql=imported_days_sql)
 
 
 def _relation_exists(conn: Any, schema: str, relation: str) -> bool:

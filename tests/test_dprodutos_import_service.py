@@ -20,8 +20,8 @@ class DProdutosImportServiceTests(unittest.TestCase):
             path.write_text(
                 "\n".join(
                     [
-                        "Codigo;Descricao;PGV;Empresa;Tipo Marca;Linha Marca;Embalagem;Marca;Grupo;Fator Hecto;Codigo Unitario;Descricao unitaria;Subtipo",
-                        "0002349; GCA PT2 CX6 ;000123;GE;001 - CERVEJA;009;CX6;00038;037;00,050000;00002349; GCA PT2 CX6 ;012",
+                        "Codigo;Descricao;PGV;Empresa;Tipo Marca;Linha Marca;Embalagem;Marca;Grupo;Fator Hecto;Peso Bruto;Codigo Unitario;Descricao unitaria;Subtipo",
+                        "0002349; GCA PT2 CX6 ;000123;GE;001 - CERVEJA;009;CX6;00038;037;00,050000;12,345;00002349; GCA PT2 CX6 ;012",
                     ]
                 ),
                 encoding="utf-8",
@@ -35,6 +35,7 @@ class DProdutosImportServiceTests(unittest.TestCase):
         self.assertEqual(rows[0].pgv, "000123")
         self.assertEqual(rows[0].tipo_marca, "001 - CERVEJA")
         self.assertEqual(rows[0].fator_hecto, Decimal("0.050000"))
+        self.assertEqual(rows[0].peso_bruto, Decimal("12.345"))
         self.assertEqual(rows[0].codigo_unitario, "2349")
         self.assertEqual(rows[0].payload["Tipo Marca"], "001 - CERVEJA")
 

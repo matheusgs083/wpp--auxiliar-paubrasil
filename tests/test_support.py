@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -335,6 +335,8 @@ def make_critica_record(**overrides: Any) -> CriticaRnRecord:
         "ttc_max": None,
         "caixa_min": Decimal("40.00"),
         "caixa_max": Decimal("42.00"),
+        "cond_pag_pedido": "PROMO 21 DIAS",
+        "peso_item": Decimal("25.00"),
         "problemas": ("Critica RN: Fora de rota", "Preco caixa fora da DPrecos"),
         "planilha_atualizada_em": "2026-06-03",
         "operation_name": "Patos",
@@ -363,6 +365,8 @@ class StubCriticaRnService(StubStatusService):
         self.registration_calls: list[dict[str, Any]] = []
         self.report_calls: list[dict[str, Any]] = []
         self.pdf_report_calls: list[dict[str, Any]] = []
+        self.gv_summary_pdf_calls: list[dict[str, Any]] = []
+        self.registration_pdf_calls: list[dict[str, Any]] = []
         self.latest_calls: list[dict[str, Any]] = []
 
     def get_summary(self, **kwargs: Any) -> CriticaRnSummary:
@@ -394,6 +398,32 @@ class StubCriticaRnService(StubStatusService):
             records=list(self.records),
             pdf_bytes=b"%PDF-critica-detalhe",
             summary_pdf_bytes=b"%PDF-critica-resumo",
+        )
+
+    def get_pdf_report_by_registration(self, **kwargs: Any) -> Any:
+        self.registration_pdf_calls.append(kwargs)
+        filtered_records = self.search_by_registration(**kwargs)
+        summary = self.summary
+        if filtered_records:
+            summary = replace(
+                self.summary,
+                row_count=len(filtered_records),
+                pedido_count=len({(record.filial, record.pedido) for record in filtered_records}),
+            )
+        return SimpleNamespace(
+            summary=summary,
+            records=filtered_records,
+            pdf_bytes=b"%PDF-critica-nb",
+            summary_pdf_bytes=b"%PDF-critica-resumo",
+        )
+
+    def get_gv_summary_pdf(self, **kwargs: Any) -> Any:
+        self.gv_summary_pdf_calls.append(kwargs)
+        return SimpleNamespace(
+            summary=self.summary,
+            records=list(self.records),
+            pdf_bytes=b"%PDF-critica-gv-resumo",
+            summary_pdf_bytes=b"",
         )
 
     def latest_date(self, **kwargs: Any) -> date | None:

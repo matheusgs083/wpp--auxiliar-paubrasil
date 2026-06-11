@@ -29,7 +29,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from bot_api.config import get_settings
-from bot_api.commercial_scope import normalize_numeric_code, split_scope_pair
+from bot_api.commercial_scope import normalize_numeric_code, normalize_stored_scope_value, split_scope_pair
 from bot_api.db import close_all_connection_pools
 from bot_api.integrations.evolution_client import EvolutionClient, EvolutionConfig, extract_incoming_message
 from bot_api.integrations.meta_cloud_client import MetaCloudClient, MetaCloudConfig
@@ -49,6 +49,7 @@ from bot_api.services.critica_rn_import_service import CriticaRnImportService
 from bot_api.services.critica_rn_query_service import CriticaRnQueryService
 from bot_api.services.dclientes_import_service import DClientesImportService
 from bot_api.services.dclientes_query_service import DClientesQueryService
+from bot_api.services.dcondicoes_import_service import DCondicoesImportService
 from bot_api.services.doperacoes_import_service import DOperacoesImportService
 from bot_api.services.dprecos_import_service import DPrecosImportService
 from bot_api.services.dprodutos_import_service import DProdutosImportService
@@ -123,6 +124,11 @@ dprecos_import_service = DPrecosImportService(
     connect_timeout_seconds=settings.access_database_timeout_seconds,
 )
 doperacoes_import_service = DOperacoesImportService(
+    database_url=settings.reports_database_url,
+    schema=settings.reports_db_schema,
+    connect_timeout_seconds=settings.access_database_timeout_seconds,
+)
+dcondicoes_import_service = DCondicoesImportService(
     database_url=settings.reports_database_url,
     schema=settings.reports_db_schema,
     connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -316,6 +322,17 @@ ADMIN_IMPORT_DATASETS: dict[str, dict[str, Any]] = {
         "summarize_method": "summarize_source",
         "import_method": "import_source",
     },
+    "dcondicoes": {
+        "label": "dCondicoes",
+        "default_path": PROJECT_ROOT / "data" / "dCondicoes" / "dCondicoes.csv",
+        "allow_default_source": False,
+        "service": dcondicoes_import_service,
+        "upload_mode": "single",
+        "accept_extensions": ".csv",
+        "validate_method": "validate_source",
+        "summarize_method": "summarize_source",
+        "import_method": "import_source",
+    },
     "dprodutos": {
         "label": "dProdutos",
         "default_path": PROJECT_ROOT / "data" / "dProdutos" / "01.11.CSV",
@@ -425,7 +442,7 @@ ADMIN_IMPORT_DATASETS: dict[str, dict[str, Any]] = {
         "import_method": "import_source",
     },
 }
-ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS = {"critica_rn", "dclientes", "doperacoes", "dprecos", "dsetores"}
+ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS = {"critica_rn", "dclientes", "doperacoes", "dprecos", "dsetores", "dcondicoes"}
 ADMIN_IMPORT_MAX_WORKERS = 3
 ADMIN_IMPORT_HISTORY_RETENTION_DAYS = 3
 admin_import_executor = ThreadPoolExecutor(max_workers=ADMIN_IMPORT_MAX_WORKERS, thread_name_prefix="admin-import")
@@ -491,6 +508,15 @@ ADMIN_BROADCAST_ACTIONS: dict[str, dict[str, Any]] = {
         "shortcut": "giro zero da base",
         "area": "cliente",
         "supports_day": False,
+    },
+    "critica_setor_pdf": {
+        "label": "Critica PDF por setor",
+        "description": "Envia a critica em PDF do setor do vendedor dentro da operacao escolhida.",
+        "shortcut": "critica pdf",
+        "area": "cliente",
+        "supports_day": False,
+        "target_audiences": ["vendedor"],
+        "per_recipient_shortcut": "critica_sector_pdf",
     },
 }
 ADMIN_BROADCAST_DAY_OPTIONS: dict[str, dict[str, str]] = {
@@ -676,6 +702,9 @@ def _admin_panel_context_from_token(token: str | None) -> dict[str, Any] | None:
     finance_filiais = _finance_panel_token_filiais(provided_token)
     if finance_filiais:
         return {"mode": "financeiro", "is_admin": False, "filiais": finance_filiais}
+    critica_filiais = _critica_panel_token_filiais(provided_token)
+    if critica_filiais:
+        return {"mode": "critica", "is_admin": False, "filiais": critica_filiais}
     return None
 
 
@@ -722,6 +751,8 @@ def _deserialize_admin_panel_session(raw_cookie: str | None) -> dict[str, Any] |
         return {"mode": "admin", "is_admin": True, "filiais": ()}
     if mode == "financeiro" and filiais:
         return {"mode": "financeiro", "is_admin": False, "filiais": filiais}
+    if mode == "critica" and filiais:
+        return {"mode": "critica", "is_admin": False, "filiais": filiais}
     return None
 
 
@@ -957,6 +988,70 @@ def _finance_panel_token_filiais(x_admin_token: str | None) -> tuple[str, ...]:
     return ()
 
 
+def _critica_panel_token_filiais(x_admin_token: str | None) -> tuple[str, ...]:
+    provided_token = str(x_admin_token or "").strip()
+    if not provided_token:
+        return ()
+    for expected_token, filiais in settings.critica_panel_tokens:
+        if expected_token and secrets.compare_digest(provided_token, expected_token):
+            return tuple(str(filial).strip() for filial in filiais if str(filial).strip())
+    return ()
+
+
+def _panel_context_mode(context: dict[str, Any] | None) -> str:
+    return str((context or {}).get("mode") or "").strip().lower()
+
+
+def _panel_context_has_all_filiais(context: dict[str, Any] | None) -> bool:
+    return any(str(filial).strip() == "*" for filial in (context or {}).get("filiais", ()))
+
+
+def _panel_context_is_critica_only(context: dict[str, Any] | None) -> bool:
+    return bool(context) and not bool(context.get("is_admin")) and _panel_context_mode(context) == "critica"
+
+
+def _panel_context_can_access_feature(context: dict[str, Any] | None, feature: str) -> bool:
+    if not context:
+        return False
+    if bool(context.get("is_admin")):
+        return True
+    mode = _panel_context_mode(context)
+    clean_feature = str(feature or "").strip().lower()
+    if mode == "critica":
+        return clean_feature in {"critica", "critica_import", "import_status"}
+    if mode == "financeiro":
+        return clean_feature not in {"admin_access", "usage"}
+    return False
+
+
+def _require_admin_panel_feature(context: dict[str, Any] | None, feature: str) -> None:
+    if not _panel_context_can_access_feature(context, feature):
+        raise HTTPException(status_code=403, detail="Acesso nao permitido para este perfil.")
+
+
+def _panel_context_allowed_import_datasets(context: dict[str, Any] | None) -> set[str] | None:
+    if not context or bool(context.get("is_admin")) or _panel_context_mode(context) == "financeiro":
+        return None
+    if _panel_context_mode(context) == "critica":
+        allowed_filiais = {
+            str(filial).strip()
+            for filial in context.get("filiais", ())
+            if str(filial).strip() and str(filial).strip() != "*"
+        }
+        if _panel_context_has_all_filiais(context) or not allowed_filiais:
+            return {dataset for dataset in ADMIN_IMPORT_DATASETS if dataset.startswith("critica_op_")}
+        return {f"critica_op_{filial}" for filial in allowed_filiais}
+    return set()
+
+
+def _require_admin_panel_import_dataset(context: dict[str, Any] | None, dataset: str) -> str:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    allowed_datasets = _panel_context_allowed_import_datasets(context)
+    if allowed_datasets is not None and normalized_dataset not in allowed_datasets:
+        raise HTTPException(status_code=403, detail="Este token so pode importar relatorios de critica liberados.")
+    return normalized_dataset
+
+
 def _require_admin_panel_auth(
     request: Request,
     authorization: str | None,
@@ -970,7 +1065,7 @@ def _require_admin_panel_auth(
             channel="api",
             event_type="admin_panel_auth",
             decision="allowed",
-            reason="admin_token" if header_context.get("is_admin") else "finance_token",
+            reason="admin_token" if header_context.get("is_admin") else f"{_panel_context_mode(header_context)}_token",
         )
         return header_context
 
@@ -2210,6 +2305,79 @@ def _list_admin_import_history(limit: int = 20) -> dict[str, Any]:
     }
 
 
+def _panel_context_visible_import_datasets(context: dict[str, Any] | None) -> set[str] | None:
+    return _panel_context_allowed_import_datasets(context)
+
+
+def _admin_import_payload_dataset(payload: dict[str, Any]) -> str:
+    return str(payload.get("dataset") or payload.get("dataset_name") or "").strip()
+
+
+def _filter_admin_import_status_for_context(
+    payload: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    visible_datasets = _panel_context_visible_import_datasets(context)
+    if visible_datasets is None:
+        return payload
+    filtered = dict(payload)
+    filtered_items = [
+        item
+        for item in payload.get("items", [])
+        if isinstance(item, dict) and _admin_import_payload_dataset(item) in visible_datasets
+    ]
+    filtered_current_jobs = [
+        job
+        for job in payload.get("current_jobs", [])
+        if isinstance(job, dict) and _admin_import_payload_dataset(job) in visible_datasets
+    ]
+    filtered_jobs = [
+        job
+        for job in payload.get("jobs", [])
+        if isinstance(job, dict) and _admin_import_payload_dataset(job) in visible_datasets
+    ]
+    first_job = filtered_current_jobs[0] if filtered_current_jobs else {}
+    last_job = payload.get("last_job") if isinstance(payload.get("last_job"), dict) else {}
+    if _admin_import_payload_dataset(last_job) not in visible_datasets:
+        last_job = {}
+    filtered.update(
+        {
+            "running": bool(filtered_current_jobs),
+            "current_job_id": str(first_job.get("job_id") or ""),
+            "current_dataset": str(first_job.get("dataset") or ""),
+            "started_at": str(first_job.get("started_at") or ""),
+            "reference_date": str(first_job.get("reference_date") or ""),
+            "current_jobs": filtered_current_jobs,
+            "items": filtered_items,
+            "jobs": filtered_jobs,
+            "last_job": last_job,
+        }
+    )
+    return filtered
+
+
+def _filter_admin_import_history_for_context(
+    payload: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    visible_datasets = _panel_context_visible_import_datasets(context)
+    if visible_datasets is None:
+        return payload
+    filtered = dict(payload)
+    history = [
+        item
+        for item in payload.get("history", [])
+        if isinstance(item, dict) and _admin_import_payload_dataset(item) in visible_datasets
+    ]
+    jobs = [
+        item
+        for item in payload.get("jobs", [])
+        if isinstance(item, dict) and _admin_import_payload_dataset(item) in visible_datasets
+    ]
+    filtered.update({"total": len(history), "history": history, "jobs": jobs})
+    return filtered
+
+
 def _normalize_recolha_status(value: str | None) -> str:
     normalized = " ".join(
         str(value or "")
@@ -2422,6 +2590,10 @@ def _recolha_record_filial(record: Any) -> str:
 def _panel_context_allows_recolha(context: dict[str, Any] | None, record: Any) -> bool:
     if not context or bool(context.get("is_admin")):
         return True
+    if _panel_context_is_critica_only(context):
+        return False
+    if _panel_context_has_all_filiais(context):
+        return True
     allowed_filiais = {str(filial).strip() for filial in context.get("filiais", ()) if str(filial).strip()}
     record_filial = _recolha_record_filial(record)
     return bool(record_filial and record_filial in allowed_filiais)
@@ -2430,7 +2602,13 @@ def _panel_context_allows_recolha(context: dict[str, Any] | None, record: Any) -
 def _panel_context_allowed_report_scopes(context: dict[str, Any] | None) -> tuple[list[str] | None, list[str] | None]:
     if not context or bool(context.get("is_admin")):
         return None, None
-    allowed_filiais = [str(filial).strip() for filial in context.get("filiais", ()) if str(filial).strip()]
+    if _panel_context_has_all_filiais(context):
+        return None, None
+    allowed_filiais = [
+        str(filial).strip()
+        for filial in context.get("filiais", ())
+        if str(filial).strip() and str(filial).strip() != "*"
+    ]
     return allowed_filiais, None
 
 
@@ -2467,7 +2645,6 @@ CRITICA_DASHBOARD_PROBLEM_LABELS = {
     "sem_dprecos": "Produto sem DPrecos",
     "pedido_acima_media": "Pedido acima da media",
     "inadimplente": "Cliente inadimplente",
-    "multipack": "Multipack fora da segmentacao",
     "mapa_buffer": "Mapa 1 / buffer",
     "mapa_fora": "Mapa fora do vendedor",
     "condicao": "Cond. pag. divergente",
@@ -2478,6 +2655,12 @@ CRITICA_DASHBOARD_PROBLEM_LABELS = {
 
 def _format_money_br(value: Decimal) -> str:
     return f"R$ {_format_decimal_br(value)}"
+
+
+def _critica_record_item_revenue(record: Any) -> Decimal:
+    quantidade = _parse_localized_decimal(getattr(record, "quantidade", "0"))
+    preco_unitario = _parse_localized_decimal(getattr(record, "preco_unitario", "0"))
+    return quantidade * preco_unitario
 
 
 def _parse_admin_critica_date(value: str | None) -> date | None:
@@ -2525,10 +2708,13 @@ def _critica_record_problem_keys(record: Any) -> set[str]:
         keys.add("preco")
     if bool(getattr(record, "order_above_average", False)) or "acima da media" in normalized_labels:
         keys.add("pedido_acima_media")
-    if _parse_localized_decimal(getattr(record, "inad_total_vencido", "0")) > 0 or "vencido em aberto" in normalized_labels:
+    inad_total_vencido = _parse_localized_decimal(getattr(record, "inad_total_vencido", "0"))
+    try:
+        inad_titulos_vencidos = int(str(getattr(record, "inad_titulos_vencidos", 0) or "0").strip() or "0")
+    except ValueError:
+        inad_titulos_vencidos = 0
+    if inad_total_vencido > 0 and inad_titulos_vencidos > 0:
         keys.add("inadimplente")
-    if bool(getattr(record, "multipack_item", False)) and not bool(getattr(record, "multipack_allowed", True)):
-        keys.add("multipack")
     map_status = str(getattr(record, "map_status", "") or "").strip().lower()
     if map_status == "buffer" or "mapa 1" in normalized_labels or "buffer" in normalized_labels:
         keys.add("mapa_buffer")
@@ -2568,11 +2754,13 @@ def _critica_order_rows_from_records(records: list[Any]) -> list[dict[str, Any]]
                 "manager": str(getattr(record, "manager_code", "") or getattr(record, "codigo_gv", "") or "").strip(),
                 "cod_pdv": str(getattr(record, "cod_pdv", "") or "").strip(),
                 "nome_pdv": str(getattr(record, "nome_pdv", "") or "").strip(),
+                "cond_pagamento": str(getattr(record, "cond_pag_pedido", "") or "").strip(),
                 "cidade": str(getattr(record, "client_cidade", "") or "").strip(),
                 "bairro": str(getattr(record, "client_bairro", "") or "").strip(),
                 "origem": str(getattr(record, "origem_pedido", "") or "").strip(),
                 "status_pedido": str(getattr(record, "status_pedido", "") or "").strip(),
                 "total_pedido_decimal": Decimal("0"),
+                "peso_pedido_decimal": Decimal("0"),
                 "item_count": 0,
                 "problem_item_count": 0,
                 "problem_keys": set(),
@@ -2588,13 +2776,14 @@ def _critica_order_rows_from_records(records: list[Any]) -> list[dict[str, Any]]
                 "refri_zero_hectolitros_decimal": Decimal("0"),
                 "cerveja_rgb_hectolitros_decimal": Decimal("0"),
                 "cerveja_ow_hectolitros_decimal": Decimal("0"),
-                "marketplace_tt_hectolitros_decimal": Decimal("0"),
+                "marketplace_tt_faturamento_decimal": Decimal("0"),
                 "search_text_parts": [],
             },
         )
         total_pedido = _parse_localized_decimal(getattr(record, "total_pedido", "0"))
         if total_pedido:
             entry["total_pedido_decimal"] = total_pedido
+        entry["peso_pedido_decimal"] += _parse_localized_decimal(getattr(record, "peso_item", "0"))
         entry["item_count"] += 1
         if problem_keys:
             entry["problem_item_count"] += 1
@@ -2635,7 +2824,7 @@ def _critica_order_rows_from_records(records: list[Any]) -> list[dict[str, Any]]
         if bool(getattr(record, "cesta_cerveja_ow", False)):
             entry["cerveja_ow_hectolitros_decimal"] += item_hectolitros
         if bool(getattr(record, "cesta_marketplace_tt", False)):
-            entry["marketplace_tt_hectolitros_decimal"] += item_hectolitros
+            entry["marketplace_tt_faturamento_decimal"] += _critica_record_item_revenue(record)
         entry["search_text_parts"].extend(
             [
                 filial,
@@ -2647,6 +2836,7 @@ def _critica_order_rows_from_records(records: list[Any]) -> list[dict[str, Any]]
                 entry["manager"],
                 entry["cod_pdv"],
                 entry["nome_pdv"],
+                entry["cond_pagamento"],
                 entry["cidade"],
                 entry["bairro"],
                 entry["origem"],
@@ -2660,6 +2850,7 @@ def _critica_order_rows_from_records(records: list[Any]) -> list[dict[str, Any]]
         products = _dedupe_texts(entry["problem_products"])
         problem_keys = sorted(entry["problem_keys"], key=lambda key: CRITICA_DASHBOARD_PROBLEM_LABELS.get(key, key))
         total_pedido = entry["total_pedido_decimal"]
+        peso_pedido = entry["peso_pedido_decimal"]
         rows.append(
             {
                 "filial": entry["filial"],
@@ -2672,12 +2863,15 @@ def _critica_order_rows_from_records(records: list[Any]) -> list[dict[str, Any]]
                 "manager": entry["manager"],
                 "cod_pdv": entry["cod_pdv"],
                 "nome_pdv": entry["nome_pdv"],
+                "cond_pagamento": entry["cond_pagamento"],
                 "cidade": entry["cidade"],
                 "bairro": entry["bairro"],
                 "origem": entry["origem"],
                 "status_pedido": entry["status_pedido"],
                 "total_pedido": _format_money_br(total_pedido),
                 "total_pedido_value": str(total_pedido),
+                "peso_pedido": _format_decimal_br(peso_pedido),
+                "peso_pedido_value": str(peso_pedido),
                 "item_count": int(entry["item_count"]),
                 "problem_item_count": int(entry["problem_item_count"]),
                 "problem_keys": problem_keys,
@@ -2695,7 +2889,7 @@ def _critica_order_rows_from_records(records: list[Any]) -> list[dict[str, Any]]
                 "refri_zero_hectolitros_value": str(entry["refri_zero_hectolitros_decimal"]),
                 "cerveja_rgb_hectolitros_value": str(entry["cerveja_rgb_hectolitros_decimal"]),
                 "cerveja_ow_hectolitros_value": str(entry["cerveja_ow_hectolitros_decimal"]),
-                "marketplace_tt_hectolitros_value": str(entry["marketplace_tt_hectolitros_decimal"]),
+                "marketplace_tt_faturamento_value": str(entry["marketplace_tt_faturamento_decimal"]),
                 "search_text": _normalize_search_text(" ".join(entry["search_text_parts"])),
             }
         )
@@ -3051,6 +3245,7 @@ def _build_admin_critica_dashboard(
         )
     ]
     total_value = sum((_parse_localized_decimal(row.get("total_pedido_value")) for row in filtered_rows), Decimal("0"))
+    peso_total = sum((_parse_localized_decimal(row.get("peso_pedido_value")) for row in filtered_rows), Decimal("0"))
     total_hectolitros = sum((_parse_localized_decimal(row.get("hectolitros_value")) for row in filtered_rows), Decimal("0"))
     nab_tt_hectolitros = sum((_parse_localized_decimal(row.get("nab_tt_hectolitros_value")) for row in filtered_rows), Decimal("0"))
     high_end_hectolitros = sum((_parse_localized_decimal(row.get("high_end_hectolitros_value")) for row in filtered_rows), Decimal("0"))
@@ -3058,7 +3253,7 @@ def _build_admin_critica_dashboard(
     refri_zero_hectolitros = sum((_parse_localized_decimal(row.get("refri_zero_hectolitros_value")) for row in filtered_rows), Decimal("0"))
     cerveja_rgb_hectolitros = sum((_parse_localized_decimal(row.get("cerveja_rgb_hectolitros_value")) for row in filtered_rows), Decimal("0"))
     cerveja_ow_hectolitros = sum((_parse_localized_decimal(row.get("cerveja_ow_hectolitros_value")) for row in filtered_rows), Decimal("0"))
-    marketplace_tt_hectolitros = sum((_parse_localized_decimal(row.get("marketplace_tt_hectolitros_value")) for row in filtered_rows), Decimal("0"))
+    marketplace_tt_faturamento = sum((_parse_localized_decimal(row.get("marketplace_tt_faturamento_value")) for row in filtered_rows), Decimal("0"))
     problem_orders = sum(1 for row in filtered_rows if row.get("problem_keys"))
     client_count = len({(row.get("filial"), row.get("cod_pdv")) for row in filtered_rows if row.get("filial") and row.get("cod_pdv")})
     problem_rank = _critica_problem_rank(filtered_rows)
@@ -3075,6 +3270,7 @@ def _build_admin_critica_dashboard(
             "clientes": client_count,
             "itens": sum(int(row.get("item_count") or 0) for row in filtered_rows),
             "valor_total": _format_money_br(total_value),
+            "peso_total": _format_decimal_br(peso_total),
             "total_hectolitros": _format_decimal_br(total_hectolitros),
             "nab_tt_hectolitros": _format_decimal_br(nab_tt_hectolitros),
             "high_end_hectolitros": _format_decimal_br(high_end_hectolitros),
@@ -3082,7 +3278,7 @@ def _build_admin_critica_dashboard(
             "refri_zero_hectolitros": _format_decimal_br(refri_zero_hectolitros),
             "cerveja_rgb_hectolitros": _format_decimal_br(cerveja_rgb_hectolitros),
             "cerveja_ow_hectolitros": _format_decimal_br(cerveja_ow_hectolitros),
-            "marketplace_tt_hectolitros": _format_decimal_br(marketplace_tt_hectolitros),
+            "marketplace_tt_faturamento": _format_money_br(marketplace_tt_faturamento),
             "ticket_medio": _format_money_br(total_value / Decimal(len(filtered_rows))) if filtered_rows else "R$ 0,00",
             "taxa_problema": _format_decimal_br((Decimal(problem_orders) / Decimal(len(filtered_rows)) * Decimal("100")) if filtered_rows else Decimal("0")) + "%",
             "maior_problema": problem_rank[0]["label"] if problem_rank else "-",
@@ -3097,6 +3293,68 @@ def _build_admin_critica_dashboard(
         "recommendations": _critica_dashboard_recommendations(problem_rank, filtered_rows),
         "orders": filtered_rows[:safe_limit],
     }
+
+
+def _normalize_admin_critica_operation(value: Any) -> str:
+    normalized = normalize_numeric_code(str(value or "").strip())
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Operacao da critica obrigatoria.")
+    return normalized
+
+
+def _normalize_admin_critica_sector(value: Any) -> str:
+    normalized = normalize_numeric_code(str(value or "").strip())
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Setor da critica obrigatorio.")
+    return normalized
+
+
+def _build_admin_critica_sector_pdf_response(
+    context: dict[str, Any] | None,
+    *,
+    operation: Any,
+    sector: Any,
+    target_date: date | None,
+    summary_only: bool,
+) -> Response:
+    normalized_operation = _normalize_admin_critica_operation(operation)
+    normalized_sector = _normalize_admin_critica_sector(sector)
+    allowed_filiais, _allowed_gv_vdes = _panel_context_allowed_report_scopes(context)
+    if allowed_filiais is not None and normalized_operation not in set(allowed_filiais):
+        raise HTTPException(status_code=403, detail="Operacao fora do escopo liberado para este painel.")
+
+    allowed_sector_scopes = [normalize_stored_scope_value(f"{normalized_operation}_{normalized_sector}")]
+    effective_date = target_date or critica_rn_query_service.latest_date(allowed_sectors=allowed_sector_scopes)
+    if effective_date is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Nao encontrei critica para a operacao {normalized_operation} e setor {normalized_sector}.",
+        )
+
+    report = critica_rn_query_service.get_pdf_report(
+        target_date=effective_date,
+        allowed_sectors=allowed_sector_scopes,
+        allowed_gv_vdes=None,
+        limit=5000,
+    )
+    pdf_bytes = report.summary_pdf_bytes if summary_only else report.pdf_bytes
+    if not pdf_bytes:
+        report_label = "resumo" if summary_only else "detalhada"
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Nao encontrei critica {report_label} para a operacao {normalized_operation} "
+                f"e setor {normalized_sector} em {effective_date.isoformat()}."
+            ),
+        )
+
+    base_filename = f"critica-rn-setor-{normalized_operation}-{normalized_sector}-{effective_date.isoformat()}"
+    filename = f"{base_filename}-resumo.pdf" if summary_only else f"{base_filename}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _build_admin_giro_recolha_dashboard(
@@ -3532,16 +3790,195 @@ def _to_positive_int(value: Any, *, default: int, minimum: int, maximum: int) ->
     return max(minimum, min(parsed, maximum))
 
 
+def _parse_usage_date(value: Any, *, field_name: str) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw[:10])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field_name} deve estar no formato YYYY-MM-DD.") from exc
+
+
+def _resolve_usage_function_window(
+    *,
+    days: int,
+    date_from: Any = None,
+    date_to: Any = None,
+) -> tuple[datetime, datetime, date, date]:
+    local_tz = ZoneInfo("America/Fortaleza")
+    today = datetime.now(local_tz).date()
+    start_date = _parse_usage_date(date_from, field_name="date_from")
+    end_date = _parse_usage_date(date_to, field_name="date_to")
+    if start_date is None and end_date is None:
+        end_date = today
+        start_date = today - timedelta(days=max(1, days) - 1)
+    elif start_date is None:
+        start_date = end_date
+    elif end_date is None:
+        end_date = start_date
+    if start_date is None or end_date is None:
+        raise HTTPException(status_code=400, detail="Informe um periodo valido.")
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="date_from nao pode ser maior que date_to.")
+    if (end_date - start_date).days > 366:
+        raise HTTPException(status_code=400, detail="Periodo maximo para funcoes e de 366 dias.")
+    start_at = datetime.combine(start_date, datetime.min.time(), tzinfo=local_tz)
+    end_at = datetime.combine(end_date + timedelta(days=1), datetime.min.time(), tzinfo=local_tz)
+    return start_at, end_at, start_date, end_date
+
+
+EVOLUTION_USAGE_FEATURE_LABELS: dict[str, str] = {
+    "cliente": "Clientes",
+    "inadimplencia": "Inadimplencia",
+    "comodato": "Comodatos",
+    "giro": "Giro",
+    "documentacao": "Documentacao",
+    "prazo_limite": "Prazo e Limite",
+    "critica": "Critica",
+    "recolha": "Recolhas",
+    "payip": "PayIP",
+    "visitas": "Visitas",
+    "admin_access": "Acessos",
+}
+
+
+def _normalize_usage_tracking_text(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.casefold()
+    return " ".join(text.split())
+
+
+def _normalize_usage_tracking_phone(value: Any) -> str:
+    digits = re.sub(r"\D+", "", str(value or ""))
+    if len(digits) in {10, 11} and not digits.startswith("55"):
+        digits = f"55{digits}"
+    if digits.startswith("55") and len(digits) == 13 and digits[4:5] == "9":
+        digits = digits[:4] + digits[5:]
+    return digits
+
+
+def _snapshot_lookup_flow_session(session: Any) -> dict[str, str]:
+    if session is None:
+        return {}
+    return {
+        "step": str(getattr(session, "step", "") or "").strip(),
+        "search_context": str(getattr(session, "search_context", "") or "").strip(),
+        "last_intent": str(getattr(session, "last_intent", "") or "").strip(),
+        "last_search_context": str(getattr(session, "last_search_context", "") or "").strip(),
+        "payip_pending_action": str(getattr(session, "payip_pending_action", "") or "").strip(),
+    }
+
+
+def _infer_usage_feature_from_intent(intent: str) -> str | None:
+    normalized_intent = str(intent or "").strip().lower()
+    if not normalized_intent:
+        return None
+    if normalized_intent.startswith(("search_cliente", "cliente_", "client_")):
+        return "cliente"
+    if normalized_intent.startswith(("search_inadimplencia", "inadimplencia_", "finance_", "manager_", "director_", "seller_")):
+        return "inadimplencia"
+    if normalized_intent.startswith(("search_comodato", "comodato_")):
+        return "comodato"
+    if normalized_intent.startswith(("search_giro", "giro_")):
+        return "giro"
+    if normalized_intent.startswith(("search_documentacao", "documentacao_")):
+        return "documentacao"
+    if normalized_intent.startswith(("search_prazo_limite", "prazo_limite_")):
+        return "prazo_limite"
+    if normalized_intent.startswith("visit_"):
+        return "visitas"
+    if normalized_intent.startswith("admin:"):
+        return "admin_access"
+    return None
+
+
+def _infer_usage_feature_from_context(search_context: str) -> str | None:
+    normalized_context = str(search_context or "").strip().lower()
+    if normalized_context in {"cliente", "inadimplencia", "comodato", "giro", "documentacao", "prazo_limite"}:
+        return normalized_context
+    return None
+
+
+def _infer_evolution_usage_feature(
+    *,
+    incoming_text: str,
+    requested_area: str,
+    session_before: dict[str, str],
+    session_after: dict[str, str],
+) -> tuple[str | None, str]:
+    normalized_text = _normalize_usage_tracking_text(incoming_text)
+    combined_steps = " ".join(
+        part for part in (
+            session_before.get("step", ""),
+            session_after.get("step", ""),
+        ) if part
+    ).lower()
+    combined_intents = " ".join(
+        part for part in (
+            session_after.get("last_intent", ""),
+            session_before.get("last_intent", ""),
+        ) if part
+    ).lower()
+    combined_contexts = (
+        session_after.get("last_search_context")
+        or session_after.get("search_context")
+        or session_before.get("last_search_context")
+        or session_before.get("search_context")
+        or ""
+    ).lower()
+
+    feature_code: str | None = None
+    if "critica" in normalized_text or "critica" in combined_steps or "critica" in combined_intents:
+        feature_code = "critica"
+    elif "recolh" in normalized_text or "recolha" in combined_steps or "recolha" in combined_intents:
+        feature_code = "recolha"
+    elif (
+        "payip" in normalized_text
+        or normalized_text.startswith("pix ")
+        or session_before.get("payip_pending_action")
+        or session_after.get("payip_pending_action")
+    ):
+        feature_code = "payip"
+    else:
+        feature_code = _infer_usage_feature_from_intent(combined_intents)
+        if feature_code is None:
+            feature_code = _infer_usage_feature_from_context(combined_contexts)
+        if feature_code is None and requested_area in EVOLUTION_USAGE_FEATURE_LABELS:
+            feature_code = requested_area
+
+    detail_parts = []
+    if session_after.get("last_intent"):
+        detail_parts.append(f"intent={session_after['last_intent']}")
+    elif session_before.get("last_intent"):
+        detail_parts.append(f"intent={session_before['last_intent']}")
+    if combined_contexts:
+        detail_parts.append(f"contexto={combined_contexts}")
+    if session_after.get("step"):
+        detail_parts.append(f"etapa={session_after['step']}")
+    elif session_before.get("step"):
+        detail_parts.append(f"etapa={session_before['step']}")
+    return feature_code, ";".join(detail_parts[:3])
+
+
 def _list_admin_evolution_usage(
     *,
     days: int = 7,
     top_limit: int = 10,
     recent_limit: int = 20,
+    function_date_from: Any = None,
+    function_date_to: Any = None,
 ) -> dict[str, Any]:
     safe_days = _to_positive_int(days, default=7, minimum=1, maximum=30)
     safe_top_limit = _to_positive_int(top_limit, default=10, minimum=1, maximum=5000)
     safe_recent_limit = _to_positive_int(recent_limit, default=20, minimum=5, maximum=50)
     series_days = max(0, safe_days - 1)
+    feature_start_at, feature_end_at, feature_start_date, feature_end_date = _resolve_usage_function_window(
+        days=safe_days,
+        date_from=function_date_from,
+        date_to=function_date_to,
+    )
 
     if not settings.access_database_url.strip():
         raise HTTPException(status_code=503, detail="ACCESS_DATABASE_URL nao configurada para o dashboard de uso.")
@@ -3729,6 +4166,30 @@ def _list_admin_evolution_usage(
         """
     ).format(audit_table)
 
+    feature_usage_query = sql.SQL(
+        """
+        SELECT phone_number, area, COUNT(*) AS total, MAX(created_at) AS last_seen
+        FROM {}
+        WHERE channel = 'webhook'
+          AND path = '/webhook/evolution'
+          AND event_type = 'feature_usage'
+          AND decision = 'viewed'
+          AND created_at >= %s
+          AND created_at < %s
+          AND COALESCE(area, '') <> ''
+        GROUP BY phone_number, area
+        ORDER BY COUNT(*) DESC, MAX(created_at) DESC
+        """
+    ).format(audit_table)
+
+    users_lookup_query = sql.SQL(
+        """
+        SELECT phone_number, name
+        FROM {}
+        ORDER BY updated_at DESC, id DESC
+        """
+    ).format(users_table)
+
     try:
         with psycopg.connect(
             settings.access_database_url,
@@ -3752,6 +4213,12 @@ def _list_admin_evolution_usage(
 
                 cur.execute(recent_events_query, (safe_recent_limit,))
                 recent_rows = cur.fetchall()
+
+                cur.execute(feature_usage_query, (feature_start_at, feature_end_at))
+                feature_usage_rows = cur.fetchall()
+
+                cur.execute(users_lookup_query)
+                users_lookup_rows = cur.fetchall()
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Falha ao consultar uso do Evolution: {exc}") from exc
 
@@ -3850,6 +4317,129 @@ def _list_admin_evolution_usage(
             }
         )
 
+    user_names_by_phone: dict[str, dict[str, str]] = {}
+    for user_phone, user_name in users_lookup_rows:
+        normalized_phone = _normalize_usage_tracking_phone(user_phone)
+        if not normalized_phone or normalized_phone in user_names_by_phone:
+            continue
+        user_names_by_phone[normalized_phone] = {
+            "display_name": str(user_name or normalized_phone).strip() or normalized_phone,
+            "display_phone": str(user_phone or normalized_phone).strip() or normalized_phone,
+        }
+
+    feature_summary_map: dict[str, dict[str, Any]] = {}
+    number_function_map: dict[str, dict[str, Any]] = {}
+    tracked_total = 0
+
+    for raw_phone, raw_feature_code, raw_total, raw_last_seen in feature_usage_rows:
+        feature_code = str(raw_feature_code or "").strip().lower()
+        if feature_code not in EVOLUTION_USAGE_FEATURE_LABELS:
+            continue
+        total = int(raw_total or 0)
+        if total <= 0:
+            continue
+        normalized_phone = _normalize_usage_tracking_phone(raw_phone)
+        if not normalized_phone:
+            normalized_phone = "sem_numero"
+        tracked_total += total
+
+        feature_entry = feature_summary_map.setdefault(
+            feature_code,
+            {
+                "feature_code": feature_code,
+                "label": EVOLUTION_USAGE_FEATURE_LABELS[feature_code],
+                "total": 0,
+                "numbers": set(),
+                "last_seen": None,
+            },
+        )
+        feature_entry["total"] += total
+        feature_entry["numbers"].add(normalized_phone)
+        if raw_last_seen and (feature_entry["last_seen"] is None or raw_last_seen > feature_entry["last_seen"]):
+            feature_entry["last_seen"] = raw_last_seen
+
+        user_display = user_names_by_phone.get(
+            normalized_phone,
+            {
+                "display_name": str(raw_phone or normalized_phone).strip() or normalized_phone,
+                "display_phone": str(raw_phone or normalized_phone).strip() or normalized_phone,
+            },
+        )
+        number_entry = number_function_map.setdefault(
+            normalized_phone,
+            {
+                "phone_number": user_display["display_phone"],
+                "normalized_phone": normalized_phone,
+                "display_name": user_display["display_name"],
+                "total": 0,
+                "last_seen": None,
+                "features": {},
+            },
+        )
+        number_entry["total"] += total
+        if raw_last_seen and (number_entry["last_seen"] is None or raw_last_seen > number_entry["last_seen"]):
+            number_entry["last_seen"] = raw_last_seen
+        feature_counter = number_entry["features"].setdefault(
+            feature_code,
+            {
+                "feature_code": feature_code,
+                "label": EVOLUTION_USAGE_FEATURE_LABELS[feature_code],
+                "total": 0,
+            },
+        )
+        feature_counter["total"] += total
+
+    function_summary = [
+        {
+            "feature_code": item["feature_code"],
+            "label": item["label"],
+            "total": int(item["total"]),
+            "unique_numbers": len(item["numbers"]),
+            "last_seen": _serialize_admin_import_value(item["last_seen"]) if item["last_seen"] else "",
+        }
+        for item in feature_summary_map.values()
+    ]
+    function_summary.sort(key=lambda item: (-int(item["total"]), item["label"]))
+
+    number_function_usage: list[dict[str, Any]] = []
+    for item in number_function_map.values():
+        features = list(item["features"].values())
+        features.sort(key=lambda feature: (-int(feature["total"]), feature["label"]))
+        top_feature = features[0] if features else None
+        number_function_usage.append(
+            {
+                "phone_number": item["phone_number"],
+                "normalized_phone": item["normalized_phone"],
+                "display_name": item["display_name"],
+                "total": int(item["total"]),
+                "unique_functions": len(features),
+                "top_feature_code": str(top_feature["feature_code"]) if top_feature else "",
+                "top_feature_label": str(top_feature["label"]) if top_feature else "",
+                "last_seen": _serialize_admin_import_value(item["last_seen"]) if item["last_seen"] else "",
+                "features": [
+                    {
+                        "feature_code": str(feature["feature_code"]),
+                        "label": str(feature["label"]),
+                        "total": int(feature["total"]),
+                    }
+                    for feature in features
+                ],
+            }
+        )
+    number_function_usage.sort(key=lambda item: (-int(item["total"]), item["display_name"]))
+    number_function_usage = number_function_usage[:safe_top_limit]
+
+    top_feature = function_summary[0] if function_summary else None
+    function_usage_summary = {
+        "tracked_interactions": tracked_total,
+        "tracked_users": len(number_function_map),
+        "functions_used": len(function_summary),
+        "top_function_label": str(top_feature["label"]) if top_feature else "-",
+        "top_function_total": int(top_feature["total"]) if top_feature else 0,
+        "date_from": feature_start_date.isoformat(),
+        "date_to": feature_end_date.isoformat(),
+    }
+
     return {
         "ok": True,
         "source": "evolution",
@@ -3862,6 +4452,11 @@ def _list_admin_evolution_usage(
         "top_numbers": top_numbers,
         "event_breakdown": event_breakdown,
         "recent_events": recent_events,
+        "function_usage_summary": function_usage_summary,
+        "function_date_from": feature_start_date.isoformat(),
+        "function_date_to": feature_end_date.isoformat(),
+        "function_summary": function_summary,
+        "number_function_usage": number_function_usage,
         "audit_enabled": bool(settings.security_audit_enabled),
         "audit_ready": bool(security_monitor.status().get("ready")),
     }
@@ -3888,6 +4483,66 @@ def _build_evolution_usage_avg_report_csv(payload: dict[str, Any]) -> str:
         messages = int(item.get("messages") or 0)
         average_per_day = messages / window_days
         writer.writerow([display_name, f"{average_per_day:.2f}".replace(".", ",")])
+
+    return "\ufeff" + buffer.getvalue()
+
+
+def _build_evolution_function_usage_report_csv(payload: dict[str, Any], feature_code: str | None = None) -> str:
+    rows = payload.get("number_function_usage") if isinstance(payload, dict) else None
+    number_rows = rows if isinstance(rows, list) else []
+    selected_feature = str(feature_code or "").strip()
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";")
+    writer.writerow(
+        [
+            "nome",
+            "numero",
+            "funcao",
+            "interacoes_funcao",
+            "interacoes_usuario",
+            "funcoes_usuario",
+            "ultima_interacao",
+        ]
+    )
+
+    for item in number_rows:
+        if not isinstance(item, dict):
+            continue
+        display_name = str(item.get("display_name") or item.get("normalized_phone") or "").strip()
+        phone_number = str(item.get("phone_number") or item.get("normalized_phone") or "").strip()
+        user_total = int(item.get("total") or 0)
+        unique_functions = int(item.get("unique_functions") or 0)
+        last_seen = str(item.get("last_seen") or "").strip()
+        features = item.get("features") if isinstance(item.get("features"), list) else []
+        if selected_feature:
+            features = [
+                feature
+                for feature in features
+                if isinstance(feature, dict) and str(feature.get("feature_code") or "").strip() == selected_feature
+            ]
+        if not features:
+            if selected_feature:
+                continue
+            writer.writerow([display_name, phone_number, "", 0, user_total, unique_functions, last_seen])
+            continue
+        if selected_feature:
+            user_total = sum(int(feature.get("total") or 0) for feature in features if isinstance(feature, dict))
+            unique_functions = len(features)
+        for feature in features:
+            if not isinstance(feature, dict):
+                continue
+            writer.writerow(
+                [
+                    display_name,
+                    phone_number,
+                    str(feature.get("label") or feature.get("feature_code") or "").strip(),
+                    int(feature.get("total") or 0),
+                    user_total,
+                    unique_functions,
+                    last_seen,
+                ]
+            )
 
     return "\ufeff" + buffer.getvalue()
 
@@ -4005,9 +4660,32 @@ def _build_admin_broadcast_shortcut(action: str, day: str) -> str:
     return str(action_data["shortcut"])
 
 
+def _admin_broadcast_action_allowed_for_audience(action: str, audience: str) -> bool:
+    action_data = ADMIN_BROADCAST_ACTIONS[action]
+    allowed_audiences = action_data.get("target_audiences")
+    if not allowed_audiences:
+        return True
+    return str(audience or "").strip() in {str(item or "").strip() for item in allowed_audiences}
+
+
 def _scope_filial(value: Any) -> str:
     pair = split_scope_pair(str(value or ""))
     return pair[0] if pair else ""
+
+
+def _scope_setor(value: Any) -> str:
+    pair = split_scope_pair(str(value or ""))
+    return pair[1] if pair else ""
+
+
+def _admin_broadcast_scope_sort_key(value: Any) -> tuple[int, int, str]:
+    pair = split_scope_pair(str(value or ""))
+    if pair:
+        filial, setor = pair
+        filial_number = int(filial) if filial.isdigit() else 999999
+        setor_number = int(setor) if setor.isdigit() else 999999
+        return filial_number, setor_number, str(value or "")
+    return 999999, 999999, str(value or "")
 
 
 def _user_broadcast_filiais(user: dict[str, Any], audience: str | None = None) -> set[str]:
@@ -4027,6 +4705,46 @@ def _user_broadcast_filiais(user: dict[str, Any], audience: str | None = None) -
             if filial:
                 filiais.add(filial)
     return filiais
+
+
+def _recipient_broadcast_sector_scopes(recipient: dict[str, Any], filial: str) -> list[str]:
+    normalized_filial = _normalize_admin_broadcast_filial(filial)
+    scopes: list[str] = []
+    seen: set[str] = set()
+    for sector in recipient.get("sectors") or []:
+        raw_scope = normalize_stored_scope_value(str(sector or ""))
+        if not raw_scope or _scope_filial(raw_scope) != normalized_filial:
+            continue
+        setor = _scope_setor(raw_scope)
+        if not setor:
+            continue
+        scope = f"{normalized_filial}_{setor}"
+        if scope in seen:
+            continue
+        seen.add(scope)
+        scopes.append(scope)
+    scopes.sort(key=_admin_broadcast_scope_sort_key)
+    return scopes
+
+
+def _build_admin_broadcast_recipient_shortcut(
+    *,
+    action: str,
+    day: str,
+    filial: str,
+    recipient: dict[str, Any],
+    default_shortcut: str,
+) -> str:
+    action_data = ADMIN_BROADCAST_ACTIONS[action]
+    if action_data.get("per_recipient_shortcut") != "critica_sector_pdf":
+        return default_shortcut
+    scopes = _recipient_broadcast_sector_scopes(recipient, filial)
+    if len(scopes) == 1:
+        filial_code, setor_code = split_scope_pair(scopes[0]) or (filial, "")
+        return f"critica pdf setor {filial_code}/{setor_code}"
+    if len(scopes) > 1:
+        return "critica pdf"
+    raise HTTPException(status_code=400, detail="Vendedor sem setor cadastrado para a operacao escolhida.")
 
 
 def _is_admin_broadcast_user(user: dict[str, Any]) -> bool:
@@ -4196,6 +4914,7 @@ def _list_admin_broadcast_options(context: dict[str, Any] | None = None) -> dict
             "description": data["description"],
             "shortcut": data["shortcut"],
             "supports_day": bool(data.get("supports_day")),
+            "target_audiences": list(data.get("target_audiences") or []),
         }
         for action_id, data in ADMIN_BROADCAST_ACTIONS.items()
     ]
@@ -4277,6 +4996,8 @@ def _build_admin_broadcast_payload(
     normalized_day = _normalize_admin_broadcast_day(day)
     normalized_target_mode = _normalize_admin_broadcast_target_mode(target_mode)
     normalized_target_audience = _normalize_admin_broadcast_audience(target_audience)
+    if not _admin_broadcast_action_allowed_for_audience(normalized_action, normalized_target_audience):
+        raise HTTPException(status_code=400, detail="Essa mensagem nao esta liberada para o perfil escolhido.")
     recipients = (
         _list_admin_broadcast_recipients(normalized_filial, normalized_target_audience)
         if normalized_target_mode == "filial"
@@ -4296,6 +5017,14 @@ def _build_admin_broadcast_payload(
         require_selection=require_selection,
     )
     shortcut = _build_admin_broadcast_shortcut(normalized_action, normalized_day)
+    for recipient in recipients:
+        recipient["shortcut"] = _build_admin_broadcast_recipient_shortcut(
+            action=normalized_action,
+            day=normalized_day,
+            filial=normalized_filial,
+            recipient=recipient,
+            default_shortcut=shortcut,
+        )
     action_data = ADMIN_BROADCAST_ACTIONS[normalized_action]
     if normalized_target_mode == "specific" and recipients:
         decision = access_control.authorize(
@@ -4435,18 +5164,24 @@ def _admin_broadcast_worker(
             "error": "",
         }
         try:
-            decision = access_control.authorize(phone_number=phone_number, area=area)
-            if not decision.allowed:
+            recipient_shortcut = str(recipient.get("shortcut") or shortcut or "").strip()
+            if not recipient_shortcut:
                 skipped += 1
-                result["error"] = decision.reason or "access_denied"
+                result["error"] = "shortcut_vazio"
             else:
-                reset_incoming = IncomingMessage(sender=phone_number, text="menu", channel="evolution", message_id=f"admin-broadcast:{job_id}:reset")
-                lookup_flow.handle(incoming=reset_incoming, decision=decision)
-                incoming = IncomingMessage(sender=phone_number, text=shortcut, channel="evolution", message_id=f"admin-broadcast:{job_id}")
-                outgoing = lookup_flow.handle(incoming=incoming, decision=decision)
-                evolution_client.send(number=phone_number, message=outgoing)
-                sent += 1
-                result["status"] = "sent"
+                decision = access_control.authorize(phone_number=phone_number, area=area)
+                if not decision.allowed:
+                    skipped += 1
+                    result["error"] = decision.reason or "access_denied"
+                else:
+                    reset_incoming = IncomingMessage(sender=phone_number, text="menu", channel="evolution", message_id=f"admin-broadcast:{job_id}:reset")
+                    lookup_flow.handle(incoming=reset_incoming, decision=decision)
+                    incoming = IncomingMessage(sender=phone_number, text=recipient_shortcut, channel="evolution", message_id=f"admin-broadcast:{job_id}")
+                    outgoing = lookup_flow.handle(incoming=incoming, decision=decision)
+                    evolution_client.send(number=phone_number, message=outgoing)
+                    sent += 1
+                    result["status"] = "sent"
+                    result["shortcut"] = recipient_shortcut
         except Exception as exc:
             failed += 1
             result["status"] = "failed"
@@ -5156,6 +5891,7 @@ def _process_webhook_message(
             )
         return
 
+    session_before = _snapshot_lookup_flow_session(lookup_flow.sessions.get(incoming.sender))
     try:
         outgoing = lookup_flow.handle(incoming=incoming, decision=decision)
     except Exception as exc:
@@ -5174,6 +5910,7 @@ def _process_webhook_message(
         _send_text_reply(incoming=incoming, text=error_text)
         return
 
+    session_after = _snapshot_lookup_flow_session(lookup_flow.sessions.get(incoming.sender))
     _record_security_event_for_path(
         path=path,
         metadata=metadata,
@@ -5184,6 +5921,23 @@ def _process_webhook_message(
         area=requested_area,
         reason=outgoing.kind,
     )
+    feature_code, feature_reason = _infer_evolution_usage_feature(
+        incoming_text=getattr(incoming, "text", ""),
+        requested_area=requested_area,
+        session_before=session_before,
+        session_after=session_after,
+    )
+    if feature_code:
+        _record_security_event_for_path(
+            path=path,
+            metadata=metadata,
+            channel="webhook",
+            event_type="feature_usage",
+            decision="viewed",
+            phone_number=decision.normalized_number or incoming.sender,
+            area=feature_code,
+            reason=feature_reason or outgoing.kind,
+        )
     try:
         _send_outgoing_reply(incoming=incoming, outgoing=outgoing)
     except Exception as exc:
@@ -5207,7 +5961,11 @@ def _send_text_reply(*, incoming: Any, text: str) -> None:
             meta_cloud_client.send_text(number=incoming.sender, text=text)
         return
     if evolution_client.enabled:
-        evolution_client.send_text(number=incoming.sender, text=text)
+        evolution_client.send_text(
+            number=incoming.sender,
+            text=text,
+            reply_targets=_evolution_reply_targets(incoming),
+        )
 
 
 def _send_outgoing_reply(*, incoming: Any, outgoing: Any) -> None:
@@ -5221,7 +5979,69 @@ def _send_outgoing_reply(*, incoming: Any, outgoing: Any) -> None:
             meta_cloud_client.send_text(number=incoming.sender, text=meta_text)
         return
     if evolution_client.enabled:
-        evolution_client.send(number=incoming.sender, message=outgoing)
+        evolution_client.send(
+            number=incoming.sender,
+            message=outgoing,
+            reply_targets=_evolution_reply_targets(incoming),
+        )
+
+
+def _evolution_reply_targets(incoming: Any) -> tuple[str, ...]:
+    targets: list[str] = []
+    seen: set[str] = set()
+    for target in (*_lookup_evolution_lid_targets(incoming), *getattr(incoming, "reply_targets", ())):
+        value = str(target or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        targets.append(value)
+    return tuple(targets)
+
+
+def _lookup_evolution_lid_targets(incoming: Any) -> tuple[str, ...]:
+    message_id = str(getattr(incoming, "message_id", "") or "").strip()
+    if not message_id or message_id.startswith(("admin-broadcast:", "daily-route:")):
+        return ()
+    database_url = settings.reports_database_url or settings.reports_runtime_database_url
+    if not database_url:
+        return ()
+    try:
+        with psycopg.connect(database_url, connect_timeout=int(settings.access_database_timeout_seconds)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        key->>'remoteJid' AS remote_jid,
+                        key->>'remoteJidAlt' AS remote_jid_alt,
+                        key->>'participant' AS participant,
+                        key->>'participantAlt' AS participant_alt
+                    FROM public."Message"
+                    WHERE key->>'id' = %s
+                      AND COALESCE((key->>'fromMe')::boolean, false) = false
+                    ORDER BY "messageTimestamp" DESC
+                    LIMIT 5
+                    """,
+                    (message_id,),
+                )
+                rows = cur.fetchall()
+    except Exception as exc:
+        logger.debug("Nao foi possivel resolver LID da Evolution para resposta: %s", exc)
+        return ()
+
+    lids: list[str] = []
+    phones: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for value in row:
+            target = str(value or "").strip()
+            if not target or target in seen:
+                continue
+            seen.add(target)
+            if target.endswith("@lid"):
+                lids.append(target)
+            elif target.endswith("@s.whatsapp.net"):
+                phones.append(target)
+    return tuple([*lids, *phones])
 
 
 def _queue_incoming_webhook(
@@ -5902,16 +6722,23 @@ def api_admin_panel_session(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    mode = _panel_context_mode(context) or "admin"
+    is_admin = bool(context.get("is_admin"))
+    is_finance = mode == "financeiro" and not is_admin
+    is_critica = mode == "critica" and not is_admin
     return {
         "ok": True,
-        "mode": str(context.get("mode") or "admin"),
-        "is_admin": bool(context.get("is_admin")),
+        "mode": mode,
+        "is_admin": is_admin,
         "filiais": list(context.get("filiais", ())),
-        "can_manage_access": bool(context.get("is_admin")),
-        "can_view_usage": bool(context.get("is_admin")),
-        "can_broadcast": bool(context.get("is_admin") or context.get("mode") == "financeiro"),
-        "can_import": True,
-        "can_manage_recolhas": True,
+        "can_manage_access": is_admin,
+        "can_view_usage": is_admin,
+        "can_broadcast": is_admin or is_finance,
+        "can_import": is_admin or is_finance,
+        "can_import_critica": is_admin or is_finance or is_critica,
+        "can_manage_recolhas": is_admin or is_finance,
+        "can_view_giro": is_admin or is_finance,
+        "can_view_critica": is_admin or is_finance or is_critica,
     }
 
 
@@ -5922,13 +6749,14 @@ def api_admin_imports_status(
     x_api_token: str | None = Header(default=None),
     x_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _require_admin_panel_auth(
+    context = _require_admin_panel_auth(
         request=request,
         authorization=authorization,
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
     payload = _list_admin_import_status()
+    payload = _filter_admin_import_status_for_context(payload, context)
     _record_security_event(request, channel="api", event_type="admin_import_status", decision="allowed", reason="success")
     return payload
 
@@ -5941,13 +6769,14 @@ def api_admin_imports_history(
     x_api_token: str | None = Header(default=None),
     x_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _require_admin_panel_auth(
+    context = _require_admin_panel_auth(
         request=request,
         authorization=authorization,
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
     payload = _list_admin_import_history(limit=limit)
+    payload = _filter_admin_import_history_for_context(payload, context)
     _record_security_event(request, channel="api", event_type="admin_import_history", decision="allowed", reason="success")
     return payload
 
@@ -5960,13 +6789,14 @@ def api_admin_imports_validate(
     x_api_token: str | None = Header(default=None),
     x_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _require_admin_panel_auth(
+    context = _require_admin_panel_auth(
         request=request,
         authorization=authorization,
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
-    result = _access_call(_run_admin_import_validation, payload.dataset)
+    normalized_dataset = _require_admin_panel_import_dataset(context, payload.dataset)
+    result = _access_call(_run_admin_import_validation, normalized_dataset)
     _record_security_event(
         request,
         channel="api",
@@ -5991,7 +6821,8 @@ def api_admin_imports_run(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
-    result = _queue_admin_import(payload.dataset, reference_date=payload.reference_date, context=context)
+    normalized_dataset = _require_admin_panel_import_dataset(context, payload.dataset)
+    result = _queue_admin_import(normalized_dataset, reference_date=payload.reference_date, context=context)
     _record_security_event(
         request,
         channel="api",
@@ -6017,7 +6848,8 @@ def api_admin_imports_upload(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
-    result = _access_call(_store_admin_import_uploads, dataset, files, context)
+    normalized_dataset = _require_admin_panel_import_dataset(context, dataset)
+    result = _access_call(_store_admin_import_uploads, normalized_dataset, files, context)
     _record_security_event(
         request,
         channel="api",
@@ -6041,6 +6873,7 @@ def api_admin_recolhas(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "recolhas")
     payload = _list_admin_recolhas(context)
     _record_security_event(
         request,
@@ -6074,6 +6907,7 @@ def api_admin_giro_recolha_dashboard(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "giro")
     try:
         payload = _build_admin_giro_recolha_dashboard(
             context,
@@ -6120,6 +6954,7 @@ def api_admin_giro_recolha_filter_options(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "giro")
     try:
         payload = _build_admin_giro_recolha_filter_options(
             context,
@@ -6162,6 +6997,7 @@ def api_admin_critica_dashboard(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "critica")
     try:
         payload = _build_admin_critica_dashboard(
             context,
@@ -6190,6 +7026,41 @@ def api_admin_critica_dashboard(
     return {"ok": True, **payload}
 
 
+@app.get("/api/admin/critica/pdf")
+def api_admin_critica_pdf(
+    request: Request,
+    operation: str = Query(default=""),
+    sector: str = Query(default=""),
+    date_value: str | None = Query(default=None, alias="date"),
+    summary_only: bool = Query(default=False),
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+    x_admin_token: str | None = Header(default=None),
+) -> Response:
+    context = _require_admin_panel_auth(
+        request=request,
+        authorization=authorization,
+        x_api_token=x_api_token,
+        x_admin_token=x_admin_token,
+    )
+    _require_admin_panel_feature(context, "critica")
+    response = _build_admin_critica_sector_pdf_response(
+        context,
+        operation=operation,
+        sector=sector,
+        target_date=_parse_admin_critica_date(date_value),
+        summary_only=summary_only,
+    )
+    _record_security_event(
+        request,
+        channel="api",
+        event_type="admin_critica_pdf",
+        decision="allowed",
+        reason=f"{operation}/{sector}|summary={int(bool(summary_only))}",
+    )
+    return response
+
+
 @app.get("/api/admin/giro/recolha-routes")
 def api_admin_giro_recolha_routes(
     request: Request,
@@ -6213,6 +7084,7 @@ def api_admin_giro_recolha_routes(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "giro")
     try:
         payload = _build_admin_giro_recolha_routes(
             context,
@@ -6253,6 +7125,7 @@ def api_admin_recolhas_bulk_update(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "recolhas")
     result = _update_admin_recolhas_bulk(payload, context)
     _record_security_event(
         request,
@@ -6278,6 +7151,7 @@ def api_admin_recolhas_import(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "recolhas")
     result = _import_admin_recolhas_csv(file, context)
     _record_security_event(
         request,
@@ -6304,6 +7178,7 @@ def api_admin_recolhas_export(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "recolhas")
     csv_bytes, total, filename = _export_admin_recolhas_csv(
         context,
         start_date=start_date,
@@ -6338,6 +7213,7 @@ def api_admin_recolhas_update(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "recolhas")
     result = _update_admin_recolha(recolha_id, payload, context)
     _record_security_event(
         request,
@@ -6363,6 +7239,7 @@ def api_admin_recolhas_delete(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "recolhas")
     result = _delete_admin_recolha(recolha_id, context)
     _record_security_event(
         request,
@@ -6378,6 +7255,8 @@ def api_admin_recolhas_delete(
 def api_admin_usage_evolution(
     request: Request,
     days: int = Query(default=7, ge=1, le=30),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
     x_api_token: str | None = Header(default=None),
     x_admin_token: str | None = Header(default=None),
@@ -6388,7 +7267,7 @@ def api_admin_usage_evolution(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
-    payload = _list_admin_evolution_usage(days=days)
+    payload = _list_admin_evolution_usage(days=days, function_date_from=date_from, function_date_to=date_to)
     _record_security_event(
         request,
         channel="api",
@@ -6432,6 +7311,53 @@ def api_admin_usage_evolution_report(
     )
 
 
+@app.get("/api/admin/usage/evolution/functions/report", response_class=PlainTextResponse)
+def api_admin_usage_evolution_functions_report(
+    request: Request,
+    days: int = Query(default=7, ge=1, le=30),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    feature: str | None = Query(default=None),
+    limit: int = Query(default=5000, ge=1, le=5000),
+    authorization: str | None = Header(default=None),
+    x_api_token: str | None = Header(default=None),
+    x_admin_token: str | None = Header(default=None),
+) -> PlainTextResponse:
+    _require_admin_api_auth(
+        request=request,
+        authorization=authorization,
+        x_api_token=x_api_token,
+        x_admin_token=x_admin_token,
+    )
+    payload = _list_admin_evolution_usage(
+        days=days,
+        top_limit=limit,
+        recent_limit=5,
+        function_date_from=date_from,
+        function_date_to=date_to,
+    )
+    selected_feature = str(feature or "").strip()
+    csv_content = _build_evolution_function_usage_report_csv(payload, feature_code=selected_feature)
+    generated_at = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    feature_slug = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_feature).strip("_") or "todas"
+    filename = (
+        f"numero_x_funcao_evolution_"
+        f"{payload.get('function_date_from', '')}_a_{payload.get('function_date_to', '')}_{feature_slug}_{generated_at}.csv"
+    )
+    _record_security_event(
+        request,
+        channel="api",
+        event_type="admin_usage_evolution_functions_report",
+        decision="allowed",
+        reason=f"days={payload.get('window_days')};limit={limit};feature={selected_feature or '*'}",
+    )
+    return PlainTextResponse(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/api/admin/broadcast/options")
 def api_admin_broadcast_options(
     request: Request,
@@ -6445,6 +7371,7 @@ def api_admin_broadcast_options(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "broadcast")
     payload = _list_admin_broadcast_options(context)
     _record_security_event(request, channel="api", event_type="admin_broadcast_options", decision="allowed")
     return {"ok": True, **payload}
@@ -6463,6 +7390,7 @@ def api_admin_broadcast_status(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "broadcast")
     _record_security_event(request, channel="api", event_type="admin_broadcast_status", decision="allowed")
     return {"ok": True, **_snapshot_admin_broadcast_state(context)}
 
@@ -6481,6 +7409,7 @@ def api_admin_broadcast_preview(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "broadcast")
     result = _build_admin_broadcast_payload(
         filial=payload.filial,
         action=payload.action,
@@ -6520,6 +7449,7 @@ def api_admin_broadcast_run(
         x_api_token=x_api_token,
         x_admin_token=x_admin_token,
     )
+    _require_admin_panel_feature(context, "broadcast")
     result = _queue_admin_broadcast(
         payload.filial,
         payload.action,
