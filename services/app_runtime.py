@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-import sys
 from threading import Event, Lock, RLock
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Response, UploadFile
+from fastapi import FastAPI, HTTPException, UploadFile
 
 from bot_api.db import close_all_connection_pools
 from bot_api.services import (
@@ -37,7 +36,7 @@ def configure_app_runtime(
     services: Any,
     project_root: Path,
     logger: Any,
-) -> dict[str, Any]:
+) -> None:
     admin_import_job_service = services.admin_import_job_service
     dclientes_query_service = services.dclientes_query_service
     clientes_score_query_service = services.clientes_score_query_service
@@ -262,32 +261,13 @@ def configure_app_runtime(
         ]
         return allowed_filiais, None
 
-    def _current_critica_rn_query_service() -> Any:
-        app_factory = sys.modules.get("bot_api.app_factory")
-        return getattr(app_factory, "critica_rn_query_service", critica_rn_query_service)
-
-
     admin_critica_dashboard_service.configure(
-        critica_rn_query_service=_current_critica_rn_query_service(),
+        critica_rn_query_service=critica_rn_query_service,
         _panel_context_allowed_report_scopes=_panel_context_allowed_report_scopes,
     )
     _parse_admin_critica_date = admin_critica_dashboard_service._parse_admin_critica_date
-
-
-    def _build_admin_critica_dashboard(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        admin_critica_dashboard_service.configure(
-            critica_rn_query_service=_current_critica_rn_query_service(),
-            _panel_context_allowed_report_scopes=_panel_context_allowed_report_scopes,
-        )
-        return admin_critica_dashboard_service._build_admin_critica_dashboard(*args, **kwargs)
-
-
-    def _build_admin_critica_sector_pdf_response(*args: Any, **kwargs: Any) -> Response:
-        admin_critica_dashboard_service.configure(
-            critica_rn_query_service=_current_critica_rn_query_service(),
-            _panel_context_allowed_report_scopes=_panel_context_allowed_report_scopes,
-        )
-        return admin_critica_dashboard_service._build_admin_critica_sector_pdf_response(*args, **kwargs)
+    _build_admin_critica_dashboard = admin_critica_dashboard_service._build_admin_critica_dashboard
+    _build_admin_critica_sector_pdf_response = admin_critica_dashboard_service._build_admin_critica_sector_pdf_response
 
 
     admin_usage_service.configure(settings=settings, security_monitor=security_monitor)
@@ -464,8 +444,4 @@ def configure_app_runtime(
         },
     )
 
-    return {
-        name: value
-        for name, value in locals().items()
-        if name not in {"app", "settings", "services", "project_root", "logger"}
-    }
+    return None

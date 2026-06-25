@@ -22,14 +22,13 @@ app = FastAPI(
     openapi_url=None,
 )
 
-_runtime_exports = configure_app_runtime(
+configure_app_runtime(
     app=app,
     settings=settings,
     services=services,
     project_root=PROJECT_ROOT,
     logger=logger,
 )
-globals().update(_runtime_exports)
 
 
 def create_app() -> FastAPI:
