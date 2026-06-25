@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Central Pau Brasil - Login</title>
+  <style>
+    :root {
+      --bg: #060d1b;
+      --panel: rgba(11, 18, 32, 0.92);
+      --line: rgba(148, 163, 184, 0.24);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --brand: #60a5fa;
+      --danger: #fca5a5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: Inter, Segoe UI, system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 12%, rgba(96, 165, 250, 0.22), transparent 28%),
+        radial-gradient(circle at 88% 8%, rgba(37, 99, 235, 0.24), transparent 30%),
+        var(--bg);
+      padding: 24px;
+    }
+    .card {
+      width: min(460px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(8, 15, 30, 0.94));
+      box-shadow: 0 24px 70px rgba(2, 8, 23, 0.55);
+      padding: 30px;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+    .mark {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 26px;
+      color: white;
+      background: linear-gradient(135deg, #0f2c63, #2563eb);
+      border: 1px solid rgba(255,255,255,0.14);
+    }
+    .brand strong { display: block; letter-spacing: .08em; font-size: 14px; }
+    .brand span { color: var(--muted); font-size: 13px; }
+    h1 { font-size: 28px; line-height: 1.1; margin: 0 0 10px; }
+    p { margin: 0 0 22px; color: var(--muted); }
+    label { display: block; margin-bottom: 8px; font-weight: 700; }
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0b1220;
+      color: var(--text);
+      border-radius: 14px;
+      padding: 14px 15px;
+      font-size: 16px;
+      outline: none;
+    }
+    input:focus { border-color: var(--brand); box-shadow: 0 0 0 4px rgba(96,165,250,.14); }
+    button {
+      width: 100%;
+      margin-top: 16px;
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 800;
+      color: white;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      cursor: pointer;
+    }
+    button:disabled { opacity: .68; cursor: wait; }
+    .error { min-height: 22px; margin-top: 12px; color: var(--danger); font-size: 14px; }
+    .note { margin-top: 18px; font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <div class="mark">P</div>
+      <div><strong>PAU BRASIL</strong><span>Central administrativa</span></div>
+    </div>
+    <h1>Entrar no painel</h1>
+    <p>Use o token admin ou o token financeiro da sua operacao.</p>
+    <form id="loginForm">
+      <label for="token">Token de acesso</label>
+      <input id="token" name="token" type="password" autocomplete="off" autofocus required>
+      <button id="submitBtn" type="submit">Entrar</button>
+      <div id="error" class="error" role="alert"></div>
+    </form>
+    <div class="note">A sessao expira automaticamente. Nao compartilhe esse acesso fora da rede autorizada.</div>
+  </main>
+  <script>
+    const form = document.getElementById("loginForm");
+    const token = document.getElementById("token");
+    const errorBox = document.getElementById("error");
+    const submitBtn = document.getElementById("submitBtn");
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      errorBox.textContent = "";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Validando...";
+      try {
+        const response = await fetch("/api/admin/panel/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: token.value.trim() })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || "Token invalido.");
+        window.location.assign("/admin/imports");
+      } catch (error) {
+        errorBox.textContent = error.message || "Falha no login.";
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Entrar";
+      }
+    });
+  </script>
+</body>
+</html>
