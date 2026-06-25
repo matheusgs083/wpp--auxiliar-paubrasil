@@ -6,7 +6,7 @@ import threading
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from time import monotonic
 from typing import Any
@@ -50,6 +50,10 @@ PDF_SCOPE_SECTOR = "setor"
 PDF_SCOPE_GV = "gv"
 REPORT_SESSION_WORK_MEM = "64MB"
 CRITICA_PDF_CACHE_VERSION = "v26-portrait-critica-product-name"
+CRITICA_PDF_CURRENT_IMPORT_MESSAGE = (
+    "PDF da critica bloqueado: importe os relatorios de critica de hoje antes de gerar."
+)
+CRITICA_IMPORT_LOCAL_TIMEZONE = timezone(timedelta(hours=-3))
 PDF_THEME = {
     "page_bg": "#F5F6F8",
     "panel_bg": "#FFFFFF",
@@ -295,6 +299,10 @@ class CriticaRnPdfReport:
     summary_pdf_bytes: bytes
 
 
+class CriticaPdfCurrentImportRequiredError(RuntimeError):
+    pass
+
+
 @dataclass
 class _TimedCacheEntry:
     value: Any
@@ -381,6 +389,34 @@ class CriticaRnQueryService:
         value = row.get("data_pedido")
         return value if isinstance(value, date) else None
 
+    def has_current_critica_import(self, *, today: date | None = None) -> bool:
+        check_date = today or datetime.now(CRITICA_IMPORT_LOCAL_TIMEZONE).date()
+        query = sql.SQL(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM {schema}.import_batches
+                WHERE dataset_name = %s
+                  AND (
+                      reference_date = %s
+                      OR (imported_at AT TIME ZONE 'America/Fortaleza')::date = %s
+                  )
+            ) AS has_import
+            """
+        ).format(schema=sql.Identifier(self.schema))
+        try:
+            with self._connect(row_factory=dict_row) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, ("critica_rn", check_date, check_date))
+                    row = cur.fetchone() or {}
+            return bool(row.get("has_import"))
+        except Exception:
+            return False
+
+    def _ensure_current_critica_import_for_pdf(self) -> None:
+        if not self.has_current_critica_import():
+            raise CriticaPdfCurrentImportRequiredError(CRITICA_PDF_CURRENT_IMPORT_MESSAGE)
+
     def get_report_data(
         self,
         *,
@@ -434,6 +470,7 @@ class CriticaRnQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 5000,
     ) -> CriticaRnPdfReport:
+        self._ensure_current_critica_import_for_pdf()
         normalized_limit = max(1, min(int(limit or 1), 50000))
         cache_key = (
             "pdf",
@@ -511,6 +548,7 @@ class CriticaRnQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 300,
     ) -> CriticaRnPdfReport:
+        self._ensure_current_critica_import_for_pdf()
         records = self.search_by_registration(
             cod_pdv=cod_pdv,
             filial=filial,
@@ -529,6 +567,7 @@ class CriticaRnQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 50000,
     ) -> CriticaRnPdfReport:
+        self._ensure_current_critica_import_for_pdf()
         data = self.get_report_data(
             target_date=target_date,
             allowed_sectors=allowed_sectors,
@@ -646,6 +685,7 @@ class CriticaRnQueryService:
     ) -> dict[str, Any]:
         started_at = monotonic()
         normalized_limit = max(1, min(int(limit or 1), 50000))
+        self._ensure_current_critica_import_for_pdf()
         effective_date = target_date or self.latest_date()
         if effective_date is None:
             return {
@@ -1551,6 +1591,12 @@ def build_critica_rn_gv_summary_pdf(
         Spacer(1, 4),
         Paragraph("RESUMO POR SETOR", styles["section"]),
         _gv_sector_summary_table(records, styles),
+        Spacer(1, 4),
+        Paragraph("CIDADES POR SETOR", styles["section"]),
+        *_gv_city_by_sector_tables(records, styles),
+        Spacer(1, 4),
+        Paragraph("PRODUTOS DO RELATORIO", styles["section"]),
+        _product_summary_table(records, styles),
     ]
 
     def draw_page_header(canvas: Any, doc_obj: Any) -> None:
@@ -1806,6 +1852,75 @@ def _gv_sector_summary_table(records: list[CriticaRnRecord], styles: dict[str, A
     )
     table.setStyle(_report_table_style(header_row_indexes=(0,), grid=True))
     return table
+
+
+def _gv_city_by_sector_tables(records: list[CriticaRnRecord], styles: dict[str, Any]) -> list[Any]:
+    from reportlab.lib.units import mm
+    from reportlab.platypus import KeepTogether, Paragraph, Spacer, Table
+
+    grouped: dict[str, dict[str, list[CriticaRnRecord]]] = {}
+    sector_labels: dict[str, str] = {}
+    for record in records:
+        sector_key = record.seller_code or f"{record.filial}_{record.setor}" or record.setor or "-"
+        sector_labels.setdefault(sector_key, _format_sector_key_for_pdf(sector_key, [record]))
+        city = str(record.client_cidade or "").strip() or "Sem cidade"
+        grouped.setdefault(sector_key, {}).setdefault(city, []).append(record)
+
+    flowables: list[Any] = []
+    for sector_key in sorted(grouped, key=_sort_key_numeric_text):
+        sector_records = [record for city_records in grouped[sector_key].values() for record in city_records]
+        sector_summary = _summarize_records(sector_records)
+        sector_title = (
+            f"Setor {sector_labels.get(sector_key, sector_key)}  |  "
+            f"{sector_summary.pedido_count} pedidos  |  "
+            f"{sector_summary.client_count} clientes  |  "
+            f"{_format_money(sector_summary.total_pedido)}"
+        )
+        rows: list[list[Any]] = [
+            [
+                Paragraph("Cidade", styles["table_header"]),
+                Paragraph("Pedidos", styles["table_header"]),
+                Paragraph("Clientes", styles["table_header"]),
+                Paragraph("Valor", styles["table_header"]),
+                Paragraph("Peso", styles["table_header"]),
+                Paragraph("HL", styles["table_header"]),
+            ]
+        ]
+        city_groups = grouped[sector_key]
+        for city in sorted(city_groups, key=_normalize_token):
+            city_summary = _summarize_records(city_groups[city])
+            rows.append(
+                [
+                    Paragraph(_escape(city), styles["table_cell_bold"]),
+                    Paragraph(_escape(str(city_summary.pedido_count)), styles["table_cell_bold_right"]),
+                    Paragraph(_escape(str(city_summary.client_count)), styles["table_cell_bold_right"]),
+                    Paragraph(_escape(_format_money(city_summary.total_pedido)), styles["table_cell_bold_right"]),
+                    Paragraph(_escape(_format_decimal(city_summary.peso_total)), styles["table_cell_bold_right"]),
+                    Paragraph(_escape(_format_decimal(city_summary.total_hectolitros)), styles["table_cell_bold_right"]),
+                ]
+            )
+        title = Paragraph(_escape(sector_title), styles["section"])
+        table = Table(
+            rows,
+            repeatRows=1,
+            colWidths=[72 * mm, 20 * mm, 20 * mm, 34 * mm, 24 * mm, 22 * mm],
+            splitByRow=1,
+        )
+        table.setStyle(
+            _report_table_style(
+                header_row_indexes=(0,),
+                extra_commands=(
+                    ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 1.8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1.8),
+                ),
+                grid=True,
+            )
+        )
+        flowables.append(KeepTogether([title, table, Spacer(1, 3)]))
+    if not flowables:
+        flowables.append(Paragraph("Nenhuma cidade encontrada para o filtro informado.", styles["note"]))
+    return flowables
 
 
 def _format_sector_key_for_pdf(sector_key: str, records: list[CriticaRnRecord]) -> str:
@@ -2293,6 +2408,14 @@ def _report_table_style(
             )
     commands.extend(extra_commands)
     return TableStyle(commands)
+
+
+def _draw_report_page_background(canvas: Any, doc_obj: Any) -> None:
+    width, height = doc_obj.pagesize
+    canvas.saveState()
+    canvas.setFillColor(_theme_color("page_bg"))
+    canvas.rect(0, 0, width, height, fill=1, stroke=0)
+    canvas.restoreState()
 
 
 def _draw_report_page_header(

@@ -44,12 +44,14 @@ from bot_api.services.dclientes_query_service import (
     DClientesQueryService,
     VisitSellerSummary,
 )
+from bot_api.services.clientes_score_query_service import ClienteScoreRecord, ClientesScoreQueryService
 from bot_api.services.comodatos_query_service import (
     ComodatoClientSummary,
     ComodatoRecord,
     ComodatosQueryService,
 )
 from bot_api.services.critica_rn_query_service import (
+    CriticaPdfCurrentImportRequiredError,
     CriticaRnQueryService,
     CriticaRnRecord,
     CriticaRnSummary,
@@ -421,6 +423,7 @@ class CustomerLookupFlow:
         payip_payments_service: PayipPaymentsService | None = None,
         recolha_request_service: RecolhaRequestService | None = None,
         critica_rn_service: CriticaRnQueryService | None = None,
+        clientes_score_service: ClientesScoreQueryService | None = None,
         session_ttl_minutes: int = 20,
     ) -> None:
         self.query_service = query_service
@@ -431,6 +434,8 @@ class CustomerLookupFlow:
         self.prazo_limite_service = prazo_limite_service
         self.payip_payments_service = payip_payments_service
         self.critica_rn_service = critica_rn_service
+        self.clientes_score_service = clientes_score_service
+        self._cliente_score_last_lookup_available = False
         self.recolha_request_service = recolha_request_service or RecolhaRequestService(
             Path("exports") / "recolhas" / "solicitacoes_recolha.csv"
         )
@@ -9400,7 +9405,7 @@ class CustomerLookupFlow:
                 f"- Itens: {len(records)}",
                 f"- Linhas com problema: {problem_count}",
                 f"- Valor dos pedidos: {_format_currency_brl(total_pedidos)}",
-                f"- Peso total: {_format_quantity(peso_total)}",
+                f"- Peso total: {_format_weight_quantity(peso_total)}",
             ]
         )
         lines.extend(["", "Pedidos:"])
@@ -9411,7 +9416,7 @@ class CustomerLookupFlow:
             condition_label = " | ".join(condition_names) if condition_names else "-"
             lines.append(
                 f"- Pedido {pedido_number}: Valor {_format_currency_brl(pedido_total)} | "
-                f"Peso {_format_quantity(pedido_weight)} | Cond. Pag. {condition_label}"
+                f"Peso {_format_weight_quantity(pedido_weight)} | Cond. Pag. {condition_label}"
             )
         lines.extend(
             [
@@ -9440,6 +9445,8 @@ class CustomerLookupFlow:
             if summary.row_count <= 0:
                 return self._build_empty_critica_response(target_date=target_date, decision=decision)
             pdf_bytes = report.pdf_bytes
+        except CriticaPdfCurrentImportRequiredError as exc:
+            return OutgoingMessage(text=f"Critica RN | PDF\n\n{exc}")
         except Exception:
             logger.exception("Falha ao gerar PDF da critica RN")
             return OutgoingMessage(text="Nao consegui gerar o PDF da critica RN agora.")
@@ -9481,6 +9488,8 @@ class CustomerLookupFlow:
             if report.summary.row_count <= 0:
                 empty_date = target_date or report.summary.data_pedido or datetime.now(LOCAL_TIMEZONE).date()
                 return self._build_empty_critica_response(target_date=empty_date, decision=decision)
+        except CriticaPdfCurrentImportRequiredError as exc:
+            return OutgoingMessage(text=f"Critica RN | PDF Gerencial GV\n\n{exc}")
         except Exception:
             logger.exception("Falha ao gerar PDF gerencial da critica RN para GV")
             return OutgoingMessage(text="Nao consegui gerar o PDF gerencial da critica RN agora.")
@@ -9542,6 +9551,8 @@ class CustomerLookupFlow:
                 allowed_gv_vdes=self._allowed_gv_vdes(decision),
                 limit=2000,
             )
+        except CriticaPdfCurrentImportRequiredError as exc:
+            return OutgoingMessage(text=f"Critica RN | NB PDF\n\n{exc}")
         except Exception:
             logger.exception("Falha ao gerar PDF da critica RN por NB")
             return OutgoingMessage(text="Nao consegui gerar o PDF desse NB agora.")
@@ -9604,6 +9615,8 @@ class CustomerLookupFlow:
                 allowed_gv_vdes=None,
                 limit=5000,
             )
+        except CriticaPdfCurrentImportRequiredError as exc:
+            return OutgoingMessage(text=f"Critica RN | PDF Setor\n\n{exc}")
         except Exception:
             logger.exception("Falha ao gerar PDF da critica RN por setor")
             return OutgoingMessage(text="Nao consegui gerar o PDF desse setor agora.")
@@ -12295,6 +12308,10 @@ class CustomerLookupFlow:
         if len(ordered_records) > 1:
             lines.extend(["", f"Encontrei {len(ordered_records)} cliente(s) para {criteria}."])
         for index, record in enumerate(ordered_records, start=1):
+            score_record = self._safe_cliente_score_by_registration(
+                filial=record.filial,
+                cod_pdv=record.cod_pdv,
+            )
             inadimplencia_records = self._safe_inadimplencia_registration_records(
                 decision=decision,
                 filial=record.filial,
@@ -12310,8 +12327,9 @@ class CustomerLookupFlow:
             lines.append("")
             prefix = f"{index}) " if len(ordered_records) > 1 else ""
             lines.append(f"{prefix}Cliente: {record.nome or '-'}")
+            score_prefix = f"*Score: {score_record.score} |* " if score_record is not None and score_record.score else ""
             lines.append(
-                f"Revenda: {record.filial or '-'} | NB: {record.cod_pdv or '-'} | Setor: {record.setor or '-'}"
+                f"{score_prefix}Revenda: {record.filial or '-'} | NB: {record.cod_pdv or '-'} | Setor: {record.setor or '-'}"
             )
             lines.append(
                 f"RN: {_scope_last_code(record.seller_code or record.setor)} | "
@@ -12325,6 +12343,7 @@ class CustomerLookupFlow:
             lines.append(f"- Cond. pag.: {_summarize_prazo_limite_field(record.entries, 'cond_pag_atual')}")
             lines.append(f"- Limite total: {_summarize_prazo_limite_field(record.entries, 'limite_total')}")
             lines.append(f"- Pag. em atraso: {_summarize_prazo_limite_field(record.entries, 'percentual_pag_atraso')}")
+            self._append_cliente_score_lines(lines, score_record)
             lines.append("")
             lines.append("*Faturamento:*")
             for entry in record.entries:
@@ -16057,11 +16076,13 @@ class CustomerLookupFlow:
         scope_restricted: bool = True,
     ) -> None:
         name = record.nome_fantasia or record.razao_social or "-"
+        score_record = self._safe_cliente_score_record(record)
         title = f"*{name}*"
         if index is not None:
             title = f"{index}) {title}"
         lines.append(title)
-        lines.append(f"NB: {record.cod_pdv or '-'} | Revenda: {record.filial or '-'} | Setor: {record.vendedor or '-'}")
+        score_prefix = f"*Score: {score_record.score} |* " if score_record is not None and score_record.score else ""
+        lines.append(f"{score_prefix}NB: {record.cod_pdv or '-'} | Revenda: {record.filial or '-'} | Setor: {record.vendedor or '-'}")
         lines.append("")
         lines.append("*Cadastro:*")
         lines.append(f"Razao social: {record.razao_social or '-'}")
@@ -16078,6 +16099,7 @@ class CustomerLookupFlow:
         lines.append(f"Cond. pag.: {record.cond_pag_atual or '-'}")
         lines.append(f"Limite: {_format_currency_brl(record.limite_credito)}")
         lines.append(f"Total pendente: {_format_currency_brl(record.total_pendente)}")
+        self._append_cliente_score_lines(lines, score_record)
         lines.append("")
         lines.append("*Pendencias:*")
         lines.append(f"Comodatos: {record.total_comodatos_pendentes}")
@@ -16089,6 +16111,51 @@ class CustomerLookupFlow:
         )
         lines.append("")
         lines.append(f"*Atualizado em:* {_format_display_date(record.ultima_atualizacao_tabela or '-')}")
+
+    def _safe_cliente_score_record(self, record: DClienteRecord) -> ClienteScoreRecord | None:
+        return self._safe_cliente_score_by_registration(
+            filial=record.filial,
+            cod_pdv=record.cod_pdv,
+        )
+
+    def _safe_cliente_score_by_registration(self, *, filial: str, cod_pdv: str) -> ClienteScoreRecord | None:
+        self._cliente_score_last_lookup_available = False
+        if not self._cliente_score_service_ready():
+            return None
+        try:
+            record = self.clientes_score_service.search_by_registration(
+                filial=filial,
+                cod_pdv=cod_pdv,
+            )
+        except Exception:
+            return None
+        self._cliente_score_last_lookup_available = True
+        return record
+
+    def _cliente_score_service_ready(self) -> bool:
+        if self.clientes_score_service is None:
+            return False
+        try:
+            status = self.clientes_score_service.status()
+        except Exception:
+            return False
+        return bool(status.get("ready"))
+
+    def _append_cliente_score_lines(self, lines: list[str], score_record: ClienteScoreRecord | None) -> None:
+        if not self._cliente_score_service_ready():
+            return
+        if score_record is None:
+            if not self._cliente_score_last_lookup_available:
+                return
+            lines.append("*Score:* Cliente sem registro no relatorio de score.")
+            return
+        lines.append(f"*Recebido (historico):* {_format_currency_brl(score_record.recebido_historico)}")
+        lines.append(f"*Titulos pagos:* {score_record.titulos_historico}")
+        lines.append(f"*% com atraso >3d:* {_format_percent_value(score_record.pct_atraso_historico)}")
+        lines.append(f"*Maior atraso:* {_format_days_count(score_record.maior_atraso_dias)}")
+        lines.append(f"*Pagos com +30d:* {score_record.vezes_mais_30d}")
+        lines.append(f"*Tarifa paga:* {_format_currency_brl(score_record.tarifa_paga)}")
+        lines.append(f"*Juros pagos:* {_format_currency_brl_compact(score_record.juros_pagos)}")
 
     def _append_documentacao_cliente_lines(
         self,
@@ -21700,6 +21767,32 @@ def _format_currency_brl(value: Decimal | str | int | float | None) -> str:
     return f"R$ {formatted}"
 
 
+def _format_currency_brl_compact(value: Decimal | str | int | float | None) -> str:
+    amount = _parse_decimal_text(value)
+    if amount is None:
+        return "R$ 0,00"
+    if abs(amount) >= Decimal("1000000"):
+        compact = (amount / Decimal("1000000")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return f"R$ {str(compact).replace('.', ',')} mi"
+    return _format_currency_brl(amount)
+
+
+def _format_percent_value(value: Decimal | str | int | float | None) -> str:
+    amount = _parse_decimal_text(value)
+    if amount is None:
+        return "0,00%"
+    formatted = f"{amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):.2f}".replace(".", ",")
+    return f"{formatted}%"
+
+
+def _format_days_count(value: int | str | Decimal | None) -> str:
+    amount = _parse_decimal_text(value)
+    if amount is None:
+        return "0 dias"
+    days = int(amount)
+    return "1 dia" if days == 1 else f"{days} dias"
+
+
 def _format_weekly_pedido_value(value: Decimal | str | int | float | None) -> str:
     amount = _parse_decimal_text(value)
     if amount is None:
@@ -21760,6 +21853,13 @@ def _format_quantity(value: int | str | Decimal) -> str:
         return str(int(amount))
     normalized = format(amount.normalize(), "f")
     return normalized.rstrip("0").rstrip(".") or "0"
+
+
+def _format_weight_quantity(value: int | str | Decimal) -> str:
+    amount = _parse_decimal_text(value)
+    if amount is None:
+        return str(value or "0")
+    return f"{amount.quantize(Decimal('0.01')):.2f}".replace(".", ",")
 
 
 def _sum_formatted_amounts(*values: str) -> str:

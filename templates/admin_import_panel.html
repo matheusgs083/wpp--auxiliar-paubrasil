@@ -510,6 +510,79 @@
           </div>
         </section>
 
+        <section class="panel-card p-3 mb-3" id="payipBatchPanel">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cash-coin me-2 text-primary"></i>Cobranças PayIP em lote</h2>
+              <div class="form-text">Entrada por revenda + NB. O NB localiza o cliente, mas a cobrança sai sem NB e sem NF por padrão.</div>
+            </div>
+            <span class="pill" id="payipBatchStatus">Aguardando lote</span>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchDefaultRate" checked>
+                <label class="form-check-label" for="payipBatchDefaultRate">Taxa padrão R$ 3,92</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchDefaultInterest" checked>
+                <label class="form-check-label" for="payipBatchDefaultInterest">Juros padrão 10%</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchIncludeNb">
+                <label class="form-check-label" for="payipBatchIncludeNb">Enviar NB no PayIP</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchIncludeNf">
+                <label class="form-check-label" for="payipBatchIncludeNf">Enviar NF se informada</label>
+              </div>
+            </div>
+          </div>
+          <div class="row g-2">
+            <div class="col-xl-5">
+              <label class="form-label small fw-semibold mb-1" for="payipBatchText">Lote CSV</label>
+              <textarea id="payipBatchText" class="form-control mono" rows="8" placeholder="filial;nb;valor;vencimento;nf;taxa;juros;descricao&#10;3;16883;150,00;2026-06-30;;;;Cobrança avulsa"></textarea>
+              <div class="form-text">Obrigatório: <code>filial;nb;valor;vencimento</code>. O sistema busca CPF/CNPJ na PayIP pelo NB.</div>
+              <div class="mt-2">
+                <label class="form-label small fw-semibold mb-1" for="payipBatchMfaCode">Token MFA PayIP</label>
+                <input id="payipBatchMfaCode" class="form-control mono" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Opcional. Informe se a PayIP pedir MFA.">
+                <div class="form-text">Usado apenas para iniciar a sessão PayIP neste lote. O painel não salva esse token.</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <button class="btn btn-outline-primary btn-sm" id="payipBatchPreviewBtn"><i class="bi bi-search me-1"></i>Validar lote</button>
+                <button class="btn btn-success btn-sm" id="payipBatchRunBtn" disabled><i class="bi bi-play-fill me-1"></i>Gerar cobranças</button>
+                <button class="btn btn-outline-secondary btn-sm" id="payipBatchStatusBtn"><i class="bi bi-arrow-repeat me-1"></i>Status</button>
+                <button class="btn btn-outline-success btn-sm" id="payipBatchExportBtn"><i class="bi bi-download me-1"></i>Exportar CSV</button>
+              </div>
+            </div>
+            <div class="col-xl-7">
+              <div class="table-scroll" style="max-height: 320px;">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead>
+                    <tr class="text-uppercase small text-secondary">
+                      <th scope="col">Linha</th>
+                      <th scope="col">Revenda/NB</th>
+                      <th scope="col">Valor</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">PIX</th>
+                      <th scope="col">PDF</th>
+                    </tr>
+                  </thead>
+                  <tbody id="payipBatchBody">
+                    <tr><td colspan="6" class="text-center py-3 text-secondary">Valide um lote para começar.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="panel-card p-3 mb-3" id="recolhasPanel">
           <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
             <div>
@@ -1274,6 +1347,14 @@
           run: "/api/admin/broadcast/run",
           status: "/api/admin/broadcast/status"
         },
+        payipBatch: {
+          preview: "/api/admin/payip/batch/preview",
+          run: "/api/admin/payip/batch/run",
+          status: "/api/admin/payip/batch/status",
+          result: "/api/admin/payip/batch/result",
+          pdf: "/api/admin/payip/batch/pdf",
+          exportCsv: "/api/admin/payip/batch/export.csv"
+        },
         recolhas: {
           list: "/api/admin/recolhas",
           update: "/api/admin/recolhas",
@@ -1307,6 +1388,7 @@
         { id: "dProdutos", name: "Cadastro de Produtos", icon: "bi-boxes", area: "operational", group: "Produtos", groupNote: "Dimensoes auxiliares para enriquecer regras e analises por produto." },
         { id: "ProdutoCestas", name: "Cesta de Produtos", icon: "bi-collection", area: "operational", group: "Produtos" },
         { id: "dClientes", name: "Carteira de Clientes", icon: "bi-person-badge", area: "reports", group: "Relatorios de negocio", groupNote: "Bases usadas diretamente nas consultas e dashboards do bot." },
+        { id: "ClientesScore", name: "Score de Clientes", icon: "bi-stars", area: "reports", group: "Relatorios de negocio" },
         { id: "Inadimplencia", name: "Inadimplencia Vencimento", icon: "bi-graph-down-arrow", area: "reports", group: "Relatorios de negocio" },
         { id: "Comodatos", name: "Equipamentos em Comodato", icon: "bi-box-seam", area: "reports", group: "Relatorios de negocio" },
         { id: "Giro", name: "Giro de Vasilhame", icon: "bi-arrow-repeat", area: "reports", group: "Relatorios de negocio" },
@@ -1342,6 +1424,7 @@
       accessUsers: [], accessEditing: null, lastSyncAt: null,
       evolutionUsage: null,
       broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
+      payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
       recolhas: { total: 0, operations: [] },
       giroRecolha: { total: 0, summary: {}, records: [] },
       giroRecolhaOptions: { operations: [], sellers: [], managers: [], cities: [], districts: [], visit_days: [] },
@@ -1364,6 +1447,7 @@
       dProdutos: "dprodutos",
       ProdutoCestas: "produto_cestas",
       dClientes: "dclientes",
+      ClientesScore: "clientes_score",
       Inadimplencia: "inadimplencia",
       Comodatos: "comodatos",
       Giro: "giro",
@@ -1386,6 +1470,7 @@
       dProdutos: { accept: ".csv", mode: "single", label: "CSV de Produtos", emptyHint: "Selecione o arquivo 01.11.CSV." },
       ProdutoCestas: { accept: ".xlsx,.xlsm,.csv", mode: "single", label: "Cesta de Produtos", emptyHint: "Selecione o arquivo Cesta de Produtos.xlsx." },
       dClientes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
+      ClientesScore: { accept: ".csv", mode: "single", label: "CSV do Score", emptyHint: "Selecione o arquivo clientes_score.csv." },
       Inadimplencia: { accept: ".csv", mode: "multiple", label: "CSV do Dataset(s)", emptyHint: "Selecione um ou mais arquivos CSV." },
       Comodatos: { accept: ".csv", mode: "multiple", label: "CSV do Dataset(s)", emptyHint: "Selecione um ou mais arquivos CSV." },
       Giro: { accept: ".xlsx,.xlsm,.xls", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm ou .xls)." },
@@ -1479,6 +1564,19 @@
       broadcastSummary: document.getElementById("broadcastSummary"),
       broadcastRecipientsBody: document.getElementById("broadcastRecipientsBody"),
       broadcastSelectAll: document.getElementById("broadcastSelectAll"),
+      payipBatchPanel: document.getElementById("payipBatchPanel"),
+      payipBatchStatus: document.getElementById("payipBatchStatus"),
+      payipBatchText: document.getElementById("payipBatchText"),
+      payipBatchMfaCode: document.getElementById("payipBatchMfaCode"),
+      payipBatchDefaultRate: document.getElementById("payipBatchDefaultRate"),
+      payipBatchDefaultInterest: document.getElementById("payipBatchDefaultInterest"),
+      payipBatchIncludeNb: document.getElementById("payipBatchIncludeNb"),
+      payipBatchIncludeNf: document.getElementById("payipBatchIncludeNf"),
+      payipBatchPreviewBtn: document.getElementById("payipBatchPreviewBtn"),
+      payipBatchRunBtn: document.getElementById("payipBatchRunBtn"),
+      payipBatchStatusBtn: document.getElementById("payipBatchStatusBtn"),
+      payipBatchExportBtn: document.getElementById("payipBatchExportBtn"),
+      payipBatchBody: document.getElementById("payipBatchBody"),
       recolhasContainer: document.getElementById("recolhasContainer"),
       recolhasCount: document.getElementById("recolhasCount"),
       recolhasExportBtn: document.getElementById("recolhasExportBtn"),
@@ -1780,6 +1878,7 @@
       renderGiroRecolhaRoutes();
       renderCriticaDashboard();
       renderRecolhas();
+      renderPayipBatch();
       setupAllowedUsersCardSizing();
       ensureUsageFunctionDateRange();
 
@@ -1814,6 +1913,15 @@
       if (E.broadcastTargetMode) E.broadcastTargetMode.addEventListener("change", () => { syncBroadcastTargetModeState(); resetBroadcastPreview(); });
       if (E.broadcastTargetNumber) E.broadcastTargetNumber.addEventListener("input", resetBroadcastPreview);
       if (E.broadcastSelectAll) E.broadcastSelectAll.addEventListener("change", toggleBroadcastSelectAll);
+      if (E.payipBatchPreviewBtn) E.payipBatchPreviewBtn.addEventListener("click", previewPayipBatch);
+      if (E.payipBatchRunBtn) E.payipBatchRunBtn.addEventListener("click", runPayipBatch);
+      if (E.payipBatchStatusBtn) E.payipBatchStatusBtn.addEventListener("click", () => syncPayipBatchStatus({ silent: false }));
+      if (E.payipBatchExportBtn) E.payipBatchExportBtn.addEventListener("click", exportPayipBatchCsv);
+      if (E.payipBatchText) E.payipBatchText.addEventListener("input", resetPayipBatchPreview);
+      [E.payipBatchText, E.payipBatchDefaultRate, E.payipBatchDefaultInterest, E.payipBatchIncludeNb, E.payipBatchIncludeNf]
+        .forEach(element => {
+          if (element) element.addEventListener("change", resetPayipBatchPreview);
+        });
       if (E.recolhasExportBtn) E.recolhasExportBtn.addEventListener("click", exportRecolhasCsv);
       if (E.recolhasRefreshBtn) E.recolhasRefreshBtn.addEventListener("click", () => syncRecolhas({ silent: false }));
       if (E.recolhasStartDate) E.recolhasStartDate.addEventListener("change", updateRecolhasPeriodFilter);
@@ -2268,6 +2376,7 @@
       if (E.allowedUsersCard) E.allowedUsersCard.style.display = adminOnlyDisplay;
       if (E.accessUsersFilter && E.accessUsersFilter.parentElement) E.accessUsersFilter.parentElement.style.display = adminOnlyDisplay;
       if (E.broadcastPanel) E.broadcastPanel.style.display = broadcastDisplay;
+      if (E.payipBatchPanel) E.payipBatchPanel.style.display = isCritica ? "none" : "";
       if (E.usageEvolutionTab && E.usageEvolutionTab.parentElement) {
         E.usageEvolutionTab.parentElement.style.display = state.panel && state.panel.canViewUsage ? "" : "none";
       }
@@ -3277,8 +3386,298 @@
           keepPolling = await syncBroadcastStatus({ silent: true });
         }
         await syncBroadcastOptions({ silent: true });
+        await syncPayipBatchStatus({ silent: true });
       } finally {
         state.broadcast.polling = false;
+      }
+    }
+
+    function currentPayipBatchPayload() {
+      return {
+        raw_text: E.payipBatchText ? E.payipBatchText.value : "",
+        use_default_rate: Boolean(E.payipBatchDefaultRate && E.payipBatchDefaultRate.checked),
+        use_default_interest: Boolean(E.payipBatchDefaultInterest && E.payipBatchDefaultInterest.checked),
+        include_nb: Boolean(E.payipBatchIncludeNb && E.payipBatchIncludeNb.checked),
+        include_nf: Boolean(E.payipBatchIncludeNf && E.payipBatchIncludeNf.checked),
+        mfa_code: E.payipBatchMfaCode ? String(E.payipBatchMfaCode.value || "").trim() : ""
+      };
+    }
+
+    function payipBatchPreviewSignature(payload) {
+      return JSON.stringify({
+        raw_text: String(payload && payload.raw_text || ""),
+        use_default_rate: Boolean(payload && payload.use_default_rate),
+        use_default_interest: Boolean(payload && payload.use_default_interest),
+        include_nb: Boolean(payload && payload.include_nb),
+        include_nf: Boolean(payload && payload.include_nf)
+      });
+    }
+
+    function resetPayipBatchPreview() {
+      if (!state.payipBatch) return;
+      state.payipBatch.preview = null;
+      state.payipBatch.previewPayload = null;
+      renderPayipBatch();
+    }
+
+    function formatMoneyText(value) {
+      const raw = Number(String(value || "0").replace(",", "."));
+      if (!Number.isFinite(raw)) return String(value || "0");
+      return raw.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    }
+
+    function renderPayipBatch() {
+      const job = state.payipBatch && state.payipBatch.job ? state.payipBatch.job : null;
+      const preview = state.payipBatch && state.payipBatch.preview ? state.payipBatch.preview : null;
+      const status = job && job.status ? String(job.status) : "";
+      const running = status === "queued" || status === "running" || Boolean(state.payipBatch && state.payipBatch.state && state.payipBatch.state.running);
+      if (E.payipBatchStatus) {
+        if (job && job.job_id) {
+          const processed = Number(job.processed || 0);
+          const total = Number(job.total || 0);
+          const success = Number(job.success || 0);
+          const failed = Number(job.failed || 0);
+          E.payipBatchStatus.textContent = running ? `Lote em andamento: ${processed}/${total}` : `Ultimo lote: ${success} ok, ${failed} erro(s)`;
+          E.payipBatchStatus.className = running ? "pill warn" : failed > 0 ? "pill warn" : "pill ok";
+        } else if (preview && Array.isArray(preview.items)) {
+          E.payipBatchStatus.textContent = `Lote validado: ${preview.items.length} cobranca(s)`;
+          E.payipBatchStatus.className = "pill ok";
+        } else {
+          E.payipBatchStatus.textContent = "Aguardando lote";
+          E.payipBatchStatus.className = "pill";
+        }
+      }
+      if (E.payipBatchRunBtn) E.payipBatchRunBtn.disabled = running || !(preview && Array.isArray(preview.items) && preview.items.length);
+      if (E.payipBatchPreviewBtn) E.payipBatchPreviewBtn.disabled = running;
+
+      const results = job && Array.isArray(job.results) ? job.results : [];
+      const rows = results.length ? results : preview && Array.isArray(preview.items) ? preview.items : [];
+      if (!E.payipBatchBody) return;
+      if (!rows.length) {
+        E.payipBatchBody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-secondary">Valide um lote para comecar.</td></tr>';
+        return;
+      }
+      E.payipBatchBody.innerHTML = rows.map(item => {
+        const itemId = item.item_id || "";
+        const pix = item.pix_code || "";
+        const canTryPdf = Boolean(item.pdf_available || item.payment_id);
+        const statusText = item.status || (results.length ? "pendente" : "validado");
+        const statusClass = statusText === "success" ? "text-bg-success" : statusText === "failed" ? "text-bg-danger" : "text-bg-light";
+        return `
+          <tr>
+            <td class="ps-2">${escapeHtml(String(item.line_number || ""))}</td>
+            <td><strong>${escapeHtml(item.filial || "-")}</strong> / NB ${escapeHtml(item.nb || "-")}<div class="small text-secondary">${escapeHtml(item.client_name || item.description || "")}</div></td>
+            <td>${escapeHtml(formatMoneyText(item.amount || "0"))}<div class="small text-secondary">Venc. ${escapeHtml(formatDate(item.due_date || ""))}</div></td>
+            <td><span class="badge ${statusClass}">${escapeHtml(statusText)}</span>${item.error ? `<div class="small text-danger mt-1">${escapeHtml(item.error)}</div>` : ""}</td>
+            <td>${pix ? `<button class="btn btn-outline-primary btn-sm" onclick="copyPayipBatchPix('${escapeHtml(itemId)}')"><i class="bi bi-clipboard me-1"></i>Copiar</button>` : '<span class="text-secondary small">-</span>'}</td>
+            <td>${canTryPdf ? `<button class="btn btn-outline-success btn-sm" onclick="downloadPayipBatchPdf('${escapeHtml(itemId)}')"><i class="bi bi-file-earmark-pdf me-1"></i>${item.pdf_available ? "PDF" : "Gerar PDF"}</button>` : '<span class="text-secondary small">-</span>'}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function previewPayipBatch() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const payload = currentPayipBatchPayload();
+      payload.mfa_code = "";
+      if (!String(payload.raw_text || "").trim()) { addLog("Cole o lote PayIP antes de validar.", "warn"); return; }
+      const btn = E.payipBatchPreviewBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Validando';
+      }
+      try {
+        const result = await req(CONFIG.endpoints.payipBatch.preview, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 60000
+        });
+        state.payipBatch.preview = result;
+        state.payipBatch.previewPayload = payipBatchPreviewSignature(payload);
+        state.payipBatch.job = null;
+        renderPayipBatch();
+        addLog(`Lote PayIP validado: ${result.total || 0} cobranca(s).`, "ok");
+      } catch (err) {
+        state.payipBatch.preview = null;
+        state.payipBatch.previewPayload = null;
+        renderPayipBatch();
+        addLog(`Falha ao validar lote PayIP: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function runPayipBatch() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const payload = currentPayipBatchPayload();
+      const preview = state.payipBatch.preview;
+      const total = preview && Array.isArray(preview.items) ? preview.items.length : 0;
+      if (!total) { addLog("Valide o lote PayIP antes de gerar.", "warn"); return; }
+      if (state.payipBatch.previewPayload !== payipBatchPreviewSignature(payload)) {
+        state.payipBatch.preview = null;
+        state.payipBatch.previewPayload = null;
+        renderPayipBatch();
+        addLog("O lote PayIP mudou depois da validacao. Valide novamente antes de gerar.", "warn");
+        return;
+      }
+      const confirmed = await askConfirmation(`Gerar ${total} cobranca(s) PayIP em fila?`);
+      if (!confirmed) return;
+      const btn = E.payipBatchRunBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enfileirando';
+      }
+      try {
+        const result = await req(CONFIG.endpoints.payipBatch.run, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 60000
+        });
+        state.payipBatch.state = result.state || null;
+        state.payipBatch.job = result.job || null;
+        if (E.payipBatchMfaCode) E.payipBatchMfaCode.value = "";
+        renderPayipBatch();
+        addLog(`Lote PayIP iniciado: ${total} cobranca(s).`, "ok");
+        pollPayipBatchStatus();
+      } catch (err) {
+        addLog(`Falha ao iniciar lote PayIP: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function syncPayipBatchStatus({ silent = true } = {}) {
+      if (!hasPanelAuth()) return false;
+      try {
+        const jobId = state.payipBatch && state.payipBatch.job && state.payipBatch.job.job_id ? state.payipBatch.job.job_id : "";
+        const query = jobId ? `?job_id=${encodeURIComponent(jobId)}` : "";
+        const payload = await req(`${CONFIG.endpoints.payipBatch.status}${query}`, { timeoutMs: 30000 });
+        state.payipBatch.state = payload.state || null;
+        state.payipBatch.job = payload.job && payload.job.job_id ? payload.job : state.payipBatch.job;
+        renderPayipBatch();
+        if (!silent) addLog("Status do lote PayIP atualizado.", "ok");
+        return Boolean(payload.state && payload.state.running);
+      } catch (err) {
+        if (!silent) addLog(`Falha ao consultar lote PayIP: ${err.message}`, "warn");
+        return false;
+      }
+    }
+
+    async function pollPayipBatchStatus() {
+      if (state.payipBatch.polling) return;
+      state.payipBatch.polling = true;
+      try {
+        let keepPolling = true;
+        while (keepPolling) {
+          await new Promise(resolve => setTimeout(resolve, 2500));
+          keepPolling = await syncPayipBatchStatus({ silent: true });
+        }
+        await syncPayipBatchStatus({ silent: true });
+      } finally {
+        state.payipBatch.polling = false;
+      }
+    }
+
+    function payipBatchResultById(itemId) {
+      const job = state.payipBatch && state.payipBatch.job ? state.payipBatch.job : null;
+      const results = job && Array.isArray(job.results) ? job.results : [];
+      return results.find(item => String(item.item_id || "") === String(itemId || "")) || null;
+    }
+
+    async function copyPayipBatchPix(itemId) {
+      const item = payipBatchResultById(itemId);
+      const pix = item ? String(item.pix_code || "") : "";
+      if (!pix) { addLog("PIX copia e cola ainda nao disponivel para este item.", "warn"); return; }
+      try {
+        const copied = await writeTextToClipboard(pix);
+        if (!copied) throw new Error("clipboard indisponivel");
+        addLog("PIX PayIP copiado.", "ok");
+      } catch (err) {
+        addLog(`Nao foi possivel copiar o PIX: ${err.message}`, "warn");
+      }
+    }
+
+    async function downloadPayipBatchPdf(itemId) {
+      updateTokens();
+      const jobId = state.payipBatch && state.payipBatch.job && state.payipBatch.job.job_id ? state.payipBatch.job.job_id : "";
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+      const query = jobId ? `?job_id=${encodeURIComponent(jobId)}` : "";
+      try {
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.payipBatch.pdf}/${encodeURIComponent(itemId)}${query}`, {
+          method: "GET",
+          credentials: "same-origin",
+          headers
+        });
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = matchedName && matchedName[1] ? matchedName[1] : `payip-${itemId}.pdf`;
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog("PDF PayIP baixado.", "ok");
+        await syncPayipBatchStatus({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao baixar PDF PayIP: ${err.message}`, "err");
+      }
+    }
+
+    async function exportPayipBatchCsv() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const jobId = state.payipBatch && state.payipBatch.job && state.payipBatch.job.job_id ? state.payipBatch.job.job_id : "";
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+      const query = jobId ? `?job_id=${encodeURIComponent(jobId)}` : "";
+      try {
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.payipBatch.exportCsv}${query}`, {
+          method: "GET",
+          credentials: "same-origin",
+          headers
+        });
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = matchedName && matchedName[1] ? matchedName[1] : "payip-lote.csv";
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog("Resultado PayIP exportado.", "ok");
+      } catch (err) {
+        addLog(`Falha ao exportar lote PayIP: ${err.message}`, "err");
       }
     }
 
@@ -5842,7 +6241,15 @@
         }
         const isAdmin = state.panel && state.panel.isAdmin;
         const giroParams = currentGiroRecolhaParams();
-        const [statusPayload, historyPayload, usersPayload, recolhasPayload, giroRecolhaOptionsPayload, giroRecolhaSlicerOptionsPayloads, giroRecolhaPayload] = await Promise.all([
+        const [
+          statusResult,
+          historyResult,
+          usersResult,
+          recolhasResult,
+          giroRecolhaOptionsResult,
+          giroRecolhaSlicerOptionsResult,
+          giroRecolhaResult
+        ] = await Promise.allSettled([
           req(CONFIG.endpoints.import.status, { timeoutMs: 30000 }),
           req(CONFIG.endpoints.import.history, { timeoutMs: 30000 }),
           isAdmin ? req(CONFIG.endpoints.access.list, { timeoutMs: 30000 }) : Promise.resolve({ users: [] }),
@@ -5851,6 +6258,18 @@
           loadGiroRecolhaSlicerOptions(giroParams),
           req(`${CONFIG.endpoints.giroRecolha.dashboard}?${giroRecolhaQueryString(giroParams)}`, { timeoutMs: 45000 })
         ]);
+        const settledPayload = (result, fallback, label) => {
+          if (result && result.status === "fulfilled") return result.value;
+          if (label) addLog(`Falha parcial ao carregar ${label}.`, "warn");
+          return fallback;
+        };
+        const statusPayload = settledPayload(statusResult, {}, "status");
+        const historyPayload = settledPayload(historyResult, { history: [], jobs: [] }, "historico");
+        const usersPayload = settledPayload(usersResult, { users: [] }, "usuarios");
+        const recolhasPayload = settledPayload(recolhasResult, { total: 0, operations: [] }, "recolhas");
+        const giroRecolhaOptionsPayload = settledPayload(giroRecolhaOptionsResult, { options: emptyGiroRecolhaOptions() }, "filtros de giro");
+        const giroRecolhaSlicerOptionsPayloads = settledPayload(giroRecolhaSlicerOptionsResult, null, "segmentadores de giro");
+        const giroRecolhaPayload = settledPayload(giroRecolhaResult, { total: 0, summary: {}, records: [] }, "dashboard de giro");
         state.status = statusPayload || {};
         state.history = (historyPayload && historyPayload.history) ? historyPayload.history : [];
         state.jobs = Array.isArray(state.status.jobs)
@@ -5888,6 +6307,7 @@
           renderEvolutionUsage();
         }
         await syncBroadcastOptions({ silent: true });
+        await syncPayipBatchStatus({ silent: true });
         addLog("Atualização concluída.", "ok");
       } catch (err) {
         addLog(`Falha ao atualizar: ${err.message}`, "err");
@@ -5902,6 +6322,7 @@
         updateMetrics();
         renderEvolutionUsage();
         renderBroadcastOptions();
+        renderPayipBatch();
       } finally {
         setSyncState(false);
       }

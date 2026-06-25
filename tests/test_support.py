@@ -15,7 +15,12 @@ if str(ROOT) not in sys.path:
 from bot_api.security.access_control import AccessControl, AccessDecision
 from bot_api.integrations.payip_client import PayipError, PayipMfaRequired
 from bot_api.services.customer_lookup_flow import CustomerLookupFlow
-from bot_api.services.critica_rn_query_service import CriticaRnRecord, CriticaRnSummary
+from bot_api.services.critica_rn_query_service import (
+    CRITICA_PDF_CURRENT_IMPORT_MESSAGE,
+    CriticaPdfCurrentImportRequiredError,
+    CriticaRnRecord,
+    CriticaRnSummary,
+)
 from bot_api.services.recolha_request_service import RecolhaRequestService
 
 
@@ -214,6 +219,31 @@ class StubComodatosService(StubStatusService):
         return list(self.search_records)
 
 
+class StubClientesScoreService(StubStatusService):
+    def __init__(
+        self,
+        *,
+        ready: bool = True,
+        records: list[Any] | None = None,
+        search_error: Exception | None = None,
+    ) -> None:
+        super().__init__(ready=ready)
+        self.records = list(records or [])
+        self.search_error = search_error
+        self.search_calls: list[dict[str, Any]] = []
+
+    def search_by_registration(self, **kwargs: Any) -> Any | None:
+        self.search_calls.append(kwargs)
+        if self.search_error is not None:
+            raise self.search_error
+        filial = str(kwargs.get("filial") or "").strip()
+        cod_pdv = str(kwargs.get("cod_pdv") or "").strip()
+        for record in self.records:
+            if str(getattr(record, "filial", "") or "").strip() == filial and str(getattr(record, "cod_pdv", "") or "").strip() == cod_pdv:
+                return record
+        return None
+
+
 class StubGiroService(StubStatusService):
     def __init__(
         self,
@@ -354,12 +384,14 @@ class StubCriticaRnService(StubStatusService):
         records: list[CriticaRnRecord] | None = None,
         problems: list[CriticaRnRecord] | None = None,
         latest: date | None = None,
+        current_import_available: bool = True,
     ) -> None:
         super().__init__(ready=ready)
         self.summary = summary or make_critica_summary()
         self.records = list(records or [make_critica_record()])
         self.problems = list(problems or self.records)
         self.latest = latest if latest is not None else date(2026, 6, 3)
+        self.current_import_available = current_import_available
         self.summary_calls: list[dict[str, Any]] = []
         self.problem_calls: list[dict[str, Any]] = []
         self.registration_calls: list[dict[str, Any]] = []
@@ -392,6 +424,7 @@ class StubCriticaRnService(StubStatusService):
         return list(self.records)
 
     def get_pdf_report(self, **kwargs: Any) -> Any:
+        self._raise_if_current_import_missing()
         self.pdf_report_calls.append(kwargs)
         return SimpleNamespace(
             summary=self.summary,
@@ -401,6 +434,7 @@ class StubCriticaRnService(StubStatusService):
         )
 
     def get_pdf_report_by_registration(self, **kwargs: Any) -> Any:
+        self._raise_if_current_import_missing()
         self.registration_pdf_calls.append(kwargs)
         filtered_records = self.search_by_registration(**kwargs)
         summary = self.summary
@@ -418,6 +452,7 @@ class StubCriticaRnService(StubStatusService):
         )
 
     def get_gv_summary_pdf(self, **kwargs: Any) -> Any:
+        self._raise_if_current_import_missing()
         self.gv_summary_pdf_calls.append(kwargs)
         return SimpleNamespace(
             summary=self.summary,
@@ -429,6 +464,13 @@ class StubCriticaRnService(StubStatusService):
     def latest_date(self, **kwargs: Any) -> date | None:
         self.latest_calls.append(kwargs)
         return self.latest
+
+    def has_current_critica_import(self, **_kwargs: Any) -> bool:
+        return self.current_import_available
+
+    def _raise_if_current_import_missing(self) -> None:
+        if not self.current_import_available:
+            raise CriticaPdfCurrentImportRequiredError(CRITICA_PDF_CURRENT_IMPORT_MESSAGE)
 
 
 class StubDocumentacaoPendenteService(StubStatusService):
@@ -735,6 +777,7 @@ class StubPayipPaymentsService:
         self.bootstrap_calls.append(mfa_code)
         self.access_token_valid = True
         self.refresh_token_valid = True
+        self.require_mfa_once = False
         return self.status()
 
     def find_client_by_code(self, *, filial: str, client_code: str) -> Any:
@@ -932,6 +975,7 @@ def make_flow(
     critica_rn_service: StubCriticaRnService | None = None,
     documentacao_pendente_service: StubDocumentacaoPendenteService | None = None,
     prazo_limite_service: StubPrazoLimiteService | None = None,
+    clientes_score_service: StubClientesScoreService | None = None,
     payip_payments_service: StubPayipPaymentsService | None = None,
     recolha_request_service: RecolhaRequestService | None = None,
     access_control: AccessControl | None = None,
@@ -945,6 +989,7 @@ def make_flow(
         critica_rn_service=critica_rn_service or StubCriticaRnService(),
         documentacao_pendente_service=documentacao_pendente_service or StubDocumentacaoPendenteService(),
         prazo_limite_service=prazo_limite_service or StubPrazoLimiteService(),
+        clientes_score_service=clientes_score_service,
         payip_payments_service=payip_payments_service or StubPayipPaymentsService(),
         recolha_request_service=recolha_request_service,
         access_control=access_control

@@ -390,7 +390,7 @@ def _media_payload_variants(
     media_type: str,
     caption: str,
     filename: str,
-    reply_targets: tuple[str, ...],
+    reply_targets: tuple[str, ...] = (),
 ) -> list[dict[str, Any]]:
     normalized_media_type = str(media_type or "image").strip().lower() or "image"
     media_value = str(media_url or "").strip()
@@ -454,8 +454,16 @@ def _media_payload_variants(
     return variants
 
 
-def _text_payload_variants(*, number: str, text: str, reply_targets: tuple[str, ...]) -> list[dict[str, Any]]:
-    return [{"number": recipient, "text": text} for recipient in _recipient_candidates(number=number, reply_targets=reply_targets)]
+def _text_payload_variants(*, number: str, text: str, reply_targets: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    variants: list[dict[str, Any]] = []
+    for recipient in _recipient_candidates(number=number, reply_targets=reply_targets):
+        variants.extend(
+            [
+                {"number": recipient, "textMessage": {"text": text}},
+                {"number": recipient, "text": text},
+            ]
+        )
+    return variants
 
 
 def _extract_reply_targets(*, data: dict[str, Any], nested_message: dict[str, Any], payload: dict[str, Any]) -> tuple[str, ...]:

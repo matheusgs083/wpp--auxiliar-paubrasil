@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 
 from bot_api.services.critica_rn_query_service import (
+    CriticaRnQueryService,
     _annotate_duplicate_client_orders,
     _annotate_client_total_above_average,
     _annotate_duplicate_products_by_price,
@@ -30,6 +31,46 @@ from bot_api.tests.test_support import make_critica_record
 
 
 class CriticaRnQueryServiceRuleTests(unittest.TestCase):
+    def test_current_critica_import_check_parameterizes_dataset_pattern(self) -> None:
+        class FakeCursor:
+            def __init__(self) -> None:
+                self.params = None
+
+            def __enter__(self) -> "FakeCursor":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def execute(self, _query: object, params: tuple[object, ...]) -> None:
+                self.params = params
+
+            def fetchone(self) -> dict[str, bool]:
+                return {"has_import": True}
+
+        class FakeConnection:
+            def __init__(self, cursor: FakeCursor) -> None:
+                self._cursor = cursor
+
+            def __enter__(self) -> "FakeConnection":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def cursor(self) -> FakeCursor:
+                return self._cursor
+
+        cursor = FakeCursor()
+        service = CriticaRnQueryService(database_url="postgresql://example", schema="reports")
+        service._connect = lambda **_kwargs: FakeConnection(cursor)  # type: ignore[method-assign]
+
+        self.assertTrue(service.has_current_critica_import(today=date(2026, 6, 15)))
+        self.assertEqual(
+            cursor.params,
+            ("critica_rn", date(2026, 6, 15), date(2026, 6, 15)),
+        )
+
     def test_resolve_price_reference_uses_ttc_for_unit_sales(self) -> None:
         reference, label = _resolve_price_reference(
             filial="1",

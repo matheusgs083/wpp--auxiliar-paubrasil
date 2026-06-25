@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
+from threading import RLock
 from typing import Any, Iterator
 
 import psycopg
@@ -27,6 +28,7 @@ class AdminImportJobService:
         self.database_url = str(database_url or "").strip()
         self.schema = _normalize_schema(schema)
         self.connect_timeout_seconds = max(float(connect_timeout_seconds), 1.0)
+        self._maintenance_lock = RLock()
 
     def create_job(
         self,
@@ -167,24 +169,25 @@ class AdminImportJobService:
 
     def list_recent_jobs(self, *, limit: int = 20) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 100))
-        with self._connect() as conn:
-            self.ensure_schema(conn)
-            self.mark_stale_jobs(conn=conn)
-            self.prune_old_jobs(conn=conn)
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        SELECT *
-                        FROM {}.{}
-                        ORDER BY created_at DESC
-                        LIMIT %s
-                        """
-                    ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE)),
-                    (safe_limit,),
-                )
-                rows = cur.fetchall()
-            conn.commit()
+        with self._maintenance_lock:
+            with self._connect() as conn:
+                self.ensure_schema(conn)
+                self.mark_stale_jobs(conn=conn)
+                self.prune_old_jobs(conn=conn)
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            SELECT *
+                            FROM {}.{}
+                            ORDER BY created_at DESC
+                            LIMIT %s
+                            """
+                        ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE)),
+                        (safe_limit,),
+                    )
+                    rows = cur.fetchall()
+                conn.commit()
         return [_job_row_to_dict(row) for row in rows]
 
     def mark_active_jobs_stale(
@@ -192,64 +195,66 @@ class AdminImportJobService:
         *,
         reason: str = "Job ficou aberto apos reinicio do bot e foi liberado automaticamente.",
     ) -> int:
-        with self._connect() as conn:
-            self.ensure_schema(conn)
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        UPDATE {}.{}
-                        SET
-                            status = 'stale',
-                            error = CASE
-                                WHEN error = '' THEN %s
-                                ELSE error
-                            END,
-                            finished_at = COALESCE(finished_at, NOW()),
-                            updated_at = NOW()
-                        WHERE status = ANY(%s)
-                        RETURNING job_id
-                        """
-                    ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE)),
-                    (str(reason or ""), list(ACTIVE_JOB_STATUSES)),
-                )
-                rows = cur.fetchall()
-            conn.commit()
+        with self._maintenance_lock:
+            with self._connect() as conn:
+                self.ensure_schema(conn)
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            UPDATE {}.{}
+                            SET
+                                status = 'stale',
+                                error = CASE
+                                    WHEN error = '' THEN %s
+                                    ELSE error
+                                END,
+                                finished_at = COALESCE(finished_at, NOW()),
+                                updated_at = NOW()
+                            WHERE status = ANY(%s)
+                            RETURNING job_id
+                            """
+                        ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE)),
+                        (str(reason or ""), list(ACTIVE_JOB_STATUSES)),
+                    )
+                    rows = cur.fetchall()
+                conn.commit()
         return len(rows)
 
     def mark_stale_jobs(self, *, conn: psycopg.Connection[Any] | None = None, stale_after_minutes: int = 360) -> int:
-        close_conn = conn is None
-        active_conn = conn or self._connect()
-        try:
-            self.ensure_schema(active_conn)
-            cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(int(stale_after_minutes), 30))
-            with active_conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        UPDATE {}.{}
-                        SET
-                            status = 'stale',
-                            error = CASE
-                                WHEN error = '' THEN 'Job ficou aberto por tempo excessivo e foi marcado como antigo.'
-                                ELSE error
-                            END,
-                            finished_at = COALESCE(finished_at, NOW()),
-                            updated_at = NOW()
-                        WHERE status = ANY(%s)
-                          AND updated_at < %s
-                        RETURNING job_id
-                        """
-                    ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE)),
-                    (list(ACTIVE_JOB_STATUSES), cutoff),
-                )
-                rows = cur.fetchall()
-            if close_conn:
-                active_conn.commit()
-            return len(rows)
-        finally:
-            if close_conn:
-                active_conn.close()
+        with self._maintenance_lock:
+            close_conn = conn is None
+            active_conn = conn or self._connect()
+            try:
+                self.ensure_schema(active_conn)
+                cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(int(stale_after_minutes), 30))
+                with active_conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            UPDATE {}.{}
+                            SET
+                                status = 'stale',
+                                error = CASE
+                                    WHEN error = '' THEN 'Job ficou aberto por tempo excessivo e foi marcado como antigo.'
+                                    ELSE error
+                                END,
+                                finished_at = COALESCE(finished_at, NOW()),
+                                updated_at = NOW()
+                            WHERE status = ANY(%s)
+                              AND updated_at < %s
+                            RETURNING job_id
+                            """
+                        ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE)),
+                        (list(ACTIVE_JOB_STATUSES), cutoff),
+                    )
+                    rows = cur.fetchall()
+                if close_conn:
+                    active_conn.commit()
+                return len(rows)
+            finally:
+                if close_conn:
+                    active_conn.close()
 
     def prune_old_jobs(
         self,
@@ -257,30 +262,31 @@ class AdminImportJobService:
         conn: psycopg.Connection[Any] | None = None,
         keep_days: int = DEFAULT_HISTORY_RETENTION_DAYS,
     ) -> int:
-        close_conn = conn is None
-        active_conn = conn or self._connect()
-        try:
-            self.ensure_schema(active_conn)
-            cutoff = datetime.now(timezone.utc) - timedelta(days=max(int(keep_days), 1))
-            with active_conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        DELETE FROM {}.{}
-                        WHERE status <> ALL(%s)
-                          AND COALESCE(finished_at, updated_at, created_at) < %s
-                        RETURNING job_id
-                        """
-                    ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE)),
-                    (list(ACTIVE_JOB_STATUSES), cutoff),
-                )
-                rows = cur.fetchall()
-            if close_conn:
-                active_conn.commit()
-            return len(rows)
-        finally:
-            if close_conn:
-                active_conn.close()
+        with self._maintenance_lock:
+            close_conn = conn is None
+            active_conn = conn or self._connect()
+            try:
+                self.ensure_schema(active_conn)
+                cutoff = datetime.now(timezone.utc) - timedelta(days=max(int(keep_days), 1))
+                with active_conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            DELETE FROM {}.{}
+                            WHERE status <> ALL(%s)
+                              AND COALESCE(finished_at, updated_at, created_at) < %s
+                            RETURNING job_id
+                            """
+                        ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE)),
+                        (list(ACTIVE_JOB_STATUSES), cutoff),
+                    )
+                    rows = cur.fetchall()
+                if close_conn:
+                    active_conn.commit()
+                return len(rows)
+            finally:
+                if close_conn:
+                    active_conn.close()
 
     @contextmanager
     def operation_lock(self, lock_keys: list[str] | tuple[str, ...]) -> Iterator[list[str]]:
