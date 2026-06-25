@@ -16,7 +16,10 @@ from bot_api.services import (
     admin_imports_runtime,
     admin_usage_service,
 )
+from bot_api.services.admin_broadcast_config import build_admin_broadcast_config
+from bot_api.services.admin_import_config import ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS, build_admin_import_datasets
 from bot_api.services.admin_templates import AdminTemplateLoader
+from bot_api.services.app_lifecycle import register_app_lifecycle
 from bot_api.services.customer_lookup_flow import FILIAL_LABELS
 from bot_api.services.admin_panel_session_service import AdminPanelSessionService
 from bot_api.services.admin_payip_batch_service import AdminPayipBatchService
@@ -89,7 +92,6 @@ ADMIN_IMPORT_RUNTIME_ROOT = (
     Path("/tmp/bot_api_admin_imports") if Path("/tmp").exists() else PROJECT_ROOT / "exports" / "admin_import_uploads"
 )
 ADMIN_UPLOAD_CHUNK_SIZE_BYTES = 1024 * 1024
-ADMIN_BROADCAST_SEND_DELAY_SECONDS = 1.0
 ADMIN_PANEL_SESSION_COOKIE = "bot_admin_session"
 ADMIN_PANEL_SESSION_TTL_SECONDS = 12 * 60 * 60
 ADMIN_PANEL_LOGIN_WINDOW_SECONDS = 5 * 60
@@ -107,169 +109,11 @@ admin_panel_session_service = AdminPanelSessionService(
 )
 
 
-ADMIN_IMPORT_DATASETS: dict[str, dict[str, Any]] = {
-    "dsetores": {
-        "label": "dSetores",
-        "default_path": PROJECT_ROOT / "data" / "dSetores" / "dSetores.csv",
-        "service": dsetores_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_csv",
-        "summarize_method": "summarize_csv",
-        "import_method": "import_csv",
-    },
-    "dprecos": {
-        "label": "DPrecos",
-        "default_path": PROJECT_ROOT / "data" / "dPrecos" / "DPrecos.xlsx",
-        "service": dprecos_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".xlsx,.xlsm,.csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "doperacoes": {
-        "label": "dOperacoes",
-        "default_path": PROJECT_ROOT / "data" / "dOperacoes" / "dOperacoes.csv",
-        "service": doperacoes_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "dcondicoes": {
-        "label": "dCondicoes",
-        "default_path": PROJECT_ROOT / "data" / "dCondicoes" / "dCondicoes.csv",
-        "allow_default_source": False,
-        "service": dcondicoes_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "dprodutos": {
-        "label": "dProdutos",
-        "default_path": PROJECT_ROOT / "data" / "dProdutos" / "01.11.CSV",
-        "allow_default_source": False,
-        "service": dprodutos_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "produto_cestas": {
-        "label": "Cesta de Produtos",
-        "default_path": PROJECT_ROOT / "data" / "dProdutos" / "Cesta de Produtos.xlsx",
-        "allow_default_source": False,
-        "service": produto_cestas_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".xlsx,.xlsm,.csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "dclientes": {
-        "label": "dClientes",
-        "default_path": PROJECT_ROOT / "data" / "dClientes" / "dClientes.csv",
-        "service": dclientes_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_csv",
-        "summarize_method": "summarize_csv",
-        "import_method": "import_csv",
-    },
-    "clientes_score": {
-        "label": "Score de Clientes",
-        "default_path": PROJECT_ROOT / "data" / "ClientesScore" / "clientes_score.csv",
-        "allow_default_source": False,
-        "service": clientes_score_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "inadimplencia": {
-        "label": "Inadimplencia",
-        "default_path": PROJECT_ROOT / "data" / "Inadimplencia",
-        "allow_default_source": False,
-        "service": inadimplencia_import_service,
-        "upload_mode": "multiple",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "comodatos": {
-        "label": "Comodatos",
-        "default_path": PROJECT_ROOT / "data" / "Comodatos",
-        "service": comodatos_import_service,
-        "upload_mode": "multiple",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "giro": {
-        "label": "Giro de Vasilhame",
-        "default_path": PROJECT_ROOT / "data" / "Giro" / "giro.xlsx",
-        "service": giro_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".xlsx,.xlsm,.xls",
-        "validate_method": "validate_workbook",
-        "summarize_method": "summarize_workbook",
-        "import_method": "import_workbook",
-    },
-    **{
-        f"critica_op_{filial_code}": {
-            "label": f"Critica Operacao {filial_code} - {FILIAL_LABELS[filial_code]}",
-            "default_path": PROJECT_ROOT / "data" / "Critica" / f"critica_operacao_{filial_code}.csv",
-            "allow_default_source": False,
-            "service": critica_operacao_import_services[filial_code],
-            "upload_mode": "single",
-            "accept_extensions": ".csv",
-            "validate_method": "validate_source",
-            "summarize_method": "summarize_source",
-            "import_method": "import_source",
-        }
-        for filial_code in sorted(FILIAL_LABELS, key=int)
-    },
-    "critica_rn": {
-        "label": "Critica RN",
-        "default_path": PROJECT_ROOT / "data" / "CriticaRN" / "critica_rn.xlsx",
-        "allow_default_source": False,
-        "service": critica_rn_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".xlsx,.xlsm,.csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "documentacao_pendente": {
-        "label": "Documentacao Pendente",
-        "default_path": PROJECT_ROOT / "data" / "DocumentacaoPendente" / "documentacao_pendente.csv",
-        "service": documentacao_pendente_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-    "prazo_limite": {
-        "label": "Prazo e Limite",
-        "default_path": PROJECT_ROOT / "data" / "PrazoLimite" / "prazo_limite.xlsx",
-        "service": prazo_limite_import_service,
-        "upload_mode": "single",
-        "accept_extensions": ".xlsx,.xlsm,.xls,.csv",
-        "validate_method": "validate_source",
-        "summarize_method": "summarize_source",
-        "import_method": "import_source",
-    },
-}
-ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS = {"critica_rn", "dclientes", "doperacoes", "dprecos", "dsetores", "dcondicoes"}
+ADMIN_IMPORT_DATASETS = build_admin_import_datasets(
+    project_root=PROJECT_ROOT,
+    services=services,
+    filial_labels=FILIAL_LABELS,
+)
 critica_pdf_prebuild_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="critica-pdf-prebuild")
 critica_pdf_prebuild_lock = Lock()
 critica_pdf_prebuild_state: dict[str, Any] = {
@@ -283,111 +127,20 @@ critica_pdf_prebuild_state: dict[str, Any] = {
     "last_result": {},
     "last_error": "",
 }
-ADMIN_BROADCAST_ACTIONS: dict[str, dict[str, Any]] = {
-    "rota_dia": {
-        "label": "Rota do dia",
-        "description": "Envia os clientes da rota do dia para cada usuario.",
-        "shortcut": "rota hoje",
-        "shortcut_template": "rota {day}",
-        "area": "cliente",
-        "supports_day": True,
-    },
-    "inad_hoje": {
-        "label": "Inad por dia",
-        "description": "Executa o atalho de risco/cobranca da rota escolhida para cada usuario.",
-        "shortcut": "inad hoje",
-        "shortcut_template": "inad {day}",
-        "area": "inadimplencia",
-        "supports_day": True,
-    },
-    "giro_hoje": {
-        "label": "Giro por dia",
-        "description": "Executa o atalho de giro da rota escolhida para cada usuario.",
-        "shortcut": "giro hoje",
-        "shortcut_template": "giro {day}",
-        "area": "cliente",
-        "supports_day": True,
-    },
-    "inad_base": {
-        "label": "Inad da base",
-        "description": "Executa o atalho de inadimplentes da base/carteira para cada usuario.",
-        "shortcut": "inadimplentes da base",
-        "area": "inadimplencia",
-        "supports_day": False,
-    },
-    "giro_zero_base": {
-        "label": "Giro zero da base",
-        "description": "Executa o atalho de clientes com giro zero da base/carteira para cada usuario.",
-        "shortcut": "giro zero da base",
-        "area": "cliente",
-        "supports_day": False,
-    },
-    "critica_setor_pdf": {
-        "label": "Critica PDF por setor",
-        "description": "Envia a critica em PDF do setor do vendedor dentro da operacao escolhida.",
-        "shortcut": "critica pdf",
-        "area": "cliente",
-        "supports_day": False,
-        "target_audiences": ["vendedor"],
-        "per_recipient_shortcut": "critica_sector_pdf",
-    },
-}
-ADMIN_BROADCAST_DAY_OPTIONS: dict[str, dict[str, str]] = {
-    "hoje": {"label": "Hoje", "token": "hoje"},
-    "segunda": {"label": "Segunda", "token": "segunda"},
-    "terca": {"label": "Terca", "token": "terca"},
-    "quarta": {"label": "Quarta", "token": "quarta"},
-    "quinta": {"label": "Quinta", "token": "quinta"},
-    "sexta": {"label": "Sexta", "token": "sexta"},
-    "sabado": {"label": "Sabado", "token": "sabado"},
-    "domingo": {"label": "Domingo", "token": "domingo"},
-}
-ADMIN_BROADCAST_TARGET_MODES: dict[str, dict[str, str]] = {
-    "filial": {"label": "Todos da filial"},
-    "specific": {"label": "Numero especifico"},
-}
-ADMIN_BROADCAST_AUDIENCES: dict[str, dict[str, str]] = {
-    "vendedor": {
-        "label": "Vendedores (RN)",
-        "role": "vendedor",
-        "role_label": "RN",
-        "empty_message": "Nenhum vendedor/RN ativo encontrado para essa filial.",
-    },
-    "gerente_vendas": {
-        "label": "GVs",
-        "role": "gerente_vendas",
-        "role_label": "GV",
-        "empty_message": "Nenhum GV ativo encontrado para essa filial.",
-    },
-}
+admin_broadcast_config = build_admin_broadcast_config(
+    daily_route_broadcast_enabled=settings.daily_route_broadcast_enabled,
+)
+ADMIN_BROADCAST_ACTIONS = admin_broadcast_config.actions
+ADMIN_BROADCAST_DAY_OPTIONS = admin_broadcast_config.day_options
+ADMIN_BROADCAST_TARGET_MODES = admin_broadcast_config.target_modes
+ADMIN_BROADCAST_AUDIENCES = admin_broadcast_config.audiences
+ADMIN_BROADCAST_SEND_DELAY_SECONDS = admin_broadcast_config.send_delay_seconds
+admin_broadcast_state = admin_broadcast_config.state
+daily_route_broadcast_status = admin_broadcast_config.daily_route_status
 admin_broadcast_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="admin-broadcast")
 admin_broadcast_lock = Lock()
-admin_broadcast_state: dict[str, Any] = {
-    "running": False,
-    "current_job_id": "",
-    "current_filial": "",
-    "current_action": "",
-    "current_day": "",
-    "current_target_mode": "",
-    "current_target_audience": "",
-    "current_shortcut": "",
-    "started_at": "",
-    "total": 0,
-    "sent": 0,
-    "failed": 0,
-    "skipped": 0,
-    "last_job": {},
-}
 daily_route_broadcast_lock = RLock()
 daily_route_broadcast_stop_event = Event()
-daily_route_broadcast_status: dict[str, Any] = {
-    "enabled": bool(settings.daily_route_broadcast_enabled),
-    "running": False,
-    "last_checked_at": "",
-    "last_run_date": "",
-    "last_run": {},
-    "last_error": "",
-}
 
 auth_deps = HttpAuthDependencies(
     settings=settings,
@@ -598,33 +351,22 @@ admin_template_loader = AdminTemplateLoader(
 _load_admin_import_panel_html = admin_template_loader.load_import_panel_html
 _load_admin_login_html = admin_template_loader.load_login_html
 
-@app.on_event("startup")
-def startup() -> None:
-    if settings.access_control_enabled:
-        ready = access_control.initialize()
-        if not ready:
-            logger.warning("RBAC Postgres indisponivel no startup: %s", access_control.status().get("last_error"))
-    if settings.security_audit_enabled:
-        ready = security_monitor.initialize()
-        if not ready:
-            logger.warning("Auditoria de seguranca indisponivel no startup: %s", security_monitor.status().get("last_error"))
-    maintenance_result = _run_admin_import_maintenance(force_stale=True)
-    if not maintenance_result.get("ok"):
-        logger.warning("Manutencao de imports indisponivel no startup: %s", maintenance_result.get("error"))
-    _start_daily_route_broadcast_scheduler()
-
-
-@app.on_event("shutdown")
-def shutdown() -> None:
-    _stop_daily_route_broadcast_scheduler()
-    security_monitor.shutdown()
-    admin_imports_runtime.shutdown()
-    critica_pdf_prebuild_executor.shutdown(wait=False, cancel_futures=False)
-    admin_broadcast_executor.shutdown(wait=False, cancel_futures=False)
-    admin_payip_batch_service.shutdown()
-    webhook_executor.shutdown(wait=True, cancel_futures=False)
-    close_all_connection_pools()
-
+register_app_lifecycle(
+    app,
+    settings=settings,
+    logger=logger,
+    access_control=access_control,
+    security_monitor=security_monitor,
+    run_admin_import_maintenance=_run_admin_import_maintenance,
+    start_daily_route_broadcast_scheduler=_start_daily_route_broadcast_scheduler,
+    stop_daily_route_broadcast_scheduler=_stop_daily_route_broadcast_scheduler,
+    admin_imports_runtime=admin_imports_runtime,
+    critica_pdf_prebuild_executor=critica_pdf_prebuild_executor,
+    admin_broadcast_executor=admin_broadcast_executor,
+    admin_payip_batch_service=admin_payip_batch_service,
+    webhook_executor=webhook_executor,
+    close_connection_pools=close_all_connection_pools,
+)
 
 health_payload_builder = HealthPayloadBuilder(
     settings=settings,
