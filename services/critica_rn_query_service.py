@@ -389,32 +389,81 @@ class CriticaRnQueryService:
         value = row.get("data_pedido")
         return value if isinstance(value, date) else None
 
-    def has_current_critica_import(self, *, today: date | None = None) -> bool:
+    def has_current_critica_import(
+        self,
+        *,
+        today: date | None = None,
+        target_date: date | None = None,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        filial: str | None = None,
+    ) -> bool:
         check_date = today or datetime.now(CRITICA_IMPORT_LOCAL_TIMEZONE).date()
         query = sql.SQL(
             """
-            SELECT EXISTS (
-                SELECT 1
-                FROM {schema}.import_batches
-                WHERE dataset_name = %s
-                  AND (
-                      reference_date = %s
-                      OR (imported_at AT TIME ZONE 'America/Fortaleza')::date = %s
-                  )
-            ) AS has_import
+            SELECT b.dataset_name
+            FROM {schema}.import_batches b
+            LEFT JOIN {schema}.dataset_state s
+              ON s.dataset_name = b.dataset_name
+            WHERE (b.dataset_name = %s OR b.dataset_name LIKE %s)
+              AND COALESCE(s.active_batch_id, b.id) = b.id
+              AND (
+                  b.reference_date = %s
+                  OR (b.imported_at AT TIME ZONE 'America/Fortaleza')::date = %s
+              )
+            """
+        ).format(schema=sql.Identifier(self.schema))
+        active_query = sql.SQL(
+            """
+            SELECT dataset_name
+            FROM {schema}.dataset_state
+            WHERE dataset_name LIKE %s
+              AND active_batch_id IS NOT NULL
             """
         ).format(schema=sql.Identifier(self.schema))
         try:
             with self._connect(row_factory=dict_row) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(query, ("critica_rn", check_date, check_date))
-                    row = cur.fetchone() or {}
-            return bool(row.get("has_import"))
+                    cur.execute(query, ("critica_rn", "critica_op_%", check_date, check_date))
+                    current_datasets = {str(row.get("dataset_name") or "") for row in cur.fetchall()}
+                    cur.execute(active_query, ("critica_op_%",))
+                    active_operation_datasets = {str(row.get("dataset_name") or "") for row in cur.fetchall()}
         except Exception:
             return False
 
-    def _ensure_current_critica_import_for_pdf(self) -> None:
-        if not self.has_current_critica_import():
+        if "critica_rn" in current_datasets:
+            return True
+
+        required_operation_datasets = {
+            f"critica_op_{filial_code}"
+            for filial_code in _extract_critica_scope_filiais(
+                allowed_sectors=allowed_sectors,
+                allowed_gv_vdes=allowed_gv_vdes,
+                filial=filial,
+            )
+        }
+        if required_operation_datasets:
+            return required_operation_datasets.issubset(current_datasets)
+
+        current_operation_datasets = {dataset for dataset in current_datasets if dataset.startswith("critica_op_")}
+        if target_date == check_date and current_operation_datasets:
+            return True
+        return bool(active_operation_datasets) and active_operation_datasets.issubset(current_operation_datasets)
+
+    def _ensure_current_critica_import_for_pdf(
+        self,
+        *,
+        target_date: date | None = None,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        filial: str | None = None,
+    ) -> None:
+        if not self.has_current_critica_import(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+            filial=filial,
+        ):
             raise CriticaPdfCurrentImportRequiredError(CRITICA_PDF_CURRENT_IMPORT_MESSAGE)
 
     def get_report_data(
@@ -470,7 +519,11 @@ class CriticaRnQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 5000,
     ) -> CriticaRnPdfReport:
-        self._ensure_current_critica_import_for_pdf()
+        self._ensure_current_critica_import_for_pdf(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+        )
         normalized_limit = max(1, min(int(limit or 1), 50000))
         cache_key = (
             "pdf",
@@ -548,7 +601,12 @@ class CriticaRnQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 300,
     ) -> CriticaRnPdfReport:
-        self._ensure_current_critica_import_for_pdf()
+        self._ensure_current_critica_import_for_pdf(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+            filial=filial,
+        )
         records = self.search_by_registration(
             cod_pdv=cod_pdv,
             filial=filial,
@@ -567,7 +625,11 @@ class CriticaRnQueryService:
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 50000,
     ) -> CriticaRnPdfReport:
-        self._ensure_current_critica_import_for_pdf()
+        self._ensure_current_critica_import_for_pdf(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+        )
         data = self.get_report_data(
             target_date=target_date,
             allowed_sectors=allowed_sectors,
@@ -685,8 +747,8 @@ class CriticaRnQueryService:
     ) -> dict[str, Any]:
         started_at = monotonic()
         normalized_limit = max(1, min(int(limit or 1), 50000))
-        self._ensure_current_critica_import_for_pdf()
         effective_date = target_date or self.latest_date()
+        self._ensure_current_critica_import_for_pdf(target_date=effective_date)
         if effective_date is None:
             return {
                 "ok": True,
@@ -1487,7 +1549,7 @@ def build_critica_rn_pdf(
             records=records,
         )
 
-    doc.build(elements, onFirstPage=draw_page_header, onLaterPages=draw_page_header)
+    doc.build(elements, onFirstPage=draw_page_header, onLaterPages=_draw_report_page_background)
     return buffer.getvalue()
 
 
@@ -1556,7 +1618,7 @@ def build_critica_rn_summary_pdf(
             records=records,
         )
 
-    doc.build(elements, onFirstPage=draw_page_header, onLaterPages=draw_page_header)
+    doc.build(elements, onFirstPage=draw_page_header, onLaterPages=_draw_report_page_background)
     return buffer.getvalue()
 
 
@@ -1610,7 +1672,7 @@ def build_critica_rn_gv_summary_pdf(
             records=records,
         )
 
-    doc.build(elements, onFirstPage=draw_page_header, onLaterPages=draw_page_header)
+    doc.build(elements, onFirstPage=draw_page_header, onLaterPages=_draw_report_page_background)
     return buffer.getvalue()
 
 
@@ -2486,6 +2548,29 @@ def _date_cache_key(value: date | None) -> str:
 
 def _scope_cache_key(values: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
     return tuple(sorted({str(value or "").strip() for value in values or () if str(value or "").strip()}))
+
+
+def _extract_critica_scope_filiais(
+    *,
+    allowed_sectors: list[str] | tuple[str, ...] | None = None,
+    allowed_gv_vdes: list[str] | tuple[str, ...] | None = None,
+    filial: str | None = None,
+) -> set[str]:
+    filiais: set[str] = set()
+    direct_filial = str(filial or "").strip()
+    if direct_filial:
+        filiais.add(direct_filial)
+    sector_keys, _legacy_sector_codes = partition_sector_scopes(allowed_sectors)
+    for sector_key in sector_keys:
+        operation, _sep, _scope = str(sector_key or "").partition("_")
+        if operation:
+            filiais.add(operation)
+    gv_keys, dc_keys, _legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
+    for scope_key in [*gv_keys, *dc_keys]:
+        operation, _sep, _scope = str(scope_key or "").partition("_")
+        if operation:
+            filiais.add(operation)
+    return {value for value in filiais if value}
 
 
 def _group_records_for_pdf_scopes(

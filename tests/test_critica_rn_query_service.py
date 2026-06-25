@@ -31,10 +31,20 @@ from bot_api.tests.test_support import make_critica_record
 
 
 class CriticaRnQueryServiceRuleTests(unittest.TestCase):
-    def test_current_critica_import_check_parameterizes_dataset_pattern(self) -> None:
+    def test_current_critica_import_allows_matching_operation_scope_only(self) -> None:
         class FakeCursor:
             def __init__(self) -> None:
-                self.params = None
+                self.calls: list[tuple[object, tuple[object, ...]]] = []
+                self._result_sets = [
+                    [{"dataset_name": "critica_op_3"}],
+                    [{"dataset_name": "critica_op_3"}, {"dataset_name": "critica_op_4"}],
+                    [{"dataset_name": "critica_op_3"}],
+                    [{"dataset_name": "critica_op_3"}, {"dataset_name": "critica_op_4"}],
+                    [{"dataset_name": "critica_op_3"}],
+                    [{"dataset_name": "critica_op_3"}, {"dataset_name": "critica_op_4"}],
+                    [{"dataset_name": "critica_op_3"}],
+                    [{"dataset_name": "critica_op_3"}, {"dataset_name": "critica_op_4"}],
+                ]
 
             def __enter__(self) -> "FakeCursor":
                 return self
@@ -43,10 +53,10 @@ class CriticaRnQueryServiceRuleTests(unittest.TestCase):
                 return None
 
             def execute(self, _query: object, params: tuple[object, ...]) -> None:
-                self.params = params
+                self.calls.append((_query, params))
 
-            def fetchone(self) -> dict[str, bool]:
-                return {"has_import": True}
+            def fetchall(self) -> list[dict[str, str]]:
+                return self._result_sets.pop(0)
 
         class FakeConnection:
             def __init__(self, cursor: FakeCursor) -> None:
@@ -65,11 +75,26 @@ class CriticaRnQueryServiceRuleTests(unittest.TestCase):
         service = CriticaRnQueryService(database_url="postgresql://example", schema="reports")
         service._connect = lambda **_kwargs: FakeConnection(cursor)  # type: ignore[method-assign]
 
-        self.assertTrue(service.has_current_critica_import(today=date(2026, 6, 15)))
-        self.assertEqual(
-            cursor.params,
-            ("critica_rn", date(2026, 6, 15), date(2026, 6, 15)),
+        self.assertTrue(
+            service.has_current_critica_import(
+                today=date(2026, 6, 25),
+                allowed_sectors=["3_400"],
+            )
         )
+        self.assertFalse(
+            service.has_current_critica_import(
+                today=date(2026, 6, 25),
+                allowed_sectors=["4_400"],
+            )
+        )
+        self.assertFalse(service.has_current_critica_import(today=date(2026, 6, 25)))
+        self.assertTrue(
+            service.has_current_critica_import(
+                today=date(2026, 6, 25),
+                target_date=date(2026, 6, 25),
+            )
+        )
+        self.assertEqual(cursor.calls[0][1], ("critica_rn", "critica_op_%", date(2026, 6, 25), date(2026, 6, 25)))
 
     def test_resolve_price_reference_uses_ttc_for_unit_sales(self) -> None:
         reference, label = _resolve_price_reference(
