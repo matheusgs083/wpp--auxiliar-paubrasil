@@ -200,7 +200,7 @@
     .flow-gateway-title { margin: 0; color: var(--ink-900); font-size: 0.86rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
     .flow-gateway-current { color: var(--ink-500); font-size: 0.8rem; font-weight: 700; }
     .flow-grid { display: grid; grid-template-columns: repeat(6, minmax(135px, 1fr)); gap: 0.55rem; }
-    .flow-path { min-height: 86px; display: grid; grid-template-columns: 30px 1fr; align-items: start; gap: 0.55rem; padding: 0.72rem; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-700); background: var(--surface); text-align: left; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease; }
+    .flow-path { min-height: 86px; display: grid; grid-template-columns: 30px 1fr; align-items: start; gap: 0.55rem; padding: 0.72rem; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-700); background: var(--surface); text-align: left; text-decoration: none; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease; }
     .flow-path:hover { border-color: var(--brand-600); background: var(--surface-soft); }
     .flow-path.is-active { border-color: var(--brand-700); background: linear-gradient(180deg, var(--brand-100), var(--surface)); box-shadow: 0 0 0 3px var(--focus); }
     .flow-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; color: #fff; background: var(--brand-700); }
@@ -291,64 +291,64 @@
         <span class="flow-gateway-current" id="activeFlowLabel">Operação diária</span>
       </div>
       <div class="flow-grid">
-        <button type="button" class="flow-path is-active" data-flow-target="operationsTab" data-flow-label="Operação diária" aria-pressed="true">
+        <a href="/admin/operations" class="flow-path is-active" data-flow-target="operationsTab" data-flow-label="Operação diária" aria-pressed="true">
           <span class="flow-icon"><i class="bi bi-sliders"></i></span>
           <span><span class="flow-title">Operação</span><span class="flow-desc">Acessos, disparos, importações e histórico.</span><span class="flow-meta">Rotina</span></span>
-        </button>
-        <button type="button" class="flow-path" data-flow-target="operationalTablesTab" data-flow-label="Tabelas operacionais" aria-pressed="false">
+        </a>
+        <a href="/admin/tables" class="flow-path" data-flow-target="operationalTablesTab" data-flow-label="Tabelas operacionais" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-table"></i></span>
           <span><span class="flow-title">Tabelas</span><span class="flow-desc">Bases auxiliares de setores, preços e produtos.</span><span class="flow-meta">Base</span></span>
-        </button>
-        <button type="button" class="flow-path" data-flow-target="criticaTab" data-flow-label="Crítica comercial" aria-pressed="false">
+        </a>
+        <a href="/admin/critica" class="flow-path" data-flow-target="criticaTab" data-flow-label="Crítica comercial" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-clipboard-data"></i></span>
           <span><span class="flow-title">Crítica</span><span class="flow-desc">Problemas por pedido, filtros e uploads por operação.</span><span class="flow-meta">Análise</span></span>
-        </button>
-        <button type="button" class="flow-path" data-flow-target="recolhasTab" data-flow-label="Recolhas financeiras" aria-pressed="false">
+        </a>
+        <a href="/admin/recolhas" class="flow-path" data-flow-target="recolhasTab" data-flow-label="Recolhas financeiras" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-truck"></i></span>
           <span><span class="flow-title">Recolhas</span><span class="flow-desc">CSV financeiro, baixas e acompanhamento por filial.</span><span class="flow-meta">Financeiro</span></span>
-        </button>
-        <button type="button" class="flow-path" data-flow-target="giroRecolhaTab" data-flow-label="Giro e rotas" aria-pressed="false">
+        </a>
+        <a href="/admin/giro-recolha" class="flow-path" data-flow-target="giroRecolhaTab" data-flow-label="Giro e rotas" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-signpost-split"></i></span>
           <span><span class="flow-title">Giro</span><span class="flow-desc">Clientes com giro baixo e montagem de rotas.</span><span class="flow-meta">Prioridade</span></span>
-        </button>
-        <button type="button" class="flow-path" data-flow-target="usageEvolutionTab" data-flow-label="Uso do bot" aria-pressed="false">
+        </a>
+        <a href="/admin/usage" class="flow-path" data-flow-target="usageEvolutionTab" data-flow-label="Uso do bot" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-whatsapp"></i></span>
           <span><span class="flow-title">Uso Evolution</span><span class="flow-desc">Volume, bloqueios, eventos e exportação.</span><span class="flow-meta">Monitor</span></span>
-        </button>
+        </a>
       </div>
     </section>
 
     <section class="panel-card p-2 mb-3">
       <ul class="nav nav-pills nav-fill gap-2" id="adminTabs" role="tablist">
         <li class="nav-item" role="presentation">
-          <button class="nav-link active" id="operationsTab" data-bs-toggle="tab" data-bs-target="#operationsPane" type="button" role="tab" aria-controls="operationsPane" aria-selected="true">
+          <a class="nav-link active" id="operationsTab" href="/admin/operations" data-admin-page-link="true" data-bs-target="#operationsPane" role="tab" aria-controls="operationsPane" aria-selected="true">
             <i class="bi bi-sliders me-1"></i>Operação
-          </button>
+          </a>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" id="operationalTablesTab" data-bs-toggle="tab" data-bs-target="#operationalTablesPane" type="button" role="tab" aria-controls="operationalTablesPane" aria-selected="false">
+          <a class="nav-link" id="operationalTablesTab" href="/admin/tables" data-admin-page-link="true" data-bs-target="#operationalTablesPane" role="tab" aria-controls="operationalTablesPane" aria-selected="false">
             <i class="bi bi-table me-1"></i>Tabelas
-          </button>
+          </a>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" id="criticaTab" data-bs-toggle="tab" data-bs-target="#criticaPane" type="button" role="tab" aria-controls="criticaPane" aria-selected="false">
+          <a class="nav-link" id="criticaTab" href="/admin/critica" data-admin-page-link="true" data-bs-target="#criticaPane" role="tab" aria-controls="criticaPane" aria-selected="false">
             <i class="bi bi-clipboard-data me-1"></i>Critica
-          </button>
+          </a>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" id="usageEvolutionTab" data-bs-toggle="tab" data-bs-target="#usageEvolutionPane" type="button" role="tab" aria-controls="usageEvolutionPane" aria-selected="false">
+          <a class="nav-link" id="usageEvolutionTab" href="/admin/usage" data-admin-page-link="true" data-bs-target="#usageEvolutionPane" role="tab" aria-controls="usageEvolutionPane" aria-selected="false">
             <i class="bi bi-whatsapp me-1"></i>Uso Evolution
-          </button>
+          </a>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" id="recolhasTab" data-bs-toggle="tab" data-bs-target="#recolhasPane" type="button" role="tab" aria-controls="recolhasPane" aria-selected="false">
+          <a class="nav-link" id="recolhasTab" href="/admin/recolhas" data-admin-page-link="true" data-bs-target="#recolhasPane" role="tab" aria-controls="recolhasPane" aria-selected="false">
             <i class="bi bi-truck me-1"></i>Recolhas
-          </button>
+          </a>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" id="giroRecolhaTab" data-bs-toggle="tab" data-bs-target="#giroRecolhaPane" type="button" role="tab" aria-controls="giroRecolhaPane" aria-selected="false">
+          <a class="nav-link" id="giroRecolhaTab" href="/admin/giro-recolha" data-admin-page-link="true" data-bs-target="#giroRecolhaPane" role="tab" aria-controls="giroRecolhaPane" aria-selected="false">
             <i class="bi bi-arrow-repeat me-1"></i>Giro
-          </button>
+          </a>
         </li>
       </ul>
     </section>
@@ -1803,6 +1803,37 @@
       : null;
     let allowedUsersCardResizeObserver = null;
     let giroRouteResizeObserver = null;
+    const PANEL_TAB_BY_PATH = {
+      "/admin": "operationsTab",
+      "/admin/imports": "operationsTab",
+      "/admin/operations": "operationsTab",
+      "/admin/tables": "operationalTablesTab",
+      "/admin/critica": "criticaTab",
+      "/admin/recolhas": "recolhasTab",
+      "/admin/giro-recolha": "giroRecolhaTab",
+      "/admin/usage": "usageEvolutionTab"
+    };
+    const PANEL_PATH_BY_TAB = {
+      operationsTab: "/admin/operations",
+      operationalTablesTab: "/admin/tables",
+      criticaTab: "/admin/critica",
+      recolhasTab: "/admin/recolhas",
+      giroRecolhaTab: "/admin/giro-recolha",
+      usageEvolutionTab: "/admin/usage"
+    };
+
+    function currentPanelPath() {
+      const path = window.location.pathname.replace(/\/+$/, "");
+      return path || "/admin";
+    }
+
+    function panelTabFromLocation() {
+      return PANEL_TAB_BY_PATH[currentPanelPath()] || "operationsTab";
+    }
+
+    function panelPathForTab(tabId) {
+      return PANEL_PATH_BY_TAB[tabId] || "/admin/operations";
+    }
 
     function setupRecolhasPane() {
       const pane = document.getElementById("recolhasPane");
@@ -1810,6 +1841,22 @@
       if (pane && panel && panel.parentElement !== pane) {
         pane.appendChild(panel);
       }
+    }
+
+    function navigatePanelPage(tabId) {
+      const targetPath = panelPathForTab(tabId);
+      if (currentPanelPath() !== targetPath) {
+        window.location.assign(targetPath);
+        return;
+      }
+      showPanelTab(tabId);
+      updateFlowNavigation(tabId);
+    }
+
+    function selectInitialPanelPage() {
+      const tabId = panelTabFromLocation();
+      showPanelTab(tabId);
+      updateFlowNavigation(tabId);
     }
 
     function flowPathButtons() {
@@ -1837,21 +1884,36 @@
       if (!buttons.length) return;
 
       buttons.forEach(button => {
-        button.addEventListener("click", () => {
+        button.addEventListener("click", event => {
           const targetId = String(button.dataset.flowTarget || "");
           const targetTab = document.getElementById(targetId);
-          if (!targetTab || targetTab.parentElement.style.display === "none" || !window.bootstrap) return;
-          bootstrap.Tab.getOrCreateInstance(targetTab).show();
-          updateFlowNavigation(targetId);
-          const paneSelector = targetTab.getAttribute("data-bs-target");
-          const pane = paneSelector ? document.querySelector(paneSelector) : null;
-          window.setTimeout(() => {
-            if (pane) pane.focus({ preventScroll: true });
-          }, 120);
+          if (!targetTab || targetTab.parentElement.style.display === "none") {
+            event.preventDefault();
+            return;
+          }
+          if (currentPanelPath() === panelPathForTab(targetId)) {
+            event.preventDefault();
+            navigatePanelPage(targetId);
+            const paneSelector = targetTab.getAttribute("data-bs-target");
+            const pane = paneSelector ? document.querySelector(paneSelector) : null;
+            window.setTimeout(() => {
+              if (pane) pane.focus({ preventScroll: true });
+            }, 120);
+          }
         });
       });
 
-      document.querySelectorAll("#adminTabs button[data-bs-toggle='tab']").forEach(tab => {
+      document.querySelectorAll("#adminTabs .nav-link[data-admin-page-link='true']").forEach(tab => {
+        tab.addEventListener("click", event => {
+          if (tab.parentElement && tab.parentElement.style.display === "none") {
+            event.preventDefault();
+            return;
+          }
+          if (currentPanelPath() === panelPathForTab(tab.id)) {
+            event.preventDefault();
+            navigatePanelPage(tab.id);
+          }
+        });
         tab.addEventListener("shown.bs.tab", event => updateFlowNavigation(event.target.id));
       });
 
@@ -1862,6 +1924,7 @@
     function init() {
       applyTheme(localStorage.getItem("bot_admin_theme") || "dark");
       setupRecolhasPane();
+      selectInitialPanelPage();
       setupFlowNavigation();
 
       localStorage.removeItem("bot_api_token");
@@ -2359,9 +2422,13 @@
         bootstrap.Tab.getOrCreateInstance(tab).show();
         return;
       }
-      document.querySelectorAll("#adminTabs .nav-link").forEach(item => item.classList.remove("active"));
+      document.querySelectorAll("#adminTabs .nav-link").forEach(item => {
+        item.classList.remove("active");
+        item.setAttribute("aria-selected", "false");
+      });
       document.querySelectorAll(".tab-pane").forEach(item => item.classList.remove("show", "active"));
       tab.classList.add("active");
+      tab.setAttribute("aria-selected", "true");
       const paneSelector = tab.getAttribute("data-bs-target");
       const pane = paneSelector ? document.querySelector(paneSelector) : null;
       if (pane) pane.classList.add("show", "active");

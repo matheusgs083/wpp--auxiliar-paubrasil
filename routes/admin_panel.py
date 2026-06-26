@@ -83,7 +83,13 @@ def create_admin_panel_router(
         return {"ok": True}
 
     @router.get("/admin", response_class=HTMLResponse)
+    @router.get("/admin/operations", response_class=HTMLResponse)
     @router.get("/admin/imports", response_class=HTMLResponse)
+    @router.get("/admin/tables", response_class=HTMLResponse)
+    @router.get("/admin/critica", response_class=HTMLResponse)
+    @router.get("/admin/recolhas", response_class=HTMLResponse)
+    @router.get("/admin/giro-recolha", response_class=HTMLResponse)
+    @router.get("/admin/usage", response_class=HTMLResponse)
     def admin_import_panel(request: Request) -> Response:
         if not admin_panel_context_from_session_cookie(request):
             return RedirectResponse(url="/admin/login", status_code=303)

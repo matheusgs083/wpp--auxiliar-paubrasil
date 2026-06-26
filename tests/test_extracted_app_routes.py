@@ -31,6 +31,27 @@ class FakeAccessControl:
 
 
 class ExtractedAppRoutesTest(unittest.TestCase):
+    def _admin_panel_test_app(self, session_context: dict[str, Any] | None) -> FastAPI:
+        app = FastAPI()
+        app.include_router(
+            create_admin_panel_router(
+                admin_panel_context_from_session_cookie=lambda _request: session_context,
+                load_admin_login_html=lambda: "<html>login</html>",
+                load_admin_import_panel_html=lambda: "<html>panel</html>",
+                check_admin_panel_login_rate_limit=lambda _request: None,
+                admin_panel_context_from_token=lambda _token: {"mode": "admin", "is_admin": True, "filiais": []},
+                record_admin_panel_login_failure=lambda _request: None,
+                clear_admin_panel_login_failures=lambda _request: None,
+                set_admin_panel_session_cookie=lambda _response, _request, _context: None,
+                require_admin_panel_auth=lambda **_kwargs: {"mode": "financeiro", "is_admin": False, "filiais": ["3"]},
+                panel_context_mode=lambda context: str(context.get("mode") or "admin"),
+                record_security_event=lambda _request, **_kwargs: None,
+                session_cookie_name="bot_admin_session",
+                session_ttl_seconds=3600,
+            )
+        )
+        return app
+
     def test_public_access_check_delegates_auth_and_audit(self) -> None:
         auth_calls: list[dict[str, Any]] = []
         scope_calls: list[dict[str, Any]] = []
@@ -58,27 +79,42 @@ class ExtractedAppRoutesTest(unittest.TestCase):
         self.assertEqual(scope_calls[0]["request"].url.path, "/api/access/check")
         self.assertEqual(events[0]["event_type"], "access_check")
 
-    def test_admin_panel_session_keeps_capability_flags(self) -> None:
-        app = FastAPI()
-        app.include_router(
-            create_admin_panel_router(
-                admin_panel_context_from_session_cookie=lambda _request: {"is_admin": True},
-                load_admin_login_html=lambda: "<html>login</html>",
-                load_admin_import_panel_html=lambda: "<html>panel</html>",
-                check_admin_panel_login_rate_limit=lambda _request: None,
-                admin_panel_context_from_token=lambda _token: {"mode": "admin", "is_admin": True, "filiais": []},
-                record_admin_panel_login_failure=lambda _request: None,
-                clear_admin_panel_login_failures=lambda _request: None,
-                set_admin_panel_session_cookie=lambda _response, _request, _context: None,
-                require_admin_panel_auth=lambda **_kwargs: {"mode": "financeiro", "is_admin": False, "filiais": ["3"]},
-                panel_context_mode=lambda context: str(context.get("mode") or "admin"),
-                record_security_event=lambda _request, **_kwargs: None,
-                session_cookie_name="bot_admin_session",
-                session_ttl_seconds=3600,
-            )
-        )
+    def test_admin_panel_pages_share_panel_without_losing_legacy_routes(self) -> None:
+        client = TestClient(self._admin_panel_test_app({"is_admin": True}))
 
-        response = TestClient(app).get("/api/admin/panel/session")
+        for path in (
+            "/admin",
+            "/admin/imports",
+            "/admin/operations",
+            "/admin/tables",
+            "/admin/critica",
+            "/admin/recolhas",
+            "/admin/giro-recolha",
+            "/admin/usage",
+        ):
+            with self.subTest(path=path):
+                response = client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.text, "<html>panel</html>")
+
+    def test_admin_panel_pages_redirect_to_login_without_session(self) -> None:
+        client = TestClient(self._admin_panel_test_app(None), follow_redirects=False)
+
+        for path in (
+            "/admin/operations",
+            "/admin/tables",
+            "/admin/critica",
+            "/admin/recolhas",
+            "/admin/giro-recolha",
+            "/admin/usage",
+        ):
+            with self.subTest(path=path):
+                response = client.get(path)
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(response.headers["location"], "/admin/login")
+
+    def test_admin_panel_session_keeps_capability_flags(self) -> None:
+        response = TestClient(self._admin_panel_test_app({"is_admin": True})).get("/api/admin/panel/session")
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
