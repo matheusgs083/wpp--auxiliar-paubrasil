@@ -7967,27 +7967,12 @@ class CustomerLookupFlow:
             if session.step == "finance_select_action":
                 self._reset_session(sender)
                 return self._build_main_menu(decision)
-            if session.step == "finance_payip_awaiting_mfa":
-                session.step = "finance_payip_menu"
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_menu()
-            if session.step in {
-                "finance_payip_awaiting_invoice",
-                "finance_payip_awaiting_client_code",
-                "finance_payip_awaiting_client_code_all",
-                "finance_payip_awaiting_client_filter",
-                "finance_payip_amount_day_awaiting_query",
-                "finance_payip_statement_awaiting_period",
-                "finance_payip_charge_awaiting_client",
-                "finance_payip_charge_awaiting_amount",
-                "finance_payip_charge_awaiting_due_date",
-                "finance_payip_charge_confirm",
-            }:
-                session.step = "finance_payip_menu"
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_menu()
+            payip_back_response = self.finance_flow.payip_flow.handle_back_command(
+                sender=sender,
+                session=session,
+            )
+            if payip_back_response is not None:
+                return payip_back_response
             if session.step in {
                 "finance_select_summary_mode",
                 "finance_clarify_today",
@@ -8030,280 +8015,15 @@ class CustomerLookupFlow:
                 due_bucket="today",
             )
 
-        if session.step == "finance_payip_awaiting_mfa":
-            if not self._can_use_payip_menu(decision):
-                self.sessions[sender] = session
-                return OutgoingMessage(
-                    text=(
-                        "Esse menu de pagamentos PayIP esta liberado apenas para financeiro e administracao.\n"
-                        "Se quiser voltar, envie MENU."
-                    )
-                )
-            mfa_code = _extract_mfa_code(text)
-            if not mfa_code:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return OutgoingMessage(
-                    text=(
-                        "Envie o codigo atual do Google Authenticator com 6 digitos.\n"
-                        "Exemplo: 123456\n"
-                        "Para voltar, envie A ou ANT."
-                    )
-                )
-            if session.payip_pending_action == "invoice":
-                return self._run_payip_invoice_search(
-                    sender=sender,
-                    session=session,
-                    invoice=session.payip_pending_invoice,
-                    filial=session.payip_pending_filial,
-                    mfa_code=mfa_code,
-                )
-            if session.payip_pending_action == "pending_client":
-                return self._run_payip_pending_client_search(
-                    sender=sender,
-                    session=session,
-                    client_code=session.payip_pending_client_code,
-                    filial=session.payip_pending_filial,
-                    mfa_code=mfa_code,
-                )
-            if session.payip_pending_action == "client":
-                return self._run_payip_client_search(
-                    sender=sender,
-                    session=session,
-                    client_code=session.payip_pending_client_code,
-                    filial=session.payip_pending_filial,
-                    mfa_code=mfa_code,
-                )
-            if session.payip_pending_action == "charge_lookup":
-                return self._run_payip_charge_client_lookup(
-                    sender=sender,
-                    session=session,
-                    client_code=session.payip_pending_client_code,
-                    filial=session.payip_pending_filial,
-                    mfa_code=mfa_code,
-                )
-            if session.payip_pending_action == "charge_create":
-                return self._run_payip_charge_create(
-                    sender=sender,
-                    session=session,
-                    mfa_code=mfa_code,
-                )
-            if session.payip_pending_action == "statement":
-                return self._run_payip_statement_resume(
-                    sender=sender,
-                    session=session,
-                    filial=session.payip_pending_filial,
-                    date_start=session.payip_pending_date_start,
-                    date_end=session.payip_pending_date_end,
-                    mfa_code=mfa_code,
-                )
-            if session.payip_pending_action == "amount_day":
-                return self._run_payip_amount_day_search(
-                    sender=sender,
-                    session=session,
-                    filial=session.payip_pending_filial,
-                    amount=session.payip_pending_amount,
-                    day=session.payip_pending_day,
-                    tolerance=session.payip_pending_tolerance,
-                    mfa_code=mfa_code,
-                )
-            return self._run_payip_login_test(
-                sender=sender,
-                session=session,
-                mfa_code=mfa_code,
-            )
-
-        if session.step == "finance_payip_awaiting_invoice":
-            invoice = _extract_payip_invoice_query(text)
-            if not invoice:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_invoice_prompt(invalid_selection=True)
-            return self._run_payip_invoice_search(
-                sender=sender,
-                session=session,
-                invoice=invoice,
-                filial=_extract_payip_filial_query(text),
-            )
-
-        if session.step == "finance_payip_awaiting_client_code":
-            client_code = _extract_payip_client_code_query(text)
-            if not client_code:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_client_code_prompt(invalid_selection=True)
-            filial = _extract_payip_filial_query(text)
-            filter_action = _parse_payip_client_filter(normalized)
-            if session.payip_pending_status == "PENDING" or filter_action == "pending":
-                return self._run_payip_pending_client_search(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            if filter_action == "all":
-                return self._run_payip_client_search(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            if session.payip_pending_status == "":
-                return self._open_payip_client_filter_or_search(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            return self._run_payip_pending_client_search(
-                sender=sender,
-                session=session,
-                client_code=client_code,
-                filial=filial,
-            )
-
-        if session.step == "finance_payip_awaiting_client_code_all":
-            client_code = _extract_payip_client_code_query(text)
-            if not client_code:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_client_code_prompt(invalid_selection=True, pending_only=False)
-            return self._run_payip_client_search(
-                sender=sender,
-                session=session,
-                client_code=client_code,
-                filial=_extract_payip_filial_query(text),
-            )
-
-        if session.step == "finance_payip_awaiting_client_filter":
-            filter_action = _parse_payip_client_filter(normalized)
-            if not filter_action:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_client_filter_prompt(invalid_selection=True)
-            if filter_action == "pending":
-                return self._run_payip_pending_client_search(
-                    sender=sender,
-                    session=session,
-                    client_code=session.payip_pending_client_code,
-                    filial=session.payip_pending_filial,
-                )
-            return self._run_payip_client_search(
-                sender=sender,
-                session=session,
-                client_code=session.payip_pending_client_code,
-                filial=session.payip_pending_filial,
-            )
-
-        if session.step == "finance_payip_amount_day_awaiting_query":
-            query = _parse_payip_amount_day_query(text)
-            if not query[0] or query[1] is None or query[2] is None or query[4]:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_amount_day_prompt(invalid_selection=True)
-            return self._run_payip_amount_day_search(
-                sender=sender,
-                session=session,
-                filial=query[0],
-                amount=query[1],
-                day=query[2],
-                tolerance=query[3],
-            )
-
-        if session.step == "finance_payip_statement_awaiting_period":
-            query = _parse_payip_statement_query(text)
-            if not query[0] or query[3]:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_statement_prompt(invalid_selection=True)
-            return self._run_payip_statement_resume(
-                sender=sender,
-                session=session,
-                filial=query[0],
-                date_start=query[1],
-                date_end=query[2],
-            )
-
-        if session.step == "finance_payip_charge_awaiting_client":
-            client_code = _extract_payip_client_code_query(text)
-            filial = _extract_payip_filial_query(text)
-            if not client_code or not filial:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_charge_client_prompt(invalid_selection=True)
-            return self._run_payip_charge_client_lookup(
-                sender=sender,
-                session=session,
-                client_code=client_code,
-                filial=filial,
-            )
-
-        if session.step == "finance_payip_charge_awaiting_amount":
-            amount = _parse_payip_charge_amount(text)
-            if amount is None or amount <= 0:
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_charge_amount_prompt(session=session, invalid_selection=True)
-            session.payip_charge_amount = _decimal_cache_text(amount)
-            session.step = "finance_payip_charge_awaiting_due_date"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_due_date_prompt()
-
-        if session.step == "finance_payip_charge_awaiting_due_date":
-            due_date = _parse_payip_charge_due_date(text)
-            if due_date is None or due_date < datetime.now(LOCAL_TIMEZONE).date():
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_charge_due_date_prompt(invalid_selection=True)
-            session.payip_charge_due_date = due_date.isoformat()
-            session.step = "finance_payip_charge_confirm"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_confirmation(session=session)
-
-        if session.step == "finance_payip_charge_confirm":
-            if normalized in {
-                "confirmar",
-                "confirma",
-                "confirmo",
-                "sim",
-                "s",
-                "ok",
-                "tentar novamente",
-                "tentar de novo",
-                "retry",
-                "repetir",
-            }:
-                return self._run_payip_charge_create(sender=sender, session=session)
-            charge_adjustment = _parse_payip_charge_adjustment(text)
-            if charge_adjustment is not None:
-                field, value = charge_adjustment
-                if field == "rate":
-                    session.payip_charge_rate_amount = _decimal_cache_text(value)
-                elif field == "interest":
-                    session.payip_charge_interest_perc = _decimal_cache_text(value)
-                elif field == "due_date":
-                    due_date = _parse_payip_charge_due_date(str(value))
-                    if due_date is None or due_date < datetime.now(LOCAL_TIMEZONE).date():
-                        session.updated_at = datetime.now(timezone.utc)
-                        self.sessions[sender] = session
-                        return self._build_payip_charge_confirmation(
-                            session=session,
-                            invalid_selection=True,
-                            detail="Data de vencimento invalida. Use dd/mm/aaaa e uma data de hoje em diante.",
-                        )
-                    session.payip_charge_due_date = due_date.isoformat()
-                elif field == "invoice":
-                    session.payip_charge_invoice = str(value or "").strip()
-                elif field == "external_id":
-                    session.payip_charge_external_id = str(value or "").strip()
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_charge_confirmation(session=session)
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_confirmation(session=session, invalid_selection=True)
+        payip_response = self.finance_flow.payip_flow.handle_session_if_applicable(
+            sender=sender,
+            session=session,
+            text=text,
+            normalized=normalized,
+            decision=decision,
+        )
+        if payip_response is not None:
+            return payip_response
 
         if session.step == "finance_select_action":
             request = _parse_hybrid_finance_request(normalized)
@@ -8491,47 +8211,13 @@ class CustomerLookupFlow:
                 )
 
             if action == "payip":
-                if not self._can_use_payip_menu(decision):
-                    self.sessions[sender] = session
-                    return OutgoingMessage(
-                        text=(
-                            "Esse menu de pagamentos PayIP esta liberado apenas para financeiro e administracao.\n"
-                            "Se quiser voltar, envie MENU."
-                        )
+                return self.finance_flow.payip_flow.handle_finance_action(
+                    sender=sender,
+                    session=session,
+                    text=text,
+                    normalized=normalized,
+                    decision=decision,
                 )
-                payip_action = _parse_payip_action(normalized)
-                statement_query = _parse_payip_statement_query(text)
-                amount_day_query = _parse_payip_amount_day_query(text)
-                if payip_action == "amount_day" and amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4]:
-                    return self._run_payip_amount_day_search(
-                        sender=sender,
-                        session=session,
-                        filial=amount_day_query[0],
-                        amount=amount_day_query[1],
-                        day=amount_day_query[2],
-                        tolerance=amount_day_query[3],
-                    )
-                if not payip_action and amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4]:
-                    return self._run_payip_amount_day_search(
-                        sender=sender,
-                        session=session,
-                        filial=amount_day_query[0],
-                        amount=amount_day_query[1],
-                        day=amount_day_query[2],
-                        tolerance=amount_day_query[3],
-                    )
-                if payip_action == "statement" and statement_query[0] and not statement_query[3]:
-                    return self._run_payip_statement_resume(
-                        sender=sender,
-                        session=session,
-                        filial=statement_query[0],
-                        date_start=statement_query[1],
-                        date_end=statement_query[2],
-                    )
-                session.step = "finance_payip_menu"
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_menu()
 
             if request.due_bucket:
                 return self._run_finance_due_bucket(
@@ -8715,241 +8401,6 @@ class CustomerLookupFlow:
                     title="Giro por GV | Base Total",
                 ),
                 return_menu="finance_giro_menu",
-            )
-
-        if session.step == "finance_payip_menu":
-            if not self._can_use_payip_menu(decision):
-                self.sessions[sender] = session
-                return OutgoingMessage(
-                    text=(
-                        "Esse menu de pagamentos PayIP esta liberado apenas para financeiro e administracao.\n"
-                        "Se quiser voltar, envie MENU."
-                    )
-                )
-            action = _parse_payip_action(normalized)
-            invoice = _extract_payip_invoice_query(text)
-            client_code = _extract_payip_client_code_query(text)
-            filial = _extract_payip_filial_query(text)
-            statement_query = _parse_payip_statement_query(text)
-            amount_day_query = _parse_payip_amount_day_query(text)
-            if action == "amount_day" and amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4] and normalized not in {PAYIP_ACTION_AMOUNT_DAY, "7"}:
-                return self._run_payip_amount_day_search(
-                    sender=sender,
-                    session=session,
-                    filial=amount_day_query[0],
-                    amount=amount_day_query[1],
-                    day=amount_day_query[2],
-                    tolerance=amount_day_query[3],
-                )
-            if action == "invoice" and invoice and normalized not in {PAYIP_ACTION_SEARCH_INVOICE, "1", "3"}:
-                return self._run_payip_invoice_search(
-                    sender=sender,
-                    session=session,
-                    invoice=invoice,
-                    filial=filial,
-                )
-            if action == "pending_client" and client_code and normalized not in {PAYIP_ACTION_PENDING_CLIENT, "4"}:
-                return self._run_payip_pending_client_search(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            if action == "client" and client_code and normalized not in {PAYIP_ACTION_CLIENT, "2", "5"}:
-                filter_action = _parse_payip_client_filter(normalized)
-                if filter_action == "pending":
-                    return self._run_payip_pending_client_search(
-                        sender=sender,
-                        session=session,
-                        client_code=client_code,
-                        filial=filial,
-                    )
-                if filter_action == "all":
-                    return self._run_payip_client_search(
-                        sender=sender,
-                        session=session,
-                        client_code=client_code,
-                        filial=filial,
-                    )
-                return self._open_payip_client_filter_or_search(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            if action == "create_charge" and client_code and normalized not in {PAYIP_ACTION_CREATE_CHARGE, "5"}:
-                return self._run_payip_charge_client_lookup(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            if action == "statement" and statement_query[0] and not statement_query[3] and normalized not in {PAYIP_ACTION_STATEMENT, "6"}:
-                return self._run_payip_statement_resume(
-                    sender=sender,
-                    session=session,
-                    filial=statement_query[0],
-                    date_start=statement_query[1],
-                    date_end=statement_query[2],
-                )
-            if not action and amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4]:
-                return self._run_payip_amount_day_search(
-                    sender=sender,
-                    session=session,
-                    filial=amount_day_query[0],
-                    amount=amount_day_query[1],
-                    day=amount_day_query[2],
-                    tolerance=amount_day_query[3],
-                )
-            if not action and invoice:
-                return self._run_payip_invoice_search(
-                    sender=sender,
-                    session=session,
-                    invoice=invoice,
-                    filial=filial,
-                )
-            if not action and client_code:
-                return self._open_payip_client_filter_or_search(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            if not action:
-                self.sessions[sender] = session
-                return self._build_payip_menu(invalid_selection=True)
-            if action == "status":
-                return self._with_post_result_navigation(
-                    sender,
-                    session,
-                    self._build_payip_status_response(),
-                    return_menu="finance_payip_menu",
-                )
-            if action == "pix":
-                if not session.payip_pix_payloads:
-                    self.sessions[sender] = session
-                    return OutgoingMessage(
-                        text=(
-                            "Ainda nao tenho PIX salvo nesta conversa.\n"
-                            "Faça uma busca PayIP primeiro e depois envie PIX 1."
-                        )
-                    )
-                return _build_payip_pix_code_response(
-                    session.payip_pix_payloads,
-                    selection=1,
-                    payip_payments_service=self.payip_payments_service,
-                )
-            if action == "create_charge":
-                session.step = "finance_payip_charge_awaiting_client"
-                session.payip_pending_status = ""
-                session.payip_pending_action = ""
-                session.payip_charge_filial = ""
-                session.payip_charge_client_code = ""
-                session.payip_charge_external_id = ""
-                session.payip_charge_client_name = ""
-                session.payip_charge_tax_payer_id = ""
-                session.payip_charge_invoice = ""
-                session.payip_charge_amount = ""
-                session.payip_charge_due_date = ""
-                session.payip_charge_rate_amount = ""
-                session.payip_charge_interest_perc = ""
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_charge_client_prompt()
-            if action == "amount_day":
-                if amount_day_query[0] and amount_day_query[1] is not None and amount_day_query[2] is not None and not amount_day_query[4]:
-                    return self._run_payip_amount_day_search(
-                        sender=sender,
-                        session=session,
-                        filial=amount_day_query[0],
-                        amount=amount_day_query[1],
-                        day=amount_day_query[2],
-                        tolerance=amount_day_query[3],
-                    )
-                session.step = "finance_payip_amount_day_awaiting_query"
-                session.payip_pending_action = ""
-                session.payip_pending_filial = ""
-                session.payip_pending_amount = ""
-                session.payip_pending_day = ""
-                session.payip_pending_tolerance = ""
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_amount_day_prompt(invalid_selection=amount_day_query[4])
-            if action == "statement":
-                if normalized in {PAYIP_ACTION_STATEMENT, "6"}:
-                    session.step = "finance_payip_statement_awaiting_period"
-                    session.payip_pending_action = ""
-                    session.payip_pending_filial = ""
-                    session.payip_pending_date_start = ""
-                    session.payip_pending_date_end = ""
-                    session.updated_at = datetime.now(timezone.utc)
-                    self.sessions[sender] = session
-                    return self._build_payip_statement_prompt()
-                if statement_query[0] and not statement_query[3]:
-                    return self._run_payip_statement_resume(
-                        sender=sender,
-                        session=session,
-                        filial=statement_query[0],
-                        date_start=statement_query[1],
-                        date_end=statement_query[2],
-                    )
-                session.step = "finance_payip_statement_awaiting_period"
-                session.payip_pending_action = ""
-                session.payip_pending_filial = ""
-                session.payip_pending_date_start = ""
-                session.payip_pending_date_end = ""
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_statement_prompt(invalid_selection=statement_query[3])
-            if action == "invoice":
-                session.step = "finance_payip_awaiting_invoice"
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_invoice_prompt()
-            if action == "pending_client" and client_code:
-                return self._run_payip_pending_client_search(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            if action == "pending_client":
-                session.step = "finance_payip_awaiting_client_code"
-                session.payip_pending_status = "PENDING"
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_client_code_prompt(pending_only=True)
-            if action == "client" and client_code and normalized not in {PAYIP_ACTION_CLIENT, "2", "5"}:
-                filter_action = _parse_payip_client_filter(normalized)
-                if filter_action == "pending":
-                    return self._run_payip_pending_client_search(
-                        sender=sender,
-                        session=session,
-                        client_code=client_code,
-                        filial=filial,
-                    )
-                if filter_action == "all":
-                    return self._run_payip_client_search(
-                        sender=sender,
-                        session=session,
-                        client_code=client_code,
-                        filial=filial,
-                    )
-                return self._open_payip_client_filter_or_search(
-                    sender=sender,
-                    session=session,
-                    client_code=client_code,
-                    filial=filial,
-                )
-            if action == "client":
-                session.step = "finance_payip_awaiting_client_code"
-                session.payip_pending_status = ""
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_client_code_prompt(pending_only=None)
-            return self._run_payip_login_test(
-                sender=sender,
-                session=session,
             )
 
         self._reset_session(sender)
@@ -10023,111 +9474,10 @@ class CustomerLookupFlow:
         )
 
     def _build_payip_menu(self, invalid_selection: bool = False) -> OutgoingMessage:
-        text = "O que voce quer consultar na PayIP?"
-        if invalid_selection:
-            text = _invalid_option_text("Escolha uma opcao da PayIP.")
-        options: list[InteractiveOption] = [
-            InteractiveOption(
-                option_id=PAYIP_ACTION_SEARCH_INVOICE,
-                title="Buscar Nota Fiscal",
-                description="Buscar pagamento pela NF",
-                shortcut="1",
-            ),
-            InteractiveOption(
-                option_id=PAYIP_ACTION_CLIENT,
-                title="Buscar por NB",
-                description="Consultar pendentes ou todos",
-                shortcut="2",
-            ),
-        ]
-        options.append(
-            InteractiveOption(
-                option_id="payip:action:pix",
-                title="PIX da Ultima Consulta",
-                description="Enviar copia e cola e PDF",
-                shortcut="3",
-            )
-        )
-        options.append(
-            InteractiveOption(
-                option_id=PAYIP_ACTION_STATUS,
-                title="Diagnostico PayIP",
-                description="Ver sessao, cache e revendas",
-                shortcut="4",
-            )
-        )
-        options.append(
-            InteractiveOption(
-                option_id=PAYIP_ACTION_CREATE_CHARGE,
-                title="Emitir Cobranca",
-                description="Criar PIX com confirmacao",
-                shortcut="5",
-            )
-        )
-        options.append(
-            InteractiveOption(
-                option_id=PAYIP_ACTION_STATEMENT,
-                title="Extrato PayIP",
-                description="Resumo de movimentacoes por periodo",
-                shortcut="6",
-            )
-        )
-        options.append(
-            InteractiveOption(
-                option_id=PAYIP_ACTION_AMOUNT_DAY,
-                title="Buscar Valor/Dia",
-                description="Cobrancas pagas por valor",
-                shortcut="7",
-            )
-        )
-        return OutgoingMessage(
-            kind="menu",
-            title="Pagamentos PayIP",
-            text=text,
-            footer=(
-                "Atalhos: nf 3 147478, nb 3 17581 pendentes, nb 4 17581 todos, extrato 4 01/05/2026 08/05/2026, valor 3 0,99 13/04/2026 tolerancia 0,10. "
-                "Use A ou ANT para voltar."
-            ),
-            button_text="Escolher",
-            options=tuple(options),
-        )
+        return self.finance_flow.payip_flow._build_payip_menu(invalid_selection=invalid_selection)
 
     def _build_payip_status_response(self) -> OutgoingMessage:
-        if self.payip_payments_service is None:
-            return OutgoingMessage(
-                text=(
-                    "PayIP ainda nao esta configurada no bot.\n"
-                    "Configure PAYIP_BASE_URL, PAYIP_USERNAME, PAYIP_PASSWORD e PAYIP_COMPANY_IDS no .env."
-                )
-            )
-
-        status = self.payip_payments_service.status()
-        lines = ["PayIP | Status da sessao", ""]
-        lines.append(f"Configurado: {_format_yes_no(bool(status.get('configured')))}")
-        lines.append(f"Cache local: {_format_yes_no(bool(status.get('has_cached_tokens')))}")
-        lines.append(f"Access token valido: {_format_yes_no(bool(status.get('access_token_valid')))}")
-        lines.append(f"Refresh token valido: {_format_yes_no(bool(status.get('refresh_token_valid')))}")
-        session_state = str(status.get("session_state") or "").strip()
-        if session_state:
-            lines.append(f"Sessao: {session_state}")
-        scope = str(status.get("scope") or "").strip()
-        if scope:
-            lines.append(f"Escopo: {scope}")
-        company_ids = status.get("company_ids")
-        if isinstance(company_ids, dict) and company_ids:
-            labels = [
-                _format_filial_label(filial)
-                for filial in sorted(company_ids, key=_sort_numeric_text)
-            ]
-            lines.append(f"Revendas PayIP: {', '.join(labels)}")
-        company_tax_ids = status.get("company_tax_ids")
-        if isinstance(company_tax_ids, dict) and company_tax_ids:
-            labels = [
-                _format_filial_label(filial)
-                for filial in sorted(company_tax_ids, key=_sort_numeric_text)
-            ]
-            lines.append(f"CNPJs emissao: {', '.join(labels)}")
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_status_response()
 
     def _run_payip_login_test(
         self,
@@ -10136,61 +9486,10 @@ class CustomerLookupFlow:
         session: LookupSession,
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        session.payip_pending_action = ""
-        session.payip_pending_invoice = ""
-        session.payip_pending_client_code = ""
-        session.payip_pending_filial = ""
-        session.payip_pending_date_start = ""
-        session.payip_pending_date_end = ""
-        session.payip_pending_amount = ""
-        session.payip_pending_day = ""
-        session.payip_pending_tolerance = ""
-        session.payip_pix_payloads = ()
-        try:
-            outgoing = self._build_payip_login_test_response(mfa_code=mfa_code)
-        except PayipMfaRequired:
-            session.step = "finance_payip_awaiting_mfa"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_mfa_prompt()
-        except PayipError as exc:
-            if mfa_code:
-                session.step = "finance_payip_awaiting_mfa"
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_mfa_prompt(
-                    invalid_selection=True,
-                    detail=_short_error_text(str(exc)),
-                )
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                OutgoingMessage(
-                    text=(
-                        "Nao consegui validar o login da PayIP agora.\n"
-                        f"Detalhe: {_short_error_text(str(exc))}"
-                    )
-                ),
-                return_menu="finance_payip_menu",
-            )
-        except RuntimeError as exc:
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                OutgoingMessage(
-                    text=(
-                        "Nao consegui consultar a PayIP agora.\n"
-                        f"Detalhe: {_short_error_text(str(exc))}"
-                    )
-                ),
-                return_menu="finance_payip_menu",
-            )
-
-        return self._with_post_result_navigation(
-            sender,
-            session,
-            outgoing,
-            return_menu="finance_payip_menu",
+        return self.finance_flow.payip_flow._run_payip_login_test(
+            sender=sender,
+            session=session,
+            mfa_code=mfa_code,
         )
 
     def _build_payip_mfa_prompt(
@@ -10200,75 +9499,20 @@ class CustomerLookupFlow:
         detail: str = "",
         context: str = "",
     ) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Nao consegui validar esse codigo MFA.")
-            if detail:
-                lines.append(f"Detalhe: {detail}")
-            lines.append("")
-        lines.extend(
-            [
-                "A PayIP pediu MFA para iniciar uma nova sessao.",
-                f"Consulta pendente: {context}" if context else "",
-                "Envie aqui o codigo atual do Google Authenticator com 6 digitos.",
-                "Exemplo: 123456",
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
+        return self.finance_flow.payip_flow._build_payip_mfa_prompt(
+            invalid_selection=invalid_selection,
+            detail=detail,
+            context=context,
         )
-        return OutgoingMessage(text="\n".join(line for line in lines if line != ""))
 
     def _build_payip_login_test_response(self, *, mfa_code: str = "") -> OutgoingMessage:
-        if self.payip_payments_service is None:
-            return OutgoingMessage(
-                text=(
-                    "PayIP ainda nao esta configurada no bot.\n"
-                    "Configure PAYIP_BASE_URL, PAYIP_USERNAME, PAYIP_PASSWORD e PAYIP_COMPANY_IDS no .env."
-                )
-            )
-
-        if mfa_code:
-            self.payip_payments_service.bootstrap_session(mfa_code=mfa_code)
-        status = self.payip_payments_service.status()
-
-        lines = ["PayIP | Diagnostico", ""]
-        lines.append("Sessao autenticada.")
-        lines.append(f"Access token valido: {_format_yes_no(bool(status.get('access_token_valid')))}")
-        lines.append(f"Refresh token valido: {_format_yes_no(bool(status.get('refresh_token_valid')))}")
-        company_ids = status.get("company_ids")
-        if isinstance(company_ids, dict) and company_ids:
-            labels = [_format_filial_label(filial) for filial in sorted(company_ids, key=_sort_numeric_text)]
-            lines.append(f"Revendas PayIP: {', '.join(labels)}")
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_login_test_response(mfa_code=mfa_code)
 
     def _build_payip_invoice_prompt(self, invalid_selection: bool = False) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Nao identifiquei o numero da nota fiscal.")
-            lines.append("")
-        lines.extend(
-            [
-                "Informe a filial e o numero da nota fiscal para buscar na PayIP.",
-                "Exemplo: 3 147478",
-                self._payip_filial_hint(),
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
-        )
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_invoice_prompt(invalid_selection=invalid_selection)
 
     def _payip_filial_hint(self) -> str:
-        if self.payip_payments_service is None:
-            return "Informe a filial da revenda."
-        try:
-            status = self.payip_payments_service.status()
-        except RuntimeError:
-            return "Informe a filial da revenda."
-        company_ids = status.get("company_ids")
-        if not isinstance(company_ids, dict) or not company_ids:
-            return "Informe a filial da revenda."
-        labels = [_format_filial_label(filial) for filial in sorted(company_ids, key=_sort_numeric_text)]
-        return f"Filiais PayIP: {' | '.join(labels)}"
+        return self.finance_flow.payip_flow._payip_filial_hint()
 
     def _build_payip_client_code_prompt(
         self,
@@ -10276,96 +9520,22 @@ class CustomerLookupFlow:
         *,
         pending_only: bool | None = True,
     ) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Nao identifiquei o NB/codigo do cliente.")
-            lines.append("")
-        if pending_only is None:
-            action_label = "consultar pagamentos"
-            example = "Exemplo: 3 17"
-        elif pending_only:
-            action_label = "listar pagamentos pendentes"
-            example = "Exemplo: 3 17"
-        else:
-            action_label = "listar pagamentos de todos os status"
-            example = "Exemplo: 3 17"
-        lines.extend(
-            [
-                f"Informe a filial e o NB/codigo do cliente para {action_label}.",
-                example,
-                self._payip_filial_hint(),
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
+        return self.finance_flow.payip_flow._build_payip_client_code_prompt(
+            invalid_selection=invalid_selection,
+            pending_only=pending_only,
         )
-        return OutgoingMessage(text="\n".join(lines))
 
     def _build_payip_client_filter_prompt(self, invalid_selection: bool = False) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Escolha 1 para pendentes ou 2 para todos os status.")
-            lines.append("")
-        lines.extend(
-            [
-                "Qual filtro voce quer usar para esse NB?",
-                "1. Somente pendentes",
-                "2. Todos os status",
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
-        )
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_client_filter_prompt(invalid_selection=invalid_selection)
 
     def _build_payip_charge_client_prompt(self, invalid_selection: bool = False) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Informe a filial e o NB/codigo do cliente.")
-            lines.append("")
-        lines.extend(
-            [
-                "Informe a filial e o NB do cliente para emitir a cobranca.",
-                "Exemplo: 3 16883",
-                self._payip_filial_hint(),
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
-        )
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_charge_client_prompt(invalid_selection=invalid_selection)
 
     def _build_payip_statement_prompt(self, invalid_selection: bool = False) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Informe uma filial valida e, se usar periodo, duas datas validas.")
-            lines.append("")
-        lines.extend(
-            [
-                "Informe a filial para consultar o extrato PayIP.",
-                "Se enviar apenas a filial, consulto do inicio do mes atual ate hoje.",
-                "Exemplo: 4",
-                "Exemplo com periodo: 4 01/05/2026 08/05/2026",
-                self._payip_filial_hint(),
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
-        )
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_statement_prompt(invalid_selection=invalid_selection)
 
     def _build_payip_amount_day_prompt(self, invalid_selection: bool = False) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Informe uma filial, um valor e uma data valida.")
-            lines.append("")
-        lines.extend(
-            [
-                "Informe a filial, o valor recebido e o dia de pagamento para buscar cobrancas na PayIP.",
-                "Exemplo: 3 0,99 13/04/2026",
-                "Tolerancia padrao: R$ 0,05. Para alterar: 3 0,99 13/04/2026 tolerancia 0,10",
-                self._payip_filial_hint(),
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
-        )
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_amount_day_prompt(invalid_selection=invalid_selection)
 
     def _run_payip_amount_day_search(
         self,
@@ -10378,133 +9548,14 @@ class CustomerLookupFlow:
         tolerance: Decimal | str | int | float | None = None,
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        normalized_filial = _resolve_payip_filial(filial)
-        normalized_amount = _parse_decimal_text(amount)
-        normalized_day = _coerce_payip_statement_date(day)
-        normalized_tolerance = (
-            _parse_decimal_text(tolerance)
-            if str(tolerance or "").strip()
-            else DEFAULT_PAYMENT_AMOUNT_TOLERANCE
-        )
-        if (
-            not normalized_filial
-            or normalized_amount is None
-            or normalized_amount <= 0
-            or normalized_day is None
-            or normalized_tolerance is None
-            or normalized_tolerance < 0
-        ):
-            session.step = "finance_payip_amount_day_awaiting_query"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_amount_day_prompt(invalid_selection=True)
-
-        mfa_bootstrapped = False
-        try:
-            if self.payip_payments_service is None:
-                raise RuntimeError(
-                    "PayIP ainda nao esta configurada. Configure PAYIP_BASE_URL, PAYIP_USERNAME, "
-                    "PAYIP_PASSWORD e PAYIP_COMPANY_IDS no .env."
-                )
-            if mfa_code:
-                self.payip_payments_service.bootstrap_session(mfa_code=mfa_code)
-                mfa_bootstrapped = True
-            page = self.payip_payments_service.find_payments_by_amount_and_paid_date(
-                filial=normalized_filial,
-                amount=normalized_amount,
-                day=normalized_day,
-                tolerance=normalized_tolerance,
-            )
-        except PayipMfaRequired:
-            session.step = "finance_payip_awaiting_mfa"
-            session.payip_pending_action = "amount_day"
-            session.payip_pending_filial = normalized_filial
-            session.payip_pending_amount = _decimal_cache_text(normalized_amount)
-            session.payip_pending_day = normalized_day.isoformat()
-            session.payip_pending_tolerance = _decimal_cache_text(normalized_tolerance)
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_mfa_prompt(
-                context=(
-                    f"valor {_format_currency_brl(normalized_amount)} em "
-                    f"{normalized_day.strftime('%d/%m/%Y')} | Tolerancia: {_format_currency_brl(normalized_tolerance)} | "
-                    f"Revenda: {_format_filial_label(normalized_filial)}"
-                )
-            )
-        except PayipError as exc:
-            if mfa_code and not mfa_bootstrapped:
-                session.step = "finance_payip_awaiting_mfa"
-                session.payip_pending_action = "amount_day"
-                session.payip_pending_filial = normalized_filial
-                session.payip_pending_amount = _decimal_cache_text(normalized_amount)
-                session.payip_pending_day = normalized_day.isoformat()
-                session.payip_pending_tolerance = _decimal_cache_text(normalized_tolerance)
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_mfa_prompt(
-                    invalid_selection=True,
-                    detail=_short_error_text(str(exc)),
-                    context=(
-                        f"valor {_format_currency_brl(normalized_amount)} em "
-                        f"{normalized_day.strftime('%d/%m/%Y')} | Tolerancia: {_format_currency_brl(normalized_tolerance)} | "
-                        f"Revenda: {_format_filial_label(normalized_filial)}"
-                    ),
-                )
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                OutgoingMessage(
-                    text=(
-                        "Nao consegui consultar a PayIP por valor e dia agora.\n"
-                        f"Detalhe: {_short_error_text(str(exc))}"
-                    )
-                ),
-                return_menu="finance_payip_menu",
-                repeat_action=REPEAT_PAYIP_AMOUNT_DAY,
-            )
-        except RuntimeError as exc:
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                OutgoingMessage(
-                    text=(
-                        "Nao consegui consultar a PayIP por valor e dia agora.\n"
-                        f"Detalhe: {_short_error_text(str(exc))}"
-                    )
-                ),
-                return_menu="finance_payip_menu",
-                repeat_action=REPEAT_PAYIP_AMOUNT_DAY,
-            )
-
-        session.payip_pending_action = ""
-        session.payip_pending_filial = ""
-        session.payip_pending_amount = ""
-        session.payip_pending_day = ""
-        session.payip_pending_tolerance = ""
-        session.payip_pix_payloads = _extract_payip_pix_payloads(
-            page.items,
-            filial=normalized_filial,
-            company_id=getattr(page, "company_id", ""),
-        )
-        criteria = (
-            f"Revenda: {_format_filial_label(normalized_filial)} | "
-            f"Pagamento: {normalized_day.strftime('%d/%m/%Y')} | "
-            f"Valor: {_format_currency_brl(normalized_amount)} | "
-            f"Tolerancia: {_format_currency_brl(normalized_tolerance)}"
-        )
-        return self._with_post_result_navigation(
-            sender,
-            session,
-            self._build_payip_payments_response(
-                title="PayIP | Valor e Dia",
-                page=page,
-                criteria=criteria,
-                empty_text=(
-                    "Nao encontrei cobrancas pagas nesse dia dentro da tolerancia informada nessa revenda."
-                ),
-            ),
-            return_menu="finance_payip_menu",
-            repeat_action=REPEAT_PAYIP_AMOUNT_DAY,
+        return self.finance_flow.payip_flow._run_payip_amount_day_search(
+            sender=sender,
+            session=session,
+            filial=filial,
+            amount=amount,
+            day=day,
+            tolerance=tolerance,
+            mfa_code=mfa_code,
         )
 
     def _run_payip_statement_resume(
@@ -10517,112 +9568,13 @@ class CustomerLookupFlow:
         date_end: date | str | None = None,
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        normalized_filial = _resolve_payip_filial(filial)
-        normalized_date_start, normalized_date_end, invalid_date = _normalize_payip_statement_period(
+        return self.finance_flow.payip_flow._run_payip_statement_resume(
+            sender=sender,
+            session=session,
+            filial=filial,
             date_start=date_start,
             date_end=date_end,
-        )
-        if not normalized_filial or invalid_date:
-            session.step = "finance_payip_statement_awaiting_period"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_statement_prompt(invalid_selection=True)
-
-        mfa_bootstrapped = False
-        try:
-            if self.payip_payments_service is None:
-                raise RuntimeError(
-                    "PayIP ainda nao esta configurada. Configure PAYIP_BASE_URL, PAYIP_USERNAME, "
-                    "PAYIP_PASSWORD e PAYIP_COMPANY_IDS no .env."
-                )
-            if mfa_code:
-                self.payip_payments_service.bootstrap_session(mfa_code=mfa_code)
-                mfa_bootstrapped = True
-            resume = self.payip_payments_service.statement_movements_resume(
-                filial=normalized_filial,
-                date_start=normalized_date_start,
-                date_end=normalized_date_end,
-            )
-            pdf_bytes, xlsx_bytes, export_errors = self._load_payip_statement_exports(
-                filial=normalized_filial,
-                date_start=normalized_date_start,
-                date_end=normalized_date_end,
-            )
-        except PayipMfaRequired:
-            session.step = "finance_payip_awaiting_mfa"
-            session.payip_pending_action = "statement"
-            session.payip_pending_filial = normalized_filial
-            session.payip_pending_date_start = normalized_date_start.isoformat()
-            session.payip_pending_date_end = normalized_date_end.isoformat()
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_mfa_prompt(
-                context=(
-                    f"extrato {_format_filial_label(normalized_filial)} "
-                    f"{normalized_date_start.strftime('%d/%m/%Y')} a {normalized_date_end.strftime('%d/%m/%Y')}"
-                )
-            )
-        except PayipError as exc:
-            if mfa_code and not mfa_bootstrapped:
-                session.step = "finance_payip_awaiting_mfa"
-                session.payip_pending_action = "statement"
-                session.payip_pending_filial = normalized_filial
-                session.payip_pending_date_start = normalized_date_start.isoformat()
-                session.payip_pending_date_end = normalized_date_end.isoformat()
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_mfa_prompt(
-                    invalid_selection=True,
-                    detail=_short_error_text(str(exc)),
-                    context=(
-                        f"extrato {_format_filial_label(normalized_filial)} "
-                        f"{normalized_date_start.strftime('%d/%m/%Y')} a {normalized_date_end.strftime('%d/%m/%Y')}"
-                    ),
-                )
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                OutgoingMessage(
-                    text=(
-                        "Nao consegui consultar o extrato PayIP agora.\n"
-                        f"Detalhe: {_short_error_text(str(exc))}"
-                    )
-                ),
-                return_menu="finance_payip_menu",
-                repeat_action=REPEAT_PAYIP_STATEMENT,
-            )
-        except RuntimeError as exc:
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                OutgoingMessage(
-                    text=(
-                        "Nao consegui consultar o extrato PayIP agora.\n"
-                        f"Detalhe: {_short_error_text(str(exc))}"
-                    )
-                ),
-                return_menu="finance_payip_menu",
-                repeat_action=REPEAT_PAYIP_STATEMENT,
-            )
-
-        session.payip_pending_action = ""
-        session.payip_pending_filial = ""
-        session.payip_pending_date_start = ""
-        session.payip_pending_date_end = ""
-        return self._with_post_result_navigation(
-            sender,
-            session,
-            _build_payip_statement_resume_response(
-                resume,
-                filial=normalized_filial,
-                date_start=normalized_date_start.isoformat(),
-                date_end=normalized_date_end.isoformat(),
-                pdf_bytes=pdf_bytes,
-                xlsx_bytes=xlsx_bytes,
-                export_errors=export_errors,
-            ),
-            return_menu="finance_payip_menu",
-            repeat_action=REPEAT_PAYIP_STATEMENT,
+            mfa_code=mfa_code,
         )
 
     def _load_payip_statement_exports(
@@ -10632,30 +9584,11 @@ class CustomerLookupFlow:
         date_start: date,
         date_end: date,
     ) -> tuple[bytes, bytes, tuple[str, ...]]:
-        if self.payip_payments_service is None:
-            return b"", b"", ()
-        errors: list[str] = []
-        pdf_bytes = b""
-        xlsx_bytes = b""
-        try:
-            pdf_bytes = self.payip_payments_service.statement_movements_export(
-                filial=filial,
-                date_start=date_start,
-                date_end=date_end,
-                file_format="pdf",
-            )
-        except (PayipError, RuntimeError) as exc:
-            errors.append(f"PDF: {_short_error_text(str(exc))}")
-        try:
-            xlsx_bytes = self.payip_payments_service.statement_movements_export(
-                filial=filial,
-                date_start=date_start,
-                date_end=date_end,
-                file_format="xlsx",
-            )
-        except (PayipError, RuntimeError) as exc:
-            errors.append(f"XLSX: {_short_error_text(str(exc))}")
-        return pdf_bytes, xlsx_bytes, tuple(errors)
+        return self.finance_flow.payip_flow._load_payip_statement_exports(
+            filial=filial,
+            date_start=date_start,
+            date_end=date_end,
+        )
 
     def _build_payip_charge_lookup_error(
         self,
@@ -10665,23 +9598,12 @@ class CustomerLookupFlow:
         error_text: str,
         mfa_was_validated: bool = False,
     ) -> OutgoingMessage:
-        detail = _short_error_text(error_text)
-        lines = [
-            "Nao consegui buscar esse cliente na PayIP agora.",
-            f"Revenda: {_format_filial_label(filial)}" if filial else "Revenda: -",
-            f"NB: {client_code or '-'}",
-            f"Detalhe: {detail}",
-        ]
-        if mfa_was_validated and _is_payip_company_forbidden_error(error_text):
-            lines.extend(
-                [
-                    "",
-                    "A sessao foi validada, mas a PayIP recusou essa empresa/revenda.",
-                    "Confira se essa filial esta liberada para o usuario PayIP usado no bot.",
-                ]
-            )
-        lines.extend(["", "Informe outra filial e NB, ou envie A para voltar."])
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_charge_lookup_error(
+            filial=filial,
+            client_code=client_code,
+            error_text=error_text,
+            mfa_was_validated=mfa_was_validated,
+        )
 
     def _build_payip_charge_amount_prompt(
         self,
@@ -10689,41 +9611,13 @@ class CustomerLookupFlow:
         session: LookupSession,
         invalid_selection: bool = False,
     ) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Informe um valor valido maior que zero.")
-            lines.append("")
-        lines.extend(
-            [
-                "Cliente encontrado para emissao PayIP",
-                "",
-                f"Revenda: {_format_filial_label(session.payip_charge_filial)}",
-                f"Cliente: {session.payip_charge_client_name}",
-                f"NB: {session.payip_charge_external_id or '-'}",
-                f"CPF/CNPJ: {_format_tax_payer_id(session.payip_charge_tax_payer_id)}",
-                "",
-                "Informe o valor da cobranca.",
-                "Exemplo: 0,99",
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
+        return self.finance_flow.payip_flow._build_payip_charge_amount_prompt(
+            session=session,
+            invalid_selection=invalid_selection,
         )
-        return OutgoingMessage(text="\n".join(lines))
 
     def _build_payip_charge_due_date_prompt(self, invalid_selection: bool = False) -> OutgoingMessage:
-        lines = []
-        if invalid_selection:
-            lines.append("Informe uma data de vencimento valida, hoje ou futura.")
-            lines.append("")
-        lines.extend(
-            [
-                "Informe a data de vencimento da cobranca.",
-                "Exemplo: 07/05/2026",
-                "",
-                "Para voltar, envie A ou ANT.",
-            ]
-        )
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_charge_due_date_prompt(invalid_selection=invalid_selection)
 
     def _build_payip_charge_confirmation(
         self,
@@ -10732,48 +9626,11 @@ class CustomerLookupFlow:
         invalid_selection: bool = False,
         detail: str = "",
     ) -> OutgoingMessage:
-        amount = _parse_decimal_text(session.payip_charge_amount) or Decimal("0")
-        rate_amount = _payip_charge_rate_amount(session)
-        interest_perc = _payip_charge_interest_perc(session)
-        due_date = _parse_iso_date(session.payip_charge_due_date)
-        issue_date = datetime.now(LOCAL_TIMEZONE).date()
-        title = _payip_charge_title(session.payip_charge_filial)
-        total = amount + rate_amount
-        lines = []
-        if invalid_selection:
-            lines.append("Para emitir a cobranca real, responda CONFIRMAR.")
-            if detail:
-                lines.append(f"Detalhe: {detail}")
-            lines.append("")
-        lines.extend(
-            [
-                "Confirmar emissao PayIP",
-                "",
-                f"Revenda: {_format_filial_label(session.payip_charge_filial)}",
-                f"Cliente: {session.payip_charge_client_name}",
-                f"NB: {session.payip_charge_external_id or '-'}",
-                f"CPF/CNPJ: {_format_tax_payer_id(session.payip_charge_tax_payer_id)}",
-                f"Nota fiscal: {session.payip_charge_invoice or '-'}",
-                "",
-                f"Titulo: {title}",
-                f"Descricao: {title}",
-                f"Emissao: {issue_date.strftime('%d/%m/%Y')}",
-                f"Vencimento: {due_date.strftime('%d/%m/%Y') if due_date else '-'}",
-                "",
-                f"Valor base: {_format_currency_brl(amount)}",
-                f"Taxa PIX: {_format_currency_brl(rate_amount)}",
-                f"Total estimado: {_format_currency_brl(total)}",
-                f"Juros apos vencimento: {_format_decimal_percent(interest_perc)} ao dia",
-                "Multa: nao",
-                "Validade apos vencimento: 30 dias",
-                "",
-                "Para alterar antes de emitir: nb 16883 | nf 147478 | taxa 5,00 | juros 8 | vencimento 31/12/2026.",
-                "Para remover: sem nb (gera ID tecnico) | sem nf | taxa 0 | juros 0.",
-                "Responda CONFIRMAR para emitir.",
-                "Para cancelar, envie A ou ANT.",
-            ]
+        return self.finance_flow.payip_flow._build_payip_charge_confirmation(
+            session=session,
+            invalid_selection=invalid_selection,
+            detail=detail,
         )
-        return OutgoingMessage(text="\n".join(lines))
 
     def _run_payip_charge_client_lookup(
         self,
@@ -10784,98 +9641,13 @@ class CustomerLookupFlow:
         filial: str = "",
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        normalized_client_code = _extract_payip_client_code_query(client_code) or _normalize_cod_pdv(client_code)
-        normalized_filial = _resolve_payip_filial(filial or _extract_payip_filial_query(client_code))
-        if not normalized_client_code or not normalized_filial:
-            session.step = "finance_payip_charge_awaiting_client"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_client_prompt(invalid_selection=True)
-        try:
-            if self.payip_payments_service is None:
-                raise RuntimeError(
-                    "PayIP ainda nao esta configurada. Configure PAYIP_BASE_URL, PAYIP_USERNAME, "
-                    "PAYIP_PASSWORD, PAYIP_COMPANY_IDS e PAYIP_COMPANY_TAX_IDS no .env."
-                )
-            mfa_bootstrapped = False
-            if mfa_code:
-                self.payip_payments_service.bootstrap_session(mfa_code=mfa_code)
-                mfa_bootstrapped = True
-            client_record = self.payip_payments_service.find_client_by_code(
-                filial=normalized_filial,
-                client_code=normalized_client_code,
-            )
-        except PayipMfaRequired:
-            session.step = "finance_payip_awaiting_mfa"
-            session.payip_pending_action = "charge_lookup"
-            session.payip_pending_client_code = normalized_client_code
-            session.payip_pending_filial = normalized_filial
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_mfa_prompt(
-                context=f"emissao NB {normalized_client_code} | Revenda: {_format_filial_label(normalized_filial)}"
-            )
-        except PayipError as exc:
-            if mfa_code and not mfa_bootstrapped:
-                session.step = "finance_payip_awaiting_mfa"
-                session.payip_pending_action = "charge_lookup"
-                session.payip_pending_client_code = normalized_client_code
-                session.payip_pending_filial = normalized_filial
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_mfa_prompt(
-                    invalid_selection=True,
-                    detail=_short_error_text(str(exc)),
-                    context=f"emissao NB {normalized_client_code} | Revenda: {_format_filial_label(normalized_filial)}",
-                )
-            session.step = "finance_payip_charge_awaiting_client"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_lookup_error(
-                filial=normalized_filial,
-                client_code=normalized_client_code,
-                error_text=str(exc),
-                mfa_was_validated=bool(mfa_code and mfa_bootstrapped),
-            )
-        except RuntimeError as exc:
-            session.step = "finance_payip_charge_awaiting_client"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_lookup_error(
-                filial=normalized_filial,
-                client_code=normalized_client_code,
-                error_text=str(exc),
-            )
-
-        if client_record is None:
-            session.step = "finance_payip_charge_awaiting_client"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return OutgoingMessage(
-                text=(
-                    f"Nao encontrei cliente ativo com NB {normalized_client_code} na revenda "
-                    f"{_format_filial_label(normalized_filial)}.\n\n"
-                    "Informe outra filial e NB, ou envie A para voltar."
-                )
-            )
-
-        session.payip_charge_filial = normalized_filial
-        session.payip_charge_client_code = client_record.code
-        session.payip_charge_external_id = client_record.code
-        session.payip_charge_client_name = client_record.name
-        session.payip_charge_tax_payer_id = client_record.tax_payer_id
-        session.payip_charge_invoice = ""
-        session.payip_charge_amount = ""
-        session.payip_charge_due_date = ""
-        session.payip_charge_rate_amount = "3.92"
-        session.payip_charge_interest_perc = "10.00"
-        session.payip_pending_action = ""
-        session.payip_pending_client_code = ""
-        session.payip_pending_filial = ""
-        session.step = "finance_payip_charge_awaiting_amount"
-        session.updated_at = datetime.now(timezone.utc)
-        self.sessions[sender] = session
-        return self._build_payip_charge_amount_prompt(session=session)
+        return self.finance_flow.payip_flow._run_payip_charge_client_lookup(
+            sender=sender,
+            session=session,
+            client_code=client_code,
+            filial=filial,
+            mfa_code=mfa_code,
+        )
 
     def _run_payip_charge_create(
         self,
@@ -10884,97 +9656,10 @@ class CustomerLookupFlow:
         session: LookupSession,
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        amount = _parse_decimal_text(session.payip_charge_amount)
-        due_date = _parse_iso_date(session.payip_charge_due_date)
-        if (
-            amount is None
-            or amount <= 0
-            or due_date is None
-            or not session.payip_charge_filial
-            or not session.payip_charge_client_code
-            or not session.payip_charge_tax_payer_id
-        ):
-            session.step = "finance_payip_charge_awaiting_client"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_client_prompt(invalid_selection=True)
-
-        title = _payip_charge_title(session.payip_charge_filial)
-        try:
-            if self.payip_payments_service is None:
-                raise RuntimeError(
-                    "PayIP ainda nao esta configurada. Configure PAYIP_BASE_URL, PAYIP_USERNAME, "
-                    "PAYIP_PASSWORD, PAYIP_COMPANY_IDS e PAYIP_COMPANY_TAX_IDS no .env."
-                )
-            mfa_bootstrapped = False
-            if mfa_code:
-                self.payip_payments_service.bootstrap_session(mfa_code=mfa_code)
-                mfa_bootstrapped = True
-            payment = self.payip_payments_service.create_pix_charge(
-                filial=session.payip_charge_filial,
-                amount=amount,
-                rate_amount=_payip_charge_rate_amount(session),
-                interest_perc=_payip_charge_interest_perc(session),
-                tax_payer_id=session.payip_charge_tax_payer_id,
-                external_id=session.payip_charge_external_id,
-                due_date=due_date,
-                issue_date=datetime.now(LOCAL_TIMEZONE).date(),
-                title=title,
-                description=title,
-                invoice=session.payip_charge_invoice,
-            )
-        except PayipMfaRequired:
-            session.step = "finance_payip_awaiting_mfa"
-            session.payip_pending_action = "charge_create"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_mfa_prompt(
-                context=f"emitir cobranca NB {session.payip_charge_client_code}"
-            )
-        except PayipError as exc:
-            if mfa_code and not mfa_bootstrapped:
-                session.step = "finance_payip_awaiting_mfa"
-                session.payip_pending_action = "charge_create"
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_mfa_prompt(
-                    invalid_selection=True,
-                    detail=_short_error_text(str(exc)),
-                    context=f"emitir cobranca NB {session.payip_charge_client_code}",
-                )
-            session.step = "finance_payip_charge_confirm"
-            session.payip_pending_action = ""
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_create_error_response(
-                session=session,
-                error_text=str(exc),
-            )
-        except RuntimeError as exc:
-            session.step = "finance_payip_charge_confirm"
-            session.payip_pending_action = ""
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_charge_create_error_response(
-                session=session,
-                error_text=str(exc),
-            )
-
-        session.payip_pending_action = ""
-        session.payip_pending_client_code = ""
-        session.payip_pending_filial = ""
-        session.payip_pending_status = ""
-        outgoing = self._build_payip_charge_post_create_response(
+        return self.finance_flow.payip_flow._run_payip_charge_create(
+            sender=sender,
             session=session,
-            payment=payment,
-            title=title,
-        )
-        return self._with_post_result_navigation(
-            sender,
-            session,
-            outgoing,
-            return_menu="finance_payip_menu",
-            repeat_action=REPEAT_PAYIP_CREATE_CHARGE,
+            mfa_code=mfa_code,
         )
 
     def _build_payip_charge_create_error_response(
@@ -10983,30 +9668,10 @@ class CustomerLookupFlow:
         session: LookupSession,
         error_text: str,
     ) -> OutgoingMessage:
-        due_date = _parse_iso_date(session.payip_charge_due_date)
-        amount = _parse_decimal_text(session.payip_charge_amount) or Decimal("0")
-        rate_amount = _payip_charge_rate_amount(session)
-        total = amount + rate_amount
-        lines = [
-            "PayIP | Falha na emissao",
-            "",
-            "A cobranca nao foi gerada.",
-            f"Detalhe: {_short_error_text(error_text)}",
-            "",
-            "*Dados mantidos:*",
-            f"- Revenda: {_format_filial_label(session.payip_charge_filial)}",
-            f"- Cliente: {session.payip_charge_client_name or '-'}",
-            f"- NB: {session.payip_charge_external_id or '-'}",
-            f"- Valor base: {_format_currency_brl(amount)}",
-            f"- Taxa PIX: {_format_currency_brl(rate_amount)}",
-            f"- Total estimado: {_format_currency_brl(total)}",
-            f"- Vencimento: {due_date.strftime('%d/%m/%Y') if due_date else '-'}",
-            "",
-            "Para tentar novamente, envie TENTAR NOVAMENTE ou CONFIRMAR.",
-            "Para ajustar antes de tentar: taxa 5,00 | juros 8 | vencimento 31/12/2026 | nf 147478.",
-            "Para cancelar e voltar ao menu PayIP, envie A ou ANT.",
-        ]
-        return OutgoingMessage(text="\n".join(lines))
+        return self.finance_flow.payip_flow._build_payip_charge_create_error_response(
+            session=session,
+            error_text=error_text,
+        )
 
     def _build_payip_charge_post_create_response(
         self,
@@ -11015,72 +9680,10 @@ class CustomerLookupFlow:
         payment: dict[str, Any],
         title: str,
     ) -> OutgoingMessage:
-        search_error = ""
-        search_items: tuple[dict[str, Any], ...] = ()
-        search_company_id = ""
-        direct_payment: dict[str, Any] | None = None
-        created_payment_id = _payip_clean_text(_payip_value(payment, "id"))
-        due_date_text = str(session.payip_charge_due_date or "").strip()
-        created_at_text = datetime.now(LOCAL_TIMEZONE).date().isoformat()
-        search_criteria = _payip_post_create_search_criteria(
-            client_code=session.payip_charge_client_code,
-            due_date=due_date_text,
-            created_at=created_at_text,
-        )
-        if created_payment_id and self.payip_payments_service is not None:
-            try:
-                direct_payment = self.payip_payments_service.get_payment(created_payment_id)
-            except (PayipError, RuntimeError) as exc:
-                search_error = _short_error_text(str(exc))
-
-        try:
-            if direct_payment is None:
-                page = self._load_payip_payments_page(
-                    page=1,
-                    page_size=50,
-                    status="PENDING",
-                    client_code=session.payip_charge_client_code,
-                    due_date_start=due_date_text,
-                    due_date_end=due_date_text,
-                    created_at_start=created_at_text,
-                    created_at_end=created_at_text,
-                    filial=session.payip_charge_filial,
-                )
-                search_items = tuple(item for item in getattr(page, "items", ()) or () if isinstance(item, dict))
-                search_company_id = str(getattr(page, "company_id", "") or "")
-        except (PayipError, RuntimeError) as exc:
-            search_error = _short_error_text(str(exc))
-
-        selected_items = (direct_payment,) if direct_payment is not None else _select_payip_created_payment_items(
-            search_items,
-            payment=payment,
+        return self.finance_flow.payip_flow._build_payip_charge_post_create_response(
             session=session,
-        )
-        used_search = bool(selected_items)
-        lookup_criteria = f"GET /v1/payments/{created_payment_id}" if direct_payment is not None else search_criteria
-        display_items = selected_items or (payment,)
-        session.payip_pix_payloads = _extract_payip_pix_payloads(
-            display_items,
-            filial=session.payip_charge_filial,
-            company_id=search_company_id,
-        )
-        if session.payip_pix_payloads:
-            return _build_payip_pix_code_response(
-                session.payip_pix_payloads,
-                selection=1,
-                payip_payments_service=self.payip_payments_service,
-                pdf_attempts=5,
-                pdf_retry_delay_seconds=2.0,
-            )
-        return _build_payip_charge_created_search_response(
-            payment=display_items[0],
+            payment=payment,
             title=title,
-            filial=session.payip_charge_filial,
-            fallback_client_name=session.payip_charge_client_name,
-            fallback_client_code=session.payip_charge_client_code,
-            used_search=used_search,
-            search_criteria=lookup_criteria,
-            search_error=search_error,
         )
 
     def _run_payip_invoice_search(
@@ -11092,24 +9695,11 @@ class CustomerLookupFlow:
         filial: str = "",
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        normalized_invoice = _extract_payip_invoice_query(invoice) or str(invoice or "").strip()
-        normalized_filial = _resolve_payip_filial(filial or _extract_payip_filial_query(invoice))
-        if not normalized_invoice:
-            session.step = "finance_payip_awaiting_invoice"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_invoice_prompt(invalid_selection=True)
-        if not normalized_filial:
-            session.step = "finance_payip_awaiting_invoice"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_invoice_prompt(invalid_selection=True)
-        return self._run_payip_search(
+        return self.finance_flow.payip_flow._run_payip_invoice_search(
             sender=sender,
             session=session,
-            action="invoice",
-            filial=normalized_filial,
-            invoice=normalized_invoice,
+            invoice=invoice,
+            filial=filial,
             mfa_code=mfa_code,
         )
 
@@ -11122,26 +9712,11 @@ class CustomerLookupFlow:
         filial: str = "",
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        normalized_client_code = _extract_payip_client_code_query(client_code) or _normalize_cod_pdv(client_code)
-        normalized_filial = _resolve_payip_filial(filial or _extract_payip_filial_query(client_code))
-        if not normalized_client_code:
-            session.step = "finance_payip_awaiting_client_code"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_client_code_prompt(invalid_selection=True)
-        if not normalized_filial:
-            session.step = "finance_payip_awaiting_client_code"
-            session.payip_pending_status = "PENDING"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_client_code_prompt(invalid_selection=True, pending_only=True)
-        return self._run_payip_search(
+        return self.finance_flow.payip_flow._run_payip_pending_client_search(
             sender=sender,
             session=session,
-            action="pending_client",
-            filial=normalized_filial,
-            client_code=normalized_client_code,
-            status="PENDING",
+            client_code=client_code,
+            filial=filial,
             mfa_code=mfa_code,
         )
 
@@ -11154,25 +9729,11 @@ class CustomerLookupFlow:
         filial: str = "",
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        normalized_client_code = _extract_payip_client_code_query(client_code) or _normalize_cod_pdv(client_code)
-        normalized_filial = _resolve_payip_filial(filial or _extract_payip_filial_query(client_code))
-        if not normalized_client_code:
-            session.step = "finance_payip_awaiting_client_code_all"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_client_code_prompt(invalid_selection=True, pending_only=False)
-        if not normalized_filial:
-            session.step = "finance_payip_awaiting_client_code"
-            session.payip_pending_status = ""
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_client_code_prompt(invalid_selection=True, pending_only=False)
-        return self._run_payip_search(
+        return self.finance_flow.payip_flow._run_payip_client_search(
             sender=sender,
             session=session,
-            action="client",
-            filial=normalized_filial,
-            client_code=normalized_client_code,
+            client_code=client_code,
+            filial=filial,
             mfa_code=mfa_code,
         )
 
@@ -11188,108 +9749,16 @@ class CustomerLookupFlow:
         status: str = "",
         mfa_code: str = "",
     ) -> OutgoingMessage:
-        repeat_action = _payip_repeat_action(action)
-        mfa_bootstrapped = False
-        try:
-            operation_mfa_code = mfa_code
-            if mfa_code and self.payip_payments_service is not None:
-                self.payip_payments_service.bootstrap_session(mfa_code=mfa_code)
-                mfa_bootstrapped = True
-                operation_mfa_code = ""
-            page = self._load_payip_payments_page(
-                page=1,
-                page_size=50,
-                status=status,
-                client_code=client_code,
-                invoice=invoice,
-                filial=filial,
-                mfa_code=operation_mfa_code,
-            )
-        except PayipMfaRequired:
-            session.step = "finance_payip_awaiting_mfa"
-            session.payip_pending_action = action
-            session.payip_pending_invoice = invoice
-            session.payip_pending_client_code = client_code
-            session.payip_pending_filial = filial
-            session.payip_pending_status = status
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_mfa_prompt(
-                context=_payip_search_label(action, invoice, client_code, filial=filial, status=status)
-            )
-        except PayipError as exc:
-            if mfa_code and not mfa_bootstrapped:
-                session.step = "finance_payip_awaiting_mfa"
-                session.payip_pending_action = action
-                session.payip_pending_invoice = invoice
-                session.payip_pending_client_code = client_code
-                session.payip_pending_filial = filial
-                session.payip_pending_status = status
-                session.updated_at = datetime.now(timezone.utc)
-                self.sessions[sender] = session
-                return self._build_payip_mfa_prompt(
-                    invalid_selection=True,
-                    detail=_short_error_text(str(exc)),
-                    context=_payip_search_label(action, invoice, client_code, filial=filial, status=status),
-                )
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                OutgoingMessage(
-                    text=(
-                        f"Nao consegui consultar a PayIP para {_payip_search_label(action, invoice, client_code)} agora.\n"
-                        f"Detalhe: {_short_error_text(str(exc))}"
-                    )
-                ),
-                return_menu="finance_payip_menu",
-                repeat_action=repeat_action,
-            )
-        except RuntimeError as exc:
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                OutgoingMessage(
-                    text=(
-                        "Nao consegui consultar a PayIP agora.\n"
-                        f"Detalhe: {_short_error_text(str(exc))}"
-                    )
-                ),
-                return_menu="finance_payip_menu",
-                repeat_action=repeat_action,
-            )
-
-        session.payip_pending_action = ""
-        session.payip_pending_invoice = ""
-        session.payip_pending_client_code = ""
-        session.payip_pending_filial = ""
-        session.payip_pending_status = ""
-        session.payip_pending_amount = ""
-        session.payip_pending_day = ""
-        session.payip_pending_tolerance = ""
-        session.payip_pix_payloads = _extract_payip_pix_payloads(
-            page.items,
-            filial=filial,
-            company_id=getattr(page, "company_id", ""),
-        )
-        title, criteria, empty_text = _payip_response_labels(
+        return self.finance_flow.payip_flow._run_payip_search(
+            sender=sender,
+            session=session,
             action=action,
             filial=filial,
             invoice=invoice,
             client_code=client_code,
             status=status,
+            mfa_code=mfa_code,
         )
-        return self._with_post_result_navigation(
-            sender,
-            session,
-            self._build_payip_payments_response(
-                title=title,
-                page=page,
-                criteria=criteria,
-                empty_text=empty_text,
-            ),
-                return_menu="finance_payip_menu",
-                repeat_action=repeat_action,
-            )
 
     def _open_payip_client_filter_or_search(
         self,
@@ -11299,27 +9768,12 @@ class CustomerLookupFlow:
         client_code: str,
         filial: str = "",
     ) -> OutgoingMessage:
-        normalized_client_code = _extract_payip_client_code_query(client_code) or _normalize_cod_pdv(client_code)
-        normalized_filial = _resolve_payip_filial(filial or _extract_payip_filial_query(client_code))
-        if not normalized_client_code or not normalized_filial:
-            session.step = "finance_payip_awaiting_client_code"
-            session.payip_pending_status = ""
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return self._build_payip_client_code_prompt(
-                invalid_selection=True,
-                pending_only=None,
-            )
-
-        session.step = "finance_payip_awaiting_client_filter"
-        session.payip_pending_action = "client"
-        session.payip_pending_invoice = ""
-        session.payip_pending_client_code = normalized_client_code
-        session.payip_pending_filial = normalized_filial
-        session.payip_pending_status = ""
-        session.updated_at = datetime.now(timezone.utc)
-        self.sessions[sender] = session
-        return self._build_payip_client_filter_prompt()
+        return self.finance_flow.payip_flow._open_payip_client_filter_or_search(
+            sender=sender,
+            session=session,
+            client_code=client_code,
+            filial=filial,
+        )
 
     def _load_payip_payments_page(
         self,
@@ -11337,14 +9791,7 @@ class CustomerLookupFlow:
         filial: str = "",
         mfa_code: str = "",
     ) -> Any:
-        if self.payip_payments_service is None:
-            raise RuntimeError(
-                "PayIP ainda nao esta configurada. Configure PAYIP_BASE_URL, PAYIP_USERNAME, "
-                "PAYIP_PASSWORD e PAYIP_COMPANY_IDS no .env."
-            )
-        if mfa_code:
-            self.payip_payments_service.bootstrap_session(mfa_code=mfa_code)
-        return self.payip_payments_service.list_payments(
+        return self.finance_flow.payip_flow._load_payip_payments_page(
             page=page,
             page_size=page_size,
             status=status,
@@ -11356,6 +9803,7 @@ class CustomerLookupFlow:
             created_at_start=created_at_start,
             created_at_end=created_at_end,
             filial=filial,
+            mfa_code=mfa_code,
         )
 
     def _build_payip_payments_response(
@@ -11366,48 +9814,12 @@ class CustomerLookupFlow:
         criteria: str,
         empty_text: str,
     ) -> OutgoingMessage:
-        items = tuple(getattr(page, "items", ()) or ())
-        returned_count = getattr(page, "items_count", None)
-        if returned_count is None:
-            returned_count = len(items)
-
-        lines = [title, ""]
-        lines.append(criteria)
-        lines.append(
-            "Pagina: "
-            f"{getattr(page, 'page', 1)} | "
-            f"Itens: {_format_optional_count(returned_count)} | "
-            f"Total API: {_format_optional_count(getattr(page, 'total_items', None))}"
+        return self.finance_flow.payip_flow._build_payip_payments_response(
+            title=title,
+            page=page,
+            criteria=criteria,
+            empty_text=empty_text,
         )
-
-        if not items:
-            lines.append("")
-            lines.append(empty_text)
-            lines.append("")
-            lines.append(_result_hint_text(allow_back=True))
-            return OutgoingMessage(text="\n".join(lines))
-
-        lines.append("")
-        max_items = 5
-        for index, payment in enumerate(items[:max_items], start=1):
-            if index > 1:
-                lines.append("")
-            lines.extend(_format_payip_payment_block(payment, index=index if len(items) > 1 else None))
-
-        pix_count = len(_extract_payip_pix_payloads(items[:max_items]))
-        if pix_count:
-            lines.append("")
-            if pix_count == 1:
-                lines.append("Para receber o codigo PIX copia e cola e o PDF em mensagem separada, envie PIX 1.")
-            else:
-                lines.append(f"Para copiar um PIX e receber o PDF, envie PIX 1 ate PIX {pix_count}.")
-
-        if len(items) > max_items:
-            lines.append("")
-            lines.append(f"Mostrando 5 de {len(items)} pagamentos retornados nesta pagina.")
-        lines.append("")
-        lines.append(_result_hint_text(allow_back=True))
-        return OutgoingMessage(text="\n".join(lines))
 
     def _build_finance_due_menu(self, invalid_selection: bool = False) -> OutgoingMessage:
         text = "Qual faixa voce quer consultar?"

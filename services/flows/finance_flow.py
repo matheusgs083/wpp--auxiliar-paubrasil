@@ -44,6 +44,16 @@ class FinanceFlow:
         if back_response is not None:
             return back_response
 
+        payip_response = self.payip_flow.handle_session_if_applicable(
+            sender=sender,
+            session=session,
+            text=text,
+            normalized=normalized,
+            decision=decision,
+        )
+        if payip_response is not None:
+            return payip_response
+
         return self.context._handle_finance_session_impl(
             sender=sender,
             session=session,
