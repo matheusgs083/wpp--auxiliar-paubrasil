@@ -5,13 +5,22 @@ from types import SimpleNamespace
 
 from bot_api.services.flows.critica_flow import CriticaFlow
 from bot_api.services.flows.finance_flow import FinanceFlow
+from bot_api.services.flows.payip_flow import PayipFlow
 
 
 class FakeFlowContext:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, object]]] = []
         self.sessions: dict[str, object] = {}
-        self.critica_rn_service = SimpleNamespace(status=lambda: {"ready": True})
+        critica_summary = SimpleNamespace(row_count=2, pedido_count=1, problem_row_count=1)
+        self.critica_rn_service = SimpleNamespace(
+            status=lambda: {"ready": True},
+            get_pdf_report=lambda **kwargs: SimpleNamespace(
+                summary=critica_summary,
+                pdf_bytes=b"pdf",
+                summary_pdf_bytes=b"summary-pdf",
+            ),
+        )
         self.finance_allowed = True
 
     def _handle_finance_session_impl(self, **kwargs: object) -> str:
@@ -43,6 +52,12 @@ class FakeFlowContext:
     def _build_critica_pdf_response(self, **kwargs: object) -> str:
         self.calls.append(("critica_pdf", kwargs))
         return "critica-pdf-result"
+
+    def _allowed_sectors(self, decision: object) -> None:
+        return None
+
+    def _allowed_gv_vdes(self, decision: object) -> None:
+        return None
 
     def _can_use_finance_menu(self, decision: object) -> bool:
         return self.finance_allowed
@@ -107,6 +122,18 @@ class CustomerFlowModulesTest(unittest.TestCase):
         self.assertEqual(session.step, "finance_select_action")
         self.assertEqual(context.sessions["5583999999999"], session)
 
+    def test_payip_flow_handles_back_to_payip_menu(self) -> None:
+        context = FakeFlowContext()
+        session = SimpleNamespace(step="finance_payip_charge_awaiting_amount")
+        result = PayipFlow(context).handle_back_command(
+            sender="5583999999999",
+            session=session,
+        )
+
+        self.assertEqual(result, "payip-menu")
+        self.assertEqual(session.step, "finance_payip_menu")
+        self.assertEqual(context.sessions["5583999999999"], session)
+
     def test_critica_flow_opens_menu_after_readiness_check(self) -> None:
         context = FakeFlowContext()
         result = CriticaFlow(context).handle_command(
@@ -132,8 +159,8 @@ class CustomerFlowModulesTest(unittest.TestCase):
             decision=SimpleNamespace(),
         )
 
-        self.assertEqual(result, "critica-pdf-result")
-        self.assertEqual(context.calls[-2][0], "critica_pdf")
+        self.assertEqual(result.kind, "media")
+        self.assertIn("Critica RN | PDF", result.text)
         self.assertEqual(context.calls[-1][0], "post_nav")
 
 

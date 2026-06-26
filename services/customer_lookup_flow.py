@@ -9077,82 +9077,12 @@ class CustomerLookupFlow:
         title: str,
         footer_lines: tuple[str, ...] = (),
     ) -> OutgoingMessage:
-        assert self.critica_rn_service is not None
-        try:
-            summary = self.critica_rn_service.get_summary(
-                target_date=target_date,
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
-            )
-        except Exception:
-            logger.exception("Falha ao consultar resumo da critica RN")
-            return OutgoingMessage(text="Nao consegui consultar a critica RN agora.")
-
-        if summary.row_count <= 0:
-            return self._build_empty_critica_response(target_date=target_date, decision=decision)
-
-        lines = [
-            title,
-            "",
-            f"Data: {_format_display_date(target_date.isoformat())}",
-            f"Atualizado em: {_format_display_date(summary.planilha_atualizada_em)}",
-            "",
-            "Resumo:",
-            f"- Pedidos: {summary.pedido_count}",
-            f"- Clientes: {summary.client_count}",
-            f"- Itens: {summary.row_count}",
-            f"- Pedidos com problema: {summary.problem_pedido_count}",
-            f"- Linhas com problema: {summary.problem_row_count}",
-            f"- Valor dos pedidos: {_format_currency_brl(summary.total_pedido)}",
-            f"- Peso total: {_format_quantity(summary.peso_total)}",
-            f"- Total HL: {_format_quantity(summary.total_hectolitros)}",
-            (
-                "- Cestas HL: "
-                f"NAB TT {_format_quantity(summary.nab_tt_hectolitros)} | "
-                f"High End {_format_quantity(summary.high_end_hectolitros)} | "
-                f"Cerveja TT {_format_quantity(summary.cerveja_tt_hectolitros)}"
-            ),
-            (
-                "- Cestas HL: "
-                f"Refri Zero {_format_quantity(summary.refri_zero_hectolitros)} | "
-                f"Cerveja RGB {_format_quantity(summary.cerveja_rgb_hectolitros)} | "
-                f"Cerveja OW {_format_quantity(summary.cerveja_ow_hectolitros)}"
-            ),
-            f"- Marketplace TT: {_format_currency_brl(summary.marketplace_tt_faturamento)}",
-        ]
-        if summary.operations:
-            lines.append(f"- Operacoes: {', '.join(summary.operations)}")
-        lines.extend(
-            [
-                "",
-                "Possiveis problemas:",
-                f"- Ocorrencias do relatorio: {summary.rows_with_critica}",
-                f"- Produto duplicado no pedido: {summary.duplicated_row_count}",
-                f"- Preco divergente: {summary.price_alert_count}",
-                f"- Produto sem DPrecos: {summary.missing_price_count}",
-                f"- Pedido acima da media: {summary.order_avg_alert_count}",
-                f"- Cliente inadimplente: {summary.inadimplente_count}",
-                f"- Multipack fora da segmentacao: {summary.multipack_violation_count}",
-                f"- Mapa 1 / buffer: {summary.map_buffer_count}",
-                f"- Mapa fora do vendedor: {summary.map_outside_count}",
-                f"- Cond. pag. divergente: {summary.cond_divergence_count}",
-                f"- Estouro de limite: {summary.limit_alert_count}",
-            ]
+        return self.critica_flow._build_critica_summary_response(
+            target_date=target_date,
+            decision=decision,
+            title=title,
+            footer_lines=footer_lines,
         )
-        if footer_lines:
-            lines.extend(list(footer_lines))
-        else:
-            lines.extend(
-                [
-                    "",
-                    "Atalhos:",
-                    "- critica hoje",
-                    "- critica pdf",
-                    "- critica pdf setor 400",
-                    "- critica nb pdf 3 18008",
-                ]
-            )
-        return OutgoingMessage(text="\n".join(lines))
 
     def _build_critica_problems_response(
         self,
@@ -9160,59 +9090,10 @@ class CustomerLookupFlow:
         target_date: date,
         decision: AccessDecision,
     ) -> OutgoingMessage:
-        assert self.critica_rn_service is not None
-        try:
-            summary = self.critica_rn_service.get_summary(
-                target_date=target_date,
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
-            )
-            records = self.critica_rn_service.list_problems(
-                target_date=target_date,
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
-                limit=12,
-            )
-        except Exception:
-            logger.exception("Falha ao listar problemas da critica RN")
-            return OutgoingMessage(text="Nao consegui listar os problemas da critica RN agora.")
-
-        if summary.row_count <= 0:
-            return self._build_empty_critica_response(target_date=target_date, decision=decision)
-        if not records:
-            return OutgoingMessage(
-                text=(
-                    "Critica RN | Possiveis problemas\n\n"
-                    f"Data: {_format_display_date(target_date.isoformat())}\n"
-                    "Nao encontrei problemas nos pedidos desse filtro.\n\n"
-                    "Para gerar o PDF completo, envie critica pdf."
-                )
-            )
-
-        lines = [
-            "Critica RN | Possiveis problemas",
-            "",
-            f"Data: {_format_display_date(target_date.isoformat())}",
-            (
-                f"Resumo: {summary.problem_row_count} linha(s) com problema "
-                f"em {summary.problem_pedido_count} pedido(s)."
-            ),
-            "",
-        ]
-        for index, record in enumerate(records, start=1):
-            lines.extend(_format_critica_problem_block(record, index=index))
-            if index != len(records):
-                lines.append("")
-        remaining = summary.problem_row_count - len(records)
-        if remaining > 0:
-            lines.extend(
-                [
-                    "",
-                    f"Mostrei {len(records)} de {summary.problem_row_count} linha(s) com problema.",
-                    "Para ver tudo, envie critica pdf.",
-                ]
-            )
-        return OutgoingMessage(text="\n".join(lines))
+        return self.critica_flow._build_critica_problems_response(
+            target_date=target_date,
+            decision=decision,
+        )
 
     def _build_critica_nb_response(
         self,
@@ -9222,87 +9103,12 @@ class CustomerLookupFlow:
         target_date: date | None,
         decision: AccessDecision,
     ) -> OutgoingMessage:
-        assert self.critica_rn_service is not None
-        try:
-            records = self.critica_rn_service.search_by_registration(
-                filial=filial,
-                cod_pdv=cod_pdv,
-                target_date=target_date,
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
-                limit=250,
-            )
-        except Exception:
-            logger.exception("Falha ao consultar critica RN por NB")
-            return OutgoingMessage(text="Nao consegui consultar esse NB na critica RN agora.")
-
-        if not records:
-            suffix = f" na revenda {filial}" if filial else ""
-            date_suffix = f" em {_format_display_date(target_date.isoformat())}" if target_date else ""
-            return OutgoingMessage(
-                text=(
-                    "Critica RN | NB\n\n"
-                    f"Nao encontrei itens para o NB {cod_pdv}{suffix}{date_suffix} dentro do seu acesso."
-                )
-            )
-
-        first = records[0]
-        pedido_totals: dict[tuple[str, str], Decimal] = {}
-        pedido_weights: dict[tuple[str, str], Decimal] = {}
-        pedido_conditions: dict[tuple[str, str], list[str]] = {}
-        for record in records:
-            pedido_key = (record.filial, record.pedido)
-            pedido_totals[pedido_key] = record.total_pedido
-            pedido_weights[pedido_key] = pedido_weights.get(pedido_key, Decimal("0")) + record.peso_item
-            condition_name = str(record.cond_pag_pedido or "").strip()
-            if condition_name:
-                existing_conditions = pedido_conditions.setdefault(pedido_key, [])
-                if condition_name not in existing_conditions:
-                    existing_conditions.append(condition_name)
-        problem_count = sum(1 for record in records if record.possui_problema)
-        total_pedidos = sum(pedido_totals.values(), Decimal("0"))
-        peso_total = sum((record.peso_item for record in records), Decimal("0"))
-        lines = [
-            "Critica RN | NB",
-            "",
-            first.nome_pdv or f"NB {cod_pdv}",
-            f"Operacao: {_format_critica_operation_name(first)} | Revenda: {first.filial} | NB: {first.cod_pdv} | Setor: {first.setor or '-'}",
-        ]
-        if target_date:
-            lines.append(f"Data: {_format_display_date(target_date.isoformat())}")
-        else:
-            dates = sorted({record.data_pedido.isoformat() for record in records if record.data_pedido})
-            if dates:
-                lines.append(f"Data(s): {', '.join(_format_display_date(item) for item in dates[:3])}")
-        lines.extend(
-            [
-                "",
-                "Resumo:",
-                f"- Pedidos: {len(pedido_totals)}",
-                f"- Itens: {len(records)}",
-                f"- Linhas com problema: {problem_count}",
-                f"- Valor dos pedidos: {_format_currency_brl(total_pedidos)}",
-                f"- Peso total: {_format_weight_quantity(peso_total)}",
-            ]
+        return self.critica_flow._build_critica_nb_response(
+            filial=filial,
+            cod_pdv=cod_pdv,
+            target_date=target_date,
+            decision=decision,
         )
-        lines.extend(["", "Pedidos:"])
-        for pedido_key, pedido_total in pedido_totals.items():
-            pedido_number = pedido_key[1] or "-"
-            pedido_weight = pedido_weights.get(pedido_key, Decimal("0"))
-            condition_names = pedido_conditions.get(pedido_key) or []
-            condition_label = " | ".join(condition_names) if condition_names else "-"
-            lines.append(
-                f"- Pedido {pedido_number}: Valor {_format_currency_brl(pedido_total)} | "
-                f"Peso {_format_weight_quantity(pedido_weight)} | Cond. Pag. {condition_label}"
-            )
-        lines.extend(
-            [
-                "",
-                "Detalhes em PDF:",
-                f"- critica nb pdf {first.filial} {first.cod_pdv}",
-            ]
-        )
-        return OutgoingMessage(text="\n".join(lines))
 
     def _build_critica_pdf_response(
         self,
@@ -9310,40 +9116,9 @@ class CustomerLookupFlow:
         target_date: date,
         decision: AccessDecision,
     ) -> OutgoingMessage:
-        assert self.critica_rn_service is not None
-        try:
-            report = self.critica_rn_service.get_pdf_report(
-                target_date=target_date,
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
-                limit=5000,
-            )
-            summary = report.summary
-            if summary.row_count <= 0:
-                return self._build_empty_critica_response(target_date=target_date, decision=decision)
-            pdf_bytes = report.pdf_bytes
-        except CriticaPdfCurrentImportRequiredError as exc:
-            return OutgoingMessage(text=f"Critica RN | PDF\n\n{exc}")
-        except Exception:
-            logger.exception("Falha ao gerar PDF da critica RN")
-            return OutgoingMessage(text="Nao consegui gerar o PDF da critica RN agora.")
-
-        filename = f"critica-rn-{target_date.isoformat()}.pdf"
-        text = (
-            "Critica RN | PDF\n\n"
-            f"Data: {_format_display_date(target_date.isoformat())}\n"
-            f"Pedidos: {summary.pedido_count} | Itens: {summary.row_count} | Problemas: {summary.problem_row_count}\n"
-            "Enviei o PDF consolidado e o resumo.\n\n"
-            f"{_result_hint_text(allow_back=True)}"
-        )
-        return _build_critica_pdf_media_response(
-            text=text,
-            main_pdf_bytes=pdf_bytes,
-            main_caption=f"Critica RN {_format_display_date(target_date.isoformat())}",
-            main_filename=filename,
-            summary_pdf_bytes=report.summary_pdf_bytes,
-            summary_caption=f"Critica RN Resumo {_format_display_date(target_date.isoformat())}",
-            summary_filename=f"critica-rn-resumo-{target_date.isoformat()}.pdf",
+        return self.critica_flow._build_critica_pdf_response(
+            target_date=target_date,
+            decision=decision,
         )
 
     def _build_critica_gv_summary_pdf_response(
@@ -9352,63 +9127,13 @@ class CustomerLookupFlow:
         target_date: date | None,
         decision: AccessDecision,
     ) -> OutgoingMessage:
-        assert self.critica_rn_service is not None
-        if not self._is_gerente_vendas(decision):
-            return OutgoingMessage(text="Esse PDF gerencial da critica e liberado apenas para GV.")
-        try:
-            report = self.critica_rn_service.get_gv_summary_pdf(
-                target_date=target_date,
-                allowed_sectors=None,
-                allowed_gv_vdes=self._critica_gv_summary_allowed_gv_vdes(decision),
-                limit=50000,
-            )
-            if report.summary.row_count <= 0:
-                empty_date = target_date or report.summary.data_pedido or datetime.now(LOCAL_TIMEZONE).date()
-                return self._build_empty_critica_response(target_date=empty_date, decision=decision)
-        except CriticaPdfCurrentImportRequiredError as exc:
-            return OutgoingMessage(text=f"Critica RN | PDF Gerencial GV\n\n{exc}")
-        except Exception:
-            logger.exception("Falha ao gerar PDF gerencial da critica RN para GV")
-            return OutgoingMessage(text="Nao consegui gerar o PDF gerencial da critica RN agora.")
-
-        report_date = target_date or report.summary.data_pedido
-        report_date_label = _format_display_date(report_date.isoformat()) if report_date else "base atual"
-        filename_date = report_date.isoformat() if report_date else "base-atual"
-        filename = f"critica-rn-gv-resumo-{filename_date}.pdf"
-        text = (
-            "Critica RN | PDF Gerencial GV\n\n"
-            f"Data: {report_date_label}\n"
-            f"Pedidos: {report.summary.pedido_count} | Setores: {len({record.setor for record in report.records if record.setor})} | "
-            f"Problemas: {report.summary.problem_pedido_count}\n"
-            "Enviei o resumo gerencial separado por setor.\n\n"
-            f"{_result_hint_text(allow_back=True)}"
-        )
-        return _build_critica_pdf_media_response(
-            text=text,
-            main_pdf_bytes=report.pdf_bytes,
-            main_caption=f"Critica RN GV {report_date_label}",
-            main_filename=filename,
-            summary_pdf_bytes=b"",
-            summary_caption="",
-            summary_filename="",
+        return self.critica_flow._build_critica_gv_summary_pdf_response(
+            target_date=target_date,
+            decision=decision,
         )
 
     def _critica_gv_summary_allowed_gv_vdes(self, decision: AccessDecision) -> list[str] | None:
-        allowed_gv_vdes = self._allowed_gv_vdes(decision)
-        if not allowed_gv_vdes:
-            return allowed_gv_vdes
-
-        gv_codes: set[str] = set()
-        for scope_value in allowed_gv_vdes:
-            normalized = normalize_stored_scope_value(scope_value)
-            pair = split_scope_pair(normalized)
-            gv_code = pair[1] if pair else normalize_numeric_code(normalized)
-            if gv_code:
-                gv_codes.add(gv_code)
-
-        if len(gv_codes) == 1:
-            return [next(iter(gv_codes))]
-        return allowed_gv_vdes
+        return self.critica_flow._critica_gv_summary_allowed_gv_vdes(decision)
 
     def _build_critica_nb_pdf_response(
         self,
@@ -9418,53 +9143,11 @@ class CustomerLookupFlow:
         target_date: date | None,
         decision: AccessDecision,
     ) -> OutgoingMessage:
-        assert self.critica_rn_service is not None
-        try:
-            report = self.critica_rn_service.get_pdf_report_by_registration(
-                filial=filial,
-                cod_pdv=cod_pdv,
-                target_date=target_date,
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
-                limit=2000,
-            )
-        except CriticaPdfCurrentImportRequiredError as exc:
-            return OutgoingMessage(text=f"Critica RN | NB PDF\n\n{exc}")
-        except Exception:
-            logger.exception("Falha ao gerar PDF da critica RN por NB")
-            return OutgoingMessage(text="Nao consegui gerar o PDF desse NB agora.")
-
-        if report.summary.row_count <= 0 or not report.records:
-            suffix = f" na revenda {filial}" if filial else ""
-            date_suffix = f" em {_format_display_date(target_date.isoformat())}" if target_date else ""
-            return OutgoingMessage(
-                text=(
-                    "Critica RN | NB PDF\n\n"
-                    f"Nao encontrei itens para o NB {cod_pdv}{suffix}{date_suffix} dentro do seu acesso."
-                )
-            )
-
-        first = report.records[0]
-        filename = (
-            f"critica-rn-nb-{first.filial}-{first.cod_pdv}-{target_date.isoformat()}.pdf"
-            if target_date
-            else f"critica-rn-nb-{first.filial}-{first.cod_pdv}.pdf"
-        )
-        text = (
-            "Critica RN | NB PDF\n\n"
-            f"Cliente: {first.nome_pdv or f'NB {first.cod_pdv}'}\n"
-            f"Revenda: {first.filial} | NB: {first.cod_pdv} | Pedidos: {report.summary.pedido_count} | Itens: {report.summary.row_count}\n"
-            "Enviei o PDF detalhado e o resumo desse NB.\n\n"
-            f"{_result_hint_text(allow_back=True)}"
-        )
-        return _build_critica_pdf_media_response(
-            text=text,
-            main_pdf_bytes=report.pdf_bytes,
-            main_caption=f"Critica RN NB {first.cod_pdv}",
-            main_filename=filename,
-            summary_pdf_bytes=report.summary_pdf_bytes,
-            summary_caption=f"Critica RN Resumo NB {first.cod_pdv}",
-            summary_filename=filename.replace(".pdf", "-resumo.pdf"),
+        return self.critica_flow._build_critica_nb_pdf_response(
+            filial=filial,
+            cod_pdv=cod_pdv,
+            target_date=target_date,
+            decision=decision,
         )
 
     def _build_critica_sector_pdf_response(
@@ -9474,56 +9157,10 @@ class CustomerLookupFlow:
         normalized_text: str,
         decision: AccessDecision,
     ) -> OutgoingMessage:
-        assert self.critica_rn_service is not None
-        sector_scope, error_text = self._resolve_critica_pdf_sector_scope(
+        return self.critica_flow._build_critica_sector_pdf_response(
             target_date=target_date,
             normalized_text=normalized_text,
             decision=decision,
-        )
-        if error_text:
-            return OutgoingMessage(text=error_text)
-        if not sector_scope:
-            return OutgoingMessage(text="Nao consegui identificar o setor para gerar o PDF.")
-
-        try:
-            report = self.critica_rn_service.get_pdf_report(
-                target_date=target_date,
-                allowed_sectors=[sector_scope],
-                allowed_gv_vdes=None,
-                limit=5000,
-            )
-        except CriticaPdfCurrentImportRequiredError as exc:
-            return OutgoingMessage(text=f"Critica RN | PDF Setor\n\n{exc}")
-        except Exception:
-            logger.exception("Falha ao gerar PDF da critica RN por setor")
-            return OutgoingMessage(text="Nao consegui gerar o PDF desse setor agora.")
-
-        if report.summary.row_count <= 0:
-            return OutgoingMessage(
-                text=(
-                    "Critica RN | PDF Setor\n\n"
-                    f"Nao encontrei pedidos para {_format_sector_scope_label(sector_scope)} "
-                    f"em {_format_display_date(target_date.isoformat())}."
-                )
-            )
-
-        filename = f"critica-rn-setor-{sector_scope.replace('_', '-')}-{target_date.isoformat()}.pdf"
-        text = (
-            "Critica RN | PDF Setor\n\n"
-            f"Setor: {_format_sector_scope_label(sector_scope)}\n"
-            f"Data: {_format_display_date(target_date.isoformat())}\n"
-            f"Pedidos: {report.summary.pedido_count} | Itens: {report.summary.row_count}\n"
-            "Enviei o PDF detalhado e o resumo desse setor.\n\n"
-            f"{_result_hint_text(allow_back=True)}"
-        )
-        return _build_critica_pdf_media_response(
-            text=text,
-            main_pdf_bytes=report.pdf_bytes,
-            main_caption=f"Critica RN {_format_sector_scope_label(sector_scope)}",
-            main_filename=filename,
-            summary_pdf_bytes=report.summary_pdf_bytes,
-            summary_caption=f"Critica RN Resumo {_format_sector_scope_label(sector_scope)}",
-            summary_filename=filename.replace(".pdf", "-resumo.pdf"),
         )
 
     def _resolve_critica_pdf_sector_scope(
@@ -9533,84 +9170,16 @@ class CustomerLookupFlow:
         normalized_text: str,
         decision: AccessDecision,
     ) -> tuple[str, str]:
-        assert self.critica_rn_service is not None
-        explicit_scope, loose_sector_code = _parse_critica_sector_query(normalized_text)
-        try:
-            records = self.critica_rn_service.list_report_rows(
-                target_date=target_date,
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
-                limit=50000,
-            )
-        except Exception:
-            logger.exception("Falha ao listar setores disponiveis para PDF da critica RN")
-            return "", "Nao consegui validar os setores disponiveis para esse PDF agora."
-
-        available_scopes = sorted(
-            {
-                normalize_stored_scope_value(record.seller_code or f"{record.filial}_{record.setor}")
-                for record in records
-                if normalize_stored_scope_value(record.seller_code or f"{record.filial}_{record.setor}")
-            },
-            key=_sort_scope_code,
-        )
-        if not available_scopes:
-            return "", (
-                "Critica RN | PDF Setor\n\n"
-                f"Nao encontrei setores com pedidos em {_format_display_date(target_date.isoformat())} dentro do seu acesso."
-            )
-        if explicit_scope:
-            if explicit_scope in available_scopes:
-                return explicit_scope, ""
-            return "", (
-                "Critica RN | PDF Setor\n\n"
-                f"O setor {_format_sector_scope_label(explicit_scope)} nao apareceu na sua base para "
-                f"{_format_display_date(target_date.isoformat())}."
-            )
-        if loose_sector_code:
-            matching_scopes = [value for value in available_scopes if (split_scope_pair(value) or ("", ""))[1] == loose_sector_code]
-            if len(matching_scopes) == 1:
-                return matching_scopes[0], ""
-            if len(matching_scopes) > 1:
-                options_text = ", ".join(_format_sector_scope_label(value) for value in matching_scopes[:5])
-                return "", (
-                    "Critica RN | PDF Setor\n\n"
-                    f"Encontrei mais de um setor {loose_sector_code} na sua base: {options_text}.\n"
-                    "Informe filial e setor. Exemplo: critica pdf setor 3/400"
-                )
-            return "", (
-                "Critica RN | PDF Setor\n\n"
-                f"Nao encontrei o setor {loose_sector_code} na sua base para {_format_display_date(target_date.isoformat())}."
-            )
-        if len(available_scopes) == 1:
-            return available_scopes[0], ""
-        preview = ", ".join(_format_sector_scope_label(value) for value in available_scopes[:5])
-        return "", (
-            "Critica RN | PDF Setor\n\n"
-            "Informe o setor para gerar o PDF.\n"
-            f"Exemplo: critica pdf setor {(split_scope_pair(available_scopes[0]) or ('', '-'))[1]}\n"
-            f"Setores com pedidos: {preview}"
+        return self.critica_flow._resolve_critica_pdf_sector_scope(
+            target_date=target_date,
+            normalized_text=normalized_text,
+            decision=decision,
         )
 
     def _build_empty_critica_response(self, *, target_date: date, decision: AccessDecision) -> OutgoingMessage:
-        assert self.critica_rn_service is not None
-        latest_text = ""
-        try:
-            latest = self.critica_rn_service.latest_date(
-                allowed_sectors=self._allowed_sectors(decision),
-                allowed_gv_vdes=self._allowed_gv_vdes(decision),
-            )
-            if latest is not None:
-                latest_text = f"\nUltima data encontrada no seu acesso: {_format_display_date(latest.isoformat())}."
-        except Exception:
-            latest_text = ""
-        return OutgoingMessage(
-            text=(
-                "Critica RN\n\n"
-                f"Nao encontrei pedidos para {_format_display_date(target_date.isoformat())} dentro do seu acesso."
-                f"{latest_text}\n\n"
-                "Envie critica para ver as opcoes."
-            )
+        return self.critica_flow._build_empty_critica_response(
+            target_date=target_date,
+            decision=decision,
         )
 
     def _is_admin(self, decision: AccessDecision) -> bool:

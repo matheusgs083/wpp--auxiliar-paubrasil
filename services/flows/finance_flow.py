@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from bot_api.services.flows.payip_flow import PayipFlow
+
 
 def _customer_flow_module() -> Any:
     from bot_api.services import customer_lookup_flow
@@ -12,6 +14,7 @@ def _customer_flow_module() -> Any:
 class FinanceFlow:
     def __init__(self, context: Any) -> None:
         self.context = context
+        self.payip_flow = PayipFlow(context)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self.context, name)
@@ -64,31 +67,9 @@ class FinanceFlow:
         if session.step == "finance_select_action":
             self.context._reset_session(sender)
             return self.context._build_main_menu(decision)
-        if session.step == "finance_payip_awaiting_mfa":
-            return self._set_step_and_return(
-                sender=sender,
-                session=session,
-                step="finance_payip_menu",
-                response=self.context._build_payip_menu(),
-            )
-        if session.step in {
-            "finance_payip_awaiting_invoice",
-            "finance_payip_awaiting_client_code",
-            "finance_payip_awaiting_client_code_all",
-            "finance_payip_awaiting_client_filter",
-            "finance_payip_amount_day_awaiting_query",
-            "finance_payip_statement_awaiting_period",
-            "finance_payip_charge_awaiting_client",
-            "finance_payip_charge_awaiting_amount",
-            "finance_payip_charge_awaiting_due_date",
-            "finance_payip_charge_confirm",
-        }:
-            return self._set_step_and_return(
-                sender=sender,
-                session=session,
-                step="finance_payip_menu",
-                response=self.context._build_payip_menu(),
-            )
+        payip_back_response = self.payip_flow.handle_back_command(sender=sender, session=session)
+        if payip_back_response is not None:
+            return payip_back_response
         if session.step in {
             "finance_select_summary_mode",
             "finance_clarify_today",
