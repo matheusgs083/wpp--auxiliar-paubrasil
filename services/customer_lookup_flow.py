@@ -511,7 +511,7 @@ class CustomerLookupFlow:
             )
 
         if session.step == "awaiting_critica_action":
-            readiness_error = self._ensure_critica_rn_ready(decision)
+            readiness_error = self.critica_flow.ensure_ready(decision)
             if readiness_error is not None:
                 return readiness_error
             selected_option = _select_interactive_option(
@@ -9058,143 +9058,16 @@ class CustomerLookupFlow:
         normalized: str,
         decision: AccessDecision,
     ) -> OutgoingMessage:
-        readiness_error = self._ensure_critica_rn_ready(decision)
-        if readiness_error is not None:
-            return readiness_error
-
-        action = _parse_critica_action(normalized)
-        parsed_date, date_was_explicit = _parse_critica_target_date(normalized)
-        wants_pdf = _critica_wants_pdf(normalized)
-        if action == "menu":
-            session.step = "awaiting_critica_action"
-            session.updated_at = datetime.now(timezone.utc)
-            self.sessions[sender] = session
-            return _build_critica_menu_response()
-
-        if action == "nb":
-            filial, cod_pdv = _parse_critica_nb_query(normalized)
-            if not cod_pdv:
-                return OutgoingMessage(
-                    text=(
-                        "Informe o NB para consultar a critica RN.\n"
-                        "Exemplos:\n"
-                        "- critica nb 3 18008\n"
-                        "- critica nb 18008"
-                    )
-                )
-            target_date = parsed_date if date_was_explicit else None
-            if wants_pdf:
-                return self._with_post_result_navigation(
-                    sender,
-                    session,
-                    self._build_critica_nb_pdf_response(
-                        filial=filial,
-                        cod_pdv=cod_pdv,
-                        target_date=target_date,
-                        decision=decision,
-                    ),
-                    return_menu="main",
-                )
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                self._build_critica_nb_response(
-                    filial=filial,
-                    cod_pdv=cod_pdv,
-                    target_date=target_date,
-                    decision=decision,
-                ),
-                return_menu="main",
-            )
-
-        target_date = parsed_date or datetime.now(LOCAL_TIMEZONE).date()
-        if wants_pdf and _critica_wants_gv_summary_pdf(normalized):
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                self._build_critica_gv_summary_pdf_response(
-                    target_date=parsed_date if date_was_explicit else None,
-                    decision=decision,
-                ),
-                return_menu="main",
-            )
-        if wants_pdf and "setor" in set(normalized.replace(":", " ").split()):
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                self._build_critica_sector_pdf_response(
-                    target_date=target_date,
-                    normalized_text=normalized,
-                    decision=decision,
-                ),
-                return_menu="main",
-            )
-        if action == "problems":
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                self._build_critica_summary_response(
-                    target_date=target_date,
-                    decision=decision,
-                    title="Critica RN | Resumo",
-                    footer_lines=(
-                        "",
-                        "Detalhes completos ficam no PDF.",
-                        "- critica pdf",
-                        "- critica pdf setor 400",
-                        "- critica nb pdf 3 18008",
-                    ),
-                ),
-                return_menu="main",
-            )
-        if action == "pdf":
-            return self._with_post_result_navigation(
-                sender,
-                session,
-                self._build_critica_pdf_response(
-                    target_date=target_date,
-                    decision=decision,
-                ),
-                return_menu="main",
-            )
-        return self._with_post_result_navigation(
-            sender,
-            session,
-            self._build_critica_summary_response(
-                target_date=target_date,
-                decision=decision,
-                title="Critica RN | Hoje" if "hoje" in set(normalized.replace(":", " ").split()) else "Critica RN",
-            ),
-            return_menu="main",
+        return self.critica_flow.handle_command(
+            sender=sender,
+            session=session,
+            text=text,
+            normalized=normalized,
+            decision=decision,
         )
 
     def _ensure_critica_rn_ready(self, decision: AccessDecision) -> OutgoingMessage | None:
-        area_decision = self._decision_for_area(decision, "cliente")
-        if not area_decision.allowed:
-            return self._build_area_access_denied_response("cliente")
-        if not self._can_use_critica(decision):
-            return OutgoingMessage(
-                text=(
-                    "Critica RN\n\n"
-                    "Essa consulta esta liberada apenas para vendedores e gerentes de vendas."
-                )
-            )
-        if self.critica_rn_service is None:
-            return OutgoingMessage(
-                text=(
-                    "A consulta de critica RN ainda nao esta configurada no bot.\n"
-                    "Suba a planilha no painel admin e tente novamente."
-                )
-            )
-        status = self.critica_rn_service.status()
-        if not status.get("ready"):
-            return OutgoingMessage(
-                text=(
-                    "No momento, eu nao consegui acessar a base de critica RN.\n"
-                    f"Detalhe: {status.get('last_error') or 'base indisponivel'}"
-                )
-            )
-        return None
+        return self.critica_flow.ensure_ready(decision)
 
     def _build_critica_summary_response(
         self,
