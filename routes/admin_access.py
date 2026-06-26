@@ -4,29 +4,10 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from pydantic import BaseModel, Field
 
+from bot_api.routes.admin_access_bulk import bulk_upsert_access_users
+from bot_api.routes.admin_access_schemas import AccessRoleUpsertRequest, AccessUserBulkUpsertRequest, AccessUserUpsertRequest
 from bot_api.security.access_control import AccessControl
-
-
-class AccessUserUpsertRequest(BaseModel):
-    phone_number: str
-    name: str | None = None
-    is_active: bool = True
-    roles: list[str] = Field(default_factory=list)
-    sectors: list[str] = Field(default_factory=list)
-    gv_vdes: list[str] = Field(default_factory=list)
-
-
-class AccessUserBulkUpsertRequest(BaseModel):
-    users: list[AccessUserUpsertRequest] = Field(default_factory=list)
-    continue_on_error: bool = True
-
-
-class AccessRoleUpsertRequest(BaseModel):
-    name: str
-    description: str | None = None
-    permissions: list[str] = Field(default_factory=list)
 
 
 def create_admin_access_router(
@@ -123,7 +104,7 @@ def create_admin_access_router(
         if len(users_payload) > 500:
             raise HTTPException(status_code=400, detail="O lote permite no maximo 500 cadastros por envio.")
 
-        saved_users, errors = _bulk_upsert_access_users(
+        saved_users, errors = bulk_upsert_access_users(
             access_control=access_control,
             users_payload=users_payload,
             continue_on_error=payload.continue_on_error,
@@ -254,49 +235,3 @@ def create_admin_access_router(
         return result
 
     return router
-
-
-def _bulk_upsert_access_users(
-    *,
-    access_control: AccessControl,
-    users_payload: list[AccessUserUpsertRequest],
-    continue_on_error: bool,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    saved_users: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-    for index, item in enumerate(users_payload, start=1):
-        try:
-            user = access_control.upsert_user(
-                phone_number=item.phone_number,
-                name=item.name,
-                is_active=item.is_active,
-                roles=item.roles,
-                sectors=item.sectors,
-                gv_vdes=item.gv_vdes,
-            )
-            saved_users.append({"line": index, "user": user})
-        except ValueError as exc:
-            _append_bulk_user_error(errors, index=index, item=item, error=exc)
-            if not continue_on_error:
-                raise HTTPException(status_code=400, detail=f"Linha {index}: {exc}") from exc
-        except RuntimeError as exc:
-            _append_bulk_user_error(errors, index=index, item=item, error=exc)
-            if not continue_on_error:
-                raise HTTPException(status_code=503, detail=f"Linha {index}: {exc}") from exc
-    return saved_users, errors
-
-
-def _append_bulk_user_error(
-    errors: list[dict[str, Any]],
-    *,
-    index: int,
-    item: AccessUserUpsertRequest,
-    error: Exception,
-) -> None:
-    errors.append(
-        {
-            "line": index,
-            "phone_number": str(item.phone_number or "").strip(),
-            "error": str(error),
-        }
-    )
