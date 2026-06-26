@@ -19,12 +19,30 @@ from bot_api.routes.webhooks import create_webhooks_router
 
 
 def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    _register_health_routes(app, deps=deps)
+    _register_admin_access_routes(app, deps=deps)
+    _register_admin_import_routes(app, deps=deps)
+    _register_admin_giro_routes(app, deps=deps)
+    _register_admin_critica_routes(app, deps=deps)
+    _register_public_query_routes(app, deps=deps)
+    _register_admin_panel_routes(app, deps=deps)
+    _register_admin_recolha_routes(app, deps=deps)
+    _register_admin_payip_routes(app, deps=deps)
+    _register_admin_usage_routes(app, deps=deps)
+    _register_admin_broadcast_routes(app, deps=deps)
+    _register_webhook_routes(app, deps=deps)
+
+
+def _register_health_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_health_router(
             build_detailed_health_payload=deps["build_detailed_health_payload"],
             require_admin_api_auth=deps["require_admin_api_auth"],
         )
     )
+
+
+def _register_admin_access_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_access_router(
             access_control=deps["access_control"],
@@ -33,6 +51,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_admin_import_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_imports_router(
             access_call=deps["access_call"],
@@ -48,6 +69,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_admin_giro_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_giro_router(
             require_admin_panel_auth=deps["require_admin_panel_auth"],
@@ -58,6 +82,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_admin_critica_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_critica_router(
             require_admin_panel_auth=deps["require_admin_panel_auth"],
@@ -68,6 +95,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_public_query_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_public_queries_router(
             access_control=deps["access_control"],
@@ -80,6 +110,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_admin_panel_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_panel_router(
             admin_panel_context_from_session_cookie=deps["admin_panel_context_from_session_cookie"],
@@ -97,6 +130,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             session_ttl_seconds=deps["admin_panel_session_ttl_seconds"],
         )
     )
+
+
+def _register_admin_recolha_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_recolhas_router(
             require_admin_panel_auth=deps["require_admin_panel_auth"],
@@ -110,6 +146,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_admin_payip_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_payip_router(
             require_admin_panel_auth=deps["require_admin_panel_auth"],
@@ -122,6 +161,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_admin_usage_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_usage_router(
             require_admin_api_auth=deps["require_admin_api_auth"],
@@ -131,6 +173,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_admin_broadcast_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_broadcast_router(
             require_admin_panel_auth=deps["require_admin_panel_auth"],
@@ -142,6 +187,9 @@ def register_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             record_security_event=deps["record_security_event"],
         )
     )
+
+
+def _register_webhook_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_webhooks_router(
             settings=deps["settings"],

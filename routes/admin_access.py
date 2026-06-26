@@ -123,39 +123,11 @@ def create_admin_access_router(
         if len(users_payload) > 500:
             raise HTTPException(status_code=400, detail="O lote permite no maximo 500 cadastros por envio.")
 
-        saved_users: list[dict[str, Any]] = []
-        errors: list[dict[str, Any]] = []
-        for index, item in enumerate(users_payload, start=1):
-            try:
-                user = access_control.upsert_user(
-                    phone_number=item.phone_number,
-                    name=item.name,
-                    is_active=item.is_active,
-                    roles=item.roles,
-                    sectors=item.sectors,
-                    gv_vdes=item.gv_vdes,
-                )
-                saved_users.append({"line": index, "user": user})
-            except ValueError as exc:
-                errors.append(
-                    {
-                        "line": index,
-                        "phone_number": str(item.phone_number or "").strip(),
-                        "error": str(exc),
-                    }
-                )
-                if not payload.continue_on_error:
-                    raise HTTPException(status_code=400, detail=f"Linha {index}: {exc}") from exc
-            except RuntimeError as exc:
-                errors.append(
-                    {
-                        "line": index,
-                        "phone_number": str(item.phone_number or "").strip(),
-                        "error": str(exc),
-                    }
-                )
-                if not payload.continue_on_error:
-                    raise HTTPException(status_code=503, detail=f"Linha {index}: {exc}") from exc
+        saved_users, errors = _bulk_upsert_access_users(
+            access_control=access_control,
+            users_payload=users_payload,
+            continue_on_error=payload.continue_on_error,
+        )
 
         decision = "allowed" if not errors else ("partial" if saved_users else "failed")
         record_security_event(
@@ -282,3 +254,49 @@ def create_admin_access_router(
         return result
 
     return router
+
+
+def _bulk_upsert_access_users(
+    *,
+    access_control: AccessControl,
+    users_payload: list[AccessUserUpsertRequest],
+    continue_on_error: bool,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    saved_users: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for index, item in enumerate(users_payload, start=1):
+        try:
+            user = access_control.upsert_user(
+                phone_number=item.phone_number,
+                name=item.name,
+                is_active=item.is_active,
+                roles=item.roles,
+                sectors=item.sectors,
+                gv_vdes=item.gv_vdes,
+            )
+            saved_users.append({"line": index, "user": user})
+        except ValueError as exc:
+            _append_bulk_user_error(errors, index=index, item=item, error=exc)
+            if not continue_on_error:
+                raise HTTPException(status_code=400, detail=f"Linha {index}: {exc}") from exc
+        except RuntimeError as exc:
+            _append_bulk_user_error(errors, index=index, item=item, error=exc)
+            if not continue_on_error:
+                raise HTTPException(status_code=503, detail=f"Linha {index}: {exc}") from exc
+    return saved_users, errors
+
+
+def _append_bulk_user_error(
+    errors: list[dict[str, Any]],
+    *,
+    index: int,
+    item: AccessUserUpsertRequest,
+    error: Exception,
+) -> None:
+    errors.append(
+        {
+            "line": index,
+            "phone_number": str(item.phone_number or "").strip(),
+            "error": str(error),
+        }
+    )
