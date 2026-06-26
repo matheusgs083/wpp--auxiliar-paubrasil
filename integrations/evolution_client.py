@@ -459,8 +459,8 @@ def _text_payload_variants(*, number: str, text: str, reply_targets: tuple[str, 
     for recipient in _recipient_candidates(number=number, reply_targets=reply_targets):
         variants.extend(
             [
-                {"number": recipient, "textMessage": {"text": text}},
                 {"number": recipient, "text": text},
+                {"number": recipient, "textMessage": {"text": text}},
             ]
         )
     return variants
@@ -501,7 +501,18 @@ def _recipient_candidates(*, number: str, reply_targets: tuple[str, ...]) -> tup
             continue
         seen.add(value)
         candidates.append(value)
-    return tuple(candidates)
+    return tuple(sorted(candidates, key=_recipient_candidate_priority))
+
+
+def _recipient_candidate_priority(value: str) -> int:
+    normalized = _normalize_sender(value)
+    if str(value or "").strip().endswith("@lid"):
+        return 3
+    if str(value or "").strip().endswith("@s.whatsapp.net"):
+        return 0
+    if normalized.isdigit():
+        return 1
+    return 2
 
 
 def _split_data_url(value: str) -> tuple[str, str]:
