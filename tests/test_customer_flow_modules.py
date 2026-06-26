@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from bot_api.services.flows.critica_flow import CriticaFlow
 from bot_api.services.flows.finance_flow import FinanceFlow
 from bot_api.services.flows.payip_flow import PayipFlow
+from bot_api.services.flows.recolha_flow import RecolhaFlow
 
 
 class FakeFlowContext:
@@ -22,10 +23,15 @@ class FakeFlowContext:
             ),
         )
         self.finance_allowed = True
+        self.recolha_roles: set[str] = set()
 
     def _handle_finance_session_impl(self, **kwargs: object) -> str:
         self.calls.append(("finance", kwargs))
         return "finance-result"
+
+    def _run_finance_summary_mode(self, **kwargs: object) -> str:
+        self.calls.append(("finance_summary", kwargs))
+        return "finance-summary-result"
 
     def _handle_critica_command_impl(self, **kwargs: object) -> str:
         self.calls.append(("critica", kwargs))
@@ -77,21 +83,36 @@ class FakeFlowContext:
         self.calls.append(("payip_menu", {}))
         return "payip-menu"
 
+    def _is_vendedor(self, decision: object) -> bool:
+        return "vendedor" in self.recolha_roles
+
+    def _is_admin(self, decision: object) -> bool:
+        return "admin" in self.recolha_roles
+
+    def _is_financeiro(self, decision: object) -> bool:
+        return "financeiro" in self.recolha_roles
+
+    def _is_gerente_vendas(self, decision: object) -> bool:
+        return "gerente_vendas" in self.recolha_roles
+
+    def _is_diretor_comercial(self, decision: object) -> bool:
+        return "diretor_comercial" in self.recolha_roles
+
 
 class CustomerFlowModulesTest(unittest.TestCase):
-    def test_finance_flow_delegates_to_customer_flow_context(self) -> None:
+    def test_finance_flow_builds_menu_for_unknown_action(self) -> None:
         context = FakeFlowContext()
         result = FinanceFlow(context).handle_session(
             sender="5583999999999",
             session=SimpleNamespace(step="finance_select_action"),
-            text="resumo financeiro",
-            normalized="resumo financeiro",
+            text="nao entendi",
+            normalized="nao entendi",
             decision=SimpleNamespace(),
         )
 
-        self.assertEqual(result, "finance-result")
-        self.assertEqual(context.calls[0][0], "finance")
-        self.assertEqual(context.calls[0][1]["sender"], "5583999999999")
+        self.assertEqual(result.kind, "menu")
+        self.assertEqual(result.title, "Financeiro")
+        self.assertIn("Nao entendi", result.text)
 
     def test_finance_flow_blocks_without_finance_access(self) -> None:
         context = FakeFlowContext()
@@ -118,7 +139,8 @@ class CustomerFlowModulesTest(unittest.TestCase):
             decision=SimpleNamespace(),
         )
 
-        self.assertEqual(result, "finance-menu")
+        self.assertEqual(result.kind, "menu")
+        self.assertEqual(result.title, "Financeiro")
         self.assertEqual(session.step, "finance_select_action")
         self.assertEqual(context.sessions["5583999999999"], session)
 
@@ -133,6 +155,32 @@ class CustomerFlowModulesTest(unittest.TestCase):
         self.assertEqual(result, "payip-menu")
         self.assertEqual(session.step, "finance_payip_menu")
         self.assertEqual(context.sessions["5583999999999"], session)
+
+    def test_recolha_flow_cancels_confirmation_session(self) -> None:
+        context = FakeFlowContext()
+        result = RecolhaFlow(context).handle_session(
+            sender="5583999999999",
+            session=SimpleNamespace(step="recolha_clear_confirm"),
+            text="cancelar",
+            normalized="cancelar",
+            decision=SimpleNamespace(),
+        )
+
+        self.assertIn("Operacao cancelada", result.text)
+        self.assertEqual(context.calls[0][0], "reset")
+
+    def test_recolha_flow_handles_idle_request_without_access(self) -> None:
+        context = FakeFlowContext()
+        context.finance_allowed = False
+        result = RecolhaFlow(context).handle_idle_request(
+            sender="5583999999999",
+            session=SimpleNamespace(step="idle"),
+            text="recolha",
+            normalized="recolha",
+            decision=SimpleNamespace(),
+        )
+
+        self.assertIn("liberada para vendedor", result.text)
 
     def test_critica_flow_opens_menu_after_readiness_check(self) -> None:
         context = FakeFlowContext()
