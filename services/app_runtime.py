@@ -344,21 +344,6 @@ def configure_app_runtime(
         close_connection_pools=close_all_connection_pools,
     )
 
-    health_payload_builder = HealthPayloadBuilder(
-        settings=settings,
-        access_control=access_control,
-        security_monitor=security_monitor,
-        dclientes_query_service=dclientes_query_service,
-        clientes_score_query_service=clientes_score_query_service,
-        inadimplencia_query_service=inadimplencia_query_service,
-        comodatos_query_service=comodatos_query_service,
-        giro_query_service=giro_query_service,
-        meta_cloud_client=meta_cloud_client,
-        daily_route_broadcast_lock=daily_route_broadcast_lock,
-        daily_route_broadcast_status=daily_route_broadcast_status,
-    )
-    _build_detailed_health_payload = health_payload_builder.build
-
     webhook_runtime = WebhookRuntime(
         settings=settings,
         logger=logger,
@@ -376,6 +361,23 @@ def configure_app_runtime(
         infer_evolution_usage_feature=_infer_evolution_usage_feature,
     )
     _queue_incoming_webhook = webhook_runtime.queue_incoming_webhook
+
+    health_payload_builder = HealthPayloadBuilder(
+        settings=settings,
+        access_control=access_control,
+        security_monitor=security_monitor,
+        dclientes_query_service=dclientes_query_service,
+        clientes_score_query_service=clientes_score_query_service,
+        inadimplencia_query_service=inadimplencia_query_service,
+        comodatos_query_service=comodatos_query_service,
+        giro_query_service=giro_query_service,
+        evolution_client=evolution_client,
+        meta_cloud_client=meta_cloud_client,
+        webhook_runtime=webhook_runtime,
+        daily_route_broadcast_lock=daily_route_broadcast_lock,
+        daily_route_broadcast_status=daily_route_broadcast_status,
+    )
+    _build_detailed_health_payload = health_payload_builder.build
 
 
     register_routes(app, deps=_build_route_dependencies(locals()))

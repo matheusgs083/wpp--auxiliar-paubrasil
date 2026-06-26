@@ -9,6 +9,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bot_api.integrations.evolution_client import (
+    EvolutionClient,
+    EvolutionConfig,
     _media_payload_variants,
     _recipient_candidates,
     _split_data_url,
@@ -17,6 +19,26 @@ from bot_api.integrations.evolution_client import (
 
 
 class EvolutionClientTests(unittest.TestCase):
+    def test_status_reports_disabled_client_without_network_call(self) -> None:
+        client = EvolutionClient(
+            EvolutionConfig(
+                base_url="",
+                api_key="",
+                instance="",
+                send_path="/message/sendText/{instance}",
+                list_path="/message/sendList/{instance}",
+                buttons_path="/message/sendButtons/{instance}",
+                media_path="/message/sendMedia/{instance}",
+                timeout_seconds=1,
+            )
+        )
+
+        status = client.status()
+
+        self.assertFalse(status["enabled"])
+        self.assertFalse(status["ready"])
+        self.assertIn("EVOLUTION_BASE_URL", status["last_error"])
+
     def test_media_payload_variants_send_pdf_data_url_as_raw_base64_first(self) -> None:
         variants = _media_payload_variants(
             number="558391964911",

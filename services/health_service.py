@@ -16,7 +16,9 @@ class HealthPayloadBuilder:
         inadimplencia_query_service: Any,
         comodatos_query_service: Any,
         giro_query_service: Any,
+        evolution_client: Any,
         meta_cloud_client: Any,
+        webhook_runtime: Any,
         daily_route_broadcast_lock: RLock,
         daily_route_broadcast_status: dict[str, Any],
     ) -> None:
@@ -28,7 +30,9 @@ class HealthPayloadBuilder:
         self.inadimplencia_query_service = inadimplencia_query_service
         self.comodatos_query_service = comodatos_query_service
         self.giro_query_service = giro_query_service
+        self.evolution_client = evolution_client
         self.meta_cloud_client = meta_cloud_client
+        self.webhook_runtime = webhook_runtime
         self.daily_route_broadcast_lock = daily_route_broadcast_lock
         self.daily_route_broadcast_status = daily_route_broadcast_status
 
@@ -40,6 +44,8 @@ class HealthPayloadBuilder:
         inadimplencia_status = self.inadimplencia_query_service.status()
         comodatos_status = self.comodatos_query_service.status()
         giro_status = self.giro_query_service.status()
+        evolution_status = self.evolution_client.status()
+        webhook_status = self.webhook_runtime.snapshot()
         with self.daily_route_broadcast_lock:
             daily_route_status = dict(self.daily_route_broadcast_status)
         return {
@@ -50,6 +56,8 @@ class HealthPayloadBuilder:
             "admin_token_configured": bool(self.settings.admin_api_token.strip()),
             "webhook_auth_required": True,
             "webhook_token_configured": bool(self.settings.verify_token.strip()),
+            "webhook_runtime": webhook_status,
+            "evolution": evolution_status,
             "meta_cloud_enabled": self.settings.meta_cloud_enabled,
             "meta_cloud_ready": self.meta_cloud_client.enabled,
             "meta_cloud_verify_token_configured": bool(self.settings.meta_cloud_verify_token.strip()),

@@ -4,6 +4,7 @@ import json
 import logging
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -37,6 +38,41 @@ class EvolutionClient:
     @property
     def enabled(self) -> bool:
         return bool(self.config.base_url and self.config.instance)
+
+    def status(self) -> dict[str, Any]:
+        base_url_configured = bool(self.config.base_url)
+        instance_configured = bool(self.config.instance)
+        payload: dict[str, Any] = {
+            "enabled": self.enabled,
+            "base_url_configured": base_url_configured,
+            "instance_configured": instance_configured,
+            "instance": self.config.instance,
+            "ready": False,
+            "state": "",
+            "last_error": "",
+        }
+        if not self.enabled:
+            payload["last_error"] = "EVOLUTION_BASE_URL ou EVOLUTION_INSTANCE nao configurado."
+            return payload
+
+        instance = quote(self.config.instance, safe="")
+        url = f"{self.config.base_url}/instance/connectionState/{instance}"
+        try:
+            with httpx.Client(timeout=self.config.timeout_seconds) as client:
+                response = client.get(url, headers=self._headers())
+            if not 200 <= response.status_code < 300:
+                payload["last_error"] = f"{response.status_code} {response.text[:240]}"
+                return payload
+            data = response.json()
+        except Exception as exc:
+            payload["last_error"] = str(exc)
+            return payload
+
+        instance_payload = data.get("instance") if isinstance(data, dict) else {}
+        state = str(instance_payload.get("state") if isinstance(instance_payload, dict) else data.get("state", "")).strip()
+        payload["state"] = state
+        payload["ready"] = state.lower() == "open"
+        return payload
 
     def send(self, number: str, message: OutgoingMessage, *, reply_targets: tuple[str, ...] = ()) -> None:
         # Menus ficam sempre em texto para evitar falhas interativas na Evolution.
