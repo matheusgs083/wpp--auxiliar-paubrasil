@@ -1,8 +1,35 @@
 from __future__ import annotations
 
-from bot_api import app_factory as _app_factory
+import logging
+from pathlib import Path
 
-app = _app_factory.app
-create_app = _app_factory.create_app
+from fastapi import FastAPI
 
-__all__ = ["app", "create_app"]
+from bot_api.config import get_settings
+from bot_api.services.app_runtime import configure_app_runtime
+from bot_api.services.container import build_app_services
+
+logger = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).resolve().parent
+settings = get_settings()
+services = build_app_services(settings, project_root=PROJECT_ROOT, logger=logger)
+
+app = FastAPI(
+    title="Customer Lookup Bot API",
+    version="1.0.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+configure_app_runtime(
+    app=app,
+    settings=settings,
+    services=services,
+    project_root=PROJECT_ROOT,
+    logger=logger,
+)
+
+
+def create_app() -> FastAPI:
+    return app
