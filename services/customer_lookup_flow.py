@@ -71,6 +71,8 @@ from bot_api.services.documentacao_pendente_query_service import (
     DocumentacaoPendenteQueryService,
     DocumentacaoPendenteScopeSummary,
 )
+from bot_api.services.flows.critica_flow import CriticaFlow
+from bot_api.services.flows.finance_flow import FinanceFlow
 from bot_api.services.prazo_limite_query_service import (
     PrazoLimiteClientRecord,
     PrazoLimiteEntryRecord,
@@ -445,6 +447,8 @@ class CustomerLookupFlow:
         self.sessions: dict[str, LookupSession] = {}
         self._response_cache: dict[tuple[Any, ...], tuple[datetime, OutgoingMessage]] = {}
         self._lock = RLock()
+        self.finance_flow = FinanceFlow(self)
+        self.critica_flow = CriticaFlow(self)
 
     def _peek_expired_session(self, sender: str) -> LookupSession | None:
         session = self.sessions.get(sender)
@@ -498,7 +502,7 @@ class CustomerLookupFlow:
             )
 
         if session.step.startswith("finance_"):
-            return self._handle_finance_session(
+            return self.finance_flow.handle_session(
                 sender=incoming.sender,
                 session=session,
                 text=text,
@@ -516,7 +520,7 @@ class CustomerLookupFlow:
                 options=_build_critica_menu_response().options,
             )
             if selected_option is not None:
-                return self._handle_critica_command(
+                return self.critica_flow.handle_command(
                     sender=incoming.sender,
                     session=session,
                     text=selected_option.option_id,
@@ -524,7 +528,7 @@ class CustomerLookupFlow:
                     decision=decision,
                 )
             if _looks_like_critica_command(normalized):
-                return self._handle_critica_command(
+                return self.critica_flow.handle_command(
                     sender=incoming.sender,
                     session=session,
                     text=text,
@@ -593,7 +597,7 @@ class CustomerLookupFlow:
                     payip_payments_service=self.payip_payments_service,
                 )
             if _looks_like_critica_command(normalized):
-                return self._handle_critica_command(
+                return self.critica_flow.handle_command(
                     sender=incoming.sender,
                     session=session,
                     text=text,
@@ -998,7 +1002,7 @@ class CustomerLookupFlow:
             )
 
         if _looks_like_critica_command(normalized):
-            return self._handle_critica_command(
+            return self.critica_flow.handle_command(
                 sender=incoming.sender,
                 session=session,
                 text=text,
@@ -6694,7 +6698,7 @@ class CustomerLookupFlow:
             request = _parse_hybrid_finance_request(normalized)
             if not request.action and not request.clarify_today:
                 return self._build_finance_menu()
-            return self._handle_finance_session(
+            return self.finance_flow.handle_session(
                 sender=sender,
                 session=session,
                 text=text,
@@ -7945,7 +7949,7 @@ class CustomerLookupFlow:
         self._reset_session(sender)
         return self._build_main_menu(decision)
 
-    def _handle_finance_session(
+    def _handle_finance_session_impl(
         self,
         sender: str,
         session: LookupSession,
@@ -9045,7 +9049,7 @@ class CustomerLookupFlow:
             list_context=list_context,
         )
 
-    def _handle_critica_command(
+    def _handle_critica_command_impl(
         self,
         *,
         sender: str,
