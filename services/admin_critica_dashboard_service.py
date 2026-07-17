@@ -9,10 +9,14 @@ import unicodedata
 
 from fastapi import HTTPException, Response
 
-from bot_api.commercial_scope import normalize_numeric_code, normalize_stored_scope_value
+from bot_api.commercial_scope import (
+    normalize_filial_scope_input,
+    normalize_numeric_code,
+    normalize_stored_scope_value,
+)
 from bot_api.services import admin_imports_runtime
 from bot_api.services.critica_rn_query_service import CriticaPdfCurrentImportRequiredError
-from bot_api.services.customer_lookup_flow import FILIAL_LABELS
+from bot_api.services.filial_labels import FILIAL_LABELS
 
 critica_rn_query_service: Any = None
 _panel_context_allowed_report_scopes: Any = None
@@ -730,17 +734,28 @@ def _build_admin_critica_sector_pdf_response(
     summary_only: bool,
 ) -> Response:
     normalized_operation = _normalize_admin_critica_operation(operation)
-    normalized_sector = _normalize_admin_critica_sector(sector)
+    raw_sector = str(sector or "").strip()
+    normalized_sector = _normalize_admin_critica_sector(raw_sector) if raw_sector else ""
     allowed_filiais, _allowed_gv_vdes = _panel_context_allowed_report_scopes(context)
     if allowed_filiais is not None and normalized_operation not in set(allowed_filiais):
         raise HTTPException(status_code=403, detail="Operacao fora do escopo liberado para este painel.")
 
-    allowed_sector_scopes = [normalize_stored_scope_value(f"{normalized_operation}_{normalized_sector}")]
+    is_sector_scope = bool(normalized_sector)
+    allowed_sector_scopes = (
+        [normalize_stored_scope_value(f"{normalized_operation}_{normalized_sector}")]
+        if is_sector_scope
+        else [normalize_filial_scope_input(normalized_operation)]
+    )
     effective_date = target_date or critica_rn_query_service.latest_date(allowed_sectors=allowed_sector_scopes)
     if effective_date is None:
+        scope_label = (
+            f"operacao {normalized_operation} e setor {normalized_sector}"
+            if is_sector_scope
+            else f"operacao {normalized_operation}"
+        )
         raise HTTPException(
             status_code=404,
-            detail=f"Nao encontrei critica para a operacao {normalized_operation} e setor {normalized_sector}.",
+            detail=f"Nao encontrei critica para a {scope_label}.",
         )
 
     try:
@@ -748,27 +763,34 @@ def _build_admin_critica_sector_pdf_response(
             target_date=effective_date,
             allowed_sectors=allowed_sector_scopes,
             allowed_gv_vdes=None,
-            limit=5000,
+            limit=5000 if is_sector_scope else 50000,
         )
     except CriticaPdfCurrentImportRequiredError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     pdf_bytes = report.summary_pdf_bytes if summary_only else report.pdf_bytes
     if not pdf_bytes:
         report_label = "resumo" if summary_only else "detalhada"
+        scope_label = (
+            f"operacao {normalized_operation} e setor {normalized_sector}"
+            if is_sector_scope
+            else f"operacao {normalized_operation}"
+        )
         raise HTTPException(
             status_code=404,
             detail=(
-                f"Nao encontrei critica {report_label} para a operacao {normalized_operation} "
-                f"e setor {normalized_sector} em {effective_date.isoformat()}."
+                f"Nao encontrei critica {report_label} para a {scope_label} "
+                f"em {effective_date.isoformat()}."
             ),
         )
 
-    base_filename = f"critica-rn-setor-{normalized_operation}-{normalized_sector}-{effective_date.isoformat()}"
+    base_filename = (
+        f"critica-rn-setor-{normalized_operation}-{normalized_sector}-{effective_date.isoformat()}"
+        if is_sector_scope
+        else f"critica-rn-operacao-{normalized_operation}-{effective_date.isoformat()}"
+    )
     filename = f"{base_filename}-resumo.pdf" if summary_only else f"{base_filename}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-

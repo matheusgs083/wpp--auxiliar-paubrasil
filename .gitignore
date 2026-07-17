@@ -7,6 +7,8 @@ __pycache__/
 *.log
 *.tmp
 *.temp
+.tmp_*
+tmp_patch_*.js
 
 # Secrets: nunca versionar credenciais reais
 .env

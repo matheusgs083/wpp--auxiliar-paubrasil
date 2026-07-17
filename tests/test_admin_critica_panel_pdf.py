@@ -71,6 +71,26 @@ class AdminCriticaPanelPdfTests(unittest.TestCase):
         self.assertEqual(service.pdf_report_calls[-1]["allowed_sectors"], ["3_400"])
         self.assertEqual(service.pdf_report_calls[-1]["target_date"], date(2026, 6, 8))
 
+    def test_build_operation_pdf_response_uses_filial_scope_when_sector_is_empty(self) -> None:
+        service = StubCriticaRnService(latest=date(2026, 6, 11))
+        self.configure_service(service)
+
+        response = admin_critica_dashboard_service._build_admin_critica_sector_pdf_response(
+            {"is_admin": False, "filiais": ["3"]},
+            operation="3",
+            sector="",
+            target_date=None,
+            summary_only=False,
+        )
+
+        self.assertEqual(response.media_type, "application/pdf")
+        self.assertEqual(response.body, b"%PDF-critica-detalhe")
+        self.assertIn('filename="critica-rn-operacao-3-2026-06-11.pdf"', response.headers.get("content-disposition", ""))
+        self.assertEqual(service.latest_calls[-1]["allowed_sectors"], ["filial:3"])
+        self.assertEqual(service.pdf_report_calls[-1]["allowed_sectors"], ["filial:3"])
+        self.assertEqual(service.pdf_report_calls[-1]["target_date"], date(2026, 6, 11))
+        self.assertEqual(service.pdf_report_calls[-1]["limit"], 50000)
+
     def test_build_sector_pdf_response_blocks_without_today_upload(self) -> None:
         service = StubCriticaRnService(latest=date(2026, 6, 10), current_import_available=False)
         self.configure_service(service)

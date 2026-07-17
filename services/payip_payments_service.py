@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 from bot_api.config import Settings
-from bot_api.integrations.payip_client import PayipClient, PayipConfig, PayipError, summarize_collection_response
+from bot_api.integrations.payip_client import PayipClient, PayipConfig, PayipError, PayipImportClientsNotFound, summarize_collection_response
 
 DEFAULT_PAYMENT_AMOUNT_TOLERANCE = Decimal("0.05")
 PAYIP_LOCAL_TIMEZONE = timezone(timedelta(hours=-3))
@@ -39,6 +39,32 @@ class PayipPaymentsPage:
 
 
 @dataclass(frozen=True)
+class PayipRoutesPage:
+    raw: dict[str, Any]
+    items: tuple[dict[str, Any], ...]
+    items_count: int | None
+    total_items: int | None
+    page: int
+    page_size: int
+    filial: str = ""
+    company_id: str = ""
+    status: str = "IN_PROGRESS"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "items_count": self.items_count,
+            "total_items": self.total_items,
+            "page": self.page,
+            "page_size": self.page_size,
+            "filial": self.filial,
+            "company_id": self.company_id,
+            "status": self.status,
+            "items": list(self.items),
+            "raw": self.raw,
+        }
+
+
+@dataclass(frozen=True)
 class PayipClientRecord:
     raw: dict[str, Any]
     client_company_id: str
@@ -48,6 +74,26 @@ class PayipClientRecord:
     name: str
     fantasy_name: str = ""
     phone: str = ""
+
+
+@dataclass(frozen=True)
+class PayipClientCreateResult:
+    raw: dict[str, Any]
+    payload: dict[str, Any]
+    verify_raw: dict[str, Any]
+    filial: str
+    client_code: str
+    tax_payer_id: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "filial": self.filial,
+            "client_code": self.client_code,
+            "tax_payer_id": self.tax_payer_id,
+            "payload": self.payload,
+            "verify_raw": self.verify_raw,
+            "raw": self.raw,
+        }
 
 
 @dataclass(frozen=True)
@@ -64,6 +110,62 @@ class PayipStatementResume:
             "company_id": self.company_id,
             "date_start": self.date_start,
             "date_end": self.date_end,
+            "raw": self.raw,
+        }
+
+
+@dataclass(frozen=True)
+class PayipPromaxImportValidation:
+    raw: dict[str, Any]
+    filial: str
+    company_id: str
+    date_start: str
+    date_end: str
+    items: tuple[dict[str, Any], ...]
+    missing_client_codes: tuple[str, ...] = ()
+
+    @property
+    def ok(self) -> bool:
+        return not self.missing_client_codes
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "filial": self.filial,
+            "company_id": self.company_id,
+            "date_start": self.date_start,
+            "date_end": self.date_end,
+            "items": list(self.items),
+            "items_count": len(self.items),
+            "missing_client_codes": list(self.missing_client_codes),
+            "ok": self.ok,
+            "raw": self.raw,
+        }
+
+
+@dataclass(frozen=True)
+class PayipPromaxImportResult:
+    raw: dict[str, Any]
+    filial: str
+    company_id: str
+    date_start: str
+    date_end: str
+    items: tuple[dict[str, Any], ...]
+    missing_client_codes: tuple[str, ...] = ()
+
+    @property
+    def ok(self) -> bool:
+        return not self.missing_client_codes
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "filial": self.filial,
+            "company_id": self.company_id,
+            "date_start": self.date_start,
+            "date_end": self.date_end,
+            "items": list(self.items),
+            "items_count": len(self.items),
+            "missing_client_codes": list(self.missing_client_codes),
+            "ok": self.ok,
             "raw": self.raw,
         }
 
@@ -126,6 +228,86 @@ class PayipPaymentsService:
             page_size=summary["page_size"] or page_size,
             filial=filial,
             company_id=company_id,
+        )
+
+    def list_routes(
+        self,
+        *,
+        filial: str,
+        status: str = "IN_PROGRESS",
+        code: str = "",
+        page: int = 1,
+        page_size: int = 25,
+    ) -> PayipRoutesPage:
+        company_id = self.client.resolve_company_id(filial=filial)
+        raw = self.client.list_routes(
+            filial=filial,
+            company_id=company_id,
+            code=code,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+        summary = summarize_collection_response(raw)
+        items = tuple(item for item in _extract_payment_items(raw) if isinstance(item, dict))
+        return PayipRoutesPage(
+            raw=raw,
+            items=items,
+            items_count=summary["items_count"],
+            total_items=summary["total_items"],
+            page=summary["page"] or page,
+            page_size=summary["page_size"] or page_size,
+            filial=filial,
+            company_id=company_id,
+            status=status,
+        )
+
+    def list_all_routes(
+        self,
+        *,
+        filial: str,
+        status: str = "IN_PROGRESS",
+        code: str = "",
+        page_size: int = 25,
+        max_pages: int = 20,
+    ) -> PayipRoutesPage:
+        normalized_page_size = max(1, min(int(page_size or 25), 100))
+        normalized_max_pages = max(1, min(int(max_pages or 20), 100))
+        pages: list[PayipRoutesPage] = []
+        items: list[dict[str, Any]] = []
+        total_items: int | None = None
+        company_id = ""
+        raw_pages: list[dict[str, Any]] = []
+        for page in range(1, normalized_max_pages + 1):
+            current = self.list_routes(
+                filial=filial,
+                status=status,
+                code=code,
+                page=page,
+                page_size=normalized_page_size,
+            )
+            pages.append(current)
+            company_id = current.company_id
+            raw_pages.append(current.raw)
+            current_items = [item for item in current.items if isinstance(item, dict)]
+            items.extend(current_items)
+            if current.total_items is not None:
+                total_items = current.total_items
+            if total_items is not None and len(items) >= total_items:
+                break
+            if len(current_items) < normalized_page_size:
+                break
+
+        return PayipRoutesPage(
+            raw={"pages": raw_pages},
+            items=tuple(items),
+            items_count=len(items),
+            total_items=total_items if total_items is not None else len(items),
+            page=1,
+            page_size=normalized_page_size,
+            filial=filial,
+            company_id=company_id,
+            status=status,
         )
 
     def find_payments_by_amount_and_paid_date(
@@ -234,6 +416,21 @@ class PayipPaymentsService:
         exact = [record for record in records if _only_digits(record.code) == normalized_client_code]
         return exact[0] if exact else records[0] if records else None
 
+    def create_client_from_profile(self, *, profile: Any) -> PayipClientCreateResult:
+        payload = _build_payip_client_payload(profile=profile, company_id=self.client.resolve_company_id(filial=profile.filial))
+        client_payload = payload.get("client") if isinstance(payload.get("client"), dict) else {}
+        tax_payer_id = _only_digits(client_payload.get("taxPayerId"))
+        verify_raw = self.client.verify_client_tax_payer(tax_payer_id=tax_payer_id)
+        raw = self.client.create_client(payload)
+        return PayipClientCreateResult(
+            raw=raw,
+            payload=payload,
+            verify_raw=verify_raw,
+            filial=str(getattr(profile, "filial", "") or ""),
+            client_code=str(client_payload.get("code") or ""),
+            tax_payer_id=tax_payer_id,
+        )
+
     def create_pix_charge(
         self,
         *,
@@ -322,6 +519,83 @@ class PayipPaymentsService:
             company_id=company_id,
             date_start=normalized_date_start,
             date_end=normalized_date_end,
+        )
+
+    def validate_promax_import_batch(
+        self,
+        *,
+        filial: str,
+        date_start: date | str,
+        date_end: date | str,
+    ) -> PayipPromaxImportValidation:
+        normalized_date_start = _date_text(date_start)
+        normalized_date_end = _date_text(date_end)
+        company_id = self.client.resolve_company_id(filial=filial)
+        try:
+            raw = self.client.validate_promax_payments_import_batch(
+                filial=filial,
+                company_id=company_id,
+                date_start=normalized_date_start,
+                date_end=normalized_date_end,
+            )
+        except PayipImportClientsNotFound as exc:
+            return PayipPromaxImportValidation(
+                raw=exc.payload,
+                filial=filial,
+                company_id=company_id,
+                date_start=normalized_date_start,
+                date_end=normalized_date_end,
+                items=(),
+                missing_client_codes=exc.codes_client,
+            )
+        items = tuple(item for item in _extract_payment_items(raw) if isinstance(item, dict))
+        return PayipPromaxImportValidation(
+            raw=raw,
+            filial=filial,
+            company_id=company_id,
+            date_start=normalized_date_start,
+            date_end=normalized_date_end,
+            items=items,
+        )
+
+    def import_promax_batch(
+        self,
+        *,
+        filial: str,
+        date_start: date | str,
+        date_end: date | str,
+        totp_code: str,
+    ) -> PayipPromaxImportResult:
+        normalized_date_start = _date_text(date_start)
+        normalized_date_end = _date_text(date_end)
+        normalized_totp_code = str(totp_code or "").strip()
+        company_id = self.client.resolve_company_id(filial=filial)
+        try:
+            raw = self.client.import_promax_payments_batch(
+                filial=filial,
+                company_id=company_id,
+                date_start=normalized_date_start,
+                date_end=normalized_date_end,
+                totp_code=normalized_totp_code,
+            )
+        except PayipImportClientsNotFound as exc:
+            return PayipPromaxImportResult(
+                raw=exc.payload,
+                filial=filial,
+                company_id=company_id,
+                date_start=normalized_date_start,
+                date_end=normalized_date_end,
+                items=(),
+                missing_client_codes=exc.codes_client,
+            )
+        items = tuple(item for item in _extract_payment_items(raw) if isinstance(item, dict))
+        return PayipPromaxImportResult(
+            raw=raw,
+            filial=filial,
+            company_id=company_id,
+            date_start=normalized_date_start,
+            date_end=normalized_date_end,
+            items=items,
         )
 
 
@@ -478,6 +752,51 @@ def _parse_client_record(item: Any) -> PayipClientRecord | None:
         fantasy_name=fantasy_name,
         phone=_only_digits(client.get("phone") or item.get("phone")),
     )
+
+
+def _build_payip_client_payload(*, profile: Any, company_id: str) -> dict[str, Any]:
+    tax_payer_id = _only_digits(getattr(profile, "documento", ""))
+    client_code = _only_digits(getattr(profile, "cod_pdv", ""))
+    filial = _only_digits(getattr(profile, "filial", ""))
+    name = _clean_text(getattr(profile, "razao_social", "")) or _clean_text(getattr(profile, "nome_fantasia", ""))
+    fantasy_name = _clean_text(getattr(profile, "nome_fantasia", "")) or name
+    email = _clean_email(getattr(profile, "email", "")) or f"cliente.{filial}.{client_code}@sememail.com.br"
+    phone = _only_digits(getattr(profile, "telefone", "")) or "83990000000"
+    payload: dict[str, Any] = {
+        "companyId": str(company_id or "").strip(),
+        "client": {
+            "taxPayerId": tax_payer_id,
+            "name": name,
+            "fantasyName": fantasy_name,
+            "email": email,
+            "phone": phone,
+            "code": client_code,
+            "type": "PJ" if len(tax_payer_id) == 14 else "PF",
+        },
+        "address": {
+            "postalCode": _only_digits(getattr(profile, "cep", "")) or "00000000",
+            "street": _clean_text(getattr(profile, "endereco", "")) or "NAO INFORMADO",
+            "number": _clean_text(getattr(profile, "numero", "")) or "SN",
+            "complement": _clean_text(getattr(profile, "complemento", "")) or "n/d",
+            "neighborhood": _clean_text(getattr(profile, "bairro", "")) or "NAO INFORMADO",
+            "city": _clean_text(getattr(profile, "cidade", "")) or "NAO INFORMADO",
+            "state": _clean_text(getattr(profile, "uf", "")).upper()[:2] or "PB",
+            "latitude": "",
+            "longitude": "",
+        },
+    }
+    return payload
+
+
+def _clean_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+def _clean_email(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if "@" not in text or "." not in text.rsplit("@", 1)[-1]:
+        return ""
+    return re.sub(r"\s+", "", text)
 
 
 def _build_pix_charge_payload(

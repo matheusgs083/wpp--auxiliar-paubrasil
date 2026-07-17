@@ -1,6 +1,9 @@
 .git
 .gitignore
 .venv
+venv
+.pytest_cache
+.codex
 __pycache__
 **/__pycache__
 *.pyc
@@ -8,7 +11,10 @@ __pycache__
 *.pyd
 .env
 exports
+backups
 *.log
+*.tmp
+.tmp_*
 data
 resumos
 .agents

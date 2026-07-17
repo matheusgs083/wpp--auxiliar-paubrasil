@@ -71,6 +71,40 @@ def _resolve_usage_function_window(
 
 
 EVOLUTION_USAGE_FEATURE_LABELS: dict[str, str] = {
+    "menu_principal": "Menu principal",
+    "rota_dia": "Rota do dia",
+    "risco_rota": "Risco da rota",
+    "carteira": "Carteira",
+    "cliente_busca": "Buscar cliente",
+    "cliente_documento": "Buscar cliente por documento",
+    "cobranca_menu": "Cobranca - menu",
+    "cobranca_cliente": "Cobranca - cliente",
+    "cobranca_rota_dia": "Cobranca - risco por dia",
+    "cobranca_vence_amanha": "Cobranca - vence amanha",
+    "cobranca_vence_2_dias": "Cobranca - vence em 2 dias",
+    "cobranca_vence_hoje": "Cobranca - vence hoje",
+    "cobranca_inadimplentes": "Cobranca - inadimplentes",
+    "comodato_menu": "Comodatos - menu",
+    "comodato_cliente": "Comodatos - cliente",
+    "giro_menu": "Giro - menu",
+    "giro_cliente": "Giro - cliente",
+    "giro_dia": "Giro - por dia",
+    "giro_zero": "Giro - zero da base",
+    "giro_resumo": "Giro - resumo gerencial",
+    "documentacao_menu": "Documentacao - menu",
+    "documentacao_cliente": "Documentacao - cliente",
+    "documentacao_dia": "Documentacao - por dia",
+    "prazo_limite_cliente": "Prazo e Limite - cliente",
+    "financeiro_menu": "Financeiro - menu",
+    "financeiro_resumo": "Financeiro - resumo",
+    "critica_menu": "Critica - menu",
+    "critica_resumo": "Critica - resumo",
+    "critica_problemas": "Critica - possiveis problemas",
+    "critica_pdf": "Critica - PDF consolidado",
+    "critica_pdf_setor": "Critica - PDF setor",
+    "critica_pdf_gv": "Critica - PDF GV",
+    "critica_nb": "Critica - NB",
+    "critica_nb_pdf": "Critica - NB PDF",
     "cliente": "Clientes",
     "inadimplencia": "Inadimplencia",
     "comodato": "Comodatos",
@@ -80,6 +114,7 @@ EVOLUTION_USAGE_FEATURE_LABELS: dict[str, str] = {
     "critica": "Critica",
     "recolha": "Recolhas",
     "payip": "PayIP",
+    "boleto": "Boletos",
     "visitas": "Visitas",
     "admin_access": "Acessos",
 }
@@ -117,20 +152,72 @@ def _infer_usage_feature_from_intent(intent: str) -> str | None:
     normalized_intent = str(intent or "").strip().lower()
     if not normalized_intent:
         return None
-    if normalized_intent.startswith(("search_cliente", "cliente_", "client_")):
-        return "cliente"
-    if normalized_intent.startswith(("search_inadimplencia", "inadimplencia_", "finance_", "manager_", "director_", "seller_")):
-        return "inadimplencia"
-    if normalized_intent.startswith(("search_comodato", "comodato_")):
-        return "comodato"
-    if normalized_intent.startswith(("search_giro", "giro_")):
-        return "giro"
-    if normalized_intent.startswith(("search_documentacao", "documentacao_")):
-        return "documentacao"
+    if normalized_intent == "visit_day":
+        return "rota_dia"
+    if normalized_intent in {"seller_risk_today", "manager_risk_today", "director_risk_today", "finance_risk_today"}:
+        return "risco_rota"
+    if normalized_intent in {"seller_summary"}:
+        return "carteira"
+    if normalized_intent in {"manager_summary", "director_summary", "manager_seller_summary"}:
+        return "financeiro_resumo"
+    if normalized_intent == "finance_menu":
+        return "financeiro_menu"
+    if normalized_intent == "finance_summary":
+        return "financeiro_resumo"
+    if normalized_intent.startswith("finance_due_"):
+        due_map = {
+            "finance_due_today": "cobranca_vence_hoje",
+            "finance_due_tomorrow": "cobranca_vence_amanha",
+            "finance_due_in_two_days": "cobranca_vence_2_dias",
+            "finance_due_overdue": "cobranca_inadimplentes",
+        }
+        return due_map.get(normalized_intent, "cobranca_menu")
+    if normalized_intent.startswith(("finance_giro_", "manager_giro_", "director_giro_")):
+        return "giro_resumo"
+    if normalized_intent == "search_cliente":
+        return "cliente_busca"
+    if normalized_intent in {"cliente_document"}:
+        return "cliente_documento"
+    if normalized_intent.startswith(("cliente_", "client_")):
+        return "cliente_busca"
+    if normalized_intent == "search_inadimplencia":
+        return "cobranca_menu"
+    if normalized_intent in {"inadimplencia_client", "inadimplencia_document"}:
+        return "cobranca_cliente"
+    if normalized_intent == "inadimplencia_visit_day":
+        return "cobranca_rota_dia"
+    if normalized_intent == "inadimplencia_list":
+        return "cobranca_inadimplentes"
+    if normalized_intent.startswith("inadimplencia_"):
+        return "cobranca_cliente"
+    if normalized_intent == "search_comodato":
+        return "comodato_menu"
+    if normalized_intent in {"comodato_client", "comodato_document"}:
+        return "comodato_cliente"
+    if normalized_intent.startswith("comodato_"):
+        return "comodato_cliente"
+    if normalized_intent == "search_giro":
+        return "giro_menu"
+    if normalized_intent in {"giro_client", "giro_document"}:
+        return "giro_cliente"
+    if normalized_intent == "giro_visit_day":
+        return "giro_dia"
+    if normalized_intent == "giro_zero_base":
+        return "giro_zero"
+    if normalized_intent.startswith("giro_"):
+        return "giro_cliente"
+    if normalized_intent == "search_documentacao":
+        return "documentacao_menu"
+    if normalized_intent in {"documentacao_client", "documentacao_document"}:
+        return "documentacao_cliente"
+    if normalized_intent == "documentacao_visit_day":
+        return "documentacao_dia"
+    if normalized_intent.startswith("documentacao_"):
+        return "documentacao_cliente"
     if normalized_intent.startswith(("search_prazo_limite", "prazo_limite_")):
-        return "prazo_limite"
+        return "prazo_limite_cliente"
     if normalized_intent.startswith("visit_"):
-        return "visitas"
+        return "rota_dia"
     if normalized_intent.startswith("admin:"):
         return "admin_access"
     return None
@@ -138,8 +225,89 @@ def _infer_usage_feature_from_intent(intent: str) -> str | None:
 
 def _infer_usage_feature_from_context(search_context: str) -> str | None:
     normalized_context = str(search_context or "").strip().lower()
-    if normalized_context in {"cliente", "inadimplencia", "comodato", "giro", "documentacao", "prazo_limite"}:
-        return normalized_context
+    context_map = {
+        "cliente": "cliente_busca",
+        "inadimplencia": "cobranca_menu",
+        "comodato": "comodato_menu",
+        "giro": "giro_menu",
+        "documentacao": "documentacao_menu",
+        "prazo_limite": "prazo_limite_cliente",
+    }
+    if normalized_context in context_map:
+        return context_map[normalized_context]
+    return None
+
+
+def _infer_critica_usage_feature(normalized_text: str, combined_steps: str, combined_intents: str) -> str | None:
+    if "critica" not in normalized_text and "critica" not in combined_steps and "critica" not in combined_intents:
+        return None
+    tokens = set(normalized_text.replace(":", " ").split())
+    has_pdf = "pdf" in tokens or "pdf" in combined_steps or "pdf" in combined_intents
+    if has_pdf and "gv" in tokens:
+        return "critica_pdf_gv"
+    if has_pdf and "setor" in tokens:
+        return "critica_pdf_setor"
+    if has_pdf and "nb" in tokens:
+        return "critica_nb_pdf"
+    if has_pdf:
+        return "critica_pdf"
+    if "nb" in tokens:
+        return "critica_nb"
+    if {"problema", "problemas", "ocorrencia", "ocorrencias"} & tokens:
+        return "critica_problemas"
+    if "awaiting_critica_action" in combined_steps:
+        return "critica_menu"
+    return "critica_resumo"
+
+
+def _infer_usage_feature_from_text(normalized_text: str) -> str | None:
+    if not normalized_text:
+        return None
+    tokens = set(normalized_text.replace(":", " ").split())
+    day_tokens = {"segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo", "seg", "ter", "qua", "qui", "sex", "sab", "dom"}
+    if normalized_text in {"menu", "inicio", "iniciar", "start", "oi", "ola"}:
+        return "menu_principal"
+    critica_feature = _infer_critica_usage_feature(normalized_text, "", "")
+    if critica_feature:
+        return critica_feature
+    if normalized_text.startswith("boleto") or " boleto" in f" {normalized_text}":
+        return "boleto"
+    if "recolh" in normalized_text:
+        return "recolha"
+    if "payip" in normalized_text or normalized_text.startswith("pix ") or "pix" in tokens:
+        return "payip"
+    if "giro zero" in normalized_text:
+        return "giro_zero"
+    if "giro" in tokens and (({"rota", "dia", "visita", "visitas"} & tokens) or (day_tokens & tokens)):
+        return "giro_dia"
+    if "giro" in tokens:
+        return "giro_menu"
+    if "risco" in tokens and "rota" in tokens:
+        return "risco_rota"
+    if "rota" in tokens or normalized_text in {"visitas", "visitas do dia", "dia de visita"}:
+        return "rota_dia"
+    if "documentacao" in tokens or "documentos" in tokens or "pendencia documental" in normalized_text:
+        if ({"dia", "rota", "visita", "visitas"} & tokens) or (day_tokens & tokens):
+            return "documentacao_dia"
+        return "documentacao_menu"
+    if "comodato" in tokens or "comodatos" in tokens:
+        return "comodato_menu"
+    if "vence" in tokens and "amanha" in tokens:
+        return "cobranca_vence_amanha"
+    if "vence" in tokens and {"2", "dois"} & tokens:
+        return "cobranca_vence_2_dias"
+    if "vence" in tokens and "hoje" in tokens:
+        return "cobranca_vence_hoje"
+    if "inadimplentes" in tokens or "vencidos" in tokens:
+        return "cobranca_inadimplentes"
+    if "inadimplencia" in tokens or "cobranca" in tokens or "devedor" in tokens:
+        return "cobranca_menu"
+    if "financeiro" in tokens:
+        return "financeiro_menu"
+    if "carteira" in tokens:
+        return "carteira"
+    if "buscar" in tokens or "cliente" in tokens:
+        return "cliente_busca"
     return None
 
 
@@ -171,20 +339,29 @@ def _infer_evolution_usage_feature(
         or ""
     ).lower()
 
-    feature_code: str | None = None
-    if "critica" in normalized_text or "critica" in combined_steps or "critica" in combined_intents:
-        feature_code = "critica"
-    elif "recolh" in normalized_text or "recolha" in combined_steps or "recolha" in combined_intents:
+    feature_code: str | None = _infer_critica_usage_feature(normalized_text, combined_steps, combined_intents)
+    if feature_code is None and (
+        normalized_text.startswith("boleto")
+        or " boleto" in f" {normalized_text}"
+        or "boleto" in combined_steps
+        or "boleto" in combined_intents
+    ):
+        feature_code = "boleto"
+    elif feature_code is None and (
+        "recolh" in normalized_text or "recolha" in combined_steps or "recolha" in combined_intents
+    ):
         feature_code = "recolha"
-    elif (
+    elif feature_code is None and (
         "payip" in normalized_text
         or normalized_text.startswith("pix ")
         or session_before.get("payip_pending_action")
         or session_after.get("payip_pending_action")
     ):
         feature_code = "payip"
-    else:
+    if feature_code is None:
         feature_code = _infer_usage_feature_from_intent(combined_intents)
+        if feature_code is None:
+            feature_code = _infer_usage_feature_from_text(normalized_text)
         if feature_code is None:
             feature_code = _infer_usage_feature_from_context(combined_contexts)
         if feature_code is None and requested_area in EVOLUTION_USAGE_FEATURE_LABELS:
@@ -787,4 +964,3 @@ def _build_evolution_function_usage_report_csv(payload: dict[str, Any], feature_
             )
 
     return "\ufeff" + buffer.getvalue()
-

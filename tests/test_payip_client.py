@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import httpx
 
-from bot_api.integrations.payip_client import PayipClient, PayipConfig, PayipTokenManager, TokenPair, summarize_collection_response
+from bot_api.integrations.payip_client import PayipClient, PayipConfig, PayipImportClientsNotFound, PayipTokenManager, TokenPair, summarize_collection_response
 from bot_api.services.payip_payments_service import (
     PayipPaymentsService,
     _build_pix_charge_payload,
@@ -216,6 +216,139 @@ class PayipClientTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in page.items], ["pay-near"])
         self.assertEqual(page.raw["tolerance"], "0.10")
 
+    def test_service_validate_promax_import_batch_returns_items(self) -> None:
+        class FakePayipClient:
+            def resolve_company_id(self, *, filial: str = "", company_id: str = "") -> str:
+                return company_id or "patos-company"
+
+            def validate_promax_payments_import_batch(self, **kwargs) -> dict:
+                return {
+                    "success": True,
+                    "data": [
+                        {
+                            "clientCode": "19167",
+                            "invoice": "181886",
+                            "total": 20,
+                            "dueDate": "2026-07-07T00:00:00",
+                        }
+                    ],
+                    "request": kwargs,
+                }
+
+        service = PayipPaymentsService(FakePayipClient())  # type: ignore[arg-type]
+
+        validation = service.validate_promax_import_batch(
+            filial="3",
+            date_start=date(2026, 7, 7),
+            date_end=date(2026, 7, 7),
+        )
+
+        self.assertTrue(validation.ok)
+        self.assertEqual(validation.company_id, "patos-company")
+        self.assertEqual(validation.date_start, "2026-07-07")
+        self.assertEqual(validation.date_end, "2026-07-07")
+        self.assertEqual(validation.items[0]["invoice"], "181886")
+
+    def test_service_validate_promax_import_batch_keeps_missing_client_codes(self) -> None:
+        class FakePayipClient:
+            def resolve_company_id(self, *, filial: str = "", company_id: str = "") -> str:
+                return company_id or "patos-company"
+
+            def validate_promax_payments_import_batch(self, **_kwargs) -> dict:
+                raise PayipImportClientsNotFound(
+                    "Cliente nao encontrado",
+                    codes_client=("19167",),
+                    payload={"details": {"codes_client": ["19167"]}},
+                )
+
+        service = PayipPaymentsService(FakePayipClient())  # type: ignore[arg-type]
+
+        validation = service.validate_promax_import_batch(
+            filial="3",
+            date_start="2026-07-07",
+            date_end="2026-07-07",
+        )
+
+        self.assertFalse(validation.ok)
+        self.assertEqual(validation.missing_client_codes, ("19167",))
+
+    def test_service_import_promax_batch_returns_items(self) -> None:
+        class FakePayipClient:
+            def resolve_company_id(self, *, filial: str = "", company_id: str = "") -> str:
+                return company_id or "patos-company"
+
+            def import_promax_payments_batch(self, **kwargs) -> dict:
+                return {
+                    "success": True,
+                    "data": [
+                        {
+                            "clientCode": "19167",
+                            "invoice": "181886",
+                            "total": 20,
+                            "dueDate": "2026-07-07T00:00:00",
+                        }
+                    ],
+                    "request": kwargs,
+                }
+
+        service = PayipPaymentsService(FakePayipClient())  # type: ignore[arg-type]
+
+        result = service.import_promax_batch(
+            filial="3",
+            date_start=date(2026, 7, 7),
+            date_end=date(2026, 7, 7),
+            totp_code="422649",
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.company_id, "patos-company")
+        self.assertEqual(result.date_start, "2026-07-07")
+        self.assertEqual(result.date_end, "2026-07-07")
+        self.assertEqual(result.items[0]["invoice"], "181886")
+
+    def test_service_create_client_from_profile_builds_payload(self) -> None:
+        class FakePayipClient:
+            def resolve_company_id(self, *, filial: str = "", company_id: str = "") -> str:
+                return company_id or "patos-company"
+
+            def verify_client_tax_payer(self, *, tax_payer_id: str) -> dict:
+                return {"verified": tax_payer_id}
+
+            def create_client(self, payload: dict) -> dict:
+                return {"id": "client-company-1", "payload": payload}
+
+        service = PayipPaymentsService(FakePayipClient())  # type: ignore[arg-type]
+        profile = type(
+            "Profile",
+            (),
+            {
+                "filial": "3",
+                "cod_pdv": "19167",
+                "documento": "12467128490",
+                "razao_social": "JHEFFERSON KAUA",
+                "nome_fantasia": "Kaua",
+                "email": "",
+                "telefone": "",
+                "cep": "58706560",
+                "endereco": "Rua Professora Cristina Lima",
+                "numero": "SN",
+                "complemento": "",
+                "bairro": "Salgadinho",
+                "cidade": "Patos",
+                "uf": "PB",
+            },
+        )()
+
+        result = service.create_client_from_profile(profile=profile)
+
+        self.assertEqual(result.payload["companyId"], "patos-company")
+        self.assertEqual(result.payload["client"]["taxPayerId"], "12467128490")
+        self.assertEqual(result.payload["client"]["code"], "19167")
+        self.assertEqual(result.payload["client"]["type"], "PF")
+        self.assertEqual(result.payload["client"]["email"], "cliente.3.19167@sememail.com.br")
+        self.assertEqual(result.payload["client"]["phone"], "83990000000")
+        self.assertEqual(result.payload["address"]["number"], "SN")
+
     def test_service_reads_all_pages_before_filtering_paid_day_and_amount(self) -> None:
         class FakePayipClient:
             def __init__(self) -> None:
@@ -391,6 +524,257 @@ class PayipClientTests(unittest.TestCase):
             requests[2].headers["accept"],
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+    def test_promax_import_validate_batch_uses_company_route_and_dates(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": [
+                        {
+                            "clientCode": "19167",
+                            "invoice": "181886",
+                            "total": 20,
+                            "dueDate": "2026-07-07T00:00:00",
+                        }
+                    ],
+                },
+            )
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+            company_ids=(("3", "patos-company"),),
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        payload = client.validate_promax_payments_import_batch(
+            filial="3",
+            date_start="2026-07-07",
+            date_end="2026-07-07",
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(requests[0].method, "POST")
+        self.assertEqual(requests[0].url.path, "/v1/payments-import/patos-company/promax/api/validate-batch")
+        self.assertEqual(requests[0].url.params["startDate"], "2026-07-07")
+        self.assertEqual(requests[0].url.params["endDate"], "2026-07-07")
+
+    def test_routes_uses_company_route_and_in_progress_status(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "id": "route-1",
+                            "code": "92305",
+                            "status": "IN_PROGRESS",
+                            "driversRoute": [{"driver": {"name": "Jose Marcelo", "code": "7444"}}],
+                        }
+                    ]
+                },
+            )
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+            company_ids=(("3", "patos-company"),),
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        payload = client.list_routes(filial="3", status="IN_PROGRESS", page=1, page_size=25)
+
+        self.assertEqual(payload["data"][0]["code"], "92305")
+        self.assertEqual(requests[0].method, "GET")
+        self.assertEqual(requests[0].url.path, "/v1/routes/patos-company")
+        self.assertEqual(requests[0].url.params["status"], "IN_PROGRESS")
+        self.assertEqual(requests[0].url.params["page"], "1")
+        self.assertEqual(requests[0].url.params["pageSize"], "25")
+        self.assertEqual(requests[0].url.params["code"], "")
+
+    def test_promax_import_validate_batch_extracts_missing_client_codes(self) -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                404,
+                json={
+                    "message": "Cliente não encontrado",
+                    "error": "NOT_FOUND",
+                    "statusCode": 404,
+                    "code": "CLI404",
+                    "details": {"codes_client": ["19167", "19167", "20001"]},
+                },
+            )
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        with self.assertRaises(PayipImportClientsNotFound) as raised:
+            client.validate_promax_payments_import_batch(
+                filial="3",
+                date_start="2026-07-07",
+                date_end="2026-07-07",
+            )
+
+        self.assertEqual(raised.exception.codes_client, ("19167", "20001"))
+
+    def test_promax_import_batch_uses_company_route_dates_and_totp(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": [
+                        {
+                            "clientCode": "19167",
+                            "invoice": "181886",
+                            "total": 20,
+                            "dueDate": "2026-07-07T00:00:00",
+                        }
+                    ],
+                },
+            )
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+            company_ids=(("3", "patos-company"),),
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        payload = client.import_promax_payments_batch(
+            filial="3",
+            date_start="2026-07-07",
+            date_end="2026-07-07",
+            totp_code="422649",
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(requests[0].method, "POST")
+        self.assertEqual(requests[0].url.path, "/v1/payments-import/patos-company/promax/api")
+        self.assertEqual(requests[0].url.params["totpCode"], "422649")
+        self.assertEqual(requests[0].url.params["startDate"], "2026-07-07")
+        self.assertEqual(requests[0].url.params["endDate"], "2026-07-07")
+
+    def test_create_client_verifies_document_and_posts_payload(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if request.url.path == "/v1/clients/verify/12467128490":
+                return httpx.Response(200, json={"valid": True})
+            if request.url.path == "/v1/clients":
+                return httpx.Response(201, json={"id": "client-company-1"})
+            return httpx.Response(404, json={"message": "not found"})
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+        payload = {
+            "companyId": "patos-company",
+            "client": {"taxPayerId": "12467128490", "name": "Cliente", "code": "19167"},
+            "address": {"city": "Patos"},
+        }
+
+        verified = client.verify_client_tax_payer(tax_payer_id="124.671.284-90")
+        created = client.create_client(payload)
+
+        self.assertTrue(verified["valid"])
+        self.assertEqual(created["id"], "client-company-1")
+        self.assertEqual(requests[0].method, "GET")
+        self.assertEqual(requests[0].url.path, "/v1/clients/verify/12467128490")
+        self.assertEqual(requests[1].method, "POST")
+        self.assertEqual(requests[1].url.path, "/v1/clients")
 
 
 if __name__ == "__main__":

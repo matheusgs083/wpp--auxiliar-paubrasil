@@ -25,6 +25,8 @@ DEFAULT_PAYIP_INTEREST_PERC = Decimal("10.00")
 PAYIP_BATCH_DELAY_SECONDS = 0.8
 PAYIP_PDF_ATTEMPTS = 5
 PAYIP_PDF_RETRY_DELAY_SECONDS = 2.0
+PAYIP_CHARGE_ATTEMPTS = 3
+PAYIP_CHARGE_RETRY_DELAY_SECONDS = 1.5
 
 
 @dataclass(frozen=True)
@@ -37,15 +39,26 @@ class PayipBatchOptions:
     mfa_code: str = ""
 
 
+@dataclass(frozen=True)
+class PayipPromaxImportOptions:
+    filial: str
+    start_date: str
+    end_date: str
+    mfa_code: str = ""
+    auto_create_clients: bool = False
+
+
 class AdminPayipBatchService:
     def __init__(
         self,
         *,
         payip_payments_service: Any,
+        dclientes_query_service: Any | None = None,
         panel_context_has_all_filiais: Any,
         logger: Any,
     ) -> None:
         self.payip_payments_service = payip_payments_service
+        self.dclientes_query_service = dclientes_query_service
         self.panel_context_has_all_filiais = panel_context_has_all_filiais
         self.logger = logger
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="admin-payip-batch")
@@ -75,6 +88,46 @@ class AdminPayipBatchService:
             "items": rows,
             "options": _options_payload(options),
         }
+
+    def validate_promax_import(self, payload: Any, context: dict[str, Any] | None) -> dict[str, Any]:
+        options = _promax_import_options(payload)
+        self._ensure_filial_allowed(options.filial, context)
+        validation = self._validate_promax_import(options)
+        client_creation = {"created": [], "not_found": [], "failed": []}
+        missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
+        if missing_codes and options.auto_create_clients:
+            client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
+            validation = self._validate_promax_import(options)
+        return _promax_import_payload(validation, client_creation=client_creation)
+
+    def run_promax_import(self, payload: Any, context: dict[str, Any] | None) -> dict[str, Any]:
+        options = _promax_import_options(payload)
+        self._ensure_filial_allowed(options.filial, context)
+        if not options.mfa_code:
+            raise HTTPException(status_code=400, detail="Informe o token MFA PayIP para confirmar a importacao.")
+        validation = self._validate_promax_import(options)
+        client_creation = {"created": [], "not_found": [], "failed": []}
+        missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
+        if missing_codes and options.auto_create_clients:
+            client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
+            validation = self._validate_promax_import(options)
+            missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
+        if missing_codes:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Ainda existem clientes faltando na PayIP: "
+                    + ", ".join(missing_codes[:20])
+                    + ("..." if len(missing_codes) > 20 else "")
+                ),
+            )
+        result = self.payip_payments_service.import_promax_batch(
+            filial=options.filial,
+            date_start=options.start_date,
+            date_end=options.end_date,
+            totp_code=options.mfa_code,
+        )
+        return _promax_import_payload(result, client_creation=client_creation, imported=True)
 
     def queue(self, payload: Any, context: dict[str, Any] | None) -> dict[str, Any]:
         options = _payload_options(payload)
@@ -223,6 +276,61 @@ class AdminPayipBatchService:
                 allowed.add(normalized)
         return allowed
 
+    def _ensure_filial_allowed(self, filial: str, context: dict[str, Any] | None) -> None:
+        allowed_filiais = self._allowed_filiais(context)
+        if allowed_filiais is not None and filial not in allowed_filiais:
+            raise HTTPException(status_code=400, detail="Revenda fora do escopo liberado para este painel.")
+
+    def _validate_promax_import(self, options: PayipPromaxImportOptions) -> Any:
+        if self.payip_payments_service is None:
+            raise HTTPException(status_code=503, detail="PayIP nao configurada.")
+        try:
+            return self.payip_payments_service.validate_promax_import_batch(
+                filial=options.filial,
+                date_start=options.start_date,
+                date_end=options.end_date,
+            )
+        except PayipMfaRequired as exc:
+            if not options.mfa_code:
+                raise HTTPException(status_code=400, detail="PayIP pediu MFA. Informe o token MFA e valide novamente.") from exc
+            try:
+                self.payip_payments_service.bootstrap_session(mfa_code=options.mfa_code)
+                return self.payip_payments_service.validate_promax_import_batch(
+                    filial=options.filial,
+                    date_start=options.start_date,
+                    date_end=options.end_date,
+                )
+            except PayipMfaRequired as retry_exc:
+                raise HTTPException(status_code=400, detail="Token MFA PayIP nao validou. Confira o codigo e tente novamente.") from retry_exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self.logger.exception("Falha ao validar importacao automatizada PayIP: %s", exc)
+            raise HTTPException(status_code=503, detail=f"Falha ao validar importacao PayIP: {_short_error(str(exc))}") from exc
+
+    def _create_missing_clients(self, *, filial: str, codes: tuple[str, ...]) -> dict[str, list[str]]:
+        if self.dclientes_query_service is None:
+            return {"created": [], "not_found": list(codes), "failed": ["dClientes indisponivel no painel."]}
+        created: list[str] = []
+        not_found: list[str] = []
+        failed: list[str] = []
+        for code in dict.fromkeys(str(item or "").strip() for item in codes if str(item or "").strip()):
+            normalized_code = normalize_numeric_code(code)
+            try:
+                profile = self.dclientes_query_service.get_payip_profile_by_registration(filial, normalized_code)
+                if profile is None:
+                    not_found.append(normalized_code)
+                    continue
+                if not getattr(profile, "documento", ""):
+                    failed.append(f"{normalized_code}: sem CPF/CNPJ valido na dClientes")
+                    continue
+                self.payip_payments_service.create_client_from_profile(profile=profile)
+                created.append(normalized_code)
+            except Exception as exc:
+                self.logger.exception("Falha ao criar cliente PayIP NB %s: %s", normalized_code, exc)
+                failed.append(f"{normalized_code}: {_short_error(str(exc))}")
+        return {"created": created, "not_found": not_found, "failed": failed}
+
     def _worker(self, job_id: str) -> None:
         with self.lock:
             job = self.jobs.get(job_id)
@@ -341,19 +449,78 @@ class AdminPayipBatchService:
 
     def _emit_charge(self, *, row: dict[str, Any], client: Any) -> dict[str, Any]:
         title = _payip_charge_title(row["filial"])
-        return self.payip_payments_service.create_pix_charge(
-            filial=row["filial"],
-            amount=Decimal(row["amount"]),
-            rate_amount=Decimal(row["rate_amount"]),
-            interest_perc=Decimal(row["interest_perc"]),
-            tax_payer_id=str(getattr(client, "tax_payer_id", "") or ""),
-            external_id=row["external_id"],
-            due_date=date.fromisoformat(row["due_date"]),
-            issue_date=datetime.now().date(),
-            title=title,
-            description=row["description"] or title,
-            invoice=row["invoice"],
-        )
+        last_error: Exception | None = None
+        for attempt in range(1, PAYIP_CHARGE_ATTEMPTS + 1):
+            try:
+                return self.payip_payments_service.create_pix_charge(
+                    filial=row["filial"],
+                    amount=Decimal(row["amount"]),
+                    rate_amount=Decimal(row["rate_amount"]),
+                    interest_perc=Decimal(row["interest_perc"]),
+                    tax_payer_id=str(getattr(client, "tax_payer_id", "") or ""),
+                    external_id=row["external_id"],
+                    due_date=date.fromisoformat(row["due_date"]),
+                    issue_date=datetime.now().date(),
+                    title=title,
+                    description=row["description"] or title,
+                    invoice=row["invoice"],
+                )
+            except PayipMfaRequired:
+                raise
+            except Exception as exc:
+                last_error = exc
+                existing = self._find_existing_charge_after_create_error(row=row)
+                if existing:
+                    self.logger.warning(
+                        "PayIP lote linha %s usou cobranca ja criada apos erro na tentativa %s: %s",
+                        row.get("line_number"),
+                        attempt,
+                        _payment_id(existing) or "-",
+                    )
+                    return existing
+                if attempt >= PAYIP_CHARGE_ATTEMPTS or not _is_retryable_payip_error(str(exc)):
+                    break
+                self.logger.warning(
+                    "PayIP lote linha %s falhou ao emitir na tentativa %s/%s; tentando novamente: %s",
+                    row.get("line_number"),
+                    attempt,
+                    PAYIP_CHARGE_ATTEMPTS,
+                    _short_error(str(exc)),
+                )
+                time.sleep(PAYIP_CHARGE_RETRY_DELAY_SECONDS)
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Falha desconhecida ao gerar cobranca PayIP.")
+
+    def _find_existing_charge_after_create_error(self, *, row: dict[str, Any]) -> dict[str, Any]:
+        client_code = row.get("external_id") or row.get("nb") or ""
+        if not client_code:
+            return {}
+        created_at = datetime.now().date().isoformat()
+        try:
+            page = self.payip_payments_service.list_payments(
+                page=1,
+                page_size=50,
+                status="PENDING",
+                client_code=str(client_code),
+                due_date_start=str(row.get("due_date") or ""),
+                due_date_end=str(row.get("due_date") or ""),
+                created_at_start=created_at,
+                created_at_end=created_at,
+                filial=str(row.get("filial") or ""),
+            )
+        except PayipMfaRequired:
+            raise
+        except Exception as exc:
+            self.logger.warning(
+                "Falha ao procurar cobranca PayIP ja criada para lote linha %s: %s",
+                row.get("line_number"),
+                _short_error(str(exc)),
+            )
+            return {}
+        items = [item for item in getattr(page, "items", ()) or () if isinstance(item, dict)]
+        matches = [item for item in items if _payment_matches_input_row(item, row)]
+        return matches[0] if matches else {}
 
     def _generated_payment_detail(self, *, payment: dict[str, Any], payment_id: str) -> dict[str, Any]:
         if not payment_id:
@@ -404,6 +571,72 @@ def _options_payload(options: PayipBatchOptions) -> dict[str, Any]:
         "include_nf": options.include_nf,
         "mfa_code_provided": bool(options.mfa_code),
     }
+
+
+def _promax_import_options(payload: Any) -> PayipPromaxImportOptions:
+    filial = normalize_numeric_code(getattr(payload, "filial", "") or getattr(payload, "revenda", ""))
+    start_date = _promax_import_date_text(getattr(payload, "start_date", "") or getattr(payload, "date_start", ""))
+    end_date = _promax_import_date_text(getattr(payload, "end_date", "") or getattr(payload, "date_end", ""))
+    if not filial:
+        raise HTTPException(status_code=400, detail="Informe a revenda da importacao PayIP.")
+    if not start_date or not end_date:
+        raise HTTPException(status_code=400, detail="Informe data inicial e final no formato AAAA-MM-DD ou DD/MM/AAAA.")
+    return PayipPromaxImportOptions(
+        filial=filial,
+        start_date=start_date,
+        end_date=end_date,
+        mfa_code=str(getattr(payload, "mfa_code", "") or "").strip(),
+        auto_create_clients=bool(getattr(payload, "auto_create_clients", False)),
+    )
+
+
+def _promax_import_date_text(value: Any) -> str:
+    parsed = _parse_date(value)
+    return parsed.isoformat() if parsed is not None else ""
+
+
+def _promax_import_payload(result: Any, *, client_creation: dict[str, list[str]], imported: bool = False) -> dict[str, Any]:
+    if hasattr(result, "to_dict"):
+        payload = result.to_dict()
+    else:
+        payload = {
+            "filial": str(getattr(result, "filial", "") or ""),
+            "company_id": str(getattr(result, "company_id", "") or ""),
+            "date_start": str(getattr(result, "date_start", "") or ""),
+            "date_end": str(getattr(result, "date_end", "") or ""),
+            "items": list(getattr(result, "items", ()) or ()),
+            "missing_client_codes": list(getattr(result, "missing_client_codes", ()) or ()),
+            "ok": bool(getattr(result, "ok", not bool(getattr(result, "missing_client_codes", ())))),
+            "raw": getattr(result, "raw", {}) or {},
+        }
+        payload["items_count"] = len(payload["items"])
+    items = [item for item in payload.get("items", []) if isinstance(item, dict)]
+    total_amount = Decimal("0")
+    for item in items:
+        amount = _parse_money(
+            item.get("total")
+            or item.get("value")
+            or item.get("amount")
+            or item.get("valor")
+        )
+        if amount is not None:
+            total_amount += amount
+    payload["items"] = items
+    payload["items_count"] = len(items)
+    payload["missing_client_codes"] = [
+        normalize_numeric_code(item)
+        for item in payload.get("missing_client_codes", [])
+        if normalize_numeric_code(item)
+    ]
+    payload["total_amount"] = _decimal_text(total_amount)
+    payload["client_creation"] = {
+        "created": list(client_creation.get("created") or []),
+        "not_found": list(client_creation.get("not_found") or []),
+        "failed": list(client_creation.get("failed") or []),
+    }
+    payload["imported"] = bool(imported)
+    payload["ok"] = not bool(payload["missing_client_codes"])
+    return payload
 
 
 def _parse_batch_text(raw_text: str) -> list[dict[str, Any]]:
@@ -554,9 +787,82 @@ def _pix_code(data: Any) -> str:
     return _pix_code(nested) if isinstance(nested, dict) else ""
 
 
+def _payment_matches_input_row(payment: dict[str, Any], row: dict[str, Any]) -> bool:
+    row_amount = _parse_money(row.get("amount"))
+    payment_amount = _parse_money(
+        payment.get("amount")
+        or _nested_value(payment, "amountDetails", "amount")
+        or _nested_value(payment, "amountDetails", "amountTotal")
+    )
+    if row_amount is not None and payment_amount is not None and row_amount != payment_amount:
+        return False
+
+    due_date = str(row.get("due_date") or "").strip()
+    payment_due_date = str(payment.get("dueDate") or payment.get("due_date") or "").strip()
+    if due_date and payment_due_date and not payment_due_date.startswith(due_date):
+        return False
+
+    invoice = str(row.get("invoice") or "").strip()
+    payment_invoice = str(payment.get("invoice") or "").strip()
+    if invoice and payment_invoice and invoice != payment_invoice:
+        return False
+
+    return bool(_payment_id(payment) or _pix_code(payment))
+
+
+def _nested_value(data: Any, *path: str) -> Any:
+    current = data
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
 def _short_error(value: str) -> str:
     text = " ".join(str(value or "").split())
     return text[:220] if len(text) > 220 else text
+
+
+def _is_retryable_payip_error(value: str) -> bool:
+    normalized = unicodedata.normalize("NFKD", str(value or "").lower())
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    non_retryable_terms = (
+        "http 400",
+        "http 401",
+        "http 403",
+        "http 404",
+        "forbidden",
+        "nao configurad",
+        "nao encontrado",
+        "not found",
+        "valor invalido",
+        "vencimento invalido",
+        "cliente ativo nao encontrado",
+    )
+    if any(term in normalized for term in non_retryable_terms):
+        return False
+    retryable_terms = (
+        "http 408",
+        "http 409",
+        "http 425",
+        "http 429",
+        "http 500",
+        "http 502",
+        "http 503",
+        "http 504",
+        "timeout",
+        "timed out",
+        "connection",
+        "conexao",
+        "temporar",
+        "tente novamente",
+        "try again",
+        "unavailable",
+        "indisponivel",
+        "reset",
+    )
+    return any(term in normalized for term in retryable_terms)
 
 
 def _is_payip_pdf_not_ready_error(value: str) -> bool:

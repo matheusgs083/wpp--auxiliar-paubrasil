@@ -52,9 +52,11 @@ class MainMenuFlow:
             if can_use_comodato:
                 option_ids.append(flow.MENU_COMODATOS)
             if can_use_cliente:
-                option_ids.append(flow.MENU_RECOLHA)
+                option_ids.append(flow.MENU_SELLER_FINANCEIRO)
             if can_use_seller_summary_menu:
                 option_ids.append(flow.MENU_SELLER_SUMMARY)
+            if can_use_cliente:
+                option_ids.append(flow.MENU_CRITICA)
         elif self._is_gerente_vendas(decision):
             if summary_option_id:
                 option_ids.append(summary_option_id)
@@ -70,6 +72,10 @@ class MainMenuFlow:
                 option_ids.append(flow.MENU_SEARCH)
             if can_use_comodato:
                 option_ids.append(flow.MENU_COMODATOS)
+            if can_use_cliente:
+                option_ids.append(flow.MENU_SELLER_FINANCEIRO)
+            if can_use_cliente:
+                option_ids.append(flow.MENU_CRITICA)
         elif self._is_diretor_comercial(decision):
             if summary_option_id:
                 option_ids.append(summary_option_id)
@@ -161,8 +167,8 @@ class MainMenuFlow:
             option_specs[flow.MENU_GIRO] = flow.InteractiveOption(option_id=flow.MENU_GIRO, title=giro_title, description=giro_description, shortcut=shortcut_map.get(flow.MENU_GIRO, ''))
         if can_use_documentacao:
             option_specs[flow.MENU_DOCUMENTACAO] = flow.InteractiveOption(option_id=flow.MENU_DOCUMENTACAO, title='Documentacao Pendente', description='Ver documentos faltando por cliente e por dia', shortcut=shortcut_map.get(flow.MENU_DOCUMENTACAO, ''))
-        if self._is_vendedor(decision) and can_use_cliente:
-            option_specs[flow.MENU_RECOLHA] = flow.InteractiveOption(option_id=flow.MENU_RECOLHA, title='Solicitar Recolha', description='Registrar pedido de recolha para o financeiro', shortcut=shortcut_map.get(flow.MENU_RECOLHA, ''))
+        if (self._is_vendedor(decision) or self._is_gerente_vendas(decision)) and can_use_cliente:
+            option_specs[flow.MENU_SELLER_FINANCEIRO] = flow.InteractiveOption(option_id=flow.MENU_SELLER_FINANCEIRO, title='Financeiro', description='Solicitar recolha ou boleto', shortcut=shortcut_map.get(flow.MENU_SELLER_FINANCEIRO, ''))
         footer = 'Responda com o numero ou com o nome da opcao.'
         if can_use_visit_menu:
             visit_title = 'Rota do Dia'
@@ -193,6 +199,8 @@ class MainMenuFlow:
             if can_use_seller_risk_menu:
                 option_specs[flow.MENU_SELLER_RISK] = flow.InteractiveOption(option_id=flow.MENU_SELLER_RISK, title='Risco da Rota', description='Ver clientes da rota com atraso ou vencimento', shortcut=shortcut_map.get(flow.MENU_SELLER_RISK, ''))
             footer = 'Responda com o numero ou com o nome da opcao. Atalhos uteis: rota segunda, giro quinta, inad hoje, 3 6643 e inad santa maria.'
+        if (self._is_vendedor(decision) or self._is_gerente_vendas(decision)) and can_use_cliente:
+            option_specs[flow.MENU_CRITICA] = flow.InteractiveOption(option_id=flow.MENU_CRITICA, title='Critica', description='Resumo e PDFs da critica RN', shortcut=shortcut_map.get(flow.MENU_CRITICA, ''))
         if can_use_finance_menu:
             option_specs[flow.MENU_FINANCEIRO] = flow.InteractiveOption(option_id=flow.MENU_FINANCEIRO, title='Financeiro', description='Ver resumo e cobrancas', shortcut=shortcut_map.get(flow.MENU_FINANCEIRO, ''))
             footer = 'Responda com o numero ou com o nome da opcao.'

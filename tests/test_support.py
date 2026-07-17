@@ -41,6 +41,7 @@ class StubQueryService(StubStatusService):
         fantasia_records: list[Any] | None = None,
         registration_records: list[Any] | None = None,
         document_records: list[Any] | None = None,
+        payip_profile: Any | None = None,
         visit_day_clients: list[Any] | None = None,
         visit_day_sellers: list[Any] | None = None,
         scope_summary: Any | None = None,
@@ -51,6 +52,7 @@ class StubQueryService(StubStatusService):
         self.fantasia_records = list(fantasia_records or [])
         self.registration_records = list(registration_records or [])
         self.document_records = list(document_records or [])
+        self.payip_profile = payip_profile
         self.visit_day_clients = list(visit_day_clients or [])
         self.visit_day_sellers = list(visit_day_sellers or [])
         self.scope_summary = scope_summary or SimpleNamespace(
@@ -63,6 +65,7 @@ class StubQueryService(StubStatusService):
         self.fantasia_calls: list[dict[str, Any]] = []
         self.registration_calls: list[dict[str, Any]] = []
         self.document_calls: list[dict[str, Any]] = []
+        self.payip_profile_calls: list[dict[str, Any]] = []
         self.visit_day_clients_calls: list[dict[str, Any]] = []
         self.visit_day_sellers_calls: list[dict[str, Any]] = []
         self.scope_summary_calls: list[dict[str, Any]] = []
@@ -83,6 +86,10 @@ class StubQueryService(StubStatusService):
     def search_by_document(self, **kwargs: Any) -> list[Any]:
         self.document_calls.append(kwargs)
         return list(self.document_records)
+
+    def get_payip_profile_by_registration(self, filial: str, cod_pdv: str) -> Any:
+        self.payip_profile_calls.append({"filial": filial, "cod_pdv": cod_pdv})
+        return self.payip_profile
 
     def list_clients_by_visit_day(self, **kwargs: Any) -> list[Any]:
         self.visit_day_clients_calls.append(kwargs)
@@ -597,6 +604,10 @@ class StubPayipPaymentsService:
         self.statement_resume_calls: list[dict[str, Any]] = []
         self.statement_export_calls: list[dict[str, Any]] = []
         self.amount_day_calls: list[dict[str, Any]] = []
+        self.import_batch_calls: list[dict[str, Any]] = []
+        self.import_batch_confirm_calls: list[dict[str, Any]] = []
+        self.routes_calls: list[dict[str, Any]] = []
+        self.create_client_calls: list[dict[str, Any]] = []
         self.bootstrap_calls: list[str] = []
 
     def status(self) -> dict[str, Any]:
@@ -779,6 +790,199 @@ class StubPayipPaymentsService:
         self.refresh_token_valid = True
         self.require_mfa_once = False
         return self.status()
+
+    def validate_promax_import_batch(
+        self,
+        *,
+        filial: str,
+        date_start: Any,
+        date_end: Any,
+    ) -> Any:
+        if self.require_mfa_once:
+            self.require_mfa_once = False
+            raise PayipMfaRequired("MFA required")
+        self.import_batch_calls.append(
+            {
+                "filial": filial,
+                "date_start": str(date_start),
+                "date_end": str(date_end),
+            }
+        )
+        items = (
+            {
+                "clientCode": "19167",
+                "invoice": "181886",
+                "total": 20,
+                "dueDate": "2026-07-07T00:00:00",
+            },
+        )
+        return SimpleNamespace(
+            raw={"success": True, "data": list(items)},
+            filial=filial,
+            company_id={
+                "3": "bdfee22b-ac11-4355-909a-54bd348c87cc",
+                "4": "aa11f5fe-38dd-4bf5-86e3-71d874cdc24c",
+            }.get(filial or "3", ""),
+            date_start=str(date_start),
+            date_end=str(date_end),
+            items=items,
+            missing_client_codes=(),
+            ok=True,
+        )
+
+    def import_promax_batch(
+        self,
+        *,
+        filial: str,
+        date_start: Any,
+        date_end: Any,
+        totp_code: str,
+    ) -> Any:
+        self.import_batch_confirm_calls.append(
+            {
+                "filial": filial,
+                "date_start": str(date_start),
+                "date_end": str(date_end),
+                "totp_code": str(totp_code),
+            }
+        )
+        items = (
+            {
+                "clientCode": "19167",
+                "invoice": "181886",
+                "total": 20,
+                "dueDate": "2026-07-07T00:00:00",
+            },
+        )
+        return SimpleNamespace(
+            raw={"success": True, "data": list(items)},
+            filial=filial,
+            company_id={
+                "3": "bdfee22b-ac11-4355-909a-54bd348c87cc",
+                "4": "aa11f5fe-38dd-4bf5-86e3-71d874cdc24c",
+            }.get(filial or "3", ""),
+            date_start=str(date_start),
+            date_end=str(date_end),
+            items=items,
+            missing_client_codes=(),
+            ok=True,
+        )
+
+    def list_routes(
+        self,
+        *,
+        filial: str,
+        status: str = "IN_PROGRESS",
+        code: str = "",
+        page: int = 1,
+        page_size: int = 25,
+    ) -> Any:
+        if self.require_mfa_once:
+            self.require_mfa_once = False
+            raise PayipMfaRequired("MFA required")
+        self.routes_calls.append(
+            {
+                "filial": filial,
+                "status": status,
+                "code": code,
+                "page": page,
+                "page_size": page_size,
+            }
+        )
+        items = (
+            {
+                "id": "route-1",
+                "code": "92305",
+                "status": "IN_PROGRESS",
+                "driversRoute": [
+                    {
+                        "status": "IN_PROGRESS",
+                        "driver": {"name": "Jose Marcelo", "code": "7444"},
+                    }
+                ],
+            },
+        )
+        return SimpleNamespace(
+            raw={"data": list(items)},
+            filial=filial,
+            company_id={
+                "3": "bdfee22b-ac11-4355-909a-54bd348c87cc",
+                "4": "aa11f5fe-38dd-4bf5-86e3-71d874cdc24c",
+            }.get(filial or "3", ""),
+            status=status,
+            items=items,
+            items_count=len(items),
+            total_items=len(items),
+            page=page,
+            page_size=page_size,
+        )
+
+    def list_all_routes(
+        self,
+        *,
+        filial: str,
+        status: str = "IN_PROGRESS",
+        code: str = "",
+        page_size: int = 25,
+        max_pages: int = 20,
+    ) -> Any:
+        pages: list[Any] = []
+        items: list[dict[str, Any]] = []
+        for page in range(1, max_pages + 1):
+            current = self.list_routes(filial=filial, status=status, code=code, page=page, page_size=page_size)
+            pages.append(current.raw)
+            items.extend(list(current.items))
+            total = current.total_items if current.total_items is not None else len(items)
+            if len(items) >= total or len(current.items) < page_size:
+                break
+        return SimpleNamespace(
+            raw={"pages": pages},
+            filial=filial,
+            company_id={
+                "3": "bdfee22b-ac11-4355-909a-54bd348c87cc",
+                "4": "aa11f5fe-38dd-4bf5-86e3-71d874cdc24c",
+            }.get(filial or "3", ""),
+            status=status,
+            items=tuple(items),
+            items_count=len(items),
+            total_items=len(items),
+            page=1,
+            page_size=page_size,
+        )
+
+    def create_client_from_profile(self, *, profile: Any) -> Any:
+        payload = {
+            "companyId": "bdfee22b-ac11-4355-909a-54bd348c87cc",
+            "client": {
+                "taxPayerId": str(getattr(profile, "documento", "")),
+                "name": str(getattr(profile, "razao_social", "")),
+                "fantasyName": str(getattr(profile, "nome_fantasia", "")),
+                "email": str(getattr(profile, "email", "") or f"cliente.{getattr(profile, 'filial', '')}.{getattr(profile, 'cod_pdv', '')}@sememail.com.br"),
+                "phone": str(getattr(profile, "telefone", "") or "83990000000"),
+                "code": str(getattr(profile, "cod_pdv", "")),
+                "type": "PF",
+            },
+            "address": {
+                "postalCode": str(getattr(profile, "cep", "")),
+                "street": str(getattr(profile, "endereco", "")),
+                "number": str(getattr(profile, "numero", "") or "SN"),
+                "complement": str(getattr(profile, "complemento", "") or "n/d"),
+                "neighborhood": str(getattr(profile, "bairro", "")),
+                "city": str(getattr(profile, "cidade", "")),
+                "state": str(getattr(profile, "uf", "")),
+                "latitude": "",
+                "longitude": "",
+            },
+        }
+        self.create_client_calls.append({"profile": profile, "payload": payload})
+        return SimpleNamespace(
+            raw={"id": "client-company-1"},
+            payload=payload,
+            verify_raw={"success": True},
+            filial=str(getattr(profile, "filial", "")),
+            client_code=str(getattr(profile, "cod_pdv", "")),
+            tax_payer_id=str(getattr(profile, "documento", "")),
+        )
 
     def find_client_by_code(self, *, filial: str, client_code: str) -> Any:
         if self.require_mfa_once:

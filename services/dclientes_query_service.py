@@ -56,6 +56,28 @@ class DClienteRecord:
 
 
 @dataclass(frozen=True)
+class DClientePayipProfile:
+    filial: str
+    cod_pdv: str
+    documento: str
+    razao_social: str
+    nome_fantasia: str
+    telefone: str
+    email: str
+    cep: str
+    endereco: str
+    numero: str
+    complemento: str
+    bairro: str
+    cidade: str
+    uf: str
+    payload: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class VisitSellerSummary:
     seller_code: str
     manager_code: str
@@ -229,6 +251,63 @@ class DClientesQueryService:
         base_query = self._base_rows_query(where=sql.SQL(" AND ").join(filters))
         query = self._details_query_from_base(base_query, order_by=sql.SQL("base.filial, base.cod_pdv"))
         return self._fetch(query, params)
+
+    def get_payip_profile_by_registration(self, filial: str, cod_pdv: str) -> DClientePayipProfile | None:
+        normalized_filial = _normalize_filial(filial)
+        normalized_cod_pdv = _normalize_cod_pdv(cod_pdv)
+        if not normalized_filial:
+            raise ValueError("Revenda/filial invalida.")
+        if not normalized_cod_pdv:
+            raise ValueError("NB/Cod PDV invalido.")
+        if not self.database_url:
+            raise RuntimeError("REPORTS_DATABASE_URL nao configurada.")
+
+        query = sql.SQL(
+            """
+            SELECT
+                filial,
+                cod_pdv,
+                documento,
+                razao_social,
+                nome_fantasia,
+                payload
+            FROM {schema}.dclientes_latest
+            WHERE filial = %s
+              AND cod_pdv = %s
+            LIMIT 1
+            """
+        ).format(schema=sql.Identifier(self.schema))
+
+        try:
+            with self._connect(row_factory=dict_row) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (normalized_filial, normalized_cod_pdv))
+                    row = cur.fetchone()
+        except Exception as exc:
+            raise RuntimeError(f"Base dClientes indisponivel: {exc}") from exc
+
+        if not row:
+            return None
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        raw_address = _first_payload_value(payload, "Endereço", "Endereco", "Logradouro")
+        street, number = _split_address_number(raw_address)
+        return DClientePayipProfile(
+            filial=_normalize_filial(str(row.get("filial") or "")),
+            cod_pdv=_normalize_cod_pdv(str(row.get("cod_pdv") or "")),
+            documento=_normalize_document(str(row.get("documento") or _first_payload_value(payload, "Documento"))),
+            razao_social=str(row.get("razao_social") or _first_payload_value(payload, "Razão Social", "Razao Social")).strip(),
+            nome_fantasia=str(row.get("nome_fantasia") or _first_payload_value(payload, "Nome Fantasia")).strip(),
+            telefone=_normalize_phone(_first_payload_value(payload, "Telefone(s)", "Telefone", "Celular")),
+            email=str(_first_payload_value(payload, "E-mail", "Email", "E mail")).strip(),
+            cep=_only_digits(_first_payload_value(payload, "CEP")),
+            endereco=street,
+            numero=number,
+            complemento=str(_first_payload_value(payload, "Complemento")).strip(),
+            bairro=str(_first_payload_value(payload, "Bairro")).strip(),
+            cidade=str(_first_payload_value(payload, "Cidade")).strip(),
+            uf=str(_first_payload_value(payload, "UF", "Estado")).strip(),
+            payload=dict(payload),
+        )
 
     def search_by_fantasia(
         self,
@@ -1273,6 +1352,46 @@ def _normalize_document(value: str) -> str:
     if len(digits) not in {11, 14}:
         return ""
     return digits
+
+
+def _only_digits(value: Any) -> str:
+    return "".join(char for char in str(value or "") if char.isdigit())
+
+
+def _normalize_phone(value: Any) -> str:
+    digits = _only_digits(value)
+    if len(digits) >= 10:
+        return digits[-11:] if len(digits) > 11 else digits
+    return digits
+
+
+def _first_payload_value(payload: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = payload.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    normalized_keys = {_normalize_search_text(key): key for key in payload}
+    for key in keys:
+        payload_key = normalized_keys.get(_normalize_search_text(key))
+        if payload_key:
+            value = payload.get(payload_key)
+            if value is not None and str(value).strip():
+                return str(value).strip()
+    return ""
+
+
+def _split_address_number(value: str) -> tuple[str, str]:
+    text = " ".join(str(value or "").strip().split())
+    if not text:
+        return "", ""
+    match = re.search(r"\s+(\d+[A-Za-z]?|S/?N|SN|S N)$", text, flags=re.IGNORECASE)
+    if not match:
+        return text, ""
+    number = match.group(1).upper().replace("/", "")
+    street = text[: match.start()].strip()
+    if number in {"S N", "SN"}:
+        number = "SN"
+    return street or text, number
 
 
 def _normalize_search_text(value: str) -> str:

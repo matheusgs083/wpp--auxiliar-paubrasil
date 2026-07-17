@@ -293,27 +293,27 @@
       <div class="flow-grid">
         <a href="/admin/operations" class="flow-path is-active" data-flow-target="operationsTab" data-flow-label="Operação diária" aria-pressed="true">
           <span class="flow-icon"><i class="bi bi-sliders"></i></span>
-          <span><span class="flow-title">Operação</span><span class="flow-desc">Acessos, disparos, importações e histórico.</span><span class="flow-meta">Rotina</span></span>
+          <span><span class="flow-title">Operação</span><span class="flow-desc">Acessos, disparos por operação e cobranças PayIP.</span><span class="flow-meta">Rotina</span></span>
         </a>
-        <a href="/admin/tables" class="flow-path" data-flow-target="operationalTablesTab" data-flow-label="Tabelas operacionais" aria-pressed="false">
-          <span class="flow-icon"><i class="bi bi-table"></i></span>
-          <span><span class="flow-title">Tabelas</span><span class="flow-desc">Bases auxiliares de setores, preços e produtos.</span><span class="flow-meta">Base</span></span>
+        <a href="/admin/reports" class="flow-path" data-flow-target="reportsTab" data-flow-label="Relatorios" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-file-earmark-spreadsheet"></i></span>
+          <span><span class="flow-title">Relatorios</span><span class="flow-desc">Uploads, histórico e jobs por origem do arquivo.</span><span class="flow-meta">Uploads</span></span>
         </a>
         <a href="/admin/critica" class="flow-path" data-flow-target="criticaTab" data-flow-label="Crítica comercial" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-clipboard-data"></i></span>
-          <span><span class="flow-title">Crítica</span><span class="flow-desc">Problemas por pedido, filtros e uploads por operação.</span><span class="flow-meta">Análise</span></span>
+          <span><span class="flow-title">Crítica</span><span class="flow-desc">Dashboard, PDFs e crítica 030111 por operação.</span><span class="flow-meta">Análise</span></span>
         </a>
         <a href="/admin/recolhas" class="flow-path" data-flow-target="recolhasTab" data-flow-label="Recolhas financeiras" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-truck"></i></span>
-          <span><span class="flow-title">Recolhas</span><span class="flow-desc">CSV financeiro, baixas e acompanhamento por filial.</span><span class="flow-meta">Financeiro</span></span>
+          <span><span class="flow-title">Recolhas</span><span class="flow-desc">CSV financeiro, baixas e status por filial.</span><span class="flow-meta">Financeiro</span></span>
         </a>
         <a href="/admin/giro-recolha" class="flow-path" data-flow-target="giroRecolhaTab" data-flow-label="Giro e rotas" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-signpost-split"></i></span>
-          <span><span class="flow-title">Giro</span><span class="flow-desc">Clientes com giro baixo e montagem de rotas.</span><span class="flow-meta">Prioridade</span></span>
+          <span><span class="flow-title">Giro</span><span class="flow-desc">Giro baixo, filtros e montagem de rotas.</span><span class="flow-meta">Prioridade</span></span>
         </a>
         <a href="/admin/usage" class="flow-path" data-flow-target="usageEvolutionTab" data-flow-label="Uso do bot" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-whatsapp"></i></span>
-          <span><span class="flow-title">Uso Evolution</span><span class="flow-desc">Volume, bloqueios, eventos e exportação.</span><span class="flow-meta">Monitor</span></span>
+          <span><span class="flow-title">Uso Evolution</span><span class="flow-desc">Uso por número, função, eventos e exportação.</span><span class="flow-meta">Monitor</span></span>
         </a>
       </div>
     </section>
@@ -326,18 +326,13 @@
           </a>
         </li>
         <li class="nav-item" role="presentation">
-          <a class="nav-link" id="operationalTablesTab" href="/admin/tables" data-admin-page-link="true" data-bs-target="#operationalTablesPane" role="tab" aria-controls="operationalTablesPane" aria-selected="false">
-            <i class="bi bi-table me-1"></i>Tabelas
+          <a class="nav-link" id="reportsTab" href="/admin/reports" data-admin-page-link="true" data-bs-target="#reportsPane" role="tab" aria-controls="reportsPane" aria-selected="false">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Relatorios
           </a>
         </li>
         <li class="nav-item" role="presentation">
           <a class="nav-link" id="criticaTab" href="/admin/critica" data-admin-page-link="true" data-bs-target="#criticaPane" role="tab" aria-controls="criticaPane" aria-selected="false">
             <i class="bi bi-clipboard-data me-1"></i>Critica
-          </a>
-        </li>
-        <li class="nav-item" role="presentation">
-          <a class="nav-link" id="usageEvolutionTab" href="/admin/usage" data-admin-page-link="true" data-bs-target="#usageEvolutionPane" role="tab" aria-controls="usageEvolutionPane" aria-selected="false">
-            <i class="bi bi-whatsapp me-1"></i>Uso Evolution
           </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -348,6 +343,11 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link" id="giroRecolhaTab" href="/admin/giro-recolha" data-admin-page-link="true" data-bs-target="#giroRecolhaPane" role="tab" aria-controls="giroRecolhaPane" aria-selected="false">
             <i class="bi bi-arrow-repeat me-1"></i>Giro
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="usageEvolutionTab" href="/admin/usage" data-admin-page-link="true" data-bs-target="#usageEvolutionPane" role="tab" aria-controls="usageEvolutionPane" aria-selected="false">
+            <i class="bi bi-whatsapp me-1"></i>Uso Evolution
           </a>
         </li>
       </ul>
@@ -510,6 +510,60 @@
           </div>
         </section>
 
+        <section class="panel-card p-3 mb-3" id="payipImportPanel">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Importacao automatizada PayIP</h2>
+              <div class="form-text">Valida e confirma cobrancas vindas do ProMax por periodo de entrega.</div>
+            </div>
+            <span class="pill" id="payipImportStatus">Aguardando validacao</span>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="payipImportFilial">Revenda</label>
+              <input id="payipImportFilial" class="form-control form-control-sm mono" inputmode="numeric" placeholder="3">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="payipImportStartDate">De</label>
+              <input id="payipImportStartDate" class="form-control form-control-sm" type="date">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="payipImportEndDate">Ate</label>
+              <input id="payipImportEndDate" class="form-control form-control-sm" type="date">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="payipImportMfaCode">Token MFA</label>
+              <input id="payipImportMfaCode" class="form-control form-control-sm mono" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Use se a PayIP pedir MFA">
+            </div>
+            <div class="col-md-2">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipImportAutoCreate">
+                <label class="form-check-label" for="payipImportAutoCreate">Criar clientes faltantes</label>
+              </div>
+            </div>
+            <div class="col-md-2 d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="payipImportValidateBtn" onclick="validatePayipImport()"><i class="bi bi-search me-1"></i>Validar</button>
+              <button type="button" class="btn btn-success btn-sm" id="payipImportRunBtn" onclick="runPayipImport()" disabled><i class="bi bi-check2-circle me-1"></i>Importar</button>
+            </div>
+          </div>
+          <div class="table-scroll" style="max-height: 300px;">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th scope="col">NB</th>
+                  <th scope="col">NF</th>
+                  <th scope="col">Valor</th>
+                  <th scope="col">Vencimento</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="payipImportBody">
+                <tr><td colspan="5" class="text-center py-3 text-secondary">Valide a importacao automatizada para comecar.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="panel-card p-3 mb-3" id="payipBatchPanel">
           <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
             <div>
@@ -635,10 +689,58 @@
           </div>
         </section>
 
+        <section class="row g-3">
+          <div class="col-12">
+            <article class="panel-card p-3 h-100" style="background:#07142b;border-color:#0f2d5e;">
+              <h2 class="h6 mb-2 fw-bold text-light"><i class="bi bi-terminal me-2 text-info"></i>Log Operacional</h2>
+              <pre id="logPanel" class="mono" role="log" aria-live="polite">Painel pronto. Clique em Atualizar.</pre>
+            </article>
+          </div>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="reportsPane" role="tabpanel" aria-labelledby="reportsTab" tabindex="0">
         <section class="panel-card p-3 mb-3">
-          <h2 class="h6 fw-bold mb-1"><i class="bi bi-database-up me-2 text-primary"></i>Relatorios de negocio</h2>
-          <div class="form-text mb-3">Uploads usados diretamente nas consultas, dashboards e respostas do bot.</div>
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Relatorios</h2>
+              <div class="form-text">Uploads separados por origem. Promax, Power BI e bases operacionais ficam na mesma aba para facilitar a rotina.</div>
+            </div>
+            <span class="pill">Promax | Power BI | Operacional</span>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Promax</h2>
+              <div class="form-text">Relatorios extraidos do Promax. Critica fica em aba propria e boletos ficam separados para futura atualizacao.</div>
+            </div>
+            <span class="pill">Origem Promax</span>
+          </div>
           <div class="dataset-groups" id="reportDatasetGrid"></div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Power BI</h2>
+              <div class="form-text">Bases oriundas do Power BI: prazo e limite, score e giro de vasilhame.</div>
+            </div>
+            <span class="pill">Origem Power BI</span>
+          </div>
+          <div class="dataset-groups" id="powerBiDatasetGrid"></div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-table me-2 text-primary"></i>Operacional</h2>
+              <div class="form-text">Bases auxiliares internas: setores, precos, operacoes, condicoes, produtos e cesta.</div>
+            </div>
+            <span class="pill">Uploads administrativos</span>
+          </div>
+          <div class="dataset-groups" id="operationalDatasetGrid"></div>
         </section>
 
         <section class="row g-3">
@@ -687,25 +789,6 @@
               </div>
             </article>
           </div>
-          <div class="col-12">
-            <article class="panel-card p-3 h-100" style="background:#07142b;border-color:#0f2d5e;">
-              <h2 class="h6 mb-2 fw-bold text-light"><i class="bi bi-terminal me-2 text-info"></i>Log Operacional</h2>
-              <pre id="logPanel" class="mono" role="log" aria-live="polite">Painel pronto. Clique em Atualizar.</pre>
-            </article>
-          </div>
-        </section>
-      </div>
-
-      <div class="tab-pane fade" id="operationalTablesPane" role="tabpanel" aria-labelledby="operationalTablesTab" tabindex="0">
-        <section class="panel-card p-3 mb-3">
-          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
-            <div>
-              <h2 class="h6 fw-bold mb-1"><i class="bi bi-table me-2 text-primary"></i>Tabelas operacionais</h2>
-              <div class="form-text">Bases auxiliares internas: setores, precos e operacoes.</div>
-            </div>
-            <span class="pill">Uploads administrativos</span>
-          </div>
-          <div class="dataset-groups" id="operationalDatasetGrid"></div>
         </section>
       </div>
 
@@ -714,195 +797,34 @@
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
             <div>
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard da critica</h2>
-              <div class="form-text">Visao por pedido para encontrar concentracao de problemas, setores de maior impacto e prioridades de tratativa.</div>
+              <div class="form-text">Resumo geral da critica importada. Abaixo ficam apenas os totais e os uploads por operacao.</div>
             </div>
             <div class="d-flex flex-wrap gap-2 align-items-center">
               <span class="pill" id="criticaDashboardCount">Aguardando dados</span>
-              <button class="btn btn-outline-primary btn-sm" id="criticaDashboardRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar critica</button>
-              <button class="btn btn-outline-success btn-sm" id="criticaSectorPdfBtn"><i class="bi bi-file-earmark-pdf me-1"></i>PDF setor</button>
-              <button class="btn btn-outline-secondary btn-sm" id="criticaSectorSummaryPdfBtn"><i class="bi bi-file-earmark-text me-1"></i>Resumo setor</button>
+              <button class="btn btn-outline-primary btn-sm" id="criticaDashboardRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar totais</button>
             </div>
           </div>
           <div class="row g-2 align-items-end mb-3">
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaDate">Data</label>
+            <div class="col-12 col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="criticaOperationSingle">Revenda</label>
+              <select class="form-select form-select-sm" id="criticaOperationSingle">
+                <option value="">Todas as revendas</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="criticaDate">Data da critica</label>
               <input type="date" class="form-control form-control-sm" id="criticaDate">
             </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaOperation">Operacao</label>
-              <div class="power-slicer" id="criticaOperationSlicer">
-                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaOperationButton" aria-expanded="false">Todas</button>
-                <div class="power-slicer-panel d-none" id="criticaOperationPanel">
-                  <input type="text" class="form-control form-control-sm" id="criticaOperationSearch" placeholder="Pesquisar operacao">
-                  <div class="power-slicer-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaOperationSelectAllBtn">Selecionar visiveis</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaOperationClearBtn">Limpar</button>
-                  </div>
-                  <div class="power-slicer-list" id="criticaOperationList"></div>
-                </div>
-                <select class="d-none" id="criticaOperation" multiple></select>
-              </div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaProblem">Problema</label>
-              <div class="power-slicer" id="criticaProblemSlicer">
-                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaProblemButton" aria-expanded="false">Todos</button>
-                <div class="power-slicer-panel d-none" id="criticaProblemPanel">
-                  <input type="text" class="form-control form-control-sm" id="criticaProblemSearch" placeholder="Pesquisar problema">
-                  <div class="power-slicer-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaProblemSelectAllBtn">Selecionar visiveis</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaProblemClearBtn">Limpar</button>
-                  </div>
-                  <div class="power-slicer-list" id="criticaProblemList"></div>
-                </div>
-                <select class="d-none" id="criticaProblem" multiple></select>
-              </div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaSector">Setor</label>
-              <div class="power-slicer" id="criticaSectorSlicer">
-                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaSectorButton" aria-expanded="false">Todos</button>
-                <div class="power-slicer-panel d-none" id="criticaSectorPanel">
-                  <input type="text" class="form-control form-control-sm" id="criticaSectorSearch" placeholder="Pesquisar setor">
-                  <div class="power-slicer-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaSectorSelectAllBtn">Selecionar visiveis</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaSectorClearBtn">Limpar</button>
-                  </div>
-                  <div class="power-slicer-list" id="criticaSectorList"></div>
-                </div>
-                <select class="d-none" id="criticaSector" multiple></select>
-              </div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaManager">GV</label>
-              <div class="power-slicer" id="criticaManagerSlicer">
-                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaManagerButton" aria-expanded="false">Todos</button>
-                <div class="power-slicer-panel d-none" id="criticaManagerPanel">
-                  <input type="text" class="form-control form-control-sm" id="criticaManagerSearch" placeholder="Pesquisar GV">
-                  <div class="power-slicer-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaManagerSelectAllBtn">Selecionar visiveis</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaManagerClearBtn">Limpar</button>
-                  </div>
-                  <div class="power-slicer-list" id="criticaManagerList"></div>
-                </div>
-                <select class="d-none" id="criticaManager" multiple></select>
-              </div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaSeller">Vendedor</label>
-              <div class="power-slicer" id="criticaSellerSlicer">
-                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaSellerButton" aria-expanded="false">Todos</button>
-                <div class="power-slicer-panel d-none" id="criticaSellerPanel">
-                  <input type="text" class="form-control form-control-sm" id="criticaSellerSearch" placeholder="Pesquisar vendedor">
-                  <div class="power-slicer-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaSellerSelectAllBtn">Selecionar visiveis</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaSellerClearBtn">Limpar</button>
-                  </div>
-                  <div class="power-slicer-list" id="criticaSellerList"></div>
-                </div>
-                <select class="d-none" id="criticaSeller" multiple></select>
-              </div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaCity">Cidade</label>
-              <div class="power-slicer" id="criticaCitySlicer">
-                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaCityButton" aria-expanded="false">Todas</button>
-                <div class="power-slicer-panel d-none" id="criticaCityPanel">
-                  <input type="text" class="form-control form-control-sm" id="criticaCitySearch" placeholder="Pesquisar cidade">
-                  <div class="power-slicer-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaCitySelectAllBtn">Selecionar visiveis</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaCityClearBtn">Limpar</button>
-                  </div>
-                  <div class="power-slicer-list" id="criticaCityList"></div>
-                </div>
-                <select class="d-none" id="criticaCity" multiple></select>
-              </div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaDistrict">Bairro</label>
-              <div class="power-slicer" id="criticaDistrictSlicer">
-                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaDistrictButton" aria-expanded="false">Todos</button>
-                <div class="power-slicer-panel d-none" id="criticaDistrictPanel">
-                  <input type="text" class="form-control form-control-sm" id="criticaDistrictSearch" placeholder="Pesquisar bairro">
-                  <div class="power-slicer-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaDistrictSelectAllBtn">Selecionar visiveis</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaDistrictClearBtn">Limpar</button>
-                  </div>
-                  <div class="power-slicer-list" id="criticaDistrictList"></div>
-                </div>
-                <select class="d-none" id="criticaDistrict" multiple></select>
-              </div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-semibold mb-1" for="criticaOrigin">Origem</label>
-              <div class="power-slicer" id="criticaOriginSlicer">
-                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="criticaOriginButton" aria-expanded="false">Todas</button>
-                <div class="power-slicer-panel d-none" id="criticaOriginPanel">
-                  <input type="text" class="form-control form-control-sm" id="criticaOriginSearch" placeholder="Pesquisar origem">
-                  <div class="power-slicer-actions">
-                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="criticaOriginSelectAllBtn">Selecionar visiveis</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="criticaOriginClearBtn">Limpar</button>
-                  </div>
-                  <div class="power-slicer-list" id="criticaOriginList"></div>
-                </div>
-                <select class="d-none" id="criticaOrigin" multiple></select>
-              </div>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small fw-semibold mb-1" for="criticaSearch">Pesquisar</label>
-              <input type="text" class="form-control form-control-sm" id="criticaSearch" placeholder="Pedido, NB, cliente, setor">
-            </div>
-            <div class="col-md-1">
-              <label class="form-label small fw-semibold mb-1" for="criticaLimit">Limite</label>
-              <input type="number" min="1" max="1000" step="1" class="form-control form-control-sm" id="criticaLimit" value="200">
-            </div>
-            <div class="col-md-2">
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" role="switch" id="criticaOnlyProblems" checked>
-                <label class="form-check-label small fw-semibold" for="criticaOnlyProblems">Somente problemas</label>
-              </div>
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-              <button class="btn btn-outline-secondary btn-sm w-100" id="criticaDashboardClearBtn"><i class="bi bi-x-circle me-1"></i>Limpar</button>
+            <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+              <button class="btn btn-primary btn-sm" id="criticaOperationPdfBtn" type="button">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF da revenda
+              </button>
+              <button class="btn btn-outline-primary btn-sm" id="criticaOperationSummaryPdfBtn" type="button">
+                <i class="bi bi-file-earmark-text me-1"></i>Resumo da revenda
+              </button>
             </div>
           </div>
           <div class="recolha-dashboard-grid mb-3" id="criticaDashboardCards"></div>
-          <div class="row g-3 mb-3">
-            <div class="col-lg-4">
-              <div class="critica-dashboard-block">
-                <div class="small fw-bold mb-2">Principais problemas</div>
-                <ul class="critica-dashboard-list" id="criticaProblemRank"></ul>
-              </div>
-            </div>
-            <div class="col-lg-4">
-              <div class="critica-dashboard-block">
-                <div class="small fw-bold mb-2">Maiores concentracoes</div>
-                <ul class="critica-dashboard-list" id="criticaConcentrationRank"></ul>
-              </div>
-            </div>
-            <div class="col-lg-4">
-              <div class="critica-dashboard-block">
-                <div class="small fw-bold mb-2">Opcoes sugeridas</div>
-                <div class="d-grid gap-2" id="criticaRecommendations"></div>
-              </div>
-            </div>
-          </div>
-          <div class="table-responsive table-scroll">
-            <table class="table table-hover align-middle mb-0">
-              <thead>
-                <tr>
-                  <th class="ps-3">Pedido</th>
-                  <th>Problemas</th>
-                  <th>Valor</th>
-                  <th>Contexto</th>
-                  <th class="text-end pe-3">Acao</th>
-                </tr>
-              </thead>
-              <tbody id="criticaDashboardBody">
-                <tr><td colspan="5" class="text-center py-3 text-secondary">Abra a aba ou clique em Atualizar critica.</td></tr>
-              </tbody>
-            </table>
-          </div>
         </section>
         <section class="panel-card p-3 mb-3">
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
@@ -1355,6 +1277,10 @@
           pdf: "/api/admin/payip/batch/pdf",
           exportCsv: "/api/admin/payip/batch/export.csv"
         },
+        payipImport: {
+          validate: "/api/admin/payip/import/validate",
+          run: "/api/admin/payip/import/run"
+        },
         recolhas: {
           list: "/api/admin/recolhas",
           update: "/api/admin/recolhas",
@@ -1380,30 +1306,7 @@
         FINANCEIRO: "Financeiro",
         ADMIN: "Administrador / TI"
       },
-      datasets: [
-        { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2", area: "operational", group: "Tabelas operacionais", groupNote: "Apoio interno para escopo, usuarios e tabelas auxiliares." },
-        { id: "DPrecos", name: "Tabela de Precos", icon: "bi-tags", area: "operational", group: "Tabelas operacionais" },
-        { id: "dOperacoes", name: "Tabela de Operacoes", icon: "bi-list-columns", area: "operational", group: "Tabelas operacionais" },
-        { id: "dCondicoes", name: "Tabela de Condicoes", icon: "bi-receipt", area: "operational", group: "Tabelas operacionais" },
-        { id: "dProdutos", name: "Cadastro de Produtos", icon: "bi-boxes", area: "operational", group: "Produtos", groupNote: "Dimensoes auxiliares para enriquecer regras e analises por produto." },
-        { id: "ProdutoCestas", name: "Cesta de Produtos", icon: "bi-collection", area: "operational", group: "Produtos" },
-        { id: "dClientes", name: "Carteira de Clientes", icon: "bi-person-badge", area: "reports", group: "Relatorios de negocio", groupNote: "Bases usadas diretamente nas consultas e dashboards do bot." },
-        { id: "ClientesScore", name: "Score de Clientes", icon: "bi-stars", area: "reports", group: "Relatorios de negocio" },
-        { id: "Inadimplencia", name: "Inadimplencia Vencimento", icon: "bi-graph-down-arrow", area: "reports", group: "Relatorios de negocio" },
-        { id: "Comodatos", name: "Equipamentos em Comodato", icon: "bi-box-seam", area: "reports", group: "Relatorios de negocio" },
-        { id: "Giro", name: "Giro de Vasilhame", icon: "bi-arrow-repeat", area: "reports", group: "Relatorios de negocio" },
-        { id: "DocumentacaoPendente", name: "Documentacao Pendente", icon: "bi-file-earmark-check", area: "reports", group: "Relatorios de negocio" },
-        { id: "PrazoLimite", name: "Prazo e Limite", icon: "bi-cash-stack", area: "reports", group: "Relatorios de negocio" },
-        { id: "CriticaOp1", name: "Critica Operacao 1 - Sousa", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao", groupNote: "Upload separado por filial. A consolidacao final do bot passa a sair desta aba." },
-        { id: "CriticaOp2", name: "Critica Operacao 2 - Itaporanga", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
-        { id: "CriticaOp3", name: "Critica Operacao 3 - Patos", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
-        { id: "CriticaOp4", name: "Critica Operacao 4 - Sume", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
-        { id: "CriticaOp5", name: "Critica Operacao 5 - Guarabira", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
-        { id: "CriticaOp6", name: "Critica Operacao 6 - Brumado", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
-        { id: "CriticaOp7", name: "Critica Operacao 7 - Barra", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
-        { id: "CriticaOp8", name: "Critica Operacao 8 - Cacule", icon: "bi-clipboard-data", area: "critica", group: "Critica por operacao" },
-        { id: "CriticaRNLegacy", name: "Critica RN (legado)", icon: "bi-archive", area: "critica", group: "Rotina anterior", groupNote: "Mantida apenas para compatibilidade. O fluxo atual deve usar os uploads por operacao.", disabled: true, badge: "Legado", description: "Importacao antiga preservada no codigo, sem uso no fluxo atual do bot.", sourcePath: "data/CriticaRN/critica_rn.xlsx" }
-      ]
+      datasets: []
     };
 
     const state = {
@@ -1425,6 +1328,7 @@
       evolutionUsage: null,
       broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
+      payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
       recolhas: { total: 0, operations: [] },
       giroRecolha: { total: 0, summary: {}, records: [] },
       giroRecolhaOptions: { operations: [], sellers: [], managers: [], cities: [], districts: [], visit_days: [] },
@@ -1436,59 +1340,166 @@
       criticaDashboard: { total: 0, summary: {}, options: {}, rankings: {}, recommendations: [], orders: [] },
       recolhasFilter: { start: "", end: "" },
       datasetValidation: {},
-      datasetBusy: {}
+      datasetBusy: {},
+      lazyTabs: {}
     };
 
-    const DATASET_MAP = {
-      dSetores: "dsetores",
-      DPrecos: "dprecos",
-      dOperacoes: "doperacoes",
-      dCondicoes: "dcondicoes",
-      dProdutos: "dprodutos",
-      ProdutoCestas: "produto_cestas",
-      dClientes: "dclientes",
-      ClientesScore: "clientes_score",
-      Inadimplencia: "inadimplencia",
-      Comodatos: "comodatos",
-      Giro: "giro",
-      CriticaOp1: "critica_op_1",
-      CriticaOp2: "critica_op_2",
-      CriticaOp3: "critica_op_3",
-      CriticaOp4: "critica_op_4",
-      CriticaOp5: "critica_op_5",
-      CriticaOp6: "critica_op_6",
-      CriticaOp7: "critica_op_7",
-      CriticaOp8: "critica_op_8",
-      DocumentacaoPendente: "documentacao_pendente",
-      PrazoLimite: "prazo_limite"
-    };
-    const DATASET_UPLOAD_META = {
-      dSetores: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
-      DPrecos: { accept: ".xlsx,.xlsm,.csv", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm) ou CSV." },
-      dOperacoes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
-      dCondicoes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione o arquivo dCondicoes.csv." },
-      dProdutos: { accept: ".csv", mode: "single", label: "CSV de Produtos", emptyHint: "Selecione o arquivo 01.11.CSV." },
-      ProdutoCestas: { accept: ".xlsx,.xlsm,.csv", mode: "single", label: "Cesta de Produtos", emptyHint: "Selecione o arquivo Cesta de Produtos.xlsx." },
-      dClientes: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
-      ClientesScore: { accept: ".csv", mode: "single", label: "CSV do Score", emptyHint: "Selecione o arquivo clientes_score.csv." },
-      Inadimplencia: { accept: ".csv", mode: "multiple", label: "CSV do Dataset(s)", emptyHint: "Selecione um ou mais arquivos CSV." },
-      Comodatos: { accept: ".csv", mode: "multiple", label: "CSV do Dataset(s)", emptyHint: "Selecione um ou mais arquivos CSV." },
-      Giro: { accept: ".xlsx,.xlsm,.xls", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm ou .xls)." },
-      CriticaOp1: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 1." },
-      CriticaOp2: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 2." },
-      CriticaOp3: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 3." },
-      CriticaOp4: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 4." },
-      CriticaOp5: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 5." },
-      CriticaOp6: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 6." },
-      CriticaOp7: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 7." },
-      CriticaOp8: { accept: ".csv", mode: "single", label: "CSV da Operacao", emptyHint: "Selecione o CSV da operacao 8." },
-      DocumentacaoPendente: { accept: ".csv", mode: "single", label: "CSV do Dataset", emptyHint: "Selecione um arquivo CSV." },
-      PrazoLimite: { accept: ".xlsx,.xlsm,.xls,.csv", mode: "single", label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel (.xlsx, .xlsm, .xls) ou CSV." }
-    };
+    let DATASET_MAP = {};
+    let DATASET_UPLOAD_META = {};
     const DATASET_TIMEOUTS = {
       dClientes: { validateMs: 600000, importMs: 900000 },
       default: { validateMs: 180000, importMs: 300000 }
     };
+
+    const DATASET_UI_OVERRIDES = {
+      dsetores: { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2", area: "operational", group: "Operacional", groupNote: "Tabelas operacionais de apoio: setores, precos, operacoes, condicoes, produtos e cesta." },
+      dprecos: { id: "DPrecos", name: "Tabela de Precos", icon: "bi-tags", area: "operational", group: "Operacional" },
+      doperacoes: { id: "dOperacoes", name: "Tabela de Operacoes", icon: "bi-list-columns", area: "operational", group: "Operacional" },
+      drevendas: { id: "dRevendas", name: "Tabela de Revendas", icon: "bi-building", area: "operational", group: "Operacional" },
+      dcondicoes: { id: "dCondicoes", name: "Tabela de Condicoes", icon: "bi-receipt", area: "operational", group: "Operacional" },
+      dprodutos: { id: "dProdutos", name: "Cadastro de Produtos", icon: "bi-boxes", area: "operational", group: "Operacional" },
+      produto_cestas: { id: "ProdutoCestas", name: "Cesta de Produtos", icon: "bi-collection", area: "operational", group: "Operacional" },
+      dclientes: { id: "dClientes", name: "dClientes - 0105070402", icon: "bi-person-badge", area: "promax", group: "Promax", groupNote: "Relatorios oriundos do Promax: dClientes, inadimplencia, comodatos, documentacao pendente e boletos." },
+      inadimplencia: { id: "Inadimplencia", name: "Inadimplencia - 120601", icon: "bi-graph-down-arrow", area: "promax", group: "Promax" },
+      comodatos: { id: "Comodatos", name: "Comodatos - 020220", icon: "bi-box-seam", area: "promax", group: "Promax" },
+      documentacao_pendente: { id: "DocumentacaoPendente", name: "Documentacao Pendente - 031701", icon: "bi-file-earmark-check", area: "promax", group: "Promax" },
+      prazo_limite: { id: "PrazoLimite", name: "Prazo e Limite", icon: "bi-cash-stack", area: "powerbi", group: "Power BI", groupNote: "Relatorios oriundos do Power BI: prazo e limite, cliente score e giro de vasilhame." },
+      clientes_score: { id: "ClientesScore", name: "Score de Clientes", icon: "bi-stars", area: "powerbi", group: "Power BI" },
+      giro: { id: "Giro", name: "Giro de Vasilhame", icon: "bi-arrow-repeat", area: "powerbi", group: "Power BI" },
+      critica_rn: { id: "CriticaRNLegacy", name: "Critica RN (legado)", icon: "bi-archive", area: "critica", group: "Rotina anterior", groupNote: "Mantida apenas para compatibilidade. O fluxo atual deve usar os uploads por operacao.", disabled: true, badge: "Legado", description: "Importacao antiga preservada no codigo, sem uso no fluxo atual do bot.", sourcePath: "data/CriticaRN/critica_rn.xlsx" }
+    };
+
+    const DATASET_FALLBACK_ORDER = [
+      "dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "produto_cestas",
+      "dclientes", "inadimplencia", "comodatos", "documentacao_pendente",
+      "prazo_limite", "clientes_score", "giro", "critica_rn"
+    ];
+
+    function datasetUiId(apiName) {
+      const name = String(apiName || "").toLowerCase();
+      const boletoMatch = name.match(/^boletos_bradesco_op_(\d+)$/);
+      if (boletoMatch) return `BoletosOp${boletoMatch[1]}`;
+      const criticaMatch = name.match(/^critica_op_(\d+)$/);
+      if (criticaMatch) return `CriticaOp${criticaMatch[1]}`;
+      if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].id) return DATASET_UI_OVERRIDES[name].id;
+      return name.replace(/(^|_)([a-z0-9])/g, (_, __, chr) => chr.toUpperCase());
+    }
+
+    function datasetArea(apiName) {
+      const name = String(apiName || "").toLowerCase();
+      if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].area) return DATASET_UI_OVERRIDES[name].area;
+      if (name.startsWith("critica_op_")) return "critica";
+      if (name.startsWith("boletos_bradesco_op_")) return "promax";
+      if (["prazo_limite", "clientes_score", "giro"].includes(name)) return "powerbi";
+      if (["dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "produto_cestas"].includes(name)) return "operational";
+      return "promax";
+    }
+
+    function datasetIcon(apiName) {
+      const name = String(apiName || "").toLowerCase();
+      if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].icon) return DATASET_UI_OVERRIDES[name].icon;
+      if (name.startsWith("critica_op_")) return "bi-clipboard-data";
+      if (name.startsWith("boletos_bradesco_op_")) return "bi-upc-scan";
+      return "bi-table";
+    }
+
+    function datasetGroup(apiName) {
+      const name = String(apiName || "").toLowerCase();
+      if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].group) return DATASET_UI_OVERRIDES[name].group;
+      if (name.startsWith("critica_op_")) return "Promax 030111 - Critica por operacao";
+      if (datasetArea(name) === "operational") return "Operacional";
+      if (datasetArea(name) === "powerbi") return "Power BI";
+      return "Promax";
+    }
+
+    function datasetGroupNote(apiName) {
+      const name = String(apiName || "").toLowerCase();
+      if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].groupNote) return DATASET_UI_OVERRIDES[name].groupNote;
+      if (name.startsWith("critica_op_")) return "Upload separado por filial. A consolidacao final do bot passa a sair desta aba.";
+      return "";
+    }
+
+    function datasetUploadMetaForItem(item, ds) {
+      const apiName = String(item.dataset || ds.apiName || "").toLowerCase();
+      const accept = String(item.accept_extensions || ".csv");
+      const mode = String(item.upload_mode || "single");
+      if (apiName.startsWith("boletos_bradesco_op_")) {
+        return { accept, mode, label: "PDF da Operacao", emptyHint: `Selecione o PDF de boletos da operacao ${apiName.replace("boletos_bradesco_op_", "")}.` };
+      }
+      if (apiName.startsWith("critica_op_")) {
+        return { accept, mode, label: "CSV da Operacao", emptyHint: `Selecione o CSV da operacao ${apiName.replace("critica_op_", "")}.` };
+      }
+      if (accept.includes(".xls") && accept.includes(".csv")) {
+        return { accept, mode, label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel ou CSV." };
+      }
+      if (accept.includes(".xls")) {
+        return { accept, mode, label: "Planilha do Dataset", emptyHint: "Selecione um arquivo Excel." };
+      }
+      return {
+        accept,
+        mode,
+        label: mode === "multiple" ? "CSV do Dataset(s)" : "CSV do Dataset",
+        emptyHint: mode === "multiple" ? "Selecione um ou mais arquivos CSV." : "Selecione um arquivo CSV."
+      };
+    }
+
+    function normalizeImportDatasetItem(item) {
+      const apiName = String(item && item.dataset ? item.dataset : "").toLowerCase();
+      if (!apiName) return null;
+      const override = DATASET_UI_OVERRIDES[apiName] || {};
+      const ds = {
+        id: datasetUiId(apiName),
+        apiName,
+        name: override.name || item.label || apiName,
+        icon: datasetIcon(apiName),
+        area: datasetArea(apiName),
+        group: datasetGroup(apiName),
+        groupNote: datasetGroupNote(apiName),
+        disabled: Boolean(override.disabled),
+        badge: override.badge || "",
+        description: override.description || "",
+        sourcePath: override.sourcePath || item.default_path || ""
+      };
+      return ds;
+    }
+
+    function buildFallbackImportDatasets() {
+      return DATASET_FALLBACK_ORDER
+        .map(dataset => normalizeImportDatasetItem({ dataset, label: (DATASET_UI_OVERRIDES[dataset] || {}).name || dataset }))
+        .filter(Boolean);
+    }
+
+    function rebuildDatasetIndexes() {
+      DATASET_MAP = {};
+      DATASET_UPLOAD_META = {};
+      CONFIG.datasets.forEach(ds => {
+        const apiName = String(ds.apiName || ds.id || "").toLowerCase();
+        DATASET_MAP[ds.id] = apiName;
+        DATASET_UPLOAD_META[ds.id] = datasetUploadMetaForItem({
+          dataset: apiName,
+          accept_extensions: ds.acceptExtensions || ".csv",
+          upload_mode: ds.uploadMode || "single"
+        }, ds);
+      });
+    }
+
+    function syncDatasetsFromImportStatus(statusPayload) {
+      const items = statusPayload && Array.isArray(statusPayload.items) ? statusPayload.items : [];
+      if (!items.length) return;
+      CONFIG.datasets = items
+        .map(item => {
+          const ds = normalizeImportDatasetItem(item);
+          if (!ds) return null;
+          ds.acceptExtensions = item.accept_extensions || ".csv";
+          ds.uploadMode = item.upload_mode || "single";
+          return ds;
+        })
+        .filter(Boolean);
+      rebuildDatasetIndexes();
+    }
+
+    CONFIG.datasets = buildFallbackImportDatasets();
+    rebuildDatasetIndexes();
 
     const E = {
       main: document.getElementById("mainContent"),
@@ -1507,6 +1518,7 @@
       operationalGrid: document.getElementById("operationalDatasetGrid"),
       criticaGrid: document.getElementById("criticaDatasetGrid"),
       reportGrid: document.getElementById("reportDatasetGrid"),
+      powerBiGrid: document.getElementById("powerBiDatasetGrid"),
       historyTable: document.getElementById("historyBody"),
       jobsTable: document.getElementById("jobsBody"),
       accessRole: document.getElementById("accessRole"),
@@ -1564,6 +1576,16 @@
       broadcastSummary: document.getElementById("broadcastSummary"),
       broadcastRecipientsBody: document.getElementById("broadcastRecipientsBody"),
       broadcastSelectAll: document.getElementById("broadcastSelectAll"),
+      payipImportPanel: document.getElementById("payipImportPanel"),
+      payipImportStatus: document.getElementById("payipImportStatus"),
+      payipImportFilial: document.getElementById("payipImportFilial"),
+      payipImportStartDate: document.getElementById("payipImportStartDate"),
+      payipImportEndDate: document.getElementById("payipImportEndDate"),
+      payipImportMfaCode: document.getElementById("payipImportMfaCode"),
+      payipImportAutoCreate: document.getElementById("payipImportAutoCreate"),
+      payipImportValidateBtn: document.getElementById("payipImportValidateBtn"),
+      payipImportRunBtn: document.getElementById("payipImportRunBtn"),
+      payipImportBody: document.getElementById("payipImportBody"),
       payipBatchPanel: document.getElementById("payipBatchPanel"),
       payipBatchStatus: document.getElementById("payipBatchStatus"),
       payipBatchText: document.getElementById("payipBatchText"),
@@ -1629,6 +1651,9 @@
       giroRecolhaBody: document.getElementById("giroRecolhaBody"),
       criticaDashboardCount: document.getElementById("criticaDashboardCount"),
       criticaDashboardRefreshBtn: document.getElementById("criticaDashboardRefreshBtn"),
+      criticaOperationSingle: document.getElementById("criticaOperationSingle"),
+      criticaOperationPdfBtn: document.getElementById("criticaOperationPdfBtn"),
+      criticaOperationSummaryPdfBtn: document.getElementById("criticaOperationSummaryPdfBtn"),
       criticaSectorPdfBtn: document.getElementById("criticaSectorPdfBtn"),
       criticaSectorSummaryPdfBtn: document.getElementById("criticaSectorSummaryPdfBtn"),
       criticaDashboardClearBtn: document.getElementById("criticaDashboardClearBtn"),
@@ -1807,7 +1832,10 @@
       "/admin": "operationsTab",
       "/admin/imports": "operationsTab",
       "/admin/operations": "operationsTab",
-      "/admin/tables": "operationalTablesTab",
+      "/admin/reports": "reportsTab",
+      "/admin/promax": "reportsTab",
+      "/admin/tables": "reportsTab",
+      "/admin/power-bi": "reportsTab",
       "/admin/critica": "criticaTab",
       "/admin/recolhas": "recolhasTab",
       "/admin/giro-recolha": "giroRecolhaTab",
@@ -1815,7 +1843,7 @@
     };
     const PANEL_PATH_BY_TAB = {
       operationsTab: "/admin/operations",
-      operationalTablesTab: "/admin/tables",
+      reportsTab: "/admin/reports",
       criticaTab: "/admin/critica",
       recolhasTab: "/admin/recolhas",
       giroRecolhaTab: "/admin/giro-recolha",
@@ -1914,7 +1942,10 @@
             navigatePanelPage(tab.id);
           }
         });
-        tab.addEventListener("shown.bs.tab", event => updateFlowNavigation(event.target.id));
+        tab.addEventListener("shown.bs.tab", event => {
+          updateFlowNavigation(event.target.id);
+          syncVisibleTabData({ silent: true });
+        });
       });
 
       const activeTab = document.querySelector("#adminTabs .nav-link.active");
@@ -1980,6 +2011,10 @@
       if (E.payipBatchRunBtn) E.payipBatchRunBtn.addEventListener("click", runPayipBatch);
       if (E.payipBatchStatusBtn) E.payipBatchStatusBtn.addEventListener("click", () => syncPayipBatchStatus({ silent: false }));
       if (E.payipBatchExportBtn) E.payipBatchExportBtn.addEventListener("click", exportPayipBatchCsv);
+      [E.payipImportFilial, E.payipImportStartDate, E.payipImportEndDate, E.payipImportAutoCreate]
+        .forEach(element => {
+          if (element) element.addEventListener("change", resetPayipImportValidation);
+        });
       if (E.payipBatchText) E.payipBatchText.addEventListener("input", resetPayipBatchPreview);
       [E.payipBatchText, E.payipBatchDefaultRate, E.payipBatchDefaultInterest, E.payipBatchIncludeNb, E.payipBatchIncludeNf]
         .forEach(element => {
@@ -1999,15 +2034,18 @@
       if (E.giroRecolhaZeroOnly) E.giroRecolhaZeroOnly.addEventListener("change", () => syncGiroRecolha({ silent: false }));
       if (E.giroRecolhaMaxRouteSize) E.giroRecolhaMaxRouteSize.addEventListener("change", () => clearGiroRecolhaRoutes());
       if (E.giroRecolhaClearBtn) E.giroRecolhaClearBtn.addEventListener("click", clearGiroRecolhaFilters);
-      if (E.giroRecolhaRouteSearch) E.giroRecolhaRouteSearch.addEventListener("input", updateGiroRecolhaRouteFilters);
+      if (E.giroRecolhaRouteSearch) E.giroRecolhaRouteSearch.addEventListener("input", scheduleGiroRouteFilterUpdate);
       if (E.giroRecolhaRouteDistrict) E.giroRecolhaRouteDistrict.addEventListener("change", updateGiroRecolhaRouteFilters);
       if (E.giroRecolhaRouteMinGap) E.giroRecolhaRouteMinGap.addEventListener("input", updateGiroRecolhaRouteFilters);
       if (E.giroRecolhaRouteClearBtn) E.giroRecolhaRouteClearBtn.addEventListener("click", clearGiroRecolhaRouteFilters);
       if (E.giroRecolhaRouteExportBtn) E.giroRecolhaRouteExportBtn.addEventListener("click", exportGiroRecolhaRoutesCsv);
       if (E.giroRecolhaActiveRoute) E.giroRecolhaActiveRoute.addEventListener("change", updateGiroRecolhaActiveRoute);
-      if (E.giroRecolhaBlockSearch) E.giroRecolhaBlockSearch.addEventListener("input", updateGiroRecolhaBlockSearch);
+      if (E.giroRecolhaBlockSearch) E.giroRecolhaBlockSearch.addEventListener("input", scheduleGiroBlockSearchUpdate);
       if (E.giroRecolhaNewRouteBtn) E.giroRecolhaNewRouteBtn.addEventListener("click", createGiroRecolhaManualRoute);
       if (E.criticaDashboardRefreshBtn) E.criticaDashboardRefreshBtn.addEventListener("click", () => syncCriticaDashboard({ silent: false }));
+      if (E.criticaOperationPdfBtn) E.criticaOperationPdfBtn.addEventListener("click", () => exportCriticaOperationPdf({ summaryOnly: false }));
+      if (E.criticaOperationSummaryPdfBtn) E.criticaOperationSummaryPdfBtn.addEventListener("click", () => exportCriticaOperationPdf({ summaryOnly: true }));
+      if (E.criticaOperationSingle) E.criticaOperationSingle.addEventListener("change", () => syncCriticaDashboard({ silent: false }));
       if (E.criticaSectorPdfBtn) E.criticaSectorPdfBtn.addEventListener("click", () => exportCriticaSectorPdf({ summaryOnly: false }));
       if (E.criticaSectorSummaryPdfBtn) E.criticaSectorSummaryPdfBtn.addEventListener("click", () => exportCriticaSectorPdf({ summaryOnly: true }));
       if (E.criticaDashboardClearBtn) E.criticaDashboardClearBtn.addEventListener("click", clearCriticaDashboardFilters);
@@ -2017,13 +2055,8 @@
           if (element) element.addEventListener("change", () => syncCriticaDashboard({ silent: false }));
         });
       if (E.criticaSearch) E.criticaSearch.addEventListener("input", scheduleCriticaDashboardSync);
-      const criticaTab = document.getElementById("criticaTab");
-      if (criticaTab) criticaTab.addEventListener("shown.bs.tab", () => {
-        const current = state.criticaDashboard || {};
-        if (!current.summary || !current.summary.data_pedido) syncCriticaDashboard({ silent: true });
-      });
       E.accessRole.addEventListener("change", updateScopeHint);
-      E.accessUsersFilter.addEventListener("input", renderAccess);
+      E.accessUsersFilter.addEventListener("input", scheduleAccessRender);
       if (E.usageWindow) {
         E.usageWindow.addEventListener("change", () => {
           if (hasPanelAuth()) syncEvolutionUsage({ silent: false });
@@ -2155,6 +2188,57 @@
       applyTheme(current === "dark" ? "light" : "dark");
     }
 
+    function isPaneActive(paneId) {
+      const pane = document.getElementById(paneId);
+      return Boolean(pane && pane.classList.contains("active"));
+    }
+
+    function debounce(fn, waitMs = 150) {
+      let timer = null;
+      return (...args) => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => fn(...args), waitMs);
+      };
+    }
+
+    const scheduleAccessRender = debounce(() => renderAccess(), 120);
+    const scheduleGiroRouteFilterUpdate = debounce(() => updateGiroRecolhaRouteFilters(), 120);
+    const scheduleGiroBlockSearchUpdate = debounce(() => updateGiroRecolhaBlockSearch(), 120);
+
+    function currentActiveTabId() {
+      const active = document.querySelector("#adminTabs .nav-link.active");
+      return active ? active.id : "operationsTab";
+    }
+
+    async function syncVisibleTabData({ silent = true, force = false } = {}) {
+      if (!hasPanelAuth()) return false;
+      const activeTabId = currentActiveTabId();
+      if (!force && state.lazyTabs && state.lazyTabs[activeTabId]) return true;
+
+      const tasks = [];
+      if (activeTabId === "operationsTab") {
+        if (state.panel && state.panel.canBroadcast) tasks.push(syncBroadcastOptions({ silent }));
+        tasks.push(syncPayipBatchStatus({ silent }));
+      } else if (activeTabId === "usageEvolutionTab") {
+        if (state.panel && state.panel.isAdmin) tasks.push(syncEvolutionUsage({ silent }));
+        else renderEvolutionUsage();
+      } else if (activeTabId === "recolhasTab") {
+        if (state.panel && state.panel.canManageRecolhas) tasks.push(syncRecolhas({ silent }));
+      } else if (activeTabId === "giroRecolhaTab") {
+        if (state.panel && state.panel.canViewGiro) tasks.push(syncGiroRecolha({ silent }));
+      } else if (activeTabId === "criticaTab") {
+        if (state.panel && state.panel.canViewCritica) tasks.push(syncCriticaDashboard({ silent }));
+      }
+
+      if (!tasks.length) {
+        state.lazyTabs[activeTabId] = true;
+        return true;
+      }
+      const results = await Promise.allSettled(tasks);
+      state.lazyTabs[activeTabId] = true;
+      return results.every(result => result.status === "fulfilled" && result.value !== false);
+    }
+
     function setSyncState(syncing) {
       const btn = document.getElementById("refreshBtn");
       btn.disabled = syncing;
@@ -2164,23 +2248,27 @@
     }
 
     function showSkeletonLoading() {
-      E.historyTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="5" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
-      if (E.jobsTable) E.jobsTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="4" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
-      E.accessUsersTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="6" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
-      if (E.recolhasContainer) {
+      if (isPaneActive("reportsPane")) {
+        E.historyTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="5" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
+        if (E.jobsTable) E.jobsTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="4" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
+        CONFIG.datasets.filter(ds => !ds.disabled).forEach(ds => {
+          const card = document.getElementById(`card-${ds.id}`);
+          if (card) card.classList.add("is-loading");
+        });
+      }
+      if (isPaneActive("operationsPane")) {
+        E.accessUsersTable.innerHTML = [1,2,3].map(() => '<tr><td colspan="6" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>').join("");
+      }
+      if (isPaneActive("recolhasPane") && E.recolhasContainer) {
         E.recolhasContainer.innerHTML = '<div class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>';
       }
-      if (E.giroRecolhaBody) {
+      if (isPaneActive("giroRecolhaPane") && E.giroRecolhaBody) {
         E.giroRecolhaBody.innerHTML = '<tr><td colspan="6" class="py-3"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></td></tr>';
       }
-      if (E.giroRecolhaRoutesContainer) {
+      if (isPaneActive("giroRecolhaPane") && E.giroRecolhaRoutesContainer) {
         E.giroRecolhaRoutesContainer.innerHTML = '<div class="py-2"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>';
       }
-      CONFIG.datasets.filter(ds => !ds.disabled).forEach(ds => {
-        const card = document.getElementById(`card-${ds.id}`);
-        if (card) card.classList.add("is-loading");
-      });
-      renderEvolutionUsageLoading();
+      if (isPaneActive("usageEvolutionPane")) renderEvolutionUsageLoading();
     }
 
     function updateMetrics() {
@@ -2202,6 +2290,10 @@
     }
 
     function datasetTimeouts(dsId) {
+      const apiName = toApiDataset(dsId);
+      if (String(apiName || "").startsWith("boletos_bradesco_op_")) {
+        return { validateMs: 600000, importMs: 1800000 };
+      }
       return DATASET_TIMEOUTS[dsId] || DATASET_TIMEOUTS.default;
     }
 
@@ -2444,11 +2536,12 @@
       if (E.accessUsersFilter && E.accessUsersFilter.parentElement) E.accessUsersFilter.parentElement.style.display = adminOnlyDisplay;
       if (E.broadcastPanel) E.broadcastPanel.style.display = broadcastDisplay;
       if (E.payipBatchPanel) E.payipBatchPanel.style.display = isCritica ? "none" : "";
+      if (E.payipImportPanel) E.payipImportPanel.style.display = isCritica ? "none" : "";
       if (E.usageEvolutionTab && E.usageEvolutionTab.parentElement) {
         E.usageEvolutionTab.parentElement.style.display = state.panel && state.panel.canViewUsage ? "" : "none";
       }
       setPanelTabVisible("operationsTab", !isCritica);
-      setPanelTabVisible("operationalTablesTab", !isCritica);
+      setPanelTabVisible("reportsTab", !isCritica);
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
       setPanelTabVisible("giroRecolhaTab", Boolean(state.panel && state.panel.canViewGiro));
@@ -2715,49 +2808,6 @@
         }
       }
 
-      const functionSummary = Array.isArray(payload.function_summary) ? payload.function_summary : [];
-      if (E.usageFunctionSummaryBody) {
-        if (!functionSummary.length) {
-          E.usageFunctionSummaryBody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-secondary">Sem funcoes rastreadas</td></tr>';
-        } else {
-          E.usageFunctionSummaryBody.innerHTML = functionSummary.map(item => `
-            <tr>
-              <td><strong>${escapeHtml(item.label || item.feature_code || "-")}</strong></td>
-              <td class="text-end">${formatNumber(item.total)}</td>
-              <td class="text-end">${formatNumber(item.unique_numbers)}</td>
-            </tr>
-          `).join("");
-        }
-      }
-
-      const numberFunctionUsage = Array.isArray(payload.number_function_usage) ? payload.number_function_usage : [];
-      if (E.usageFunctionUsersBody) {
-        if (!numberFunctionUsage.length) {
-          E.usageFunctionUsersBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Sem rastreio por funcao no periodo</td></tr>';
-        } else {
-          E.usageFunctionUsersBody.innerHTML = numberFunctionUsage.map(item => {
-            const rawPhone = String(item.phone_number || "");
-            const phone = formatPhoneForUi(rawPhone);
-            const displayName = String(item.display_name || phone || "-");
-            const showPhone = phone && displayName !== phone;
-            const features = Array.isArray(item.features) ? item.features : [];
-            const badges = features.length
-              ? features.map(feature => `<span class="badge rounded-pill text-bg-light border me-1 mb-1">${escapeHtml(feature.label || feature.feature_code || "-")}: ${formatNumber(feature.total)}</span>`).join("")
-              : '<span class="text-secondary small">Sem detalhe</span>';
-            return `
-              <tr>
-                <td>
-                  <strong>${escapeHtml(displayName)}</strong>
-                  ${showPhone ? `<div class="small mono text-secondary">${escapeHtml(phone)}</div>` : ""}
-                </td>
-                <td class="text-end">${formatNumber(item.total)}</td>
-                <td class="text-end">${formatNumber(item.unique_functions)}</td>
-                <td>${badges}</td>
-              </tr>
-            `;
-          }).join("");
-        }
-      }
       renderEvolutionFunctionUsage(payload);
 
       const breakdown = Array.isArray(payload.event_breakdown) ? payload.event_breakdown : [];
@@ -3459,6 +3509,198 @@
       }
     }
 
+    function currentPayipImportPayload() {
+      return {
+        filial: E.payipImportFilial ? String(E.payipImportFilial.value || "").trim() : "",
+        start_date: E.payipImportStartDate ? String(E.payipImportStartDate.value || "").trim() : "",
+        end_date: E.payipImportEndDate ? String(E.payipImportEndDate.value || "").trim() : "",
+        auto_create_clients: Boolean(E.payipImportAutoCreate && E.payipImportAutoCreate.checked),
+        mfa_code: E.payipImportMfaCode ? String(E.payipImportMfaCode.value || "").trim() : ""
+      };
+    }
+
+    function payipImportSignature(payload) {
+      return JSON.stringify({
+        filial: String(payload && payload.filial || ""),
+        start_date: String(payload && payload.start_date || ""),
+        end_date: String(payload && payload.end_date || ""),
+        auto_create_clients: Boolean(payload && payload.auto_create_clients)
+      });
+    }
+
+    function resetPayipImportValidation() {
+      if (!state.payipImport) return;
+      state.payipImport.validation = null;
+      state.payipImport.validationPayload = null;
+      state.payipImport.loading = false;
+      state.payipImport.error = "";
+      renderPayipImport();
+    }
+
+    function payipImportItemAmount(item) {
+      if (!item || typeof item !== "object") return "0";
+      return item.total || item.value || item.amount || item.valor || "0";
+    }
+
+    function payipImportItemDueDate(item) {
+      if (!item || typeof item !== "object") return "";
+      return item.dueDate || item.due_date || item.vencimento || "";
+    }
+
+    function renderPayipImport() {
+      const validation = state.payipImport && state.payipImport.validation ? state.payipImport.validation : null;
+      const items = validation && Array.isArray(validation.items) ? validation.items : [];
+      const missing = validation && Array.isArray(validation.missing_client_codes) ? validation.missing_client_codes : [];
+      const creation = validation && validation.client_creation ? validation.client_creation : { created: [], not_found: [], failed: [] };
+      const created = Array.isArray(creation.created) ? creation.created : [];
+      const notFound = Array.isArray(creation.not_found) ? creation.not_found : [];
+      const failed = Array.isArray(creation.failed) ? creation.failed : [];
+      const loading = Boolean(state.payipImport && state.payipImport.loading);
+      const error = state.payipImport && state.payipImport.error ? String(state.payipImport.error) : "";
+      const canRun = Boolean(validation && state.payipImport.validationPayload === payipImportSignature(currentPayipImportPayload()) && !missing.length);
+      if (E.payipImportStatus) {
+        if (loading) {
+          E.payipImportStatus.textContent = "Validando...";
+          E.payipImportStatus.className = "pill warn";
+        } else if (error) {
+          E.payipImportStatus.textContent = "Falha na validacao";
+          E.payipImportStatus.className = "pill warn";
+        } else if (validation) {
+          E.payipImportStatus.textContent = missing.length
+            ? `Clientes faltantes: ${missing.length}`
+            : `Validado: ${items.length} cobranca(s)`;
+          E.payipImportStatus.className = missing.length ? "pill warn" : "pill ok";
+        } else {
+          E.payipImportStatus.textContent = "Aguardando validacao";
+          E.payipImportStatus.className = "pill";
+        }
+      }
+      if (E.payipImportValidateBtn) E.payipImportValidateBtn.disabled = loading;
+      if (E.payipImportRunBtn) E.payipImportRunBtn.disabled = loading || !canRun;
+      if (!E.payipImportBody) return;
+      if (loading) {
+        E.payipImportBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary"><span class="spinner-border spinner-border-sm me-1"></span>Validando importacao PayIP...</td></tr>';
+        return;
+      }
+      if (error) {
+        E.payipImportBody.innerHTML = `<tr><td colspan="5" class="text-danger"><strong>Falha na validacao:</strong> ${escapeHtml(error)}</td></tr>`;
+        return;
+      }
+      if (!validation) {
+        E.payipImportBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Valide a importacao automatizada para comecar.</td></tr>';
+        return;
+      }
+      const helperRows = [];
+      if (missing.length) helperRows.push(`<tr><td colspan="5" class="text-danger"><strong>Clientes nao encontrados na PayIP:</strong> ${escapeHtml(missing.slice(0, 40).join(", "))}${missing.length > 40 ? "..." : ""}</td></tr>`);
+      if (created.length) helperRows.push(`<tr><td colspan="5" class="text-success"><strong>Criados pela dClientes:</strong> ${escapeHtml(created.join(", "))}</td></tr>`);
+      if (notFound.length) helperRows.push(`<tr><td colspan="5" class="text-danger"><strong>Nao encontrados na dClientes:</strong> ${escapeHtml(notFound.join(", "))}</td></tr>`);
+      if (failed.length) helperRows.push(`<tr><td colspan="5" class="text-danger"><strong>Falhas ao criar:</strong> ${escapeHtml(failed.join(" | "))}</td></tr>`);
+      const itemRows = items.slice(0, 80).map(item => `
+        <tr>
+          <td class="ps-2"><strong>${escapeHtml(item.clientCode || item.client_code || item.nb || "-")}</strong></td>
+          <td>${escapeHtml(item.invoice || item.notaFiscal || item.nf || "-")}</td>
+          <td>${escapeHtml(formatMoneyText(payipImportItemAmount(item)))}</td>
+          <td>${escapeHtml(formatDate(payipImportItemDueDate(item)))}</td>
+          <td><span class="badge text-bg-light">${validation.imported ? "importado" : "validado"}</span></td>
+        </tr>
+      `);
+      if (items.length > 80) itemRows.push(`<tr><td colspan="5" class="text-center text-secondary small">Mostrando 80 de ${formatNumber(items.length)} cobranca(s).</td></tr>`);
+      if (!helperRows.length && !itemRows.length) {
+        E.payipImportBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Nenhuma cobranca retornada pela PayIP.</td></tr>';
+        return;
+      }
+      E.payipImportBody.innerHTML = helperRows.concat(itemRows).join("");
+    }
+
+    async function validatePayipImport() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const payload = currentPayipImportPayload();
+      if (!payload.filial || !payload.start_date || !payload.end_date) {
+        addLog("Informe revenda, data inicial e data final da importacao PayIP.", "warn");
+        return;
+      }
+      const btn = E.payipImportValidateBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Validando';
+      }
+      state.payipImport.loading = true;
+      state.payipImport.error = "";
+      renderPayipImport();
+      try {
+        const result = await req(CONFIG.endpoints.payipImport.validate, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 90000
+        });
+        state.payipImport.validation = result;
+        state.payipImport.validationPayload = payipImportSignature(payload);
+        state.payipImport.error = "";
+        renderPayipImport();
+        const missing = Array.isArray(result.missing_client_codes) ? result.missing_client_codes.length : 0;
+        addLog(missing ? `PayIP validou com ${missing} cliente(s) faltando.` : `Importacao PayIP validada: ${result.items_count || 0} cobranca(s).`, missing ? "warn" : "ok");
+      } catch (err) {
+        state.payipImport.validation = null;
+        state.payipImport.validationPayload = null;
+        state.payipImport.error = err.message || "Falha ao validar importacao PayIP.";
+        renderPayipImport();
+        addLog(`Falha ao validar importacao PayIP: ${err.message}`, "err");
+      } finally {
+        state.payipImport.loading = false;
+        renderPayipImport();
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function runPayipImport() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const payload = currentPayipImportPayload();
+      if (!payload.mfa_code) {
+        addLog("Informe o token MFA PayIP para confirmar a importacao.", "warn");
+        return;
+      }
+      if (!state.payipImport.validation || state.payipImport.validationPayload !== payipImportSignature(payload)) {
+        addLog("Valide a importacao PayIP antes de confirmar.", "warn");
+        return;
+      }
+      const total = state.payipImport.validation.items_count || (Array.isArray(state.payipImport.validation.items) ? state.payipImport.validation.items.length : 0);
+      const confirmed = await askConfirmation(`Confirmar importacao PayIP da revenda ${payload.filial} com ${total} cobranca(s)?`);
+      if (!confirmed) return;
+      const btn = E.payipImportRunBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Importando';
+      }
+      try {
+        const result = await req(CONFIG.endpoints.payipImport.run, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 120000
+        });
+        state.payipImport.validation = result;
+        state.payipImport.validationPayload = payipImportSignature(payload);
+        if (E.payipImportMfaCode) E.payipImportMfaCode.value = "";
+        renderPayipImport();
+        addLog(`Importacao PayIP confirmada: ${result.items_count || 0} cobranca(s).`, "ok");
+      } catch (err) {
+        addLog(`Falha ao confirmar importacao PayIP: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
     function currentPayipBatchPayload() {
       return {
         raw_text: E.payipBatchText ? E.payipBatchText.value : "",
@@ -3970,11 +4212,14 @@
     }
 
     function currentCriticaDashboardParams() {
-      const limit = Number(E.criticaLimit && E.criticaLimit.value ? E.criticaLimit.value : 200);
+      const limit = Number(E.criticaLimit && E.criticaLimit.value ? E.criticaLimit.value : 1);
+      const selectedOperation = E.criticaOperationSingle && E.criticaOperationSingle.value
+        ? [E.criticaOperationSingle.value]
+        : selectedCriticaValues(E.criticaOperation);
       return {
         date: E.criticaDate ? E.criticaDate.value : "",
-        limit: Number.isFinite(limit) ? Math.max(1, Math.min(1000, Math.trunc(limit))) : 200,
-        operation: selectedCriticaValues(E.criticaOperation),
+        limit: Number.isFinite(limit) ? Math.max(1, Math.min(1000, Math.trunc(limit))) : 1,
+        operation: selectedOperation,
         problem: selectedCriticaValues(E.criticaProblem),
         sector: selectedCriticaValues(E.criticaSector),
         manager: selectedCriticaValues(E.criticaManager),
@@ -3983,7 +4228,7 @@
         district: selectedCriticaValues(E.criticaDistrict),
         origin: selectedCriticaValues(E.criticaOrigin),
         search: E.criticaSearch ? E.criticaSearch.value.trim() : "",
-        onlyProblems: E.criticaOnlyProblems ? E.criticaOnlyProblems.checked : true
+        onlyProblems: E.criticaOnlyProblems ? E.criticaOnlyProblems.checked : false
       };
     }
 
@@ -4030,6 +4275,80 @@
         return { operation: matchingOperations[0], sector: sectors[0], date: params.date || "" };
       }
       throw new Error("Selecione uma unica operacao junto com o setor para gerar o PDF.");
+    }
+
+    function resolveCriticaOperationExportScope() {
+      const params = currentCriticaDashboardParams();
+      const operations = Array.isArray(params.operation) ? params.operation.filter(Boolean) : [];
+      if (operations.length !== 1) throw new Error("Selecione uma unica revenda para gerar o PDF.");
+      return { operation: operations[0], date: params.date || "" };
+    }
+
+    async function exportCriticaOperationPdf({ summaryOnly = false } = {}) {
+      updateTokens();
+      if (!hasPanelAuth()) {
+        addLog("Sessao do painel nao validada.", "warn");
+        return;
+      }
+
+      let scope;
+      try {
+        scope = resolveCriticaOperationExportScope();
+      } catch (err) {
+        addLog(err.message, "warn");
+        return;
+      }
+
+      const btn = summaryOnly ? E.criticaOperationSummaryPdfBtn : E.criticaOperationPdfBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = summaryOnly
+          ? '<span class="spinner-border spinner-border-sm me-1"></span>Gerando resumo'
+          : '<span class="spinner-border spinner-border-sm me-1"></span>Gerando PDF';
+      }
+
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+
+      try {
+        const query = new URLSearchParams();
+        query.set("operation", scope.operation);
+        if (scope.date) query.set("date", scope.date);
+        if (summaryOnly) query.set("summary_only", "1");
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.critica.pdf}?${query.toString()}`, {
+          method: "GET",
+          headers,
+          credentials: "same-origin"
+        });
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"([^\"]+)\"/i);
+        const filename = matchedName && matchedName[1]
+          ? matchedName[1]
+          : `critica-rn-operacao-${scope.operation}${summaryOnly ? "-resumo" : ""}.pdf`;
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog(`${summaryOnly ? "Resumo" : "PDF"} da critica exportado para revenda ${scope.operation}.`, "ok");
+      } catch (err) {
+        addLog(`Falha ao exportar critica da revenda: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
     }
 
     async function exportCriticaSectorPdf({ summaryOnly = false } = {}) {
@@ -4104,6 +4423,19 @@
       CRITICA_DASHBOARD_SLICERS.forEach(def => {
         setCriticaSlicerSelection(def, previousParams[def.key], { sync: false, clearDependents: false });
       });
+      if (E.criticaOperationSingle) {
+        const options = state.criticaDashboard && state.criticaDashboard.options ? state.criticaDashboard.options : {};
+        const currentValue = E.criticaOperationSingle.value || (Array.isArray(previousParams.operation) ? previousParams.operation[0] : "");
+        const operationOptions = Array.isArray(options.operations) ? options.operations : [];
+        E.criticaOperationSingle.innerHTML = '<option value="">Todas as revendas</option>' + operationOptions.map(item => {
+          const value = String(item && item.value != null ? item.value : "").trim();
+          if (!value) return "";
+          const label = cleanDisplayText(item.label || item.value || value);
+          const selected = value === currentValue ? " selected" : "";
+          return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+        }).join("");
+        if (currentValue && !E.criticaOperationSingle.value) E.criticaOperationSingle.value = currentValue;
+      }
       const summaryDate = state.criticaDashboard && state.criticaDashboard.summary ? state.criticaDashboard.summary.data_pedido : "";
       if (E.criticaDate && !previousParams.date && summaryDate) E.criticaDate.value = summaryDate;
     }
@@ -4153,15 +4485,14 @@
       `).join("");
     }
 
-    function renderCriticaDashboard() {
-      const payload = state.criticaDashboard && typeof state.criticaDashboard === "object" ? state.criticaDashboard : emptyCriticaDashboard();
-      const summary = payload.summary || {};
-      const orders = Array.isArray(payload.orders) ? payload.orders : [];
-      const rankings = payload.rankings || {};
-      if (E.criticaDashboardCount) {
-        E.criticaDashboardCount.textContent = summary.data_pedido
-          ? `${formatNumber(summary.pedidos || orders.length)} pedido(s) | ${formatDate(summary.data_pedido)}`
-          : `${formatNumber(summary.pedidos || orders.length)} pedido(s)`;
+      function renderCriticaDashboard() {
+        const payload = state.criticaDashboard && typeof state.criticaDashboard === "object" ? state.criticaDashboard : emptyCriticaDashboard();
+        const summary = payload.summary || {};
+        const orders = Array.isArray(payload.orders) ? payload.orders : [];
+        if (E.criticaDashboardCount) {
+          E.criticaDashboardCount.textContent = summary.data_pedido
+            ? `${formatNumber(summary.pedidos || orders.length)} pedido(s) | ${formatDate(summary.data_pedido)}`
+            : `${formatNumber(summary.pedidos || orders.length)} pedido(s)`;
         E.criticaDashboardCount.className = Number(summary.pedidos_com_problema || 0) ? "pill warn" : "pill ok";
       }
       if (E.criticaDashboardCards) {
@@ -4176,8 +4507,7 @@
           ["Cerveja TT HL", summary.cerveja_tt_hectolitros || "0,00", "cesta de produtos"],
           ["Refri Zero HL", summary.refri_zero_hectolitros || "0,00", "cesta de produtos"],
           ["Cerveja RGB/OW HL", `${summary.cerveja_rgb_hectolitros || "0,00"} / ${summary.cerveja_ow_hectolitros || "0,00"}`, "RGB / OW"],
-          ["Marketplace TT R$", summary.marketplace_tt_faturamento || "R$ 0,00", "faturamento da cesta"],
-          ["Maior problema", summary.maior_problema || "-", "por quantidade de pedidos"]
+          ["Marketplace TT R$", summary.marketplace_tt_faturamento || "R$ 0,00", "faturamento da cesta"]
         ].map(([label, value, sub]) => `
           <article class="recolha-dashboard-card">
             <span class="label">${escapeHtml(label)}</span>
@@ -4186,53 +4516,6 @@
           </article>
         `).join("");
       }
-      renderCriticaRankList(E.criticaProblemRank, rankings.problems || [], { valueKey: "orders" });
-      const concentrations = []
-        .concat(Array.isArray(rankings.operations) ? rankings.operations.slice(0, 3) : [])
-        .concat(Array.isArray(rankings.sectors) ? rankings.sectors.slice(0, 3) : [])
-        .concat(Array.isArray(rankings.clients) ? rankings.clients.slice(0, 3) : []);
-      renderCriticaRankList(E.criticaConcentrationRank, concentrations, { valueKey: "problem_orders" });
-      renderCriticaRecommendations(payload.recommendations || []);
-      if (!E.criticaDashboardBody) return;
-      if (!orders.length) {
-        E.criticaDashboardBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Nenhum pedido encontrado nos filtros atuais.</td></tr>';
-        return;
-      }
-      E.criticaDashboardBody.innerHTML = orders.map(order => {
-        const command = `critica nb ${order.filial || ""} ${order.cod_pdv || ""}`.trim();
-        const products = Array.isArray(order.problem_products) && order.problem_products.length
-          ? `<div class="small text-secondary mt-1">Produtos: ${escapeHtml(cleanDisplayText(order.problem_products.slice(0, 3).join(" | ")))}</div>`
-          : "";
-        const orderMeta = [`Peso pedido ${order.peso_pedido || "0,00"}`];
-        if (order.cond_pagamento) orderMeta.push(`Cond. pag. ${cleanDisplayText(order.cond_pagamento)}`);
-        return `
-          <tr>
-            <td class="ps-3">
-              <strong>${escapeHtml(order.pedido || "-")}</strong>
-              <div class="small text-secondary">Operacao ${escapeHtml(order.filial || "-")} | Setor ${escapeHtml(order.setor || "-")} | GV ${escapeHtml(order.manager || "-")}</div>
-              <div class="small text-secondary">NB ${escapeHtml(order.cod_pdv || "-")} | ${escapeHtml(cleanDisplayText(order.nome_pdv || "-"))}</div>
-              <div class="small text-secondary">${escapeHtml(orderMeta.join(" | "))}</div>
-            </td>
-            <td>
-              ${criticaProblemBadges(order)}
-              ${products}
-            </td>
-            <td>
-              <strong>${escapeHtml(order.total_pedido || "R$ 0,00")}</strong>
-              <div class="small text-secondary">HL ${escapeHtml(order.hectolitros || "0,00")} | Itens ${formatNumber(order.item_count || 0)} | Itens criticos ${formatNumber(order.problem_item_count || 0)}</div>
-            </td>
-            <td>
-              <div>${escapeHtml(cleanDisplayText([order.cidade, order.bairro].filter(Boolean).join(" | ") || "-"))}</div>
-              <div class="small text-secondary">Origem ${escapeHtml(order.origem || "-")} | Tipo ${escapeHtml(cleanDisplayText(order.movement_operation_name || order.status_pedido || "-"))}</div>
-            </td>
-            <td class="text-end pe-3">
-              <button class="btn btn-outline-primary btn-sm" onclick="copyCriticaCommand('${escapeHtml(command)}')">
-                <i class="bi bi-clipboard me-1"></i>Copiar NB
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join("");
     }
 
     function clearCriticaDashboardFilters() {
@@ -6291,15 +6574,12 @@
           state.giroRecolhaSlicerOptions = emptyGiroRecolhaOptions();
           state.giroRecolhaRoutes = { generated: false, total: 0, summary: {}, routes: [] };
           state.lastSyncAt = new Date();
+          syncDatasetsFromImportStatus(state.status);
+          buildGrid();
           renderHistory();
           renderJobs();
           renderGridPanels();
           renderAccess();
-          renderGiroRecolha();
-          renderGiroRecolhaRoutes();
-          renderRecolhas();
-          renderEvolutionUsage();
-          renderBroadcastOptions();
           await syncCriticaDashboard({ silent: true });
           updateGeneralState();
           updateMetrics();
@@ -6307,23 +6587,14 @@
           return;
         }
         const isAdmin = state.panel && state.panel.isAdmin;
-        const giroParams = currentGiroRecolhaParams();
         const [
           statusResult,
           historyResult,
-          usersResult,
-          recolhasResult,
-          giroRecolhaOptionsResult,
-          giroRecolhaSlicerOptionsResult,
-          giroRecolhaResult
+          usersResult
         ] = await Promise.allSettled([
           req(CONFIG.endpoints.import.status, { timeoutMs: 30000 }),
           req(CONFIG.endpoints.import.history, { timeoutMs: 30000 }),
-          isAdmin ? req(CONFIG.endpoints.access.list, { timeoutMs: 30000 }) : Promise.resolve({ users: [] }),
-          req(CONFIG.endpoints.recolhas.list, { timeoutMs: 30000 }),
-          req(`${CONFIG.endpoints.giroRecolha.options}?${giroRecolhaOptionsQueryString(giroParams)}`, { timeoutMs: 45000 }),
-          loadGiroRecolhaSlicerOptions(giroParams),
-          req(`${CONFIG.endpoints.giroRecolha.dashboard}?${giroRecolhaQueryString(giroParams)}`, { timeoutMs: 45000 })
+          isAdmin ? req(CONFIG.endpoints.access.list, { timeoutMs: 30000 }) : Promise.resolve({ users: [] })
         ]);
         const settledPayload = (result, fallback, label) => {
           if (result && result.status === "fulfilled") return result.value;
@@ -6333,48 +6604,22 @@
         const statusPayload = settledPayload(statusResult, {}, "status");
         const historyPayload = settledPayload(historyResult, { history: [], jobs: [] }, "historico");
         const usersPayload = settledPayload(usersResult, { users: [] }, "usuarios");
-        const recolhasPayload = settledPayload(recolhasResult, { total: 0, operations: [] }, "recolhas");
-        const giroRecolhaOptionsPayload = settledPayload(giroRecolhaOptionsResult, { options: emptyGiroRecolhaOptions() }, "filtros de giro");
-        const giroRecolhaSlicerOptionsPayloads = settledPayload(giroRecolhaSlicerOptionsResult, null, "segmentadores de giro");
-        const giroRecolhaPayload = settledPayload(giroRecolhaResult, { total: 0, summary: {}, records: [] }, "dashboard de giro");
         state.status = statusPayload || {};
         state.history = (historyPayload && historyPayload.history) ? historyPayload.history : [];
         state.jobs = Array.isArray(state.status.jobs)
           ? state.status.jobs
           : ((historyPayload && Array.isArray(historyPayload.jobs)) ? historyPayload.jobs : []);
         state.accessUsers = (usersPayload && usersPayload.users) ? usersPayload.users : [];
-        state.recolhas = recolhasPayload && typeof recolhasPayload === "object"
-          ? { total: Number(recolhasPayload.total || 0), operations: Array.isArray(recolhasPayload.operations) ? recolhasPayload.operations : [] }
-          : { total: 0, operations: [] };
-        state.giroRecolha = giroRecolhaPayload && typeof giroRecolhaPayload === "object"
-          ? { total: Number(giroRecolhaPayload.total || 0), summary: giroRecolhaPayload.summary || {}, records: Array.isArray(giroRecolhaPayload.records) ? giroRecolhaPayload.records : [] }
-          : { total: 0, summary: {}, records: [] };
-        state.giroRecolhaOptions = giroRecolhaOptionsPayload && giroRecolhaOptionsPayload.options
-          ? giroRecolhaOptionsPayload.options
-          : emptyGiroRecolhaOptions();
-        state.giroRecolhaSlicerOptions = normalizeGiroRecolhaSlicerOptions(giroRecolhaSlicerOptionsPayloads, state.giroRecolhaOptions);
-        state.giroRecolhaRoutes = { generated: false, total: 0, summary: {}, routes: [] };
         state.lastSyncAt = new Date();
+        syncDatasetsFromImportStatus(state.status);
+        buildGrid();
         renderHistory();
         renderJobs();
         renderGridPanels();
         renderAccess();
-        renderGiroRecolhaFilterOptions(giroParams);
-        renderGiroRecolha();
-        renderGiroRecolhaRoutes();
-        renderRecolhas();
-        if (document.getElementById("criticaPane") && document.getElementById("criticaPane").classList.contains("active")) {
-          await syncCriticaDashboard({ silent: true });
-        }
         updateGeneralState();
         updateMetrics();
-        if (isAdmin) {
-          await syncEvolutionUsage({ silent: true });
-        } else {
-          renderEvolutionUsage();
-        }
-        await syncBroadcastOptions({ silent: true });
-        await syncPayipBatchStatus({ silent: true });
+        await syncVisibleTabData({ silent: true, force: true });
         addLog("Atualização concluída.", "ok");
       } catch (err) {
         addLog(`Falha ao atualizar: ${err.message}`, "err");
@@ -6507,7 +6752,8 @@
     function buildGrid() {
       renderDatasetGrid(E.operationalGrid, CONFIG.datasets.filter(ds => ds.area === "operational"));
       renderDatasetGrid(E.criticaGrid, CONFIG.datasets.filter(ds => ds.area === "critica"));
-      renderDatasetGrid(E.reportGrid, CONFIG.datasets.filter(ds => ds.area === "reports"));
+      renderDatasetGrid(E.reportGrid, CONFIG.datasets.filter(ds => ds.area === "promax"));
+      renderDatasetGrid(E.powerBiGrid, CONFIG.datasets.filter(ds => ds.area === "powerbi"));
       CONFIG.datasets.filter(ds => !ds.disabled).forEach(ds => {
         const inp = document.getElementById(`file-${ds.id}`);
         const hint = document.getElementById(`filehint-${ds.id}`);

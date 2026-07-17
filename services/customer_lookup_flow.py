@@ -50,6 +50,7 @@ from bot_api.services.comodatos_query_service import (
     ComodatoRecord,
     ComodatosQueryService,
 )
+from bot_api.services.filial_labels import DEFAULT_FILIAL_LABELS, FILIAL_LABELS, set_filial_labels
 from bot_api.services.critica_rn_query_service import (
     CriticaPdfCurrentImportRequiredError,
     CriticaRnQueryService,
@@ -85,6 +86,7 @@ from bot_api.services.prazo_limite_query_service import (
     PrazoLimiteEntryRecord,
     PrazoLimiteQueryService,
 )
+from bot_api.services.boletos_query_service import BoletosQueryService
 from bot_api.services.recolha_request_service import RecolhaRequestRecord, RecolhaRequestService
 from bot_api.integrations.payip_client import PayipError, PayipMfaRequired
 from bot_api.services.payip_payments_service import DEFAULT_PAYMENT_AMOUNT_TOLERANCE, PayipPaymentsService
@@ -104,12 +106,16 @@ MENU_COMODATOS = "menu:comodatos"
 MENU_GIRO = "menu:giro"
 MENU_DOCUMENTACAO = "menu:documentacao"
 MENU_RECOLHA = "menu:recolha"
+MENU_SELLER_FINANCEIRO = "menu:seller_financeiro"
+MENU_CRITICA = "menu:critica"
 MENU_VISIT_DAY = "menu:visitas_do_dia"
 MENU_FINANCEIRO = "menu:financeiro"
 MENU_GV_SUMMARY = "menu:gv_summary"
 MENU_MANAGER = "menu:gerente_vendas"
 MENU_SELLER_SUMMARY = "menu:seller_summary"
 MENU_SELLER_RISK = "menu:seller_risk"
+SELLER_FINANCE_ACTION_RECOLHA = "seller_finance:recolha"
+SELLER_FINANCE_ACTION_BOLETO = "seller_finance:boleto"
 SEARCH_BY_REGISTRATION = "search:cadastro"
 SEARCH_BY_FANTASIA = "search:fantasia"
 SEARCH_BY_DOCUMENT = "search:documento"
@@ -152,8 +158,12 @@ PAYIP_ACTION_SEARCH_INVOICE = "payip:action:search_invoice"
 PAYIP_ACTION_PENDING_CLIENT = "payip:action:pending_client"
 PAYIP_ACTION_CLIENT = "payip:action:client"
 PAYIP_ACTION_CREATE_CHARGE = "payip:action:create_charge"
+PAYIP_ACTION_CREATE_CLIENT = "payip:action:create_client"
 PAYIP_ACTION_STATEMENT = "payip:action:statement"
 PAYIP_ACTION_AMOUNT_DAY = "payip:action:amount_day"
+PAYIP_ACTION_VALIDATE_DAY = "payip:action:validate_day"
+PAYIP_ACTION_IMPORT_BATCH = "payip:action:import_batch"
+PAYIP_ACTION_ROUTES = "payip:action:routes"
 REPEAT_SEARCH_REGISTRATION = "repeat:search:registration"
 REPEAT_SEARCH_DOCUMENT = "repeat:search:document"
 REPEAT_SEARCH_NAME = "repeat:search:name"
@@ -161,8 +171,12 @@ REPEAT_PAYIP_INVOICE = "repeat:payip:invoice"
 REPEAT_PAYIP_PENDING_CLIENT = "repeat:payip:pending_client"
 REPEAT_PAYIP_CLIENT = "repeat:payip:client"
 REPEAT_PAYIP_CREATE_CHARGE = "repeat:payip:create_charge"
+REPEAT_PAYIP_CREATE_CLIENT = "repeat:payip:create_client"
 REPEAT_PAYIP_STATEMENT = "repeat:payip:statement"
 REPEAT_PAYIP_AMOUNT_DAY = "repeat:payip:amount_day"
+REPEAT_PAYIP_VALIDATE_DAY = "repeat:payip:validate_day"
+REPEAT_PAYIP_IMPORT_BATCH = "repeat:payip:import_batch"
+REPEAT_PAYIP_ROUTES = "repeat:payip:routes"
 
 FINANCE_SUMMARY_TOTAL = "finance:summary:total"
 FINANCE_SUMMARY_BY_FILIAL = "finance:summary:by_filial"
@@ -236,16 +250,6 @@ INADIMPLENCIA_CONTEXT_DIRECTOR_TOP_DEBTORS = "director_top_debtors"
 MENU_BACK_COMMANDS = frozenset({"a", "ant", "anterior"})
 PAGE_NEXT_COMMANDS = frozenset({"p", "prox", "proximo", "prxx"})
 
-FILIAL_LABELS = {
-    "1": "Sousa",
-    "2": "Itaporanga",
-    "3": "Patos",
-    "4": "Sume",
-    "5": "Guarabira",
-    "6": "Brumado",
-    "7": "Barra",
-    "8": "Cacule",
-}
 LOCAL_TIMEZONE = timezone(timedelta(hours=-3))
 VISIT_DAY_CHOICES = (
     ("SEG/", "Segunda"),
@@ -315,6 +319,9 @@ class LookupSession:
     selected_visit_risk_gv: str = ""
     selected_visit_risk_token: str = ""
     selected_visit_risk_label: str = ""
+    boleto_filial: str = ""
+    boleto_cod_pdv: str = ""
+    boleto_option_count: int = 0
     clarification_title: str = ""
     clarification_prompt: str = ""
     clarification_footer: str = ""
@@ -337,6 +344,7 @@ class LookupSession:
     payip_pending_amount: str = ""
     payip_pending_day: str = ""
     payip_pending_tolerance: str = ""
+    payip_import_missing_client_codes: tuple[str, ...] = ()
     payip_pix_payloads: tuple[PayipPixPayload, ...] = ()
     payip_charge_filial: str = ""
     payip_charge_client_code: str = ""
@@ -429,6 +437,7 @@ class CustomerLookupFlow:
         documentacao_pendente_service: DocumentacaoPendenteQueryService,
         prazo_limite_service: PrazoLimiteQueryService,
         access_control: AccessControl,
+        boletos_service: BoletosQueryService | None = None,
         payip_payments_service: PayipPaymentsService | None = None,
         recolha_request_service: RecolhaRequestService | None = None,
         critica_rn_service: CriticaRnQueryService | None = None,
@@ -441,6 +450,7 @@ class CustomerLookupFlow:
         self.giro_service = giro_service
         self.documentacao_pendente_service = documentacao_pendente_service
         self.prazo_limite_service = prazo_limite_service
+        self.boletos_service = boletos_service
         self.payip_payments_service = payip_payments_service
         self.critica_rn_service = critica_rn_service
         self.clientes_score_service = clientes_score_service
@@ -2913,7 +2923,7 @@ def _parse_payip_amount_day_query(
 
     date_matches = list(
         re.finditer(
-            r"(?<!\d)(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)(?!\d)",
+            r"(?<!\d)(\d{8}|\d{6}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)(?!\d)",
             raw,
         )
     )
@@ -3013,7 +3023,7 @@ def _parse_payip_statement_query(text: str) -> tuple[str, date | None, date | No
 
     date_matches = list(
         re.finditer(
-            r"(?<!\d)(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)(?!\d)",
+            r"(?<!\d)(\d{8}|\d{6}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)(?!\d)",
             raw,
         )
     )
@@ -3074,6 +3084,13 @@ def _parse_payip_statement_date_token(value: str) -> date | None:
     try:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
             return date.fromisoformat(text)
+        compact = re.fullmatch(r"(\d{2})(\d{2})(\d{2}|\d{4})", text)
+        if compact:
+            day = int(compact.group(1))
+            month = int(compact.group(2))
+            year_text = compact.group(3)
+            year = 2000 + int(year_text) if len(year_text) == 2 else int(year_text)
+            return date(year, month, day)
         match = re.fullmatch(r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?", text)
         if match:
             day = int(match.group(1))
@@ -4424,6 +4441,45 @@ def _build_critica_menu_response() -> OutgoingMessage:
                 description="Consolidado da sua base",
                 shortcut="2",
             ),
+            InteractiveOption(
+                option_id="critica pdf setor",
+                title="PDF por setor",
+                description="Informe o setor depois",
+                shortcut="3",
+            ),
+            InteractiveOption(
+                option_id="critica nb pdf",
+                title="PDF por NB",
+                description="Informe revenda e NB",
+                shortcut="4",
+            ),
+        ),
+    )
+
+
+def _build_seller_finance_menu_response(invalid_selection: bool = False) -> OutgoingMessage:
+    text = "O que voce quer solicitar?"
+    if invalid_selection:
+        text = _invalid_option_text("Escolha uma opcao do financeiro.")
+    return OutgoingMessage(
+        kind="menu",
+        title="Financeiro",
+        text=text,
+        footer="Use A ou ANT para voltar, ou MENU para ir ao inicio.",
+        button_text="Escolher",
+        options=(
+            InteractiveOption(
+                option_id=SELLER_FINANCE_ACTION_RECOLHA,
+                title="Solicitar Recolha",
+                description="Registrar pedido de recolha",
+                shortcut="1",
+            ),
+            InteractiveOption(
+                option_id=SELLER_FINANCE_ACTION_BOLETO,
+                title="Solicitar Boleto",
+                description="Receber boleto por revenda e NB",
+                shortcut="2",
+            ),
         ),
     )
 
@@ -5209,6 +5265,58 @@ def _parse_finance_action(normalized_text: str) -> str:
 
 
 def _parse_payip_action(normalized_text: str) -> str:
+    if re.match(r"^(?:rotas?|mapas?)\b", normalized_text):
+        return "routes"
+    if normalized_text in {
+        PAYIP_ACTION_ROUTES,
+        "11",
+        "rotas",
+        "rota payip",
+        "rotas payip",
+        "mapas",
+        "mapas em progresso",
+        "rotas em progresso",
+    }:
+        return "routes"
+    if re.search(r"\b(?:importar|importacao|importar cobrancas|validar importacao|automatizada)\b", normalized_text) and re.search(
+        r"(?<!\d)(?:\d{8}|\d{6}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)(?!\d)",
+        normalized_text,
+    ):
+        return "import_batch"
+    if normalized_text in {
+        PAYIP_ACTION_IMPORT_BATCH,
+        "9",
+        "importar cobrancas",
+        "importar cobranca",
+        "importacao automatizada",
+        "importacao de cobrancas",
+        "importacao cobrancas",
+        "validar importacao",
+        "validar importacao automatizada",
+        "cobranca automatizada",
+        "cobrancas automatizadas",
+    }:
+        return "import_batch"
+    if re.search(r"\b(?:validar|conferir)\b", normalized_text) and re.search(
+        r"(?<!\d)(?:\d{8}|\d{6}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?)(?!\d)",
+        normalized_text,
+    ):
+        return "validate_day"
+    if normalized_text in {
+        PAYIP_ACTION_VALIDATE_DAY,
+        "8",
+        "validar",
+        "validar data",
+        "validar payip",
+        "validar cobrancas",
+        "validar cobranca",
+        "conferir data",
+        "conferir cobrancas",
+        "conferir cobranca",
+        "cobrancas por data",
+        "cobranca por data",
+    }:
+        return "validate_day"
     if normalized_text in {
         PAYIP_ACTION_STATEMENT,
         "6",
@@ -5237,6 +5345,15 @@ def _parse_payip_action(normalized_text: str) -> str:
         "cobranca por valor e dia",
     }:
         return "amount_day"
+    if normalized_text in {
+        PAYIP_ACTION_CREATE_CLIENT,
+        "10",
+        "criar cliente payip",
+        "cadastrar cliente payip",
+        "cadastro cliente payip",
+        "incluir cliente payip",
+    }:
+        return "create_client"
     if normalized_text in {
         PAYIP_ACTION_CREATE_CHARGE,
         "5",
@@ -5335,8 +5452,16 @@ def _parse_payip_action(normalized_text: str) -> str:
         {"dia", "pagamento", "pagamentos", "pago", "pagos", "paga", "pagas", "cobranca", "cobrancas"} & tokens
     ):
         return "amount_day"
+    if {"rota", "rotas", "mapa", "mapas"} & tokens:
+        return "routes"
+    if {"validar", "conferir"} & tokens and {"data", "dia", "cobranca", "cobrancas", "payip"} & tokens:
+        return "validate_day"
+    if {"importar", "importacao", "automatizada"} & tokens and {"cobranca", "cobrancas", "payip"} & tokens:
+        return "import_batch"
     if {"emitir", "criar", "gerar", "nova", "novo"} & tokens and {"cobranca", "cobrancas"} & tokens:
         return "create_charge"
+    if {"criar", "cadastrar", "cadastro", "incluir"} & tokens and {"cliente", "payip"} <= tokens:
+        return "create_client"
     if {"extrato", "movimentacao", "movimentacoes", "movimentos"} & tokens:
         return "statement"
     if {"status", "sessao", "cache", "token", "tokens"} & tokens:
@@ -5868,6 +5993,8 @@ def _parse_hybrid_finance_request(normalized_text: str) -> HybridFinanceRequest:
             action = "prazo_limite"
         elif {"extrato", "movimentacao", "movimentacoes", "movimentos"} & tokens:
             action = "payip"
+        elif _parse_payip_action(normalized_text) in {"validate_day", "import_batch", "routes"}:
+            action = "payip"
 
     if action == "prazo_limite":
         document = _normalize_document(normalized_text)
@@ -5989,6 +6116,8 @@ def _looks_like_finance_request(normalized_text: str) -> bool:
     if {"prazo", "limite"} <= tokens or ({"prazo", "limite"} & tokens and {"liberacao", "validacao"} & tokens):
         return True
     if {"payip", "extrato", "movimentacao", "movimentacoes", "movimentos"} & tokens:
+        return True
+    if _parse_payip_action(normalized_text) in {"validate_day", "import_batch", "routes"}:
         return True
     return False
 

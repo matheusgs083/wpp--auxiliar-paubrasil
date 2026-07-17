@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import base64
+import io
+import re
 from typing import Any
+
+from pypdf import PdfReader, PdfWriter
 
 
 def _customer_flow_module() -> Any:
@@ -38,6 +43,19 @@ class CustomerRouter:
             return self.recolha_flow.handle_session(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
         if session.step.startswith('finance_'):
             return self.finance_flow.handle_session(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
+        if session.step == 'seller_finance_select_action':
+            selected_option = flow._select_interactive_option(text=text, normalized=normalized, options=flow._build_seller_finance_menu_response().options)
+            if selected_option is None:
+                session.updated_at = flow.datetime.now(flow.timezone.utc)
+                self.sessions[incoming.sender] = session
+                return flow._build_seller_finance_menu_response(invalid_selection=True)
+            if selected_option.option_id == flow.SELLER_FINANCE_ACTION_RECOLHA:
+                return self._open_recolha_request(sender=incoming.sender, session=session, text='', normalized='', decision=decision)
+            if selected_option.option_id == flow.SELLER_FINANCE_ACTION_BOLETO:
+                return self._open_boleto_registration_prompt(sender=incoming.sender, session=session)
+            return flow._build_seller_finance_menu_response(invalid_selection=True)
+        if session.step == 'awaiting_boleto_registration':
+            return self._handle_boleto_registration_input(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
         if session.step == 'awaiting_critica_action':
             readiness_error = self.critica_flow.ensure_ready(decision)
             if readiness_error is not None:
@@ -57,6 +75,8 @@ class CustomerRouter:
                 self.sessions[incoming.sender] = session
                 return self._build_intent_clarification_menu(session=session, invalid_selection=True)
             return self._run_intent_clarification_option(sender=incoming.sender, session=session, decision=decision, option_id=selected_option.option_id)
+        if session.step == 'awaiting_boleto_selection':
+            return self._handle_boleto_selection(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
         if flow._is_back_menu_command(normalized):
             if session.step == 'awaiting_post_result_navigation':
                 resumed_response = self._resume_post_result_navigation(sender=incoming.sender, session=session, decision=decision)
@@ -75,6 +95,9 @@ class CustomerRouter:
                 return flow._build_payip_pix_code_response(session.payip_pix_payloads, selection=payip_pix_selection, payip_payments_service=self.payip_payments_service)
             if flow._looks_like_critica_command(normalized):
                 return self.critica_flow.handle_command(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
+            payip_response = self.finance_flow.payip_flow.handle_post_result_request(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
+            if payip_response is not None:
+                return payip_response
             recolha_response = self.recolha_flow.handle_post_result_request(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
             if recolha_response is not None:
                 return recolha_response
@@ -199,6 +222,16 @@ class CustomerRouter:
             return recolha_response
         if flow._looks_like_critica_command(normalized):
             return self.critica_flow.handle_command(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
+        boleto_response = self._maybe_handle_boleto_command(sender=incoming.sender, text=text, normalized=normalized, decision=decision)
+        if boleto_response is not None:
+            return boleto_response
+        if session.step == 'idle' and self._looks_like_idle_direct_registration_lookup(text=text, normalized=normalized):
+            direct_lookup = flow._parse_direct_registration_lookup(text)
+            if direct_lookup is not None:
+                access_error = self._ensure_scoped_lookup_access(decision, search_context='cliente')
+                if access_error is not None:
+                    return access_error
+                return self._run_repeatable_registration_lookup(sender=incoming.sender, session=session, decision=decision, search_context='cliente', filial=direct_lookup[0], cod_pdv=direct_lookup[1])
         conversational_response = self._maybe_handle_idle_conversation(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
         if conversational_response is not None:
             return conversational_response
@@ -213,11 +246,13 @@ class CustomerRouter:
         giro_shortcut = main_menu_shortcuts.get(flow.MENU_GIRO, '')
         documentacao_shortcut = main_menu_shortcuts.get(flow.MENU_DOCUMENTACAO, '')
         recolha_shortcut = main_menu_shortcuts.get(flow.MENU_RECOLHA, '')
+        seller_financeiro_shortcut = main_menu_shortcuts.get(flow.MENU_SELLER_FINANCEIRO, '')
         visit_day_shortcut = main_menu_shortcuts.get(flow.MENU_VISIT_DAY, '')
         comodatos_shortcut = main_menu_shortcuts.get(flow.MENU_COMODATOS, '')
         summary_shortcut = main_menu_shortcuts.get(summary_option_id, '') if summary_option_id else ''
         seller_summary_shortcut = main_menu_shortcuts.get(flow.MENU_SELLER_SUMMARY, '')
         seller_risk_shortcut = main_menu_shortcuts.get(flow.MENU_SELLER_RISK, '')
+        critica_shortcut = main_menu_shortcuts.get(flow.MENU_CRITICA, '')
         financeiro_shortcut = main_menu_shortcuts.get(flow.MENU_FINANCEIRO, '')
         admin_shortcut = main_menu_shortcuts.get(flow.MENU_ADMIN_ACCESS, '')
         if normalized == flow.MENU_INADIMPLENCIA or (session.step == 'idle' and normalized in {value for value in {inadimplencia_shortcut, 'inadimplencia', 'inadimpl?ncia', 'inadimplente', 'devedor', 'cobranca', 'cobranca da carteira', 'cobranca da gerencia', 'cobran?a'} if value}):
@@ -303,8 +338,13 @@ class CustomerRouter:
             if self._can_view_recolhas(decision) and flow._looks_like_recolha_list_request(normalized):
                 return self._with_post_result_navigation(incoming.sender, session, self._build_recolhas_finance_response(request_text=normalized, sender=incoming.sender, decision=decision), return_menu='main')
             if not self._can_request_recolha(decision):
-                return flow.OutgoingMessage(text='A solicitacao de recolha esta liberada para vendedor e financeiro.\nSe voce for do financeiro, envie RECOLHAS para ver as solicitacoes.')
+                return flow.OutgoingMessage(text='A solicitacao de recolha esta liberada para vendedor, GV e financeiro.\nSe voce for do financeiro, envie RECOLHAS para ver as solicitacoes.')
             return self._open_recolha_request(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
+        if normalized == flow.MENU_SELLER_FINANCEIRO or (session.step == 'idle' and (self._is_vendedor(decision) or self._is_gerente_vendas(decision)) and normalized in {value for value in {seller_financeiro_shortcut, 'financeiro', 'menu financeiro', 'financeiro vendedor', 'financeiro gv'} if value}):
+            session.step = 'seller_finance_select_action'
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[incoming.sender] = session
+            return flow._build_seller_finance_menu_response()
         if normalized == flow.MENU_FINANCEIRO or (session.step == 'idle' and normalized in {value for value in {financeiro_shortcut, 'financeiro', 'financeiro menu', 'menu financeiro'} if value} and self._can_use_finance_menu(decision)):
             readiness_error = self._ensure_search_context_ready('inadimplencia', decision=decision)
             if readiness_error is not None:
@@ -379,6 +419,14 @@ class CustomerRouter:
                 self._reset_session(incoming.sender)
                 return access_error
             return self._with_post_result_navigation(incoming.sender, session, self._build_seller_risk_response(decision), return_menu='main')
+        if normalized == flow.MENU_CRITICA or (session.step == 'idle' and (self._is_vendedor(decision) or self._is_gerente_vendas(decision)) and normalized in {value for value in {critica_shortcut, 'critica', 'critica rn', 'menu critica'} if value}):
+            readiness_error = self.critica_flow.ensure_ready(decision)
+            if readiness_error is not None:
+                return readiness_error
+            session.step = 'awaiting_critica_action'
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[incoming.sender] = session
+            return flow._build_critica_menu_response()
         if normalized == flow.MENU_COMODATOS or (session.step == 'idle' and normalized in {value for value in {comodatos_shortcut, 'comodato', 'comodatos', 'pendencia de comodato', 'pendencias de comodato'} if value}):
             readiness_error = self._ensure_search_context_ready('comodato', decision=decision)
             if readiness_error is not None:
@@ -771,6 +819,382 @@ class CustomerRouter:
             self.sessions[incoming.sender] = session
             return self._build_search_menu(search_context='cliente', decision=decision)
         return self._build_main_menu(decision, invalid_selection=bool(normalized))
+
+    def _open_boleto_registration_prompt(self, *, sender: str, session: LookupSession) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        session.step = "awaiting_boleto_registration"
+        session.updated_at = flow.datetime.now(flow.timezone.utc)
+        self.sessions[sender] = session
+        return flow.OutgoingMessage(
+            text=(
+                "Solicitar Boleto\n\n"
+                "Informe revenda e NB do cliente.\n"
+                "Exemplo: 3 11305"
+            )
+        )
+
+    def _handle_boleto_registration_input(
+        self,
+        *,
+        sender: str,
+        session: LookupSession,
+        text: str,
+        normalized: str,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        parsed = self._parse_boleto_registration_command(text=text, normalized=normalized)
+        if parsed is None:
+            parsed = flow._parse_direct_registration_lookup(text)
+        if parsed is None:
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            return flow.OutgoingMessage(
+                text=(
+                    "Nao entendi a revenda e o NB.\n"
+                    "Envie nesse formato: 3 11305"
+                )
+            )
+        filial, cod_pdv = parsed
+        return self._run_boleto_registration_lookup(
+            sender=sender,
+            session=session,
+            filial=filial,
+            cod_pdv=cod_pdv,
+            decision=decision,
+        )
+
+    def _maybe_handle_boleto_command(self, *, sender: str, text: str, normalized: str, decision: AccessDecision) -> OutgoingMessage | None:
+        flow = _customer_flow_module()
+        parsed = self._parse_boleto_registration_command(text=text, normalized=normalized)
+        if parsed is None:
+            return None
+        filial, cod_pdv = parsed
+        session = self.sessions.get(sender, flow.LookupSession())
+        return self._run_boleto_registration_lookup(
+            sender=sender,
+            session=session,
+            filial=filial,
+            cod_pdv=cod_pdv,
+            decision=decision,
+        )
+
+    def _run_boleto_registration_lookup(
+        self,
+        *,
+        sender: str,
+        session: LookupSession,
+        filial: str,
+        cod_pdv: str,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        boletos_service = getattr(self, "boletos_service", None)
+        if boletos_service is None:
+            return flow.OutgoingMessage(text="A consulta de boletos ainda nao esta configurada.\nSe quiser fazer outra consulta, envie MENU.")
+        status = boletos_service.status()
+        if not status.get("ready"):
+            return flow.OutgoingMessage(text="A base de boletos ainda nao foi importada no painel admin.\nAssim que o PDF for validado e importado, eu consigo enviar normalmente.")
+        allowed_sectors = None if self._has_unrestricted_lookup_access(decision) else self._allowed_sectors(decision)
+        allowed_gv_vdes = None if self._has_unrestricted_lookup_access(decision) else self._allowed_gv_vdes(decision)
+        try:
+            records = boletos_service.search_by_registration(
+                filial=filial,
+                cod_pdv=cod_pdv,
+                allowed_sectors=allowed_sectors,
+                allowed_gv_vdes=allowed_gv_vdes,
+                limit=20,
+                include_pdf=False,
+            )
+        except Exception:
+            flow.logger.exception("Falha ao consultar boleto", extra={"filial": filial, "cod_pdv": cod_pdv})
+            return flow.OutgoingMessage(text="Nao consegui consultar esse boleto agora.\nTente novamente em instantes.")
+        if not records:
+            unrestricted_records = []
+            try:
+                if allowed_sectors is not None or allowed_gv_vdes is not None:
+                    unrestricted_records = boletos_service.search_by_registration(
+                        filial=filial,
+                        cod_pdv=cod_pdv,
+                        allowed_sectors=None,
+                        allowed_gv_vdes=None,
+                        limit=1,
+                        include_pdf=False,
+                    )
+            except Exception:
+                unrestricted_records = []
+            if unrestricted_records:
+                return flow.OutgoingMessage(text=f"Encontrei boleto para revenda {filial} e NB {cod_pdv}, mas ele nao esta dentro do seu acesso.\nSe quiser tentar outro cliente, envie boleto revenda NB.")
+            return flow.OutgoingMessage(text=f"Nao ha boleto importado para revenda {filial} e NB {cod_pdv}.\nConfira se o PDF correto dessa operacao foi importado no painel ou tente outro cliente.")
+        if len(records) > 1:
+            session = self.sessions.get(sender, flow.LookupSession())
+            session.step = "awaiting_boleto_selection"
+            session.boleto_filial = filial
+            session.boleto_cod_pdv = cod_pdv
+            session.boleto_option_count = len(records)
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            return self._format_boleto_selection_message(filial=filial, cod_pdv=cod_pdv, records=records)
+        try:
+            records_with_pdf = boletos_service.search_by_registration(
+                filial=filial,
+                cod_pdv=cod_pdv,
+                allowed_sectors=allowed_sectors,
+                allowed_gv_vdes=allowed_gv_vdes,
+                limit=1,
+                include_pdf=True,
+            )
+        except Exception:
+            flow.logger.exception("Falha ao carregar PDF do boleto", extra={"filial": filial, "cod_pdv": cod_pdv})
+            return flow.OutgoingMessage(text="Encontrei o boleto, mas nao consegui gerar o PDF agora.\nTente novamente em instantes.")
+        if not records_with_pdf:
+            return flow.OutgoingMessage(text="Essa lista de boletos mudou. Envie boleto revenda NB novamente para atualizar a consulta.")
+        return self._build_boleto_media_response(record=records_with_pdf[0], requested_filial=filial, requested_cod_pdv=cod_pdv)
+
+    def _handle_boleto_selection(self, *, sender: str, session: LookupSession, text: str, normalized: str, decision: AccessDecision) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        option_text = str(normalized or text or "").strip()
+        selection_kind, selected_index = self._parse_boleto_selection_option(option_text)
+        if not selection_kind:
+            return self._repeat_boleto_selection(session=session, decision=decision, invalid=True)
+        if selection_kind == "single" and (selected_index is None or selected_index < 0 or selected_index >= int(session.boleto_option_count or 0)):
+            return self._repeat_boleto_selection(session=session, decision=decision, invalid=True)
+        boletos_service = getattr(self, "boletos_service", None)
+        if boletos_service is None:
+            self._reset_session(sender)
+            return flow.OutgoingMessage(text="A consulta de boletos ainda nao esta configurada.\nSe quiser fazer outra consulta, envie MENU.")
+        allowed_sectors = None if self._has_unrestricted_lookup_access(decision) else self._allowed_sectors(decision)
+        allowed_gv_vdes = None if self._has_unrestricted_lookup_access(decision) else self._allowed_gv_vdes(decision)
+        try:
+            records = boletos_service.search_by_registration(
+                filial=session.boleto_filial,
+                cod_pdv=session.boleto_cod_pdv,
+                allowed_sectors=allowed_sectors,
+                allowed_gv_vdes=allowed_gv_vdes,
+                limit=20,
+                include_pdf=True,
+            )
+        except Exception:
+            flow.logger.exception("Falha ao consultar boleto selecionado", extra={"filial": session.boleto_filial, "cod_pdv": session.boleto_cod_pdv})
+            self._reset_session(sender)
+            return flow.OutgoingMessage(text="Nao consegui consultar esse boleto agora.\nTente novamente em instantes.")
+        if selection_kind == "all_merged":
+            self._reset_session(sender)
+            return self._build_boleto_merged_media_response(
+                records=records,
+                requested_filial=session.boleto_filial,
+                requested_cod_pdv=session.boleto_cod_pdv,
+            )
+        if selection_kind == "all_separate":
+            self._reset_session(sender)
+            return self._build_boleto_separate_media_response(
+                records=records,
+                requested_filial=session.boleto_filial,
+                requested_cod_pdv=session.boleto_cod_pdv,
+            )
+        if selected_index is None or selected_index >= len(records):
+            self._reset_session(sender)
+            return flow.OutgoingMessage(text="Essa lista de boletos mudou. Envie boleto revenda NB novamente para atualizar a consulta.")
+        record = records[selected_index]
+        self._reset_session(sender)
+        return self._build_boleto_media_response(record=record, requested_filial=session.boleto_filial, requested_cod_pdv=session.boleto_cod_pdv)
+
+    def _repeat_boleto_selection(self, *, session: LookupSession, decision: AccessDecision, invalid: bool = False) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        boletos_service = getattr(self, "boletos_service", None)
+        if boletos_service is None:
+            return flow.OutgoingMessage(text="A consulta de boletos ainda nao esta configurada.\nSe quiser fazer outra consulta, envie MENU.")
+        allowed_sectors = None if self._has_unrestricted_lookup_access(decision) else self._allowed_sectors(decision)
+        allowed_gv_vdes = None if self._has_unrestricted_lookup_access(decision) else self._allowed_gv_vdes(decision)
+        records = boletos_service.search_by_registration(
+            filial=session.boleto_filial,
+            cod_pdv=session.boleto_cod_pdv,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+            limit=20,
+            include_pdf=False,
+        )
+        prefix = "Opcao invalida.\n\n" if invalid else ""
+        return self._format_boleto_selection_message(
+            filial=session.boleto_filial,
+            cod_pdv=session.boleto_cod_pdv,
+            records=records,
+            prefix=prefix,
+        )
+
+    def _format_boleto_selection_message(self, *, filial: str, cod_pdv: str, records: list[Any], prefix: str = "") -> OutgoingMessage:
+        flow = _customer_flow_module()
+        lines = [
+            f"{prefix}Boletos encontrados",
+            "",
+            f"*Revenda:* {filial} | *NB:* {cod_pdv}",
+            f"*Total:* {len(records)} boleto(s)",
+            "",
+        ]
+        for index, record in enumerate(records, start=1):
+            due_label = record.vencimento.strftime("%d/%m") if record.vencimento else "-"
+            nf_label = getattr(record, "nota_fiscal", "") or "-"
+            value_label = self._format_boleto_money(record.valor_centavos)
+            lines.append(f"{index} - NF {nf_label} | Venc {due_label} | {value_label}")
+        lines.extend(
+            [
+                "",
+                "Responda com:",
+                "- numero do boleto para receber apenas um",
+                "- TODOS JUNTOS para receber um unico PDF",
+                "- TODOS SEPARADOS para receber um PDF por boleto",
+            ]
+        )
+        return flow.OutgoingMessage(text="\n".join(lines))
+
+    def _build_boleto_media_response(self, *, record: Any, requested_filial: str, requested_cod_pdv: str) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        encoded_pdf = base64.b64encode(record.pdf_bytes).decode("ascii")
+        due_label = record.vencimento.strftime("%d/%m/%Y") if record.vencimento else "-"
+        document_date_label = record.data_documento.strftime("%d/%m/%Y") if getattr(record, "data_documento", None) else "-"
+        value_label = self._format_boleto_money(record.valor_centavos)
+        text_lines = [
+            "Boleto encontrado",
+            "",
+            f"*Revenda:* {record.filial or requested_filial} | *NB:* {record.cod_pdv or requested_cod_pdv}",
+            f"*Cliente:* {record.pagador or '-'}",
+            f"*Setor:* {record.setor or '-'} | *GV:* {record.gv or '-'}",
+            f"*Mapa:* {getattr(record, 'mapa', '') or '-'} | *NF:* {getattr(record, 'nota_fiscal', '') or '-'}",
+            f"*Data doc.:* {document_date_label}",
+            f"*Vencimento:* {due_label}",
+            f"*Valor:* {value_label}",
+            f"*Nosso numero:* {record.nosso_numero or '-'}",
+            "",
+            "Estou enviando o PDF em anexo.",
+        ]
+        return flow.OutgoingMessage(
+            kind="media",
+            text="\n".join(text_lines),
+            media_url=f"data:application/pdf;base64,{encoded_pdf}",
+            media_type="document",
+            media_caption=f"Boleto NB {record.cod_pdv or requested_cod_pdv}",
+            media_filename=f"boleto-{record.filial or requested_filial}-{record.cod_pdv or requested_cod_pdv}.pdf",
+        )
+
+    def _build_boleto_merged_media_response(self, *, records: list[Any], requested_filial: str, requested_cod_pdv: str) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        pdf_bytes = self._merge_boleto_pdf_bytes(records)
+        if not pdf_bytes:
+            return flow.OutgoingMessage(text="Encontrei os boletos, mas nao consegui gerar os PDFs agora.\nTente novamente em instantes.")
+        encoded_pdf = base64.b64encode(pdf_bytes).decode("ascii")
+        total_value = sum(int(getattr(record, "valor_centavos", 0) or 0) for record in records)
+        text_lines = [
+            "Boletos encontrados",
+            "",
+            f"*Revenda:* {requested_filial} | *NB:* {requested_cod_pdv}",
+            f"*Total:* {len(records)} boleto(s)",
+            f"*Valor total:* {self._format_boleto_money(total_value)}",
+            "",
+            "Estou enviando todos os boletos juntos em um unico PDF.",
+        ]
+        return flow.OutgoingMessage(
+            kind="media",
+            text="\n".join(text_lines),
+            media_url=f"data:application/pdf;base64,{encoded_pdf}",
+            media_type="document",
+            media_caption=f"Boletos NB {requested_cod_pdv}",
+            media_filename=f"boletos-{requested_filial}-{requested_cod_pdv}.pdf",
+        )
+
+    def _build_boleto_separate_media_response(self, *, records: list[Any], requested_filial: str, requested_cod_pdv: str) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        attachments = []
+        for index, record in enumerate(records, start=1):
+            pdf_bytes = bytes(getattr(record, "pdf_bytes", b"") or b"")
+            if not pdf_bytes:
+                continue
+            nf_label = str(getattr(record, "nota_fiscal", "") or index)
+            encoded_pdf = base64.b64encode(pdf_bytes).decode("ascii")
+            attachments.append(
+                flow.MediaAttachment(
+                    media_url=f"data:application/pdf;base64,{encoded_pdf}",
+                    media_type="document",
+                    media_caption=f"Boleto {index} NB {record.cod_pdv or requested_cod_pdv} NF {nf_label}",
+                    media_filename=f"boleto-{record.filial or requested_filial}-{record.cod_pdv or requested_cod_pdv}-nf-{nf_label}.pdf",
+                )
+            )
+        if not attachments:
+            return flow.OutgoingMessage(text="Encontrei os boletos, mas nao consegui gerar os PDFs agora.\nTente novamente em instantes.")
+        total_value = sum(int(getattr(record, "valor_centavos", 0) or 0) for record in records)
+        text_lines = [
+            "Boletos encontrados",
+            "",
+            f"*Revenda:* {requested_filial} | *NB:* {requested_cod_pdv}",
+            f"*Total:* {len(attachments)} boleto(s)",
+            f"*Valor total:* {self._format_boleto_money(total_value)}",
+            "",
+            "Estou enviando todos os boletos separadamente.",
+        ]
+        first = attachments[0]
+        return flow.OutgoingMessage(
+            kind="media",
+            text="\n".join(text_lines),
+            media_url=first.media_url,
+            media_type=first.media_type,
+            media_caption=first.media_caption,
+            media_filename=first.media_filename,
+            extra_media=tuple(attachments[1:]),
+        )
+
+    def _merge_boleto_pdf_bytes(self, records: list[Any]) -> bytes:
+        writer = PdfWriter()
+        for record in records:
+            pdf_bytes = bytes(getattr(record, "pdf_bytes", b"") or b"")
+            if not pdf_bytes:
+                continue
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+            for page in reader.pages:
+                writer.add_page(page)
+        if len(writer.pages) == 0:
+            return b""
+        buffer = io.BytesIO()
+        writer.write(buffer)
+        return buffer.getvalue()
+
+    def _parse_boleto_selection_option(self, value: str) -> tuple[str, int | None]:
+        normalized = str(value or "").strip().lower()
+        if normalized in {"0", "todos", "todos juntos", "junto", "juntos", "pdf unico", "unico", "unica", "todos em um", "todos em 1"}:
+            return "all_merged", None
+        if normalized in {"00", "todos separados", "separados", "separado", "individual", "individuais", "um por um", "cada um"}:
+            return "all_separate", None
+        if re.fullmatch(r"\d{1,2}", normalized):
+            return "single", int(normalized) - 1
+        return "", None
+
+    def _parse_boleto_registration_command(self, *, text: str, normalized: str) -> tuple[str, str] | None:
+        value = str(normalized or text or "").strip().lower()
+        if not value.startswith("boleto"):
+            return None
+        numbers = [item for item in re.findall(r"\d+", value)]
+        if len(numbers) < 2:
+            return None
+        return numbers[0], numbers[1]
+
+    def _format_boleto_money(self, cents: int) -> str:
+        amount = max(int(cents or 0), 0) / 100
+        return f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def _looks_like_idle_direct_registration_lookup(self, *, text: str, normalized: str) -> bool:
+        flow = _customer_flow_module()
+        value = str(normalized or text or "").strip().lower()
+        if flow._parse_payip_action(value) in {"validate_day", "import_batch", "routes"}:
+            return False
+        numbers = re.findall(r"\d+", value)
+        if len(numbers) != 2:
+            return False
+        if re.fullmatch(r"\d{1,4}\D+\d{2,}", value):
+            return True
+        return bool(
+            re.fullmatch(
+                r"(?:revenda|filial)\D*\d{1,4}\D*(?:nb|cod(?:igo)?\s*pdv)\D*\d{2,}",
+                value,
+            )
+        )
 
     def _maybe_handle_idle_conversation(self, sender: str, session: LookupSession, text: str, normalized: str, decision: AccessDecision) -> OutgoingMessage | None:
         flow = _customer_flow_module()

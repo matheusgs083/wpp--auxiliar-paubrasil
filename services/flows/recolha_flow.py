@@ -161,7 +161,7 @@ class RecolhaFlow:
         if not self._can_request_recolha(decision):
             return flow.OutgoingMessage(
                 text=(
-                    "A solicitacao de recolha esta liberada para vendedor e financeiro.\n"
+                    "A solicitacao de recolha esta liberada para vendedor, GV e financeiro.\n"
                     "Se voce for do financeiro, envie RECOLHAS para ver as solicitacoes."
                 )
             )
@@ -177,7 +177,7 @@ class RecolhaFlow:
         flow = _customer_flow_module()
         if not self._can_request_recolha(decision):
             self._reset_session(sender)
-            return flow.OutgoingMessage(text='A solicitacao de recolha esta liberada para vendedor e financeiro.\nSe voce for do financeiro, envie RECOLHAS para ver as solicitacoes.')
+            return flow.OutgoingMessage(text='A solicitacao de recolha esta liberada para vendedor, GV e financeiro.\nSe voce for do financeiro, envie RECOLHAS para ver as solicitacoes.')
         text = self._contextualize_recolha_request_text(session=session, text=text)
         self._clear_recolha_state(session)
         inline_request = flow._parse_recolha_inline_request(text)
@@ -252,7 +252,7 @@ class RecolhaFlow:
             return self._build_recolha_clear_confirmation(invalid_selection=True)
         if not self._can_request_recolha(decision):
             self._reset_session(sender)
-            return flow.OutgoingMessage(text='Esse fluxo de recolha esta liberado para vendedor e financeiro.')
+            return flow.OutgoingMessage(text='Esse fluxo de recolha esta liberado para vendedor, GV e financeiro.')
         if normalized in {'editar', 'recomecar', 'reiniciar'}:
             self._clear_recolha_state(session)
             session.step = 'recolha_awaiting_client'
@@ -618,7 +618,7 @@ class RecolhaFlow:
 
     def _can_request_recolha(self, decision: AccessDecision) -> bool:
         flow = _customer_flow_module()
-        return self._is_vendedor(decision) or self._can_use_finance_menu(decision)
+        return self._is_vendedor(decision) or self._is_gerente_vendas(decision) or self._can_use_finance_menu(decision)
 
     def _can_view_recolhas(self, decision: AccessDecision) -> bool:
         flow = _customer_flow_module()

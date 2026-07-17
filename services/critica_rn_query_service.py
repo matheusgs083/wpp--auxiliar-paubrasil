@@ -23,17 +23,8 @@ from bot_api.commercial_scope import (
     partition_sector_scopes,
 )
 from bot_api.db import get_connection_pool
+from bot_api.services.filial_labels import FILIAL_LABELS
 
-FILIAL_OPERATION_LABELS = {
-    "1": "Sousa",
-    "2": "Itaporanga",
-    "3": "Patos",
-    "4": "Sume",
-    "5": "Guarabira",
-    "6": "Brumado",
-    "7": "Barra",
-    "8": "Cacule",
-}
 PRICE_TOLERANCE_OP1 = Decimal("0.03")
 PRICE_TOLERANCE_DEFAULT = Decimal("0.12")
 B2B_PRICE_TOLERANCE = Decimal("0.60")
@@ -2905,7 +2896,7 @@ def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
         caixa_max=caixa_max,
         problemas=(),
         planilha_atualizada_em=_format_updated_at(row.get("reference_date"), row.get("batch_imported_at")),
-        operation_name=FILIAL_OPERATION_LABELS.get(filial, filial),
+        operation_name=FILIAL_LABELS.get(filial, filial),
         produto_peso_bruto=produto_peso_bruto,
         peso_item=peso_item,
         movement_operation_name=str(row.get("movement_operation_name") or "").strip(),

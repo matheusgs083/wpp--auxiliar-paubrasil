@@ -44,6 +44,17 @@ def build_admin_import_datasets(
             "summarize_method": "summarize_source",
             "import_method": "import_source",
         },
+        "drevendas": {
+            "label": "dRevendas",
+            "default_path": project_root / "data" / "dRevendas" / "dRevendas.xlsx",
+            "allow_default_source": False,
+            "service": services.drevendas_import_service,
+            "upload_mode": "single",
+            "accept_extensions": ".xlsx,.xlsm,.csv",
+            "validate_method": "validate_source",
+            "summarize_method": "summarize_source",
+            "import_method": "import_source",
+        },
         "dcondicoes": {
             "label": "dCondicoes",
             "default_path": project_root / "data" / "dCondicoes" / "dCondicoes.csv",
@@ -76,6 +87,20 @@ def build_admin_import_datasets(
             "validate_method": "validate_source",
             "summarize_method": "summarize_source",
             "import_method": "import_source",
+        },
+        **{
+            f"boletos_bradesco_op_{filial_code}": {
+                "label": f"Boletos Operacao {filial_code} - {filial_labels[filial_code]}",
+                "default_path": project_root / "data" / "Boletos" / f"boletos_bradesco_operacao_{filial_code}.pdf",
+                "allow_default_source": False,
+                "service": services.boletos_pdf_import_services[filial_code],
+                "upload_mode": "single",
+                "accept_extensions": ".pdf",
+                "validate_method": "validate_source",
+                "summarize_method": "summarize_source",
+                "import_method": "import_source",
+            }
+            for filial_code in sorted(filial_labels, key=int)
         },
         "dclientes": {
             "label": "dClientes",

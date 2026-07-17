@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -16,6 +17,7 @@ from psycopg.types.json import Jsonb
 
 from bot_api.commercial_scope import normalize_numeric_code
 from bot_api.services.dsetores_import_service import ensure_dsetores_schema
+from bot_api.services.filial_labels import FILIAL_LABELS
 from bot_api.services.import_publication import (
     activate_import_batch,
     ensure_dataset_state_table,
@@ -25,16 +27,6 @@ from bot_api.services.import_publication import (
 
 
 EXPECTED_EXTENSION_SET = {".xlsx", ".xlsm", ".xls"}
-FILIAL_LABELS = {
-    "1": "Sousa",
-    "2": "Itaporanga",
-    "3": "Patos",
-    "4": "Sume",
-    "5": "Guarabira",
-    "6": "Brumado",
-    "7": "Barra",
-    "8": "Cacule",
-}
 STATUS_OK = "OK"
 STATUS_NOK = "NOK"
 STATUS_ZERO = "ZERO"
@@ -257,6 +249,8 @@ class GiroImportService:
             ensure_dsetores_schema(conn, self.schema)
             self._ensure_schema(conn)
             active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "giro", activate_if_missing=True)
+            if active_batch_id is not None:
+                self._hydrate_scope_columns(conn, active_batch_id)
             self._create_latest_view(conn)
             conn.commit()
 
@@ -502,75 +496,93 @@ def _load_giro_rows(source_path: Path) -> tuple[str, list[GiroFlatRow]]:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         workbook = load_workbook(path, data_only=True, read_only=True)
-    worksheet = workbook[workbook.sheetnames[0]]
+    try:
+        worksheet = workbook[workbook.sheetnames[0]]
+        sheet_title = worksheet.title
 
-    header_row = [str(value or "").strip() for value in next(worksheet.iter_rows(min_row=2, max_row=2, values_only=True))]
-    modern_layout_map = _resolve_modern_layout_map(header_row)
-    if modern_layout_map is not None:
-        return worksheet.title, _load_giro_rows_modern_layout(worksheet, modern_layout_map)
+        modern_header = _find_modern_layout_header(worksheet)
+        if modern_header is not None:
+            header_row_number, modern_layout_map = modern_header
+            return sheet_title, _load_giro_rows_modern_layout(
+                worksheet,
+                modern_layout_map,
+                data_start_row=header_row_number + 1,
+            )
 
+        current_revenda = ""
+        current_filial = ""
+        for row_index, row_values in enumerate(worksheet.iter_rows(min_row=3, values_only=True), start=3):
+            row = list(row_values)
+            if len(row) < 24:
+                row.extend([None] * (24 - len(row)))
+
+            revenda_candidate = _clean_text(row[0])
+            if revenda_candidate:
+                current_revenda = revenda_candidate
+
+            fantasia = _clean_text(row[1])
+            setor = normalize_numeric_code(row[2])
+            if not fantasia and not setor:
+                continue
+
+            nb = normalize_numeric_code(row[3] or row[10] or row[17])
+            filial_candidate = normalize_numeric_code(row[4] or row[11] or row[18])
+            if filial_candidate:
+                current_filial = filial_candidate
+            filial = current_filial
+            rows.append(
+                GiroFlatRow(
+                    revenda=current_revenda,
+                    fantasia=fantasia,
+                    setor=setor,
+                    nb=nb,
+                    filial=filial,
+                    total_litrinho=_to_decimal(row[6]),
+                    real_litrinho=_to_decimal(row[7]),
+                    gap_litrinho=_to_decimal(row[8]),
+                    giro_litrinho=_normalize_giro_status(row[9]),
+                    total_inteira=_to_decimal(row[13]),
+                    real_inteira=_to_decimal(row[14]),
+                    gap_inteira=_to_decimal(row[15]),
+                    giro_inteira=_normalize_giro_status(row[16]),
+                    total_litrao=_to_decimal(row[20]),
+                    real_litrao=_to_decimal(row[21]),
+                    gap_litrao=_to_decimal(row[22]),
+                    giro_litrao=_normalize_giro_status(row[23]),
+                    source_row_number=row_index,
+                )
+            )
+        return sheet_title, rows
+    finally:
+        workbook.close()
+
+
+def _load_giro_rows_modern_layout(worksheet: Any, column_map: dict[str, int], *, data_start_row: int = 3) -> list[GiroFlatRow]:
+    rows: list[GiroFlatRow] = []
     current_revenda = ""
     current_filial = ""
-    for row_index, row_values in enumerate(worksheet.iter_rows(min_row=3, values_only=True), start=3):
-        row = list(row_values)
-        if len(row) < 24:
-            row.extend([None] * (24 - len(row)))
-
-        revenda_candidate = _clean_text(row[0])
-        if revenda_candidate:
-            current_revenda = revenda_candidate
-
-        fantasia = _clean_text(row[1])
-        setor = normalize_numeric_code(row[2])
-        if not fantasia and not setor:
-            continue
-
-        nb = normalize_numeric_code(row[3] or row[10] or row[17])
-        filial_candidate = normalize_numeric_code(row[4] or row[11] or row[18])
-        if filial_candidate:
-            current_filial = filial_candidate
-        filial = current_filial
-        rows.append(
-            GiroFlatRow(
-                revenda=current_revenda,
-                fantasia=fantasia,
-                setor=setor,
-                nb=nb,
-                filial=filial,
-                total_litrinho=_to_decimal(row[6]),
-                real_litrinho=_to_decimal(row[7]),
-                gap_litrinho=_to_decimal(row[8]),
-                giro_litrinho=_normalize_giro_status(row[9]),
-                total_inteira=_to_decimal(row[13]),
-                real_inteira=_to_decimal(row[14]),
-                gap_inteira=_to_decimal(row[15]),
-                giro_inteira=_normalize_giro_status(row[16]),
-                total_litrao=_to_decimal(row[20]),
-                real_litrao=_to_decimal(row[21]),
-                gap_litrao=_to_decimal(row[22]),
-                giro_litrao=_normalize_giro_status(row[23]),
-                source_row_number=row_index,
-            )
-        )
-    return worksheet.title, rows
-
-
-def _load_giro_rows_modern_layout(worksheet: Any, column_map: dict[str, int]) -> list[GiroFlatRow]:
-    rows: list[GiroFlatRow] = []
-    for row_index, row_values in enumerate(worksheet.iter_rows(min_row=3, values_only=True), start=3):
+    for row_index, row_values in enumerate(worksheet.iter_rows(min_row=data_start_row, values_only=True), start=data_start_row):
         row = list(row_values)
         required_length = max(column_map.values()) + 1
         if len(row) < required_length:
             row.extend([None] * (required_length - len(row)))
 
-        revenda = _clean_text(row[column_map["revenda"]])
+        revenda_candidate = _clean_text(row[column_map["revenda"]])
         nb = normalize_numeric_code(row[column_map["nb"]])
         fantasia = _clean_text(row[column_map["fantasia"]])
         setor = normalize_numeric_code(row[column_map["setor"]])
-        filial = normalize_numeric_code(row[column_map["filial"]]) or _filial_from_revenda(revenda)
 
-        if not revenda and not nb and not fantasia and not setor:
+        if revenda_candidate and not nb and not fantasia and not setor:
             continue
+        if not revenda_candidate and not nb and not fantasia and not setor:
+            continue
+        if revenda_candidate:
+            current_revenda = revenda_candidate
+        revenda = revenda_candidate or current_revenda
+        filial_candidate = _filial_from_revenda(revenda) or normalize_numeric_code(row[column_map["filial"]])
+        if filial_candidate:
+            current_filial = filial_candidate
+        filial = filial_candidate or current_filial
 
         rows.append(
             GiroFlatRow(
@@ -597,6 +609,15 @@ def _load_giro_rows_modern_layout(worksheet: Any, column_map: dict[str, int]) ->
     return rows
 
 
+def _find_modern_layout_header(worksheet: Any) -> tuple[int, dict[str, int]] | None:
+    for row_number, row_values in enumerate(worksheet.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
+        header_row = [str(value or "").strip() for value in row_values]
+        modern_layout_map = _resolve_modern_layout_map(header_row)
+        if modern_layout_map is not None:
+            return row_number, modern_layout_map
+    return None
+
+
 def _resolve_modern_layout_map(header_row: list[str]) -> dict[str, int] | None:
     normalized = [_normalize_lookup_text(value) for value in header_row]
     if len(normalized) >= 5 and normalized[:5] == ["revenda", "fantasia", "setor", "nb", "filial"]:
@@ -618,6 +639,55 @@ def _resolve_modern_layout_map(header_row: list[str]) -> dict[str, int] | None:
             "real_litrao": 21,
             "gap_litrao": 22,
             "giro_litrao": 23,
+        }
+    if len(normalized) >= 18 and normalized[:4] == ["revenda", "fantasia", "setor", "visita"]:
+        groups = _find_giro_metric_groups(normalized, start_index=4)
+        if len(groups) >= 3:
+            lit_group, inteira_group, litrao_group = groups[:3]
+            return {
+                "revenda": 0,
+                "fantasia": 1,
+                "setor": 2,
+                "nb": lit_group["nb"],
+                "filial": lit_group["filial"],
+                "total_litrinho": lit_group["total"],
+                "real_litrinho": lit_group["real"],
+                "gap_litrinho": lit_group["gap"],
+                "giro_litrinho": lit_group["giro"],
+                "total_inteira": inteira_group["total"],
+                "real_inteira": inteira_group["real"],
+                "gap_inteira": inteira_group["gap"],
+                "giro_inteira": inteira_group["giro"],
+                "total_litrao": litrao_group["total"],
+                "real_litrao": litrao_group["real"],
+                "gap_litrao": litrao_group["gap"],
+                "giro_litrao": litrao_group["giro"],
+            }
+    if (
+        len(normalized) >= 25
+        and normalized[:4] == ["revenda", "fantasia", "setor", "visita"]
+        and normalized[5:11] == ["nb", "filial", "total", "real", "gap", "giro"]
+        and normalized[12:18] == ["nb", "filial", "total", "real", "gap", "giro"]
+        and normalized[19:25] == ["nb", "filial", "total", "real", "gap", "giro"]
+    ):
+        return {
+            "revenda": 0,
+            "fantasia": 1,
+            "setor": 2,
+            "nb": 5,
+            "filial": 6,
+            "total_litrinho": 7,
+            "real_litrinho": 8,
+            "gap_litrinho": 9,
+            "giro_litrinho": 10,
+            "total_inteira": 14,
+            "real_inteira": 15,
+            "gap_inteira": 16,
+            "giro_inteira": 17,
+            "total_litrao": 21,
+            "real_litrao": 22,
+            "gap_litrao": 23,
+            "giro_litrao": 24,
         }
     if len(normalized) >= 5 and normalized[:4] == ["revenda", "nb", "fantasia", "setor"]:
         return {
@@ -642,6 +712,35 @@ def _resolve_modern_layout_map(header_row: list[str]) -> dict[str, int] | None:
     return None
 
 
+def _find_giro_metric_groups(normalized_header: list[str], *, start_index: int) -> list[dict[str, int]]:
+    groups: list[dict[str, int]] = []
+    index = start_index
+    while index < len(normalized_header):
+        if normalized_header[index] != "nb":
+            index += 1
+            continue
+        if index + 1 >= len(normalized_header) or normalized_header[index + 1] != "filial":
+            index += 1
+            continue
+        cursor = index + 2
+        while cursor < len(normalized_header) and not normalized_header[cursor]:
+            cursor += 1
+        metric_indexes: dict[str, int] = {"nb": index, "filial": index + 1}
+        valid = True
+        for metric in ("total", "real", "gap", "giro"):
+            if cursor >= len(normalized_header) or normalized_header[cursor] != metric:
+                valid = False
+                break
+            metric_indexes[metric] = cursor
+            cursor += 1
+        if valid:
+            groups.append(metric_indexes)
+            index = cursor
+            continue
+        index += 1
+    return groups
+
+
 def _normalize_schema(schema: str) -> str:
     normalized = str(schema or "").strip()
     return normalized or "reports"
@@ -660,7 +759,9 @@ def _filial_from_revenda(revenda: str) -> str:
 
 
 def _normalize_lookup_text(value: Any) -> str:
-    return "".join(ch for ch in str(value or "").strip().lower() if ch.isalnum())
+    normalized = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+    without_accents = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return "".join(ch for ch in without_accents if ch.isalnum())
 
 
 def _to_decimal(value: Any) -> Decimal:

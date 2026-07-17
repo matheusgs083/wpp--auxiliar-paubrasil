@@ -16,6 +16,14 @@ class AdminPayipBatchRequest(BaseModel):
     mfa_code: str = ""
 
 
+class AdminPayipPromaxImportRequest(BaseModel):
+    filial: str
+    start_date: str
+    end_date: str
+    mfa_code: str = ""
+    auto_create_clients: bool = False
+
+
 def create_admin_payip_router(
     *,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
@@ -25,6 +33,8 @@ def create_admin_payip_router(
     snapshot_payip_batch: Callable[..., dict[str, Any]],
     export_payip_batch_csv: Callable[..., tuple[bytes, str]],
     payip_batch_pdf_bytes: Callable[..., tuple[bytes, str]],
+    validate_payip_promax_import: Callable[[AdminPayipPromaxImportRequest, dict[str, Any] | None], dict[str, Any]],
+    run_payip_promax_import: Callable[[AdminPayipPromaxImportRequest, dict[str, Any] | None], dict[str, Any]],
     record_security_event: Callable[..., None],
 ) -> APIRouter:
     router = APIRouter()
@@ -111,6 +121,54 @@ def create_admin_payip_router(
             reason=f"job_id={job.get('job_id') if isinstance(job, dict) else ''}",
         )
         return {"ok": True, "queued": True, **result}
+
+    @router.post("/api/admin/payip/import/validate")
+    def api_admin_payip_import_validate(
+        request: Request,
+        payload: AdminPayipPromaxImportRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_payip_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        result = validate_payip_promax_import(payload, context)
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_payip_import_validate",
+            decision="allowed",
+            reason=f"filial={payload.filial};items={result.get('items_count')};missing={len(result.get('missing_client_codes') or [])}",
+        )
+        return {"ok": True, **result}
+
+    @router.post("/api/admin/payip/import/run")
+    def api_admin_payip_import_run(
+        request: Request,
+        payload: AdminPayipPromaxImportRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_payip_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        result = run_payip_promax_import(payload, context)
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_payip_import_run",
+            decision="allowed",
+            reason=f"filial={payload.filial};items={result.get('items_count')};created={len((result.get('client_creation') or {}).get('created') or [])}",
+        )
+        return {"ok": True, **result}
 
     @router.get("/api/admin/payip/batch/result")
     def api_admin_payip_batch_result(

@@ -48,6 +48,19 @@ from tests.test_support import (
 )
 
 
+class StubBoletosService:
+    def __init__(self, records: list[SimpleNamespace]) -> None:
+        self.records = records
+        self.calls: list[dict[str, object]] = []
+
+    def status(self) -> dict[str, bool]:
+        return {"ready": True}
+
+    def search_by_registration(self, **kwargs: object) -> list[SimpleNamespace]:
+        self.calls.append(dict(kwargs))
+        return list(self.records)
+
+
 class CustomerLookupFlowRoutingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.query_service = StubQueryService(ready=True)
@@ -67,11 +80,96 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             payip_payments_service=self.payip_service,
         )
 
+    def _make_boleto_pdf_bytes(self) -> bytes:
+        import io
+
+        from pypdf import PdfWriter
+
+        writer = PdfWriter()
+        writer.add_blank_page(width=72, height=72)
+        buffer = io.BytesIO()
+        writer.write(buffer)
+        return buffer.getvalue()
+
+    def _make_boleto_records(self) -> list[SimpleNamespace]:
+        return [
+            SimpleNamespace(
+                filial="3",
+                cod_pdv="11305",
+                mapa="27848",
+                nota_fiscal="167139",
+                setor="401",
+                gv="5",
+                pagador="MARIA GABRIELY RAMOS FARIAS LTDA",
+                data_documento=date(2026, 6, 12),
+                vencimento=date(2026, 6, 18),
+                valor_centavos=403525,
+                nosso_numero="09/15630075670-3",
+                pdf_bytes=self._make_boleto_pdf_bytes(),
+            ),
+            SimpleNamespace(
+                filial="3",
+                cod_pdv="11305",
+                mapa="27849",
+                nota_fiscal="168228",
+                setor="401",
+                gv="5",
+                pagador="MARIA GABRIELY RAMOS FARIAS LTDA",
+                data_documento=date(2026, 6, 20),
+                vencimento=date(2026, 6, 22),
+                valor_centavos=379500,
+                nosso_numero="09/15630075671-1",
+                pdf_bytes=self._make_boleto_pdf_bytes(),
+            ),
+        ]
+
     def test_dclientes_document_lookup_accepts_scope_filters(self) -> None:
         parameters = signature(DClientesQueryService.search_by_document).parameters
 
         self.assertIn("allowed_sectors", parameters)
         self.assertIn("allowed_gv_vdes", parameters)
+
+    def test_boleto_multiple_selection_sends_all_merged(self) -> None:
+        import base64
+        import io
+
+        from pypdf import PdfReader
+
+        boletos_service = StubBoletosService(self._make_boleto_records())
+        self.flow.boletos_service = boletos_service
+        sender = "5511-boleto-merged"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        selection = self.flow.handle(IncomingMessage(sender=sender, text="boleto 3 11305"), decision)
+        self.assertIn("TODOS JUNTOS", selection.text)
+        self.assertIn("TODOS SEPARADOS", selection.text)
+
+        response = self.flow.handle(IncomingMessage(sender=sender, text="todos juntos"), decision)
+
+        self.assertEqual(response.kind, "media")
+        self.assertEqual(response.media_filename, "boletos-3-11305.pdf")
+        self.assertEqual(response.extra_media, ())
+        self.assertIn("unico PDF", response.text)
+        merged_pdf = base64.b64decode(response.media_url.split(",", 1)[1])
+        reader = PdfReader(io.BytesIO(merged_pdf))
+        self.assertEqual(len(reader.pages), 2)
+        self.assertTrue(boletos_service.calls[-1].get("include_pdf"))
+
+    def test_boleto_multiple_selection_sends_all_separate(self) -> None:
+        boletos_service = StubBoletosService(self._make_boleto_records())
+        self.flow.boletos_service = boletos_service
+        sender = "5511-boleto-separate"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="boleto 3 11305"), decision)
+        response = self.flow.handle(IncomingMessage(sender=sender, text="todos separados"), decision)
+
+        self.assertEqual(response.kind, "media")
+        self.assertEqual(response.media_filename, "boleto-3-11305-nf-167139.pdf")
+        self.assertEqual(len(response.extra_media), 1)
+        self.assertEqual(response.extra_media[0].media_filename, "boleto-3-11305-nf-168228.pdf")
+        self.assertIn("separadamente", response.text)
+        self.assertTrue(boletos_service.calls[-1].get("include_pdf"))
 
     def test_cliente_lookup_includes_score_history_when_available(self) -> None:
         self.query_service.registration_records = [
@@ -289,7 +387,15 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(menu.kind, "menu")
         self.assertIn("Resumo rapido por mensagem", menu.text)
         self.assertNotIn("critica nb 3 18008", menu.text)
-        self.assertEqual([(option.shortcut, option.title) for option in menu.options], [("1", "Critica hoje"), ("2", "PDF geral")])
+        self.assertEqual(
+            [(option.shortcut, option.title) for option in menu.options],
+            [
+                ("1", "Critica hoje"),
+                ("2", "PDF geral"),
+                ("3", "PDF por setor"),
+                ("4", "PDF por NB"),
+            ],
+        )
 
         response = self.flow.handle(
             IncomingMessage(sender="5511", text="2"),
@@ -624,6 +730,88 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         )
         self.assertEqual(self.flow.sessions[sender].step, "awaiting_search_mode")
         self.assertEqual(self.flow.sessions[sender].search_context, "documentacao")
+
+    def test_idle_direct_registration_prioritizes_customer_lookup_before_menu_shortcut(self) -> None:
+        sender = "5511-idle-direct-client"
+        decision = make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",))
+        self.query_service.registration_records = [
+            DClienteRecord(
+                filial="3",
+                cod_pdv="16883",
+                razao_social="CLIENTE TESTE LTDA",
+                nome_fantasia="CLIENTE TESTE",
+                telefone="",
+                dia_visita="SEG/",
+                vendedor="400",
+                status="Ativo",
+                cidade="PATOS",
+                cond_pag_atual="505",
+                limite_credito="0",
+                total_pendente="0",
+                total_comodatos_pendentes=0,
+                ultima_atualizacao_tabela="2026-07-02 08:00:00 UTC",
+            )
+        ]
+
+        response = self.flow.handle(IncomingMessage(sender=sender, text="3 16883"), decision)
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("CLIENTE TESTE", response.text)
+        self.assertEqual(self.query_service.registration_calls[-1]["filial"], "3")
+        self.assertEqual(self.query_service.registration_calls[-1]["cod_pdv"], "16883")
+        self.assertEqual(self.giro_service.search_calls, [])
+
+    def test_direct_registration_inside_giro_menu_keeps_giro_context(self) -> None:
+        sender = "5511-giro-direct-giro"
+        decision = make_decision(allowed=True, roles=("vendedor",), sectors=("3_400",))
+        self.query_service.registration_records = [
+            DClienteRecord(
+                filial="3",
+                cod_pdv="16883",
+                razao_social="CLIENTE TESTE LTDA",
+                nome_fantasia="CLIENTE TESTE",
+                telefone="",
+                dia_visita="SEG/",
+                vendedor="400",
+                status="Ativo",
+                cidade="PATOS",
+                cond_pag_atual="505",
+                limite_credito="0",
+                total_pendente="0",
+                total_comodatos_pendentes=0,
+                ultima_atualizacao_tabela="2026-07-02 08:00:00 UTC",
+            )
+        ]
+        self.giro_service.search_records = [
+            GiroClientRecord(
+                filial="3",
+                cod_pdv="16883",
+                nome="CLIENTE GIRO",
+                setor="400",
+                revenda="PATOS",
+                total_litrinho="2",
+                real_litrinho="0",
+                gap_litrinho="4",
+                giro_litrinho="0",
+                total_inteira="0",
+                real_inteira="0",
+                gap_inteira="0",
+                giro_inteira="0",
+                total_litrao="0",
+                real_litrao="0",
+                gap_litrao="0",
+                giro_litrao="0",
+                planilha_atualizada_em="2026-07-02",
+            )
+        ]
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="giro"), decision)
+        response = self.flow.handle(IncomingMessage(sender=sender, text="3 16883"), decision)
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("giro", response.text.lower())
+        self.assertEqual(self.giro_service.search_calls[-1]["filial"], "3")
+        self.assertEqual(self.giro_service.search_calls[-1]["cod_pdv"], "16883")
 
     def test_handle_documentacao_visit_day_shortcut_opens_day_menu(self) -> None:
         sender = "5511-doc-dia"
@@ -1894,6 +2082,10 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             ("5", "Emitir Cobranca"),
             ("6", "Extrato PayIP"),
             ("7", "Buscar Valor/Dia"),
+            ("8", "Validar Data"),
+            ("9", "Validar Importacao"),
+            ("10", "Criar Cliente"),
+            ("11", "Rotas em Progresso"),
         ])
 
         status = self.flow.handle(IncomingMessage(sender=sender, text="4"), decision)
@@ -2042,6 +2234,414 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(result.kind, "text")
         self.assertIn("Tolerancia: R$ 0,10", result.text)
         self.assertEqual(self.payip_service.amount_day_calls[-1]["tolerance"], "0.10")
+
+    def test_finance_payip_validates_due_and_created_day(self) -> None:
+        sender = "5511-fin-payip-validate-day"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        prompt = self.flow.handle(IncomingMessage(sender=sender, text="8"), decision)
+
+        self.assertEqual(prompt.kind, "text")
+        self.assertIn("validar as cobrancas", prompt.text)
+        self.assertEqual(self.flow.sessions[sender].step, "finance_payip_validate_day_awaiting_query")
+
+        result = self.flow.handle(IncomingMessage(sender=sender, text="3 07072026"), decision)
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("PayIP | Validacao por Data", result.text)
+        self.assertIn("Revenda: 3 - Patos", result.text)
+        self.assertIn("Data: 07/07/2026", result.text)
+        self.assertIn("- Com vencimento nessa data: 10", result.text)
+        self.assertIn("- Criadas nessa data: 10", result.text)
+        self.assertNotIn("Vencimento - exemplos", result.text)
+        self.assertNotIn("Nota Fiscal:", result.text)
+        self.assertNotIn("Quer fazer outra consulta", result.text)
+        self.assertEqual(
+            self.payip_service.list_calls[-2],
+            {
+                "page": 1,
+                "page_size": 5,
+                "status": "",
+                "client_code": "",
+                "invoice": "",
+                "filial": "3",
+                "due_date_start": "2026-07-07",
+                "due_date_end": "2026-07-07",
+            },
+        )
+        self.assertEqual(
+            self.payip_service.list_calls[-1],
+            {
+                "page": 1,
+                "page_size": 5,
+                "status": "",
+                "client_code": "",
+                "invoice": "",
+                "filial": "3",
+                "created_at_start": "2026-07-07",
+                "created_at_end": "2026-07-07",
+            },
+        )
+    def test_finance_payip_validate_day_accepts_inline_shortcut(self) -> None:
+        sender = "5511-fin-payip-validate-day-inline"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        result = self.flow.handle(IncomingMessage(sender=sender, text="validar 3 07/07/2026"), decision)
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("PayIP | Validacao por Data", result.text)
+        self.assertEqual(self.payip_service.list_calls[-2]["due_date_start"], "2026-07-07")
+        self.assertEqual(self.payip_service.list_calls[-1]["created_at_start"], "2026-07-07")
+
+    def test_finance_payip_validate_day_shortcut_from_idle_does_not_fall_into_client_lookup(self) -> None:
+        sender = "5511-fin-payip-validate-day-idle"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        result = self.flow.handle(IncomingMessage(sender=sender, text="validar 3 07072026"), decision)
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("PayIP | Validacao por Data", result.text)
+        self.assertNotIn("Nao encontrei cliente", result.text)
+        self.assertEqual(self.payip_service.list_calls[-2]["due_date_start"], "2026-07-07")
+        self.assertEqual(self.payip_service.list_calls[-1]["created_at_start"], "2026-07-07")
+
+    def test_finance_payip_validate_day_resumes_after_mfa(self) -> None:
+        sender = "5511-fin-payip-validate-day-mfa"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+        payip_service = StubPayipPaymentsService(require_mfa_once=True)
+        flow = make_flow(payip_payments_service=payip_service)
+
+        _ = flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        prompt = flow.handle(IncomingMessage(sender=sender, text="validar 3 07072026"), decision)
+
+        self.assertEqual(prompt.kind, "text")
+        self.assertIn("Envie aqui o codigo atual do Google Authenticator", prompt.text)
+        self.assertEqual(flow.sessions[sender].step, "finance_payip_awaiting_mfa")
+        self.assertEqual(flow.sessions[sender].payip_pending_action, "validate_day")
+
+        result = flow.handle(IncomingMessage(sender=sender, text="123456"), decision)
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("PayIP | Validacao por Data", result.text)
+        self.assertEqual(payip_service.bootstrap_calls, ["123456"])
+        self.assertEqual(payip_service.list_calls[-2]["due_date_start"], "2026-07-07")
+        self.assertEqual(payip_service.list_calls[-1]["created_at_start"], "2026-07-07")
+
+    def test_finance_payip_validates_promax_import_batch(self) -> None:
+        sender = "5511-fin-payip-import-batch"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        result = self.flow.handle(IncomingMessage(sender=sender, text="3 07072026 07072026"), decision)
+
+        self.assertEqual(result.kind, "text")
+        self.assertIn("PayIP | Importacao Automatizada", result.text)
+        self.assertIn("Revenda: 3 - Patos", result.text)
+        self.assertIn("Periodo: 07/07/2026 a 07/07/2026", result.text)
+        self.assertIn("Validacao aprovada.", result.text)
+        self.assertIn("- Cobrancas encontradas: 1", result.text)
+        self.assertIn("- Valor total: R$ 20,00", result.text)
+        self.assertIn("CONFIRMAR IMPORTACAO", result.text)
+        self.assertEqual(self.flow.sessions[sender].step, "finance_payip_import_batch_confirm")
+        self.assertEqual(
+            self.payip_service.import_batch_calls[-1],
+            {"filial": "3", "date_start": "2026-07-07", "date_end": "2026-07-07"},
+        )
+
+    def test_finance_payip_import_batch_confirms_after_mfa(self) -> None:
+        sender = "5511-fin-payip-import-batch-confirm"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="3 07072026 07072026"), decision)
+        prompt = self.flow.handle(IncomingMessage(sender=sender, text="CONFIRMAR IMPORTACAO"), decision)
+
+        self.assertIn("Envie aqui o codigo atual do Google Authenticator", prompt.text)
+        self.assertEqual(self.flow.sessions[sender].step, "finance_payip_awaiting_mfa")
+        self.assertEqual(self.flow.sessions[sender].payip_pending_action, "import_batch_confirm")
+
+        result = self.flow.handle(IncomingMessage(sender=sender, text="422649"), decision)
+
+        self.assertIn("PayIP | Importacao Confirmada", result.text)
+        self.assertIn("Importacao enviada com sucesso.", result.text)
+        self.assertEqual(
+            self.payip_service.import_batch_confirm_calls[-1],
+            {
+                "filial": "3",
+                "date_start": "2026-07-07",
+                "date_end": "2026-07-07",
+                "totp_code": "422649",
+            },
+        )
+
+    def test_finance_payip_import_batch_accepts_mfa_directly_after_validation(self) -> None:
+        sender = "5511-fin-payip-import-batch-direct-mfa"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="3 07072026 07072026"), decision)
+        result = self.flow.handle(IncomingMessage(sender=sender, text="422649"), decision)
+
+        self.assertIn("PayIP | Importacao Confirmada", result.text)
+        self.assertEqual(self.payip_service.import_batch_confirm_calls[-1]["totp_code"], "422649")
+
+    def test_finance_payip_import_batch_stores_missing_client_codes(self) -> None:
+        sender = "5511-fin-payip-import-batch-missing-client"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        class MissingClientPayipService(StubPayipPaymentsService):
+            def validate_promax_import_batch(self, **kwargs: Any) -> Any:
+                self.import_batch_calls.append(
+                    {
+                        "filial": str(kwargs.get("filial") or ""),
+                        "date_start": str(kwargs.get("date_start") or ""),
+                        "date_end": str(kwargs.get("date_end") or ""),
+                    }
+                )
+                return SimpleNamespace(
+                    raw={"details": {"codes_client": ["19167"]}},
+                    filial=str(kwargs.get("filial") or ""),
+                    company_id="bdfee22b-ac11-4355-909a-54bd348c87cc",
+                    date_start=str(kwargs.get("date_start") or ""),
+                    date_end=str(kwargs.get("date_end") or ""),
+                    items=(),
+                    missing_client_codes=("19167",),
+                    ok=False,
+                )
+
+        payip_service = MissingClientPayipService()
+        flow = make_flow(payip_payments_service=payip_service)
+
+        _ = flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        result = flow.handle(IncomingMessage(sender=sender, text="importar 3 07072026 07072026"), decision)
+
+        self.assertIn("Validacao com erro.", result.text)
+        self.assertIn("- Clientes nao encontrados: 1", result.text)
+        self.assertIn("- Codigos: 19167", result.text)
+        self.assertEqual(flow.sessions[sender].payip_import_missing_client_codes, ("19167",))
+
+    def test_finance_payip_import_batch_can_create_missing_clients_from_dclientes(self) -> None:
+        sender = "5511-fin-payip-import-batch-create-missing-client"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        class MissingClientPayipService(StubPayipPaymentsService):
+            def validate_promax_import_batch(self, **kwargs: Any) -> Any:
+                self.import_batch_calls.append(
+                    {
+                        "filial": str(kwargs.get("filial") or ""),
+                        "date_start": str(kwargs.get("date_start") or ""),
+                        "date_end": str(kwargs.get("date_end") or ""),
+                    }
+                )
+                return SimpleNamespace(
+                    raw={"details": {"codes_client": ["19167"]}},
+                    filial=str(kwargs.get("filial") or ""),
+                    company_id="bdfee22b-ac11-4355-909a-54bd348c87cc",
+                    date_start=str(kwargs.get("date_start") or ""),
+                    date_end=str(kwargs.get("date_end") or ""),
+                    items=(),
+                    missing_client_codes=("19167",),
+                    ok=False,
+                )
+
+        query_service = StubQueryService(
+            payip_profile=SimpleNamespace(
+                filial="3",
+                cod_pdv="19167",
+                documento="12467128490",
+                razao_social="JHEFFERSON KAUA",
+                nome_fantasia="Kaua",
+                email="",
+                telefone="",
+                cep="58706560",
+                endereco="Rua Professora Cristina Lima",
+                numero="SN",
+                complemento="",
+                bairro="Salgadinho",
+                cidade="Patos",
+                uf="PB",
+            )
+        )
+        payip_service = MissingClientPayipService()
+        flow = make_flow(query_service=query_service, payip_payments_service=payip_service)
+
+        _ = flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        _ = flow.handle(IncomingMessage(sender=sender, text="importar 3 07072026 07072026"), decision)
+        result = flow.handle(IncomingMessage(sender=sender, text="criar clientes payip"), decision)
+
+        self.assertIn("PayIP | Clientes da Importacao", result.text)
+        self.assertIn("- Criados: 1", result.text)
+        self.assertIn("19167", result.text)
+        self.assertEqual(query_service.payip_profile_calls[-1], {"filial": "3", "cod_pdv": "19167"})
+        self.assertEqual(payip_service.create_client_calls[-1]["payload"]["client"]["code"], "19167")
+
+    def test_finance_payip_creates_client_from_dclientes(self) -> None:
+        sender = "5511-fin-payip-create-client"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+        query_service = StubQueryService(
+            payip_profile=SimpleNamespace(
+                filial="3",
+                cod_pdv="19167",
+                documento="12467128490",
+                razao_social="JHEFFERSON KAUA",
+                nome_fantasia="Kaua",
+                email="",
+                telefone="",
+                cep="58706560",
+                endereco="Rua Professora Cristina Lima",
+                numero="SN",
+                complemento="",
+                bairro="Salgadinho",
+                cidade="Patos",
+                uf="PB",
+            )
+        )
+        payip_service = StubPayipPaymentsService()
+        flow = make_flow(query_service=query_service, payip_payments_service=payip_service)
+
+        result = flow.handle(IncomingMessage(sender=sender, text="criar cliente payip 3 19167"), decision)
+
+        self.assertIn("PayIP | Cliente Criado", result.text)
+        self.assertIn("NB: 19167", result.text)
+        self.assertIn("Cliente: JHEFFERSON KAUA", result.text)
+        self.assertIn("Campos com fallback: email, telefone", result.text)
+        self.assertEqual(query_service.payip_profile_calls[-1], {"filial": "3", "cod_pdv": "19167"})
+        self.assertEqual(payip_service.create_client_calls[-1]["payload"]["client"]["code"], "19167")
+
+    def test_finance_payip_create_client_menu_prompts_for_registration(self) -> None:
+        sender = "5511-fin-payip-create-client-menu"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        prompt = self.flow.handle(IncomingMessage(sender=sender, text="10"), decision)
+
+        self.assertIn("Informe a filial e o NB do cliente", prompt.text)
+        self.assertEqual(self.flow.sessions[sender].step, "finance_payip_create_client_awaiting_registration")
+
+    def test_finance_payip_import_batch_resumes_after_mfa(self) -> None:
+        sender = "5511-fin-payip-import-batch-mfa"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+        payip_service = StubPayipPaymentsService(require_mfa_once=True)
+        flow = make_flow(payip_payments_service=payip_service)
+
+        _ = flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        prompt = flow.handle(IncomingMessage(sender=sender, text="importar 3 07072026 07072026"), decision)
+
+        self.assertIn("Envie aqui o codigo atual do Google Authenticator", prompt.text)
+        self.assertEqual(flow.sessions[sender].payip_pending_action, "import_batch")
+
+        result = flow.handle(IncomingMessage(sender=sender, text="123456"), decision)
+
+        self.assertIn("PayIP | Importacao Automatizada", result.text)
+        self.assertEqual(payip_service.bootstrap_calls, ["123456"])
+        self.assertEqual(payip_service.import_batch_calls[-1]["date_start"], "2026-07-07")
+
+    def test_finance_payip_routes_lists_in_progress_maps(self) -> None:
+        sender = "5511-fin-payip-routes"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+        payip_service = StubPayipPaymentsService()
+
+        def list_routes_page(**kwargs: Any) -> Any:
+            page = int(kwargs.get("page") or 1)
+            filial = str(kwargs.get("filial") or "")
+            status = str(kwargs.get("status") or "IN_PROGRESS")
+            payip_service.routes_calls.append(
+                {
+                    "filial": filial,
+                    "status": status,
+                    "code": str(kwargs.get("code") or ""),
+                    "page": page,
+                    "page_size": int(kwargs.get("page_size") or 25),
+                }
+            )
+            page_items = {
+                1: (
+                    {
+                        "id": "route-2",
+                        "code": "92305",
+                        "status": "IN_PROGRESS",
+                        "driversRoute": [{"driver": {"name": "Jose Marcelo", "code": "7444"}}],
+                    },
+                ),
+                2: (
+                    {
+                        "id": "route-1",
+                        "code": "92304",
+                        "status": "IN_PROGRESS",
+                        "driversRoute": [{"driver": {"name": "Ana Maria", "code": "7333"}}],
+                    },
+                ),
+            }.get(page, ())
+            return SimpleNamespace(
+                raw={"data": list(page_items), "total": 2, "page": page, "pageSize": 1},
+                filial=filial,
+                company_id="bdfee22b-ac11-4355-909a-54bd348c87cc",
+                status=status,
+                items=page_items,
+                items_count=len(page_items),
+                total_items=2,
+                page=page,
+                page_size=1,
+            )
+
+        payip_service.list_routes = list_routes_page  # type: ignore[method-assign]
+
+        def list_all_routes_pages(**kwargs: Any) -> Any:
+            items = []
+            for page in (1, 2):
+                current = list_routes_page(**{**kwargs, "page": page, "page_size": 1})
+                items.extend(list(current.items))
+            return SimpleNamespace(
+                raw={"pages": []},
+                filial=str(kwargs.get("filial") or ""),
+                company_id="bdfee22b-ac11-4355-909a-54bd348c87cc",
+                status=str(kwargs.get("status") or "IN_PROGRESS"),
+                items=tuple(items),
+                items_count=len(items),
+                total_items=len(items),
+                page=1,
+                page_size=1,
+            )
+
+        payip_service.list_all_routes = list_all_routes_pages  # type: ignore[method-assign]
+        flow = make_flow(payip_payments_service=payip_service)
+
+        result = flow.handle(IncomingMessage(sender=sender, text="rotas 3"), decision)
+
+        self.assertIn("PayIP | Rotas em Progresso", result.text)
+        self.assertIn("Revenda: 3 - Patos", result.text)
+        self.assertLess(result.text.index("92304 - Ana Maria (7333)"), result.text.index("92305 - Jose Marcelo (7444)"))
+        self.assertIn("92305 - Jose Marcelo (7444)", result.text)
+        self.assertEqual([call["page"] for call in payip_service.routes_calls], [1, 2])
+
+    def test_finance_payip_routes_resumes_after_mfa(self) -> None:
+        sender = "5511-fin-payip-routes-mfa"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+        payip_service = StubPayipPaymentsService(require_mfa_once=True)
+        flow = make_flow(payip_payments_service=payip_service)
+
+        prompt = flow.handle(IncomingMessage(sender=sender, text="rotas 3"), decision)
+
+        self.assertIn("Envie aqui o codigo atual do Google Authenticator", prompt.text)
+        self.assertEqual(flow.sessions[sender].payip_pending_action, "routes")
+
+        result = flow.handle(IncomingMessage(sender=sender, text="123456"), decision)
+
+        self.assertIn("PayIP | Rotas em Progresso", result.text)
+        self.assertEqual(payip_service.bootstrap_calls, ["123456"])
+        self.assertEqual(payip_service.routes_calls[-1]["filial"], "3")
 
     def test_finance_payip_amount_day_resumes_after_mfa(self) -> None:
         sender = "5511-fin-payip-amount-day-mfa"
@@ -2267,7 +2867,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(self.flow.sessions[sender].step, "finance_payip_charge_confirm")
         self.assertEqual(self.payip_service.create_charge_calls, [])
 
-        result = self.flow.handle(IncomingMessage(sender=sender, text="CONFIRMAR"), decision)
+        result = self.flow.handle(IncomingMessage(sender=sender, text="CONFIRMAR."), decision)
 
         self.assertEqual(result.kind, "media")
         self.assertEqual(result.text, "000201010212PAYIPPIXCREATE168836304DCBA")
@@ -2325,11 +2925,64 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(payip_service.create_charge_calls, [])
 
         payip_service.create_charge_error = None
-        retry = flow.handle(IncomingMessage(sender=sender, text="tentar novamente"), decision)
+        retry = flow.handle(IncomingMessage(sender=sender, text="CONFIRMAR"), decision)
 
         self.assertEqual(retry.kind, "media")
         self.assertEqual(retry.text, "000201010212PAYIPPIXCREATE168836304DCBA")
         self.assertEqual(payip_service.create_charge_calls[-1]["external_id"], "16883")
+
+    def test_finance_payip_charge_accepts_confirmation_with_extra_words(self) -> None:
+        sender = "5511-fin-payip-create-confirm-extra"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="5"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="3 16883"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="0,99"), decision)
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="31/12/2026"), decision)
+
+        result = self.flow.handle(IncomingMessage(sender=sender, text="Confirmar emissao PayIP"), decision)
+
+        self.assertEqual(result.kind, "media")
+        self.assertEqual(result.text, "000201010212PAYIPPIXCREATE168836304DCBA")
+        self.assertEqual(self.payip_service.create_charge_calls[-1]["external_id"], "16883")
+
+    def test_finance_payip_charge_retries_transient_create_error_before_failing(self) -> None:
+        import bot_api.services.flows.payip_flow as payip_flow_module
+
+        class RetryChargePayipService(StubPayipPaymentsService):
+            def __init__(self) -> None:
+                super().__init__()
+                self.remaining_failures = 1
+
+            def create_pix_charge(self, **kwargs: object) -> dict[str, object]:
+                if self.remaining_failures:
+                    self.remaining_failures -= 1
+                    raise PayipError("PayIP charge request failed: HTTP 503")
+                return super().create_pix_charge(**kwargs)
+
+        sender = "5511-fin-payip-create-internal-retry"
+        decision = make_decision(allowed=True, roles=("financeiro",))
+        payip_service = RetryChargePayipService()
+        flow = make_flow(payip_payments_service=payip_service)
+
+        previous_delay = payip_flow_module.PAYIP_CHARGE_RETRY_DELAY_SECONDS
+        payip_flow_module.PAYIP_CHARGE_RETRY_DELAY_SECONDS = 0
+        try:
+            _ = flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
+            _ = flow.handle(IncomingMessage(sender=sender, text="9"), decision)
+            _ = flow.handle(IncomingMessage(sender=sender, text="5"), decision)
+            _ = flow.handle(IncomingMessage(sender=sender, text="3 16883"), decision)
+            _ = flow.handle(IncomingMessage(sender=sender, text="0,99"), decision)
+            _ = flow.handle(IncomingMessage(sender=sender, text="31/12/2026"), decision)
+            result = flow.handle(IncomingMessage(sender=sender, text="CONFIRMAR"), decision)
+        finally:
+            payip_flow_module.PAYIP_CHARGE_RETRY_DELAY_SECONDS = previous_delay
+
+        self.assertEqual(result.kind, "media")
+        self.assertEqual(result.text, "000201010212PAYIPPIXCREATE168836304DCBA")
+        self.assertEqual(len(payip_service.create_charge_calls), 1)
 
     def test_finance_payip_allows_charge_rate_interest_and_due_date_adjustment(self) -> None:
         sender = "5511-fin-payip-create-adjust"
@@ -3212,8 +3865,9 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
                 ("5", "Buscar Cliente"),
                 ("6", "Cobranca da Carteira"),
                 ("7", "Comodatos"),
-                ("8", "Solicitar Recolha"),
+                ("8", "Financeiro"),
                 ("9", "Carteira"),
+                ("10", "Critica"),
             ],
         )
         self.assertIn("rota segunda", menu.footer)
@@ -3229,6 +3883,23 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(response.kind, "menu")
         self.assertEqual(response.title, "Consultar Giro")
         self.assertIn("Como voce quer procurar o giro?", response.text)
+
+        finance_menu = self.flow.handle(
+            IncomingMessage(sender=sender, text="menu"),
+            decision,
+        )
+        self.assertEqual(finance_menu.kind, "menu")
+        response = self.flow.handle(
+            IncomingMessage(sender=sender, text="8"),
+            decision,
+        )
+
+        self.assertEqual(response.kind, "menu")
+        self.assertEqual(response.title, "Financeiro")
+        self.assertEqual(
+            [(option.shortcut, option.title) for option in response.options],
+            [("1", "Solicitar Recolha"), ("2", "Solicitar Boleto")],
+        )
 
     def test_handle_seller_carteira_response_is_more_operational(self) -> None:
         sender = "5520-carteira"
@@ -3344,6 +4015,8 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
                 ("5", "Documentacao Pendente"),
                 ("6", "Buscar Cliente"),
                 ("7", "Comodatos"),
+                ("8", "Financeiro"),
+                ("9", "Critica"),
             ],
         )
         self.assertIn("rota segunda", menu.footer)
@@ -3370,6 +4043,23 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
                 ("6", "Giro Consolidado"),
                 ("7", "Resumo Total"),
             ],
+        )
+
+        main_menu = self.flow.handle(
+            IncomingMessage(sender=sender, text="menu"),
+            decision,
+        )
+        self.assertEqual(main_menu.kind, "menu")
+        finance_menu = self.flow.handle(
+            IncomingMessage(sender=sender, text="8"),
+            decision,
+        )
+
+        self.assertEqual(finance_menu.kind, "menu")
+        self.assertEqual(finance_menu.title, "Financeiro")
+        self.assertEqual(
+            [(option.shortcut, option.title) for option in finance_menu.options],
+            [("1", "Solicitar Recolha"), ("2", "Solicitar Boleto")],
         )
 
     def test_handle_director_main_menu_prioritizes_diretoria_and_routes_to_submenu(self) -> None:

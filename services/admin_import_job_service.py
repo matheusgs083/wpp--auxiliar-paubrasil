@@ -7,6 +7,7 @@ from threading import RLock
 from typing import Any, Iterator
 
 import psycopg
+from psycopg import errors
 from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -29,6 +30,8 @@ class AdminImportJobService:
         self.schema = _normalize_schema(schema)
         self.connect_timeout_seconds = max(float(connect_timeout_seconds), 1.0)
         self._maintenance_lock = RLock()
+        self._schema_lock = RLock()
+        self._schema_ready = False
 
     def create_job(
         self,
@@ -229,6 +232,8 @@ class AdminImportJobService:
                 self.ensure_schema(active_conn)
                 cutoff = datetime.now(timezone.utc) - timedelta(minutes=max(int(stale_after_minutes), 30))
                 with active_conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("SET LOCAL lock_timeout = '3s'")
+                    cur.execute("SET LOCAL statement_timeout = '15s'")
                     cur.execute(
                         sql.SQL(
                             """
@@ -252,6 +257,9 @@ class AdminImportJobService:
                 if close_conn:
                     active_conn.commit()
                 return len(rows)
+            except (errors.LockNotAvailable, errors.QueryCanceled):
+                active_conn.rollback()
+                return 0
             finally:
                 if close_conn:
                     active_conn.close()
@@ -269,6 +277,8 @@ class AdminImportJobService:
                 self.ensure_schema(active_conn)
                 cutoff = datetime.now(timezone.utc) - timedelta(days=max(int(keep_days), 1))
                 with active_conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("SET LOCAL lock_timeout = '3s'")
+                    cur.execute("SET LOCAL statement_timeout = '15s'")
                     cur.execute(
                         sql.SQL(
                             """
@@ -284,6 +294,9 @@ class AdminImportJobService:
                 if close_conn:
                     active_conn.commit()
                 return len(rows)
+            except (errors.LockNotAvailable, errors.QueryCanceled):
+                active_conn.rollback()
+                return 0
             finally:
                 if close_conn:
                     active_conn.close()
@@ -315,48 +328,60 @@ class AdminImportJobService:
             conn.close()
 
     def ensure_schema(self, conn: psycopg.Connection[Any]) -> None:
-        with conn.cursor() as cur:
-            cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(self.schema)))
-            cur.execute(
-                sql.SQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS {}.{} (
-                        job_id TEXT PRIMARY KEY,
-                        action VARCHAR(32) NOT NULL,
-                        dataset_name VARCHAR(80) NOT NULL,
-                        dataset_label TEXT NOT NULL DEFAULT '',
-                        lock_keys JSONB NOT NULL DEFAULT '[]'::jsonb,
-                        status VARCHAR(32) NOT NULL,
-                        reference_date DATE,
-                        source_path TEXT NOT NULL DEFAULT '',
-                        file_names JSONB NOT NULL DEFAULT '[]'::jsonb,
-                        created_by TEXT NOT NULL DEFAULT '',
-                        metadata JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-                        result_json JSONB,
-                        error TEXT NOT NULL DEFAULT '',
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                        started_at TIMESTAMPTZ,
-                        finished_at TIMESTAMPTZ,
-                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        if self._schema_ready:
+            return
+        with self._schema_lock:
+            if self._schema_ready:
+                return
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SET LOCAL lock_timeout = '5s'")
+                    cur.execute("SET LOCAL statement_timeout = '30s'")
+                    cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(self.schema)))
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS {}.{} (
+                                job_id TEXT PRIMARY KEY,
+                                action VARCHAR(32) NOT NULL,
+                                dataset_name VARCHAR(80) NOT NULL,
+                                dataset_label TEXT NOT NULL DEFAULT '',
+                                lock_keys JSONB NOT NULL DEFAULT '[]'::jsonb,
+                                status VARCHAR(32) NOT NULL,
+                                reference_date DATE,
+                                source_path TEXT NOT NULL DEFAULT '',
+                                file_names JSONB NOT NULL DEFAULT '[]'::jsonb,
+                                created_by TEXT NOT NULL DEFAULT '',
+                                metadata JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                                result_json JSONB,
+                                error TEXT NOT NULL DEFAULT '',
+                                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                                started_at TIMESTAMPTZ,
+                                finished_at TIMESTAMPTZ,
+                                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                            )
+                            """
+                        ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE))
                     )
-                    """
-                ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE))
-            )
-            cur.execute(
-                sql.SQL(
-                    "CREATE INDEX IF NOT EXISTS admin_import_jobs_status_idx ON {}.{} (status, updated_at DESC)"
-                ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE))
-            )
-            cur.execute(
-                sql.SQL(
-                    "CREATE INDEX IF NOT EXISTS admin_import_jobs_dataset_idx ON {}.{} (dataset_name, created_at DESC)"
-                ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE))
-            )
-            cur.execute(
-                sql.SQL(
-                    "CREATE INDEX IF NOT EXISTS admin_import_jobs_lock_keys_idx ON {}.{} USING GIN (lock_keys)"
-                ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE))
-            )
+                    cur.execute(
+                        sql.SQL(
+                            "CREATE INDEX IF NOT EXISTS admin_import_jobs_status_idx ON {}.{} (status, updated_at DESC)"
+                        ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE))
+                    )
+                    cur.execute(
+                        sql.SQL(
+                            "CREATE INDEX IF NOT EXISTS admin_import_jobs_dataset_idx ON {}.{} (dataset_name, created_at DESC)"
+                        ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE))
+                    )
+                    cur.execute(
+                        sql.SQL(
+                            "CREATE INDEX IF NOT EXISTS admin_import_jobs_lock_keys_idx ON {}.{} USING GIN (lock_keys)"
+                        ).format(sql.Identifier(self.schema), sql.Identifier(ADMIN_IMPORT_JOBS_TABLE))
+                    )
+                self._schema_ready = True
+            except (errors.LockNotAvailable, errors.QueryCanceled):
+                conn.rollback()
+                raise
 
     def _connect(self) -> psycopg.Connection[Any]:
         if not self.database_url:

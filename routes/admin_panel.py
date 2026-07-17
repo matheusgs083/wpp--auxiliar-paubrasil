@@ -30,11 +30,20 @@ def create_admin_panel_router(
 ) -> APIRouter:
     router = APIRouter()
 
+    def no_store_html(content: str) -> HTMLResponse:
+        return HTMLResponse(
+            content=content,
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
+
     @router.get("/admin/login", response_class=HTMLResponse)
     def admin_login(request: Request) -> Response:
         if admin_panel_context_from_session_cookie(request):
             return RedirectResponse(url="/admin/imports", status_code=303)
-        return HTMLResponse(content=load_admin_login_html())
+        return no_store_html(load_admin_login_html())
 
     @router.post("/api/admin/panel/login")
     def api_admin_panel_login(
@@ -85,6 +94,9 @@ def create_admin_panel_router(
     @router.get("/admin", response_class=HTMLResponse)
     @router.get("/admin/operations", response_class=HTMLResponse)
     @router.get("/admin/imports", response_class=HTMLResponse)
+    @router.get("/admin/reports", response_class=HTMLResponse)
+    @router.get("/admin/promax", response_class=HTMLResponse)
+    @router.get("/admin/power-bi", response_class=HTMLResponse)
     @router.get("/admin/tables", response_class=HTMLResponse)
     @router.get("/admin/critica", response_class=HTMLResponse)
     @router.get("/admin/recolhas", response_class=HTMLResponse)
@@ -93,7 +105,7 @@ def create_admin_panel_router(
     def admin_import_panel(request: Request) -> Response:
         if not admin_panel_context_from_session_cookie(request):
             return RedirectResponse(url="/admin/login", status_code=303)
-        return HTMLResponse(content=load_admin_import_panel_html())
+        return no_store_html(load_admin_import_panel_html())
 
     @router.get("/api/admin/panel/session")
     def api_admin_panel_session(

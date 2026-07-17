@@ -19,11 +19,13 @@ from bot_api.services.admin_broadcast_config import build_admin_broadcast_config
 from bot_api.services.admin_import_config import ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS, build_admin_import_datasets
 from bot_api.services.admin_templates import AdminTemplateLoader
 from bot_api.services.app_lifecycle import register_app_lifecycle
-from bot_api.services.customer_lookup_flow import FILIAL_LABELS
 from bot_api.services.admin_panel_session_service import AdminPanelSessionService
 from bot_api.services.admin_payip_batch_service import AdminPayipBatchService
 from bot_api.services.admin_recolhas_service import AdminRecolhasService
+from bot_api.services.boletos_pdf_import_service import BoletosPdfImportService
+from bot_api.services.critica_operacao_import_service import CriticaOperacaoImportService
 from bot_api.services.critica_rn_query_service import CriticaPdfCurrentImportRequiredError
+from bot_api.services.filial_labels import set_filial_labels
 from bot_api.services.health_service import HealthPayloadBuilder
 from bot_api.services.webhook_runtime import WebhookRuntime
 from bot_api.security.http_auth import HttpAuthDependencies
@@ -51,6 +53,7 @@ def configure_app_runtime(
     dsetores_import_service = services.dsetores_import_service
     dprecos_import_service = services.dprecos_import_service
     doperacoes_import_service = services.doperacoes_import_service
+    drevendas_import_service = services.drevendas_import_service
     dcondicoes_import_service = services.dcondicoes_import_service
     dprodutos_import_service = services.dprodutos_import_service
     produto_cestas_import_service = services.produto_cestas_import_service
@@ -103,8 +106,41 @@ def configure_app_runtime(
     ADMIN_IMPORT_DATASETS = build_admin_import_datasets(
         project_root=PROJECT_ROOT,
         services=services,
-        filial_labels=FILIAL_LABELS,
+        filial_labels=services.filial_labels,
     )
+
+    def _refresh_filial_labels_runtime() -> dict[str, Any]:
+        latest_labels = services.drevendas_import_service.latest_labels()
+        if latest_labels:
+            services.filial_labels.clear()
+            services.filial_labels.update(latest_labels)
+            set_filial_labels(latest_labels)
+            for filial_code in sorted(latest_labels, key=int):
+                if filial_code not in services.boletos_pdf_import_services:
+                    services.boletos_pdf_import_services[filial_code] = BoletosPdfImportService(
+                        database_url=settings.reports_database_url,
+                        schema=settings.reports_db_schema,
+                        dataset_name=f"boletos_bradesco_op_{filial_code}",
+                        expected_filial=filial_code,
+                        connect_timeout_seconds=settings.access_database_timeout_seconds,
+                    )
+                if filial_code not in services.critica_operacao_import_services:
+                    services.critica_operacao_import_services[filial_code] = CriticaOperacaoImportService(
+                        database_url=settings.reports_database_url,
+                        schema=settings.reports_db_schema,
+                        dataset_name=f"critica_op_{filial_code}",
+                        expected_filial=filial_code,
+                        connect_timeout_seconds=settings.access_database_timeout_seconds,
+                    )
+            refreshed_datasets = build_admin_import_datasets(
+                project_root=PROJECT_ROOT,
+                services=services,
+                filial_labels=services.filial_labels,
+            )
+            ADMIN_IMPORT_DATASETS.clear()
+            ADMIN_IMPORT_DATASETS.update(refreshed_datasets)
+        return {"ok": bool(latest_labels), "total": len(latest_labels), "datasets": len(ADMIN_IMPORT_DATASETS)}
+
     critica_pdf_prebuild_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="critica-pdf-prebuild")
     critica_pdf_prebuild_lock = Lock()
     critica_pdf_prebuild_state: dict[str, Any] = {
@@ -189,6 +225,7 @@ def configure_app_runtime(
         ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS=ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS,
         admin_import_job_service=admin_import_job_service,
         dclientes_import_service=dclientes_import_service,
+        giro_import_service=giro_import_service,
         critica_rn_import_service=critica_rn_import_service,
         critica_operacao_admin_service=critica_operacao_admin_service,
         critica_rn_query_service=critica_rn_query_service,
@@ -197,6 +234,7 @@ def configure_app_runtime(
         critica_pdf_prebuild_lock=critica_pdf_prebuild_lock,
         critica_pdf_prebuild_state=critica_pdf_prebuild_state,
         _panel_context_allowed_import_datasets=_panel_context_allowed_import_datasets,
+        _refresh_filial_labels_runtime=_refresh_filial_labels_runtime,
     )
     _normalize_admin_import_dataset = admin_imports_runtime._normalize_admin_import_dataset
     _run_admin_import_validation = admin_imports_runtime._run_admin_import_validation
@@ -233,7 +271,7 @@ def configure_app_runtime(
         giro_query_service=giro_query_service,
         comodatos_query_service=comodatos_query_service,
         access_control=access_control,
-        filial_labels=FILIAL_LABELS,
+        filial_labels=services.filial_labels,
         panel_context_has_all_filiais=_panel_context_has_all_filiais,
         panel_context_is_critica_only=_panel_context_is_critica_only,
         copy_upload_with_limit=_copy_upload_with_limit,
@@ -309,6 +347,7 @@ def configure_app_runtime(
 
     admin_payip_batch_service = AdminPayipBatchService(
         payip_payments_service=payip_payments_service,
+        dclientes_query_service=dclientes_query_service,
         panel_context_has_all_filiais=_panel_context_has_all_filiais,
         logger=logger,
     )
@@ -317,6 +356,8 @@ def configure_app_runtime(
     _snapshot_payip_batch = admin_payip_batch_service.snapshot
     _export_payip_batch_csv = admin_payip_batch_service.export_csv
     _payip_batch_pdf_bytes = admin_payip_batch_service.pdf_bytes
+    _validate_payip_promax_import = admin_payip_batch_service.validate_promax_import
+    _run_payip_promax_import = admin_payip_batch_service.run_promax_import
 
 
     admin_template_loader = AdminTemplateLoader(
@@ -438,6 +479,8 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "snapshot_payip_batch": runtime["_snapshot_payip_batch"],
         "export_payip_batch_csv": runtime["_export_payip_batch_csv"],
         "payip_batch_pdf_bytes": runtime["_payip_batch_pdf_bytes"],
+        "validate_payip_promax_import": runtime["_validate_payip_promax_import"],
+        "run_payip_promax_import": runtime["_run_payip_promax_import"],
         "list_admin_evolution_usage": runtime["_list_admin_evolution_usage"],
         "build_evolution_usage_avg_report_csv": runtime["_build_evolution_usage_avg_report_csv"],
         "build_evolution_function_usage_report_csv": runtime["_build_evolution_function_usage_report_csv"],

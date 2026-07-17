@@ -14,7 +14,10 @@ import httpx
 AUTH_PATH = "/auth/realms/portal/protocol/openid-connect/token"
 PAYMENTS_PATH = "/v1/payments"
 CLIENTS_PATH = "/v1/clients"
+ROUTES_PATH = "/v1/routes/{company_id}"
 PAYMENT_INVOICE_REPORT_PATH = "/v1/payments/report/invoice"
+PAYMENTS_IMPORT_BATCH_PATH = "/v1/payments-import/{company_id}/promax/api"
+PAYMENTS_IMPORT_VALIDATE_BATCH_PATH = "/v1/payments-import/{company_id}/promax/api/validate-batch"
 STATEMENT_MOVEMENTS_RESUME_PATH = "/v1/statments/movements/resume"
 STATEMENT_MOVEMENTS_EXPORT_PDF_PATH = "/v1/statments/movements/export/pdf"
 STATEMENT_MOVEMENTS_EXPORT_XLSX_PATH = "/v1/statments/movements/export/xlsx"
@@ -57,6 +60,15 @@ class PayipMfaRequired(PayipError):
 
 class PayipAuthError(PayipError):
     """Raised when PayIP authentication or refresh fails."""
+
+
+class PayipImportClientsNotFound(PayipError):
+    """Raised when PayIP automated import finds client codes missing in PayIP."""
+
+    def __init__(self, message: str, *, codes_client: tuple[str, ...], payload: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.codes_client = codes_client
+        self.payload = payload or {}
 
 
 @dataclass(frozen=True)
@@ -573,6 +585,124 @@ class PayipClient:
             )
         return response.json()
 
+    def list_routes(
+        self,
+        *,
+        filial: str = "",
+        company_id: str = "",
+        code: str = "",
+        status: str = "IN_PROGRESS",
+        page: int = 1,
+        page_size: int = 25,
+    ) -> dict[str, Any]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        resolved_company_id = self._resolve_company_id(filial=filial, company_id=company_id)
+        response = self._get_routes(
+            token_pair=token_pair,
+            company_id=resolved_company_id,
+            code=code,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+        logger.info(
+            "PayIP routes response status=%s page=%s page_size=%s company_id=%s status=%s code=%s",
+            response.status_code,
+            page,
+            page_size,
+            resolved_company_id,
+            status or "-",
+            code or "-",
+        )
+        if response.status_code == 401:
+            logger.warning("PayIP access token rejected on routes request; refreshing and retrying once")
+            token_pair = self.tokens.refresh(self._client)
+            response = self._get_routes(
+                token_pair=token_pair,
+                company_id=resolved_company_id,
+                code=code,
+                status=status,
+                page=page,
+                page_size=page_size,
+            )
+            logger.info("PayIP routes retry response status=%s", response.status_code)
+
+        if not 200 <= response.status_code < 300:
+            raise PayipError(
+                f"PayIP routes request failed: HTTP {response.status_code}. "
+                f"Response: {_safe_response_body(response)}"
+            )
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise PayipError("PayIP routes retornou JSON invalido") from exc
+        logger.info("PayIP routes summary %s", summarize_collection_response(data))
+        return data
+
+    def verify_client_tax_payer(self, *, tax_payer_id: str) -> dict[str, Any]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        normalized_tax_payer_id = _only_digits(tax_payer_id)
+        response = self._client.get(
+            f"{CLIENTS_PATH}/verify/{normalized_tax_payer_id}",
+            headers={"Authorization": token_pair.authorization_header()},
+        )
+        logger.info(
+            "PayIP verify client response status=%s tax_payer_id=%s",
+            response.status_code,
+            _mask_document(normalized_tax_payer_id),
+        )
+        if response.status_code == 401:
+            logger.warning("PayIP access token rejected on verify client; refreshing and retrying once")
+            token_pair = self.tokens.refresh(self._client)
+            response = self._client.get(
+                f"{CLIENTS_PATH}/verify/{normalized_tax_payer_id}",
+                headers={"Authorization": token_pair.authorization_header()},
+            )
+            logger.info("PayIP verify client retry response status=%s", response.status_code)
+        if not 200 <= response.status_code < 300:
+            raise PayipError(
+                f"PayIP verify client failed: HTTP {response.status_code}. "
+                f"Response: {_safe_response_body(response)}"
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise PayipError("PayIP verify client retornou JSON invalido") from exc
+
+    def create_client(self, payload: dict[str, Any]) -> dict[str, Any]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        response = self._client.post(
+            CLIENTS_PATH,
+            json=payload,
+            headers={"Authorization": token_pair.authorization_header()},
+        )
+        client = payload.get("client") if isinstance(payload.get("client"), dict) else {}
+        logger.info(
+            "PayIP create client response status=%s company_id=%s code=%s tax_payer_id=%s",
+            response.status_code,
+            payload.get("companyId") or "-",
+            client.get("code") or "-",
+            _mask_document(client.get("taxPayerId")),
+        )
+        if response.status_code == 401:
+            logger.warning("PayIP access token rejected on create client; refreshing and retrying once")
+            token_pair = self.tokens.refresh(self._client)
+            response = self._client.post(
+                CLIENTS_PATH,
+                json=payload,
+                headers={"Authorization": token_pair.authorization_header()},
+            )
+            logger.info("PayIP create client retry response status=%s", response.status_code)
+        if not 200 <= response.status_code < 300:
+            raise PayipError(
+                f"PayIP create client failed: HTTP {response.status_code}. "
+                f"Response: {_safe_response_body(response)}"
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise PayipError("PayIP create client retornou JSON invalido") from exc
+
     def create_payment(self, payload: dict[str, Any]) -> dict[str, Any]:
         token_pair = self.tokens.ensure_access_token(self._client)
         response = self._client.post(
@@ -781,6 +911,117 @@ class PayipClient:
             raise PayipError(f"PayIP statement export {normalized_format} retornou arquivo vazio")
         return response.content
 
+    def validate_promax_payments_import_batch(
+        self,
+        *,
+        filial: str = "",
+        company_id: str = "",
+        date_start: str,
+        date_end: str,
+    ) -> dict[str, Any]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        resolved_company_id = self._resolve_company_id(filial=filial, company_id=company_id)
+        response = self._get_promax_payments_import_validate_batch(
+            token_pair=token_pair,
+            company_id=resolved_company_id,
+            date_start=date_start,
+            date_end=date_end,
+        )
+        logger.info(
+            "PayIP payments import validate response status=%s company_id=%s date=%s..%s",
+            response.status_code,
+            resolved_company_id,
+            date_start,
+            date_end,
+        )
+        if response.status_code == 401:
+            logger.warning("PayIP access token rejected on payments import validate; refreshing and retrying once")
+            token_pair = self.tokens.refresh(self._client)
+            response = self._get_promax_payments_import_validate_batch(
+                token_pair=token_pair,
+                company_id=resolved_company_id,
+                date_start=date_start,
+                date_end=date_end,
+            )
+            logger.info("PayIP payments import validate retry response status=%s", response.status_code)
+
+        if response.status_code == 404:
+            payload = _safe_json_payload(response)
+            codes = _extract_missing_client_codes(payload)
+            if codes:
+                raise PayipImportClientsNotFound(
+                    "PayIP importacao automatizada encontrou cliente nao cadastrado",
+                    codes_client=codes,
+                    payload=payload,
+                )
+
+        if not 200 <= response.status_code < 300:
+            raise PayipError(
+                f"PayIP payments import validate failed: HTTP {response.status_code}. "
+                f"Response: {_safe_response_body(response)}"
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise PayipError("PayIP payments import validate retornou JSON invalido") from exc
+
+    def import_promax_payments_batch(
+        self,
+        *,
+        filial: str = "",
+        company_id: str = "",
+        date_start: str,
+        date_end: str,
+        totp_code: str,
+    ) -> dict[str, Any]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        resolved_company_id = self._resolve_company_id(filial=filial, company_id=company_id)
+        response = self._post_promax_payments_import_batch(
+            token_pair=token_pair,
+            company_id=resolved_company_id,
+            date_start=date_start,
+            date_end=date_end,
+            totp_code=totp_code,
+        )
+        logger.info(
+            "PayIP payments import response status=%s company_id=%s date=%s..%s",
+            response.status_code,
+            resolved_company_id,
+            date_start,
+            date_end,
+        )
+        if response.status_code == 401:
+            logger.warning("PayIP access token rejected on payments import; refreshing and retrying once")
+            token_pair = self.tokens.refresh(self._client)
+            response = self._post_promax_payments_import_batch(
+                token_pair=token_pair,
+                company_id=resolved_company_id,
+                date_start=date_start,
+                date_end=date_end,
+                totp_code=totp_code,
+            )
+            logger.info("PayIP payments import retry response status=%s", response.status_code)
+
+        if response.status_code == 404:
+            payload = _safe_json_payload(response)
+            codes = _extract_missing_client_codes(payload)
+            if codes:
+                raise PayipImportClientsNotFound(
+                    "PayIP importacao automatizada encontrou cliente nao cadastrado",
+                    codes_client=codes,
+                    payload=payload,
+                )
+
+        if not 200 <= response.status_code < 300:
+            raise PayipError(
+                f"PayIP payments import failed: HTTP {response.status_code}. "
+                f"Response: {_safe_response_body(response)}"
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise PayipError("PayIP payments import retornou JSON invalido") from exc
+
     def _get_payments(
         self,
         *,
@@ -860,6 +1101,65 @@ class PayipClient:
         return self._client.get(
             CLIENTS_PATH,
             params=params,
+            headers={"Authorization": token_pair.authorization_header()},
+        )
+
+    def _get_routes(
+        self,
+        *,
+        token_pair: TokenPair,
+        company_id: str,
+        code: str = "",
+        status: str = "IN_PROGRESS",
+        page: int,
+        page_size: int,
+    ) -> httpx.Response:
+        return self._client.get(
+            ROUTES_PATH.format(company_id=company_id),
+            params={
+                "code": str(code or ""),
+                "status": str(status or ""),
+                "page": page,
+                "pageSize": page_size,
+            },
+            headers={"Authorization": token_pair.authorization_header()},
+        )
+
+    def _get_promax_payments_import_validate_batch(
+        self,
+        *,
+        token_pair: TokenPair,
+        company_id: str,
+        date_start: str,
+        date_end: str,
+    ) -> httpx.Response:
+        path = PAYMENTS_IMPORT_VALIDATE_BATCH_PATH.format(company_id=company_id)
+        return self._client.post(
+            path,
+            params={
+                "startDate": date_start,
+                "endDate": date_end,
+            },
+            headers={"Authorization": token_pair.authorization_header()},
+        )
+
+    def _post_promax_payments_import_batch(
+        self,
+        *,
+        token_pair: TokenPair,
+        company_id: str,
+        date_start: str,
+        date_end: str,
+        totp_code: str,
+    ) -> httpx.Response:
+        path = PAYMENTS_IMPORT_BATCH_PATH.format(company_id=company_id)
+        return self._client.post(
+            path,
+            params={
+                "totpCode": totp_code,
+                "startDate": date_start,
+                "endDate": date_end,
+            },
             headers={"Authorization": token_pair.authorization_header()},
         )
 
@@ -1050,6 +1350,29 @@ def _safe_response_body(response: httpx.Response) -> str:
     except ValueError:
         return text[:1_000]
     return json.dumps(_redact_sensitive(payload), ensure_ascii=False)[:1_000]
+
+
+def _safe_json_payload(response: httpx.Response) -> dict[str, Any]:
+    try:
+        payload = response.json()
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _extract_missing_client_codes(payload: dict[str, Any]) -> tuple[str, ...]:
+    details = payload.get("details")
+    if not isinstance(details, dict):
+        return ()
+    raw_codes = details.get("codes_client")
+    if not isinstance(raw_codes, list):
+        return ()
+    codes: list[str] = []
+    for item in raw_codes:
+        code = str(item or "").strip()
+        if code:
+            codes.append(code)
+    return tuple(dict.fromkeys(codes))
 
 
 def _redact_sensitive(value: Any) -> Any:

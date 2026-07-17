@@ -397,6 +397,11 @@ class NavigationFlow:
             session.updated_at = flow.datetime.now(flow.timezone.utc)
             self.sessions[sender] = session
             return self._build_payip_charge_client_prompt()
+        if repeat_action == flow.REPEAT_PAYIP_CREATE_CLIENT:
+            session.step = 'finance_payip_create_client_awaiting_registration'
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            return self.finance_flow.payip_flow._build_payip_create_client_prompt()
         if repeat_action == flow.REPEAT_PAYIP_STATEMENT:
             session.step = 'finance_payip_statement_awaiting_period'
             session.updated_at = flow.datetime.now(flow.timezone.utc)
@@ -407,6 +412,16 @@ class NavigationFlow:
             session.updated_at = flow.datetime.now(flow.timezone.utc)
             self.sessions[sender] = session
             return self._build_payip_amount_day_prompt()
+        if repeat_action == flow.REPEAT_PAYIP_VALIDATE_DAY:
+            session.step = 'finance_payip_validate_day_awaiting_query'
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            return self.finance_flow.payip_flow._build_payip_validate_day_prompt()
+        if repeat_action == flow.REPEAT_PAYIP_IMPORT_BATCH:
+            session.step = 'finance_payip_import_batch_awaiting_period'
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            return self.finance_flow.payip_flow._build_payip_import_batch_prompt()
         return self._resume_post_result_navigation(sender=sender, session=session, decision=decision)
 
     def _store_post_result_navigation(self, sender: str, session: LookupSession, *, return_menu: str, repeat_action: str='') -> None:
@@ -682,6 +697,20 @@ class NavigationFlow:
             return self._open_search_context(sender=sender, session=session, search_context='documentacao', decision=decision)
         if option_id == flow.MENU_RECOLHA:
             return self._open_recolha_request(sender=sender, session=session, text='', normalized='', decision=decision)
+        if option_id == flow.MENU_SELLER_FINANCEIRO:
+            session.step = 'seller_finance_select_action'
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            return flow._build_seller_finance_menu_response()
+        if option_id == flow.MENU_CRITICA:
+            readiness_error = self.critica_flow.ensure_ready(decision)
+            if readiness_error is not None:
+                self._reset_session(sender)
+                return readiness_error
+            session.step = 'awaiting_critica_action'
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            return flow._build_critica_menu_response()
         if option_id == flow.MENU_COMODATOS:
             readiness_error = self._ensure_search_context_ready('comodato', decision=decision)
             if readiness_error is not None:

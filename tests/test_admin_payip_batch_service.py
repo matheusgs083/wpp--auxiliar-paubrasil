@@ -15,13 +15,18 @@ if str(ROOT) not in sys.path:
 import bot_api.services.admin_payip_batch_service as payip_batch_module
 from bot_api.integrations.payip_client import PayipError
 from bot_api.services.admin_payip_batch_service import AdminPayipBatchService
-from tests.test_support import StubPayipPaymentsService
+from tests.test_support import StubPayipPaymentsService, StubQueryService
 
 
 class AdminPayipBatchServiceTests(unittest.TestCase):
-    def make_service(self, payip_service: StubPayipPaymentsService | None = None) -> AdminPayipBatchService:
+    def make_service(
+        self,
+        payip_service: StubPayipPaymentsService | None = None,
+        dclientes_query_service: object | None = None,
+    ) -> AdminPayipBatchService:
         return AdminPayipBatchService(
             payip_payments_service=payip_service or StubPayipPaymentsService(),
+            dclientes_query_service=dclientes_query_service,
             panel_context_has_all_filiais=lambda context: "*" in (context or {}).get("filiais", ()),
             logger=SimpleNamespace(warning=lambda *_args, **_kwargs: None, exception=lambda *_args, **_kwargs: None),
         )
@@ -136,6 +141,124 @@ class AdminPayipBatchServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["job"]["success"], 1)
         self.assertTrue(snapshot["job"]["results"][0]["pdf_available"])
         self.assertEqual(len(payip.invoice_report_calls), 2)
+
+    def test_queue_retries_charge_creation_after_transient_error(self) -> None:
+        class RetryChargePayipService(StubPayipPaymentsService):
+            def __init__(self) -> None:
+                super().__init__()
+                self.remaining_failures = 1
+
+            def create_pix_charge(self, **kwargs: object) -> dict[str, object]:
+                if self.remaining_failures:
+                    self.remaining_failures -= 1
+                    raise PayipError("PayIP create payment failed: HTTP 503")
+                return super().create_pix_charge(**kwargs)
+
+        previous_delay = payip_batch_module.PAYIP_CHARGE_RETRY_DELAY_SECONDS
+        payip_batch_module.PAYIP_CHARGE_RETRY_DELAY_SECONDS = 0
+        try:
+            payip = RetryChargePayipService()
+            service = self.make_service(payip)
+            result = service.queue(
+                self.payload("filial;nb;valor;vencimento\n3;16883;99,90;2026-12-31"),
+                {"is_admin": True},
+            )
+            job_id = result["job"]["job_id"]
+            for _ in range(20):
+                snapshot = service.snapshot(job_id=job_id)
+                if snapshot["job"].get("status") == "done":
+                    break
+                time.sleep(0.05)
+        finally:
+            payip_batch_module.PAYIP_CHARGE_RETRY_DELAY_SECONDS = previous_delay
+
+        snapshot = service.snapshot(job_id=job_id)
+        self.assertEqual(snapshot["job"]["success"], 1)
+        self.assertEqual(len(payip.create_charge_calls), 1)
+        self.assertEqual(snapshot["job"]["results"][0]["payment_id"], "created-payment-1")
+
+    def test_promax_import_validation_returns_missing_clients(self) -> None:
+        class MissingClientPayipService(StubPayipPaymentsService):
+            def validate_promax_import_batch(self, **kwargs: object) -> object:
+                return SimpleNamespace(
+                    raw={"details": {"codes_client": ["19167"]}},
+                    filial=str(kwargs.get("filial") or ""),
+                    company_id="company-3",
+                    date_start=str(kwargs.get("date_start") or ""),
+                    date_end=str(kwargs.get("date_end") or ""),
+                    items=(),
+                    missing_client_codes=("19167",),
+                    ok=False,
+                )
+
+        service = self.make_service(MissingClientPayipService())
+        payload = SimpleNamespace(filial="3", start_date="2026-07-07", end_date="2026-07-07", auto_create_clients=False)
+
+        result = service.validate_promax_import(payload, {"is_admin": True})
+
+        self.assertEqual(result["missing_client_codes"], ["19167"])
+        self.assertFalse(result["ok"])
+
+    def test_promax_import_validation_uses_mfa_when_payip_requests_it(self) -> None:
+        payip = StubPayipPaymentsService(require_mfa_once=True)
+        service = self.make_service(payip)
+        payload = SimpleNamespace(
+            filial="3",
+            start_date="2026-07-07",
+            end_date="2026-07-07",
+            mfa_code="123456",
+            auto_create_clients=False,
+        )
+
+        result = service.validate_promax_import(payload, {"is_admin": True})
+
+        self.assertEqual(result["items_count"], 1)
+        self.assertEqual(payip.bootstrap_calls, ["123456"])
+
+    def test_promax_import_validation_auto_creates_missing_clients_from_dclientes(self) -> None:
+        class MissingThenOkPayipService(StubPayipPaymentsService):
+            def validate_promax_import_batch(self, **kwargs: object) -> object:
+                self.import_batch_calls.append(dict(kwargs))
+                if not self.create_client_calls:
+                    return SimpleNamespace(
+                        raw={"details": {"codes_client": ["19167"]}},
+                        filial=str(kwargs.get("filial") or ""),
+                        company_id="company-3",
+                        date_start=str(kwargs.get("date_start") or ""),
+                        date_end=str(kwargs.get("date_end") or ""),
+                        items=(),
+                        missing_client_codes=("19167",),
+                        ok=False,
+                    )
+                return super().validate_promax_import_batch(**kwargs)
+
+        profile = SimpleNamespace(
+            filial="3",
+            cod_pdv="19167",
+            documento="12467128490",
+            razao_social="JHEFFERSON KAUA",
+            nome_fantasia="Kaua",
+            email="",
+            telefone="",
+            cep="58706560",
+            endereco="Rua Professora Cristina Lima",
+            numero="SN",
+            complemento="",
+            bairro="Salgadinho",
+            cidade="Patos",
+            uf="PB",
+        )
+        payip = MissingThenOkPayipService()
+        query = StubQueryService(payip_profile=profile)
+        service = self.make_service(payip, dclientes_query_service=query)
+        payload = SimpleNamespace(filial="3", start_date="2026-07-07", end_date="2026-07-07", auto_create_clients=True)
+
+        result = service.validate_promax_import(payload, {"is_admin": True})
+
+        self.assertEqual(result["missing_client_codes"], [])
+        self.assertEqual(result["client_creation"]["created"], ["19167"])
+        self.assertEqual(query.payip_profile_calls[-1], {"filial": "3", "cod_pdv": "19167"})
+        self.assertGreaterEqual(len(payip.import_batch_calls), 2)
 
 
 if __name__ == "__main__":

@@ -40,12 +40,14 @@ ADMIN_IMPORT_RUNTIME_ROOT: Path = Path("/tmp/bot_api_admin_imports")
 ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS: set[str] = set()
 admin_import_job_service: Any = None
 dclientes_import_service: Any = None
+giro_import_service: Any = None
 critica_rn_import_service: Any = None
 critica_operacao_admin_service: Any = None
 _clear_critica_runtime_cache: Any = None
 _queue_critica_pdf_prebuild: Any = None
 _snapshot_critica_pdf_prebuild_state: Any = None
 _panel_context_allowed_import_datasets: Any = None
+_refresh_filial_labels_runtime: Any = None
 
 
 def configure(**deps: Any) -> None:
@@ -269,6 +271,7 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
     if normalized_dataset == "dsetores":
         result = getattr(service, str(config["import_method"]))(source_path, reference_date=batch_date)
         refresh_result = dclientes_import_service.refresh_latest_view()
+        giro_refresh_result = giro_import_service.refresh_latest_view()
         critica_refresh_result = critica_rn_import_service.refresh_latest_view()
         critica_operacao_refresh_result = critica_operacao_admin_service.refresh_latest_view()
         _clear_critica_runtime_cache()
@@ -283,6 +286,7 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
             "import_result": _serialize_admin_import_value(result),
             "post_actions": {
                 "refresh_dclientes_view": _serialize_admin_import_value(refresh_result),
+                "refresh_giro_view": _serialize_admin_import_value(giro_refresh_result),
                 "refresh_critica_rn_view": _serialize_admin_import_value(critica_refresh_result),
                 "refresh_critica_operacao_view": _serialize_admin_import_value(critica_operacao_refresh_result),
                 "prebuild_critica_pdf_reports": _serialize_admin_import_value(prebuild_result),
@@ -297,6 +301,8 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
     else:
         result = getattr(service, str(config["import_method"]))(source_path, reference_date=batch_date)
     post_actions: dict[str, Any] = {}
+    if normalized_dataset == "drevendas" and callable(_refresh_filial_labels_runtime):
+        post_actions["refresh_filial_labels"] = _serialize_admin_import_value(_refresh_filial_labels_runtime())
     if normalized_dataset == "dprecos":
         post_actions["refresh_critica_rn_view"] = _serialize_admin_import_value(critica_rn_import_service.refresh_latest_view())
         post_actions["refresh_critica_operacao_view"] = _serialize_admin_import_value(

@@ -133,6 +133,8 @@ def _register_admin_payip_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             snapshot_payip_batch=deps["snapshot_payip_batch"],
             export_payip_batch_csv=deps["export_payip_batch_csv"],
             payip_batch_pdf_bytes=deps["payip_batch_pdf_bytes"],
+            validate_payip_promax_import=deps["validate_payip_promax_import"],
+            run_payip_promax_import=deps["run_payip_promax_import"],
             record_security_event=deps["record_security_event"],
         )
     )

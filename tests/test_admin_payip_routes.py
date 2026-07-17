@@ -32,6 +32,8 @@ class AdminPayipRoutesTests(unittest.TestCase):
                 snapshot_payip_batch=lambda **_kwargs: {"state": {"running": False}, "job": {"job_id": "job-1", "results": []}},
                 export_payip_batch_csv=lambda **_kwargs: (b"linha;status\n", "payip.csv"),
                 payip_batch_pdf_bytes=lambda item_id, **_kwargs: (b"%PDF-route", f"{item_id}.pdf"),
+                validate_payip_promax_import=lambda payload, context: {"items_count": 1, "items": [{"clientCode": "19167"}], "missing_client_codes": []},
+                run_payip_promax_import=lambda payload, context: {"items_count": 1, "items": [{"clientCode": "19167"}], "missing_client_codes": [], "imported": True},
                 record_security_event=lambda *_args, **_kwargs: None,
             )
         )
@@ -62,6 +64,24 @@ class AdminPayipRoutesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["content-type"], "application/pdf")
         self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_promax_import_validate_route_returns_payload(self) -> None:
+        client = self.make_client()
+        response = client.post(
+            "/api/admin/payip/import/validate",
+            json={"filial": "3", "start_date": "2026-07-07", "end_date": "2026-07-07"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items_count"], 1)
+
+    def test_promax_import_run_route_returns_payload(self) -> None:
+        client = self.make_client()
+        response = client.post(
+            "/api/admin/payip/import/run",
+            json={"filial": "3", "start_date": "2026-07-07", "end_date": "2026-07-07", "mfa_code": "123456"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["imported"])
 
 
 if __name__ == "__main__":
