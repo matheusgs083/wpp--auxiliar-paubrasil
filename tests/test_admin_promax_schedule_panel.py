@@ -56,6 +56,29 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
             self.html,
         )
 
+    def test_execution_log_filters_by_date_range(self) -> None:
+        for field_id in (
+            "promaxJobStatusFilter",
+            "promaxJobFromDate",
+            "promaxJobToDate",
+            "promaxJobClearFiltersBtn",
+        ):
+            with self.subTest(field_id=field_id):
+                self.assertEqual(self.html.count(f'id="{field_id}"'), 1)
+
+        self.assertIn('params.set("created_from", createdFrom)', self.html)
+        self.assertIn('params.set("created_to", createdTo)', self.html)
+        self.assertIn("function clearPromaxJobFilters()", self.html)
+
+    def test_promax_admin_uses_scoped_neutral_colors(self) -> None:
+        self.assertIn("#promaxPane {", self.html)
+        self.assertIn("--promax-neutral-bg: #f5f6f8;", self.html)
+        self.assertIn(".promax-status--danger", self.html)
+        self.assertIn(
+            '<span class="promax-status ${promaxStatusClass(status)}">',
+            self.html,
+        )
+
     def test_schedule_uses_searchable_power_bi_style_slicers(self) -> None:
         for prefix in (
             "promaxScheduleReseller",

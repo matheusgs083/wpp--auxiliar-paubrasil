@@ -235,6 +235,7 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("trigger_after_schedule_id", ddl)
         self.assertIn("triggered_by_job_id", ddl)
         self.assertIn("promax_jobs_schedule_trigger_idx", ddl)
+        self.assertIn("promax_jobs_created_at_idx", ddl)
         self.assertIn("promax_job_logs_append_only", ddl)
         self.assertIn("BEFORE UPDATE OR DELETE", ddl)
         self.assertIn("pg_advisory_xact_lock", ddl)
@@ -310,6 +311,29 @@ class PromaxSqlContractTests(unittest.TestCase):
             service.enqueue_jobs(
                 items=[{"job_type": f"group-{index}"} for index in range(51)]
             )
+
+    def test_list_jobs_filters_status_and_created_at_bounds(self) -> None:
+        cursor = FakeCursor(fetchall_values=[[]])
+        service, _connection = self.make_service(cursor)
+        created_from = datetime(2026, 7, 18, 3, 0, tzinfo=UTC)
+        created_before = datetime(2026, 7, 20, 3, 0, tzinfo=UTC)
+
+        jobs = service.list_jobs(
+            statuses=["success"],
+            created_from=created_from,
+            created_before=created_before,
+            limit=25,
+        )
+
+        self.assertEqual(jobs, [])
+        statement = query_text(cursor.executions[0][0])
+        self.assertIn("status = ANY(%s)", statement)
+        self.assertIn("created_at >= %s", statement)
+        self.assertIn("created_at < %s", statement)
+        self.assertEqual(
+            cursor.executions[0][1],
+            [["success"], created_from, created_before, 25, 0],
+        )
 
     def test_claim_is_atomic_skip_locked_and_assigns_lease_token(self) -> None:
         cursor = FakeCursor(fetchone_values=[None])

@@ -3,6 +3,7 @@ from __future__ import annotations
 import secrets
 import sys
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -297,7 +298,12 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         requests = [
             ("get", "/api/admin/promax/catalog", None, 200),
             ("post", "/api/admin/promax/jobs", self.job_payload(), 202),
-            ("get", "/api/admin/promax/jobs?status=pending&category=reports&limit=25", None, 200),
+            (
+                "get",
+                "/api/admin/promax/jobs?status=pending&category=reports&created_from=2026-07-18&created_to=2026-07-19&limit=25",
+                None,
+                200,
+            ),
             ("get", "/api/admin/promax/jobs/job-1", None, 200),
             ("get", "/api/admin/promax/jobs/job-1/logs?limit=50&after_id=0", None, 200),
             ("post", "/api/admin/promax/jobs/job-1/cancel", None, 200),
@@ -358,6 +364,14 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         list_kwargs = service.calls[1][2]
         self.assertEqual(list_kwargs["limit"], 500)
         self.assertEqual(list_kwargs["statuses"], ["pending"])
+        self.assertEqual(
+            list_kwargs["created_from"],
+            datetime(2026, 7, 18, 3, 0, tzinfo=UTC),
+        )
+        self.assertEqual(
+            list_kwargs["created_before"],
+            datetime(2026, 7, 20, 3, 0, tzinfo=UTC),
+        )
 
     def test_admin_authentication_failure_stops_before_service(self) -> None:
         client, service, _events, auth_calls = self.make_client(auth_status=401)
@@ -450,6 +464,12 @@ class AdminPromaxRoutesTests(unittest.TestCase):
 
         client, service, _events, _auth_calls = self.make_client()
         response = client.get("/api/admin/promax/jobs?limit=201")
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(service.calls, [])
+
+        response = client.get(
+            "/api/admin/promax/jobs?created_from=2026-07-19&created_to=2026-07-18"
+        )
         self.assertEqual(response.status_code, 422)
         self.assertEqual(service.calls, [])
 

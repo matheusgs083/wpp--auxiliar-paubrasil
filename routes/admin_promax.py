@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping
-from datetime import date, time
+from datetime import UTC, date, datetime, time, timedelta
 from secrets import compare_digest
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
@@ -14,6 +15,7 @@ _CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _UUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
 _MAX_DATE_RANGE_DAYS = 366
+_PROMAX_LOCAL_TIMEZONE = ZoneInfo("America/Fortaleza")
 
 
 def _normalize_category(value: str) -> str:
@@ -42,6 +44,32 @@ def _validate_date_range(start_date: date, end_date: date) -> None:
         raise ValueError("end_date must be on or after start_date")
     if (end_date - start_date).days > _MAX_DATE_RANGE_DAYS:
         raise ValueError(f"date range must not exceed {_MAX_DATE_RANGE_DAYS} days")
+
+
+def _promax_job_created_bounds(
+    created_from: date | None,
+    created_to: date | None,
+) -> tuple[datetime | None, datetime | None]:
+    if created_from and created_to and created_to < created_from:
+        raise HTTPException(
+            status_code=422,
+            detail="A data final do filtro nao pode ser anterior a data inicial.",
+        )
+    start_at = (
+        datetime.combine(created_from, time.min, _PROMAX_LOCAL_TIMEZONE).astimezone(UTC)
+        if created_from
+        else None
+    )
+    before_at = (
+        datetime.combine(
+            created_to + timedelta(days=1),
+            time.min,
+            _PROMAX_LOCAL_TIMEZONE,
+        ).astimezone(UTC)
+        if created_to
+        else None
+    )
+    return start_at, before_at
 
 
 def _catalog_identifiers(value: Any) -> set[str] | None:
@@ -706,11 +734,19 @@ def create_admin_promax_router(
         request: Request,
         status: str | None = Query(default=None, min_length=1, max_length=32),
         category: str | None = Query(default=None, pattern=r"^[a-z][a-z0-9_-]{0,63}$"),
+        created_from: date | None = Query(default=None),
+        created_to: date | None = Query(default=None),
         limit: int = Query(default=50, ge=1, le=200),
         context: dict[str, Any] = Depends(require_promax_context),
     ) -> dict[str, Any]:
+        created_from_at, created_before_at = _promax_job_created_bounds(
+            created_from,
+            created_to,
+        )
         result = service.list_jobs(
             statuses=[status] if status else None,
+            created_from=created_from_at,
+            created_before=created_before_at,
             limit=500 if category else limit,
         )
         if category:

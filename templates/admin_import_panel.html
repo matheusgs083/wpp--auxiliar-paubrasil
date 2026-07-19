@@ -184,6 +184,60 @@
     .promax-slicer-group + .promax-slicer-group { margin-top: 0.45rem; padding-top: 0.45rem; border-top: 1px solid var(--line); }
     .promax-slicer-group-title { position: sticky; top: 0; z-index: 1; margin: 0 0 0.2rem; padding: 0.18rem 0.35rem; color: var(--ink-500); background: var(--surface); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
     .promax-schedule-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+    #promaxPane {
+      --promax-action: #40566d;
+      --promax-action-hover: #34485c;
+      --promax-neutral-bg: #f5f6f8;
+      --promax-neutral-border: #d3d7dd;
+    }
+    body[data-theme="dark"] #promaxPane {
+      --promax-action: #526a82;
+      --promax-action-hover: #607b96;
+      --promax-neutral-bg: #111827;
+      --promax-neutral-border: #344155;
+    }
+    #promaxPane .panel-card { border-color: var(--promax-neutral-border); box-shadow: none; }
+    #promaxPane .panel-card > header { background: var(--promax-neutral-bg); }
+    #promaxPane .promax-schedule-scope { background: var(--promax-neutral-bg); }
+    #promaxPane .text-primary { color: var(--ink-700) !important; }
+    #promaxPane .btn-primary {
+      --bs-btn-bg: var(--promax-action);
+      --bs-btn-border-color: var(--promax-action);
+      --bs-btn-hover-bg: var(--promax-action-hover);
+      --bs-btn-hover-border-color: var(--promax-action-hover);
+    }
+    #promaxPane .btn-outline-primary,
+    #promaxPane .btn-outline-warning,
+    #promaxPane .btn-outline-success {
+      --bs-btn-color: var(--ink-700);
+      --bs-btn-border-color: var(--promax-neutral-border);
+      --bs-btn-hover-color: var(--ink-900);
+      --bs-btn-hover-bg: var(--promax-neutral-bg);
+      --bs-btn-hover-border-color: var(--line-strong);
+      --bs-btn-active-color: var(--ink-900);
+      --bs-btn-active-bg: var(--promax-neutral-bg);
+      --bs-btn-active-border-color: var(--line-strong);
+    }
+    #promaxPane .btn-outline-danger {
+      --bs-btn-color: var(--danger);
+      --bs-btn-border-color: rgba(185, 28, 28, 0.34);
+      --bs-btn-hover-color: var(--danger);
+      --bs-btn-hover-bg: rgba(185, 28, 28, 0.08);
+      --bs-btn-hover-border-color: rgba(185, 28, 28, 0.52);
+    }
+    #promaxPane .pill.ok { color: var(--ink-700); background: var(--promax-neutral-bg); border-color: var(--promax-neutral-border); }
+    #promaxPane .pill.warn { color: var(--warning); background: var(--promax-neutral-bg); border-color: var(--promax-neutral-border); }
+    .promax-job-filters { display: flex; flex-wrap: wrap; align-items: end; justify-content: flex-end; gap: 0.45rem; }
+    .promax-job-filter-field { display: grid; gap: 0.2rem; min-width: 142px; }
+    .promax-job-filter-field.status { min-width: 190px; }
+    .promax-job-filter-label { color: var(--ink-500); font-size: 0.68rem; font-weight: 800; line-height: 1; text-transform: uppercase; }
+    .promax-status { display: inline-flex; align-items: center; padding: 0.3rem 0.5rem; border: 1px solid var(--promax-neutral-border); border-radius: 5px; color: var(--ink-700); background: var(--promax-neutral-bg); font-size: 0.72rem; font-weight: 800; }
+    .promax-status--running { color: var(--promax-action); border-color: rgba(64, 86, 109, 0.36); }
+    .promax-status--success { color: var(--success); border-color: rgba(4, 120, 87, 0.28); }
+    .promax-status--warning { color: var(--warning); border-color: rgba(180, 83, 9, 0.3); }
+    .promax-status--danger { color: var(--danger); border-color: rgba(185, 28, 28, 0.34); background: rgba(185, 28, 28, 0.06); }
+    #promaxPane .badge.text-bg-success,
+    #promaxPane .badge.text-bg-secondary { color: var(--ink-700) !important; background: var(--promax-neutral-bg) !important; border: 1px solid var(--promax-neutral-border); }
     .route-table-scroll { height: 260px; min-height: 180px; max-height: 1400px; }
     .route-resize-handle { min-height: 30px; display: flex; align-items: center; justify-content: center; gap: 0.4rem; border: 1px dashed var(--line); border-top: 0; border-radius: 0 0 8px 8px; color: var(--muted); cursor: ns-resize; user-select: none; touch-action: none; background: var(--surface-soft); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
     body.is-resizing-route { cursor: ns-resize; user-select: none; }
@@ -238,6 +292,8 @@
       .flow-gateway-head { align-items: flex-start; flex-direction: column; }
       .flow-grid { grid-template-columns: 1fr; }
       .flow-path { min-height: 74px; }
+      .promax-job-filters { width: 100%; justify-content: stretch; }
+      .promax-job-filter-field, .promax-job-filter-field.status { min-width: min(100%, 150px); flex: 1 1 140px; }
     }
   </style>
 </head>
@@ -922,16 +978,30 @@
         <section class="panel-card mb-3">
           <header class="px-3 pt-3 pb-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
             <h2 class="h6 mb-0 fw-bold"><i class="bi bi-list-task me-2 text-primary"></i>Execucoes</h2>
-            <select class="form-select form-select-sm w-auto" id="promaxJobStatusFilter" aria-label="Filtrar status dos jobs">
-              <option value="">Todos os status</option>
-              <option value="pending">Pendente</option>
-              <option value="running">Executando</option>
-              <option value="cancel_requested">Cancelamento solicitado</option>
-              <option value="success">Concluido</option>
-              <option value="partial_success">Parcial</option>
-              <option value="failed">Falhou</option>
-              <option value="cancelled">Cancelado</option>
-            </select>
+            <div class="promax-job-filters" aria-label="Filtros das execucoes">
+              <label class="promax-job-filter-field status" for="promaxJobStatusFilter">
+                <span class="promax-job-filter-label">Status</span>
+                <select class="form-select form-select-sm" id="promaxJobStatusFilter">
+                  <option value="">Todos os status</option>
+                  <option value="pending">Pendente</option>
+                  <option value="running">Executando</option>
+                  <option value="cancel_requested">Cancelamento solicitado</option>
+                  <option value="success">Concluido</option>
+                  <option value="partial_success">Parcial</option>
+                  <option value="failed">Falhou</option>
+                  <option value="cancelled">Cancelado</option>
+                </select>
+              </label>
+              <label class="promax-job-filter-field" for="promaxJobFromDate">
+                <span class="promax-job-filter-label">De</span>
+                <input class="form-control form-control-sm" id="promaxJobFromDate" type="date">
+              </label>
+              <label class="promax-job-filter-field" for="promaxJobToDate">
+                <span class="promax-job-filter-label">Ate</span>
+                <input class="form-control form-control-sm" id="promaxJobToDate" type="date">
+              </label>
+              <button class="btn btn-outline-secondary btn-sm" id="promaxJobClearFiltersBtn" type="button" title="Limpar filtros das execucoes" aria-label="Limpar filtros das execucoes"><i class="bi bi-x-lg"></i></button>
+            </div>
           </header>
           <div class="table-scroll">
             <table class="table table-hover table-sm align-middle">
@@ -1886,6 +1956,9 @@
       promaxPublish: document.getElementById("promaxPublish"),
       promaxRunBtn: document.getElementById("promaxRunBtn"),
       promaxJobStatusFilter: document.getElementById("promaxJobStatusFilter"),
+      promaxJobFromDate: document.getElementById("promaxJobFromDate"),
+      promaxJobToDate: document.getElementById("promaxJobToDate"),
+      promaxJobClearFiltersBtn: document.getElementById("promaxJobClearFiltersBtn"),
       promaxJobsBody: document.getElementById("promaxJobsBody"),
       promaxScheduleName: document.getElementById("promaxScheduleName"),
       promaxScheduleType: document.getElementById("promaxScheduleType"),
@@ -2931,11 +3004,11 @@
 
     function promaxStatusClass(status) {
       const value = String(status || "");
-      if (value === "success") return "text-bg-success";
-      if (value === "running") return "text-bg-primary";
-      if (value === "pending" || value === "partial_success") return "text-bg-warning";
-      if (value === "failed") return "text-bg-danger";
-      return "text-bg-secondary";
+      if (value === "success") return "promax-status--success";
+      if (value === "running") return "promax-status--running";
+      if (value === "pending" || value === "partial_success") return "promax-status--warning";
+      if (value === "failed" || value === "cancel_requested") return "promax-status--danger";
+      return "";
     }
 
     function renderPromax() {
@@ -3003,7 +3076,7 @@
             <td>${escapeHtml(periodStart)}<br><span class="text-secondary">${escapeHtml(periodEnd)}</span></td>
             <td class="mono">${escapeHtml(routines)}</td>
             <td class="mono">${escapeHtml(units)}</td>
-            <td><span class="badge ${promaxStatusClass(status)}">${escapeHtml(promaxStatusLabel(status))}</span>${visibleResult ? `<div class="small text-secondary mt-1 text-wrap" title="${escapeHtml(resultMessage)}">${escapeHtml(visibleResult)}</div>` : ""}</td>
+            <td><span class="promax-status ${promaxStatusClass(status)}">${escapeHtml(promaxStatusLabel(status))}</span>${visibleResult ? `<div class="small text-secondary mt-1 text-wrap" title="${escapeHtml(resultMessage)}">${escapeHtml(visibleResult)}</div>` : ""}</td>
             <td>${escapeHtml(job.leased_by || "-")}</td>
             <td class="text-end pe-3"><div class="d-flex gap-1 justify-content-end">${action}<button class="btn btn-outline-primary btn-sm" onclick="promaxLoadLogs('${escapeHtml(job.id)}')"><i class="bi bi-terminal me-1"></i>Logs</button></div></td>
           </tr>`;
@@ -3044,7 +3117,15 @@
       if (!state.panel || !state.panel.canManagePromax) return false;
       const params = new URLSearchParams({ limit: "100" });
       const status = String(E.promaxJobStatusFilter && E.promaxJobStatusFilter.value || "");
+      const createdFrom = String(E.promaxJobFromDate && E.promaxJobFromDate.value || "");
+      const createdTo = String(E.promaxJobToDate && E.promaxJobToDate.value || "");
+      if (createdFrom && createdTo && createdTo < createdFrom) {
+        if (!silent) addLog("A data final do filtro nao pode ser anterior a inicial.", "warn");
+        return false;
+      }
       if (status) params.set("status", status);
+      if (createdFrom) params.set("created_from", createdFrom);
+      if (createdTo) params.set("created_to", createdTo);
       const requests = [
         req(CONFIG.endpoints.promax.catalog, { timeoutMs: 20000 }),
         req(`${CONFIG.endpoints.promax.jobs}?${params.toString()}`, { timeoutMs: 30000 }),
@@ -3169,6 +3250,32 @@
       } catch (err) {
         E.promaxLogOutput.textContent = `Falha ao carregar logs: ${err.message}`;
       }
+    }
+
+    function syncPromaxJobDateBounds() {
+      const createdFrom = String(E.promaxJobFromDate && E.promaxJobFromDate.value || "");
+      const createdTo = String(E.promaxJobToDate && E.promaxJobToDate.value || "");
+      if (E.promaxJobFromDate) {
+        if (createdTo) E.promaxJobFromDate.max = createdTo;
+        else E.promaxJobFromDate.removeAttribute("max");
+      }
+      if (E.promaxJobToDate) {
+        if (createdFrom) E.promaxJobToDate.min = createdFrom;
+        else E.promaxJobToDate.removeAttribute("min");
+      }
+    }
+
+    function applyPromaxJobFilters() {
+      syncPromaxJobDateBounds();
+      return syncPromax({ silent: false });
+    }
+
+    function clearPromaxJobFilters() {
+      if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.value = "";
+      if (E.promaxJobFromDate) E.promaxJobFromDate.value = "";
+      if (E.promaxJobToDate) E.promaxJobToDate.value = "";
+      syncPromaxJobDateBounds();
+      return syncPromax({ silent: true });
     }
 
     function syncPromaxDateFields() {
@@ -3386,6 +3493,7 @@
       if (E.promaxEndDate && !E.promaxEndDate.value) E.promaxEndDate.value = today;
       if (E.promaxScheduleStartDate && !E.promaxScheduleStartDate.value) E.promaxScheduleStartDate.value = today;
       if (E.promaxScheduleEndDate && !E.promaxScheduleEndDate.value) E.promaxScheduleEndDate.value = today;
+      syncPromaxJobDateBounds();
       syncPromaxDateFields();
       syncPromaxScheduleFields();
       setupPromaxScheduleSlicerEvents("run");
@@ -3401,7 +3509,10 @@
       if (E.promaxClearBtn) E.promaxClearBtn.addEventListener("click", () => promaxQueueAction("pending"));
       if (E.promaxReprocessPublicationsBtn) E.promaxReprocessPublicationsBtn.addEventListener("click", promaxReprocessPublications);
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
-      if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", () => syncPromax({ silent: true }));
+      if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", applyPromaxJobFilters);
+      if (E.promaxJobFromDate) E.promaxJobFromDate.addEventListener("change", applyPromaxJobFilters);
+      if (E.promaxJobToDate) E.promaxJobToDate.addEventListener("change", applyPromaxJobFilters);
+      if (E.promaxJobClearFiltersBtn) E.promaxJobClearFiltersBtn.addEventListener("click", clearPromaxJobFilters);
       if (E.promaxSendDates) E.promaxSendDates.addEventListener("change", syncPromaxDateFields);
       if (E.promaxScheduleSendDates) E.promaxScheduleSendDates.addEventListener("change", syncPromaxDateFields);
       if (E.promaxScheduleType) E.promaxScheduleType.addEventListener("change", syncPromaxScheduleFields);

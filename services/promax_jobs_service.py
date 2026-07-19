@@ -896,10 +896,28 @@ class PromaxJobsService:
         self,
         *,
         statuses: Sequence[JobStatus] | None = None,
+        created_from: datetime | None = None,
+        created_before: datetime | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[JobRecord]:
         normalized_statuses = [_job_status(status) for status in statuses] if statuses else []
+        normalized_created_from = (
+            _aware_utc(created_from, field_name="created_from")
+            if created_from is not None
+            else None
+        )
+        normalized_created_before = (
+            _aware_utc(created_before, field_name="created_before")
+            if created_before is not None
+            else None
+        )
+        if (
+            normalized_created_from is not None
+            and normalized_created_before is not None
+            and normalized_created_before <= normalized_created_from
+        ):
+            raise ValueError("created_before must be after created_from")
         safe_limit = _bounded_limit(limit, maximum=500)
         safe_offset = max(int(offset), 0)
         with self._connect() as conn:
@@ -909,10 +927,19 @@ class PromaxJobsService:
                     schema=sql.Identifier(self.schema),
                     jobs=sql.Identifier(JOBS_TABLE),
                 )
+                conditions: list[sql.Composed] = []
                 params: list[Any] = []
                 if normalized_statuses:
-                    query += sql.SQL(" WHERE status = ANY(%s)")
+                    conditions.append(sql.SQL("status = ANY(%s)"))
                     params.append(normalized_statuses)
+                if normalized_created_from is not None:
+                    conditions.append(sql.SQL("created_at >= %s"))
+                    params.append(normalized_created_from)
+                if normalized_created_before is not None:
+                    conditions.append(sql.SQL("created_at < %s"))
+                    params.append(normalized_created_before)
+                if conditions:
+                    query += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
                 query += sql.SQL(" ORDER BY created_at DESC, id DESC LIMIT %s OFFSET %s")
                 params.extend((safe_limit, safe_offset))
                 cur.execute(query, params)
@@ -2083,6 +2110,16 @@ class PromaxJobsService:
                         """
                     ).format(
                         index=sql.Identifier("promax_jobs_claim_idx"),
+                        schema=schema,
+                        jobs=sql.Identifier(JOBS_TABLE),
+                    ),
+                    sql.SQL(
+                        """
+                        CREATE INDEX IF NOT EXISTS {index}
+                        ON {schema}.{jobs} (created_at DESC, id DESC)
+                        """
+                    ).format(
+                        index=sql.Identifier("promax_jobs_created_at_idx"),
                         schema=schema,
                         jobs=sql.Identifier(JOBS_TABLE),
                     ),
