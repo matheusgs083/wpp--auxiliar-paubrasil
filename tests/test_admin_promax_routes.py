@@ -28,6 +28,20 @@ class FakePromaxService:
     def enqueue_job(self, **kwargs: Any) -> dict[str, Any]:
         return self._call("enqueue_job", return_value={"id": "job-1", **kwargs}, **kwargs)
 
+    def enqueue_jobs(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return self._call(
+            "enqueue_jobs",
+            return_value=[
+                {
+                    "id": f"job-{index}",
+                    "job_type": item["job_type"],
+                    "payload": item["payload"],
+                }
+                for index, item in enumerate(kwargs["items"], start=1)
+            ],
+            **kwargs,
+        )
+
     def list_jobs(self, **kwargs: Any) -> list[dict[str, Any]]:
         status = (kwargs.get("statuses") or ["pending"])[0]
         return self._call(
@@ -107,6 +121,16 @@ class FakePromaxService:
             **kwargs,
         )
 
+    def create_schedule_chain(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return self._call(
+            "create_schedule_chain",
+            return_value=[
+                {"id": f"schedule-{index}", **dict(item)}
+                for index, item in enumerate(kwargs["items"], start=1)
+            ],
+            **kwargs,
+        )
+
     def list_schedules(self, **kwargs: Any) -> list[dict[str, Any]]:
         return self._call(
             "list_schedules",
@@ -179,6 +203,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             "units": ["030117", "030118"],
             "start_date": "2026-07-01",
             "end_date": "2026-07-18",
+            "send_dates": False,
             "publish": False,
         }
 
@@ -191,6 +216,20 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             "time_of_day": "06:00:00",
             "timezone": "America/Fortaleza",
             "enabled": True,
+        }
+
+    @classmethod
+    def job_batch_payload(cls) -> dict[str, Any]:
+        job = cls.job_payload()
+        return {
+            "groups": [
+                {"category": job["category"], "routines": job["routines"]},
+            ],
+            "units": job["units"],
+            "start_date": job["start_date"],
+            "end_date": job["end_date"],
+            "send_dates": job["send_dates"],
+            "publish": job["publish"],
         }
 
     def make_client(
@@ -314,6 +353,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
 
         create_payload = service.calls[0][2]["payload"]
         self.assertEqual(create_payload["start_date"], "2026-07-01")
+        self.assertIs(create_payload["send_dates"], False)
         self.assertIs(create_payload["publish"], False)
         list_kwargs = service.calls[1][2]
         self.assertEqual(list_kwargs["limit"], 500)
@@ -326,6 +366,55 @@ class AdminPromaxRoutesTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(len(auth_calls), 1)
+        self.assertEqual(service.calls, [])
+
+    def test_job_batch_enqueues_all_groups_in_selected_order(self) -> None:
+        catalog = {
+            "reports": {
+                "routines": ["030237", "150501"],
+                "units": ["030117", "030118"],
+            },
+            "financeiro": {
+                "routines": ["120601"],
+                "units": ["030117", "030118"],
+            },
+        }
+        client, service, events, _auth_calls = self.make_client(catalog_value=catalog)
+        payload = {
+            **self.job_batch_payload(),
+            "groups": [
+                {"category": "reports", "routines": ["150501"]},
+                {"category": "financeiro", "routines": ["120601"]},
+            ],
+        }
+
+        response = client.post("/api/admin/promax/jobs/batch", json=payload)
+
+        self.assertEqual(response.status_code, 202, response.text)
+        self.assertEqual(len(response.json()["jobs"]), 2)
+        self.assertEqual(service.calls[0][0], "enqueue_jobs")
+        items = service.calls[0][2]["items"]
+        self.assertEqual([item["job_type"] for item in items], ["reports", "financeiro"])
+        self.assertEqual(items[0]["payload"]["routines"], ["150501"])
+        self.assertEqual(items[1]["payload"]["routines"], ["120601"])
+        self.assertEqual(items[1]["payload"]["units"], ["030117", "030118"])
+        self.assertIs(items[1]["payload"]["send_dates"], False)
+        self.assertEqual(events[-1]["event_type"], "admin_promax_job_batch_create")
+
+    def test_job_batch_rejects_duplicate_or_unknown_groups(self) -> None:
+        duplicate = self.job_batch_payload()
+        duplicate["groups"] = [duplicate["groups"][0], duplicate["groups"][0]]
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post("/api/admin/promax/jobs/batch", json=duplicate)
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(service.calls, [])
+
+        unknown = self.job_batch_payload()
+        unknown["groups"] = [{"category": "desconhecido", "routines": ["030237"]}]
+        response = client.post("/api/admin/promax/jobs/batch", json=unknown)
+        self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(service.calls, [])
 
     def test_admin_rbac_failure_stops_before_service(self) -> None:
@@ -345,6 +434,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             {**self.job_payload(), "routines": ["030237", "030237"]},
             {**self.job_payload(), "start_date": "2026-07-19", "end_date": "2026-07-18"},
             {**self.job_payload(), "start_date": "2025-01-01", "end_date": "2026-07-18"},
+            {**self.job_payload(), "send_dates": "true"},
             {**self.job_payload(), "publish": "true"},
             {**self.job_payload(), "routines": [f"r{index}" for index in range(51)]},
             {**self.job_payload(), "units": [f"u{index}" for index in range(101)]},
@@ -468,6 +558,71 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         self.assertEqual(invalid_selection_update.status_code, 422)
         self.assertEqual(service.calls, [])
 
+    def test_schedule_chain_validates_and_creates_groups_in_order(self) -> None:
+        catalog = {
+            "reports": {
+                "routines": ["030237"],
+                "units": ["0640001", "2210003"],
+            },
+            "obz": {
+                "routines": ["0512"],
+                "units": ["0640001", "2210003"],
+            },
+        }
+        client, service, events, _auth_calls = self.make_client(catalog_value=catalog)
+        trigger_id = "8cc06d03-1b8f-4e8f-b1d0-2c49d77d37a2"
+
+        response = client.post(
+            "/api/admin/promax/schedule-chains",
+            json={
+                "name": "Fechamento diario",
+                "groups": [
+                    {"category": "reports", "routines": ["030237"]},
+                    {"category": "obz", "routines": ["0512"]},
+                ],
+                "units": ["0640001", "2210003"],
+                "start_date": "2026-07-18",
+                "end_date": "2026-07-18",
+                "send_dates": True,
+                "publish": True,
+                "schedule_type": "daily",
+                "time_of_day": "06:00:00",
+                "timezone": "America/Fortaleza",
+                "trigger_after_schedule_id": trigger_id,
+                "enabled": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(len(response.json()["schedules"]), 2)
+        self.assertEqual([call[0] for call in service.calls], ["create_schedule_chain"])
+        kwargs = service.calls[0][2]
+        self.assertEqual([item["job_type"] for item in kwargs["items"]], ["reports", "obz"])
+        self.assertEqual(kwargs["items"][0]["payload"]["units"], ["0640001", "2210003"])
+        self.assertIs(kwargs["items"][0]["payload"]["send_dates"], True)
+        self.assertEqual(kwargs["trigger_after_schedule_id"], trigger_id)
+        self.assertEqual(events[-1]["event_type"], "admin_promax_schedule_chain_create")
+
+    def test_schedule_chain_rejects_unknown_group_before_writing(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/admin/promax/schedule-chains",
+            json={
+                "name": "Agenda invalida",
+                "groups": [{"category": "obz", "routines": ["0512"]}],
+                "units": [],
+                "start_date": "2026-07-18",
+                "end_date": "2026-07-18",
+                "publish": True,
+                "schedule_type": "daily",
+                "time_of_day": "06:00:00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(service.calls, [])
+
     def test_internal_routes_use_worker_contract_and_compare_digest(self) -> None:
         client, service, events, _auth_calls = self.make_client()
 
@@ -519,7 +674,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                     },
                 ),
                 client.get(
-                    "/api/internal/promax/control?worker_id=worker-1",
+                    "/api/internal/promax/control?worker_id=worker-1&job_id=job-1",
                     headers=self.worker_headers,
                 ),
             ]
@@ -545,6 +700,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         self.assertEqual(service.calls[2][2]["worker_metadata"]["pid"], 4321)
         self.assertEqual(service.calls[2][2]["lease_seconds"], 240)
         self.assertEqual(service.calls[3][2]["level"], "warning")
+        self.assertTrue(responses[-1].json()["cancel_requested"])
         worker_auth_events = [event for event in events if event["event_type"] == "promax_worker_auth"]
         self.assertEqual(len(worker_auth_events), len(responses))
         self.assertTrue(all(event["decision"] == "allowed" for event in worker_auth_events))

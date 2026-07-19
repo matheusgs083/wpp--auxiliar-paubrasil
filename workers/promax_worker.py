@@ -446,10 +446,23 @@ def _job_lease_token(job: Mapping[str, Any]) -> str:
 
 
 def _control_flag(payload: Mapping[str, Any], *, key: str, job_id: str) -> bool:
+    if key == "cancel_requested":
+        stop_job_ids = payload.get("stop_job_ids")
+        if isinstance(stop_job_ids, (list, tuple, set, frozenset)):
+            if job_id in {str(value or "").strip() for value in stop_job_ids}:
+                return True
+
     candidates: list[Mapping[str, Any]] = [payload]
     nested_control = payload.get("control")
     if isinstance(nested_control, Mapping):
         candidates.append(nested_control)
+        stop_job_ids = nested_control.get("stop_job_ids")
+        if key == "cancel_requested" and isinstance(
+            stop_job_ids,
+            (list, tuple, set, frozenset),
+        ):
+            if job_id in {str(value or "").strip() for value in stop_job_ids}:
+                return True
     active_job = payload.get("job") or payload.get("active_job")
     if isinstance(active_job, Mapping):
         candidates.append(active_job)

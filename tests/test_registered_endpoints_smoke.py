@@ -94,6 +94,17 @@ class FakePromaxJobsService:
     def enqueue_job(self, **_kwargs: Any) -> dict[str, Any]:
         return dict(self.job)
 
+    def enqueue_jobs(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return [
+            {
+                **self.job,
+                "id": f"job-{index}",
+                "job_type": str(item.get("job_type") or ""),
+                "payload": dict(item.get("payload") or {}),
+            }
+            for index, item in enumerate(kwargs.get("items") or [], start=1)
+        ]
+
     def list_jobs(self, **_kwargs: Any) -> list[dict[str, Any]]:
         return []
 
@@ -123,6 +134,9 @@ class FakePromaxJobsService:
 
     def create_schedule(self, **_kwargs: Any) -> dict[str, Any]:
         return dict(self.schedule)
+
+    def create_schedule_chain(self, **_kwargs: Any) -> list[dict[str, Any]]:
+        return [dict(self.schedule)]
 
     def list_schedules(self, **_kwargs: Any) -> list[dict[str, Any]]:
         return [dict(self.schedule)]
@@ -287,11 +301,43 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "units": [],
             "start_date": "2026-07-18",
             "end_date": "2026-07-18",
+            "send_dates": False,
             "publish": True,
         }
         promax_schedule_payload = {
             **promax_job_payload,
             "name": "Fluxo diario",
+            "schedule_type": "daily",
+            "time_of_day": "06:00:00",
+            "timezone": "America/Fortaleza",
+            "enabled": True,
+        }
+        promax_job_batch_payload = {
+            "groups": [
+                {
+                    "category": promax_job_payload["category"],
+                    "routines": promax_job_payload["routines"],
+                }
+            ],
+            "units": promax_job_payload["units"],
+            "start_date": promax_job_payload["start_date"],
+            "end_date": promax_job_payload["end_date"],
+            "send_dates": promax_job_payload["send_dates"],
+            "publish": promax_job_payload["publish"],
+        }
+        promax_schedule_chain_payload = {
+            "name": "Fluxo encadeado",
+            "groups": [
+                {
+                    "category": promax_job_payload["category"],
+                    "routines": promax_job_payload["routines"],
+                }
+            ],
+            "units": promax_job_payload["units"],
+            "start_date": promax_job_payload["start_date"],
+            "end_date": promax_job_payload["end_date"],
+            "send_dates": promax_job_payload["send_dates"],
+            "publish": promax_job_payload["publish"],
             "schedule_type": "daily",
             "time_of_day": "06:00:00",
             "timezone": "America/Fortaleza",
@@ -363,6 +409,12 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                 expected_status=202,
                 kwargs={"json": promax_job_payload},
             ),
+            EndpointCase(
+                "POST",
+                "/api/admin/promax/jobs/batch",
+                expected_status=202,
+                kwargs={"json": promax_job_batch_payload},
+            ),
             EndpointCase("GET", "/api/admin/promax/jobs"),
             EndpointCase("POST", "/api/admin/promax/publications/reprocess", expected_status=202),
             EndpointCase("GET", "/api/admin/promax/jobs/job-1"),
@@ -378,6 +430,12 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                 "/api/admin/promax/schedules",
                 expected_status=201,
                 kwargs={"json": promax_schedule_payload},
+            ),
+            EndpointCase(
+                "POST",
+                "/api/admin/promax/schedule-chains",
+                expected_status=201,
+                kwargs={"json": promax_schedule_chain_payload},
             ),
             EndpointCase("GET", "/api/admin/promax/schedules"),
             EndpointCase("GET", "/api/admin/promax/schedules/schedule-1"),

@@ -9,6 +9,7 @@ from bot_api.services.promax_jobs_service import (
     LeaseLostError,
     PromaxJobsService,
     _schedule_idempotency_key,
+    _schedule_trigger_idempotency_key,
     calculate_next_run,
     validate_schedule_definition,
 )
@@ -187,6 +188,15 @@ class PromaxScheduleCalculationTests(unittest.TestCase):
 
         self.assertEqual(utc_key, local_key)
 
+    def test_schedule_trigger_idempotency_key_uses_both_ids(self) -> None:
+        schedule_id = "8cc06d03-1b8f-4e8f-b1d0-2c49d77d37a2"
+        parent_job_id = "1d42b4cf-b851-48b8-888e-2a33cc6f5608"
+
+        self.assertEqual(
+            _schedule_trigger_idempotency_key(schedule_id, parent_job_id),
+            f"schedule-trigger:{schedule_id}:{parent_job_id}",
+        )
+
 
 class PromaxSqlContractTests(unittest.TestCase):
     def make_service(
@@ -222,10 +232,84 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("status IN ('running', 'cancel_requested')", ddl)
         self.assertIn("needs_review BOOLEAN", ddl)
         self.assertIn("promax_jobs_schedule_occurrence_idx", ddl)
+        self.assertIn("trigger_after_schedule_id", ddl)
+        self.assertIn("triggered_by_job_id", ddl)
+        self.assertIn("promax_jobs_schedule_trigger_idx", ddl)
         self.assertIn("promax_job_logs_append_only", ddl)
         self.assertIn("BEFORE UPDATE OR DELETE", ddl)
         self.assertIn("pg_advisory_xact_lock", ddl)
         self.assertEqual(connection.commits, 1)
+
+    def test_schedule_enqueue_separates_timed_and_completion_triggers(self) -> None:
+        cursor = FakeCursor(fetchall_values=[[], []])
+        service, _connection = self.make_service(cursor)
+
+        jobs = service.enqueue_due_schedules(
+            now=datetime(2026, 7, 18, 12, 0, tzinfo=UTC),
+            limit=20,
+        )
+
+        self.assertEqual(jobs, [])
+        statements = [query_text(query) for query, _params in cursor.executions]
+        self.assertIn("trigger_after_schedule_id IS NULL", statements[0])
+        self.assertIn("JOIN LATERAL", statements[1])
+        self.assertIn("parent.status IN ('success', 'partial_success')", statements[1])
+        self.assertIn("triggered.triggered_by_job_id = parent.id", statements[1])
+
+    def test_enqueue_jobs_uses_one_transaction_and_preserves_batch_order(self) -> None:
+        created_at = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)
+        cursor = FakeCursor(
+            fetchone_values=[
+                {
+                    "id": "job-1",
+                    "job_type": "adf",
+                    "payload": {"routines": ["030237"]},
+                    "status": "pending",
+                    "available_at": created_at,
+                    "created_at": created_at,
+                    "updated_at": created_at,
+                },
+                {
+                    "id": "job-2",
+                    "job_type": "obz",
+                    "payload": {"routines": ["0512"]},
+                    "status": "pending",
+                    "available_at": created_at,
+                    "created_at": created_at,
+                    "updated_at": created_at,
+                },
+            ]
+        )
+        service, _connection = self.make_service(cursor)
+
+        jobs = service.enqueue_jobs(
+            items=[
+                {"job_type": "adf", "payload": {"routines": ["030237"]}},
+                {"job_type": "obz", "payload": {"routines": ["0512"]}},
+            ],
+            created_by="admin",
+            available_at=created_at,
+        )
+
+        self.assertEqual([job["job_type"] for job in jobs], ["adf", "obz"])
+        self.assertEqual(len(cursor.executions), 2)
+        first_params = cursor.executions[0][1]
+        second_params = cursor.executions[1][1]
+        self.assertEqual(first_params[1], "adf")
+        self.assertEqual(second_params[1], "obz")
+        self.assertLess(first_params[8], second_params[8])
+        self.assertEqual(first_params[9], "admin")
+        self.assertEqual(second_params[9], "admin")
+
+    def test_enqueue_jobs_rejects_an_empty_or_oversized_batch(self) -> None:
+        service, _connection = self.make_service(FakeCursor())
+
+        with self.assertRaisesRegex(ValueError, "entre 1 e 50"):
+            service.enqueue_jobs(items=[])
+        with self.assertRaisesRegex(ValueError, "entre 1 e 50"):
+            service.enqueue_jobs(
+                items=[{"job_type": f"group-{index}"} for index in range(51)]
+            )
 
     def test_claim_is_atomic_skip_locked_and_assigns_lease_token(self) -> None:
         cursor = FakeCursor(fetchone_values=[None])
@@ -257,6 +341,33 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("lease_token = %s", statement)
         self.assertIn("leased_by = %s", statement)
         self.assertIn("lease_expires_at > NOW()", statement)
+
+    def test_heartbeat_preserves_worker_catalog_metadata(self) -> None:
+        now = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)
+        cursor = FakeCursor(
+            fetchone_values=[
+                {
+                    "id": "1d42b4cf-b851-48b8-888e-2a33cc6f5608",
+                    "status": "running",
+                    "lease_expires_at": now,
+                    "heartbeat_at": now,
+                }
+            ]
+        )
+        service, _connection = self.make_service(cursor)
+
+        service.heartbeat_job(
+            job_id="1d42b4cf-b851-48b8-888e-2a33cc6f5608",
+            lease_token="9a31bdf4-8672-4747-9acc-132ad046d5a4",
+            worker_id="worker-1",
+            worker_metadata={"pid": 4321},
+        )
+
+        worker_statement = query_text(cursor.executions[1][0])
+        self.assertIn(
+            'metadata = "worker_heartbeats".metadata || EXCLUDED.metadata',
+            worker_statement,
+        )
 
     def test_reaper_marks_expired_jobs_failed_without_requeue(self) -> None:
         cursor = FakeCursor(fetchall_values=[[]])

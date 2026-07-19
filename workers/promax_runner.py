@@ -139,11 +139,15 @@ class PromaxRunner:
             "--perfil",
             clean_profile,
         ]
-        for field, option in (("start_date", "--data-inicial"), ("end_date", "--data-final")):
-            raw_value = str(payload.get(field) or "").strip()
-            if raw_value:
-                date.fromisoformat(raw_value)
-                command.extend([option, raw_value])
+        send_dates = payload.get("send_dates", False)
+        if not isinstance(send_dates, bool):
+            raise ValueError("Promax send_dates flag must be boolean.")
+        if send_dates:
+            for field, option in (("start_date", "--data-inicial"), ("end_date", "--data-final")):
+                raw_value = str(payload.get(field) or "").strip()
+                if raw_value:
+                    date.fromisoformat(raw_value)
+                    command.extend([option, raw_value])
 
         routines = _identifier_list(payload.get("routines"), field_name="routines")
         if routines:

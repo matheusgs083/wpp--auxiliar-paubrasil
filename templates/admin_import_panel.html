@@ -174,6 +174,16 @@
     .power-slicer-item { display: flex; align-items: center; gap: 0.45rem; min-height: 28px; padding: 0.25rem 0.35rem; border-radius: 6px; cursor: pointer; }
     .power-slicer-item:hover { background: rgba(37, 99, 235, 0.08); }
     .power-slicer-actions { display: flex; gap: 0.35rem; margin-top: 0.5rem; }
+    .promax-schedule-form { display: grid; gap: 0.8rem; }
+    .promax-schedule-section-title { display: flex; align-items: center; gap: 0.45rem; margin: 0 0 0.6rem; color: var(--ink-900); font-size: 0.8rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+    .promax-schedule-scope { margin: 0 -1rem; padding: 0.85rem 1rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+    .promax-slicer .power-slicer-toggle { width: 100%; color: var(--ink-900); background: var(--surface); }
+    .promax-slicer .power-slicer-panel { min-width: min(360px, calc(100vw - 2.5rem)); }
+    .promax-routine-slicer .power-slicer-panel { left: auto; right: 0; min-width: min(460px, calc(100vw - 2.5rem)); }
+    .promax-slicer .power-slicer-list { min-height: 44px; }
+    .promax-slicer-group + .promax-slicer-group { margin-top: 0.45rem; padding-top: 0.45rem; border-top: 1px solid var(--line); }
+    .promax-slicer-group-title { position: sticky; top: 0; z-index: 1; margin: 0 0 0.2rem; padding: 0.18rem 0.35rem; color: var(--ink-500); background: var(--surface); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+    .promax-schedule-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
     .route-table-scroll { height: 260px; min-height: 180px; max-height: 1400px; }
     .route-resize-handle { min-height: 30px; display: flex; align-items: center; justify-content: center; gap: 0.4rem; border: 1px dashed var(--line); border-top: 0; border-radius: 0 0 8px 8px; color: var(--muted); cursor: ns-resize; user-select: none; touch-action: none; background: var(--surface-soft); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
     body.is-resizing-route { cursor: ns-resize; user-select: none; }
@@ -821,41 +831,89 @@
             <button class="btn btn-outline-danger btn-sm" id="promaxClearBtn" type="button"><i class="bi bi-trash3 me-1"></i>Limpar pendentes</button>
             <button class="btn btn-outline-primary btn-sm" id="promaxReprocessPublicationsBtn" type="button" disabled title="Tentar novamente o envio dos arquivos preservados no worker"><i class="bi bi-arrow-clockwise me-1"></i>Reprocessar publicacoes</button>
           </div>
+          <div class="form-text mt-2">A fila aceita varios jobs e executa um por vez, na ordem de prioridade e inclusao.</div>
         </section>
 
         <section class="panel-card p-3 mb-3">
           <h2 class="h6 fw-bold mb-3"><i class="bi bi-play-fill me-2 text-primary"></i>Executar agora</h2>
-          <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-              <label class="form-label small mb-1" for="promaxCategory">Categoria</label>
-              <select class="form-select form-select-sm" id="promaxCategory" disabled>
-                <option value="">Catalogo indisponivel</option>
-              </select>
-              <div class="form-text" id="promaxCategoryHint">Carregue o catalogo para selecionar uma categoria.</div>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small mb-1" for="promaxStartDate">Data inicial</label>
-              <input class="form-control form-control-sm" id="promaxStartDate" type="date">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small mb-1" for="promaxEndDate">Data final</label>
-              <input class="form-control form-control-sm" id="promaxEndDate" type="date">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small mb-1" for="promaxUnits">Unidades</label>
-              <input class="form-control form-control-sm mono" id="promaxUnits" type="text" placeholder="Vazio = todas">
-              <div class="form-text" id="promaxUnitsHint">As unidades dependem da categoria.</div>
-            </div>
-            <div class="col-12">
-              <label class="form-label small mb-1">Rotinas</label>
-              <div class="d-flex flex-wrap gap-3 min-h-32 align-items-center" id="promaxRoutines" role="group" aria-label="Rotinas Promax">
-                <span class="small text-secondary">Catalogo indisponivel.</span>
+          <div class="promax-schedule-form">
+            <div>
+              <h3 class="promax-schedule-section-title"><i class="bi bi-calendar-range"></i>Periodo</h3>
+              <div class="row g-2 align-items-end">
+                <div class="col-xl-4 col-lg-6">
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label small mb-1" for="promaxStartDate">Data inicial</label>
+                      <input class="form-control form-control-sm" id="promaxStartDate" type="date">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label small mb-1" for="promaxEndDate">Data final</label>
+                      <input class="form-control form-control-sm" id="promaxEndDate" type="date">
+                    </div>
+                  </div>
+                </div>
+                <div class="col-xl-5 col-lg-6">
+                  <div class="d-flex flex-wrap gap-3 pb-1">
+                    <label class="form-check mb-0"><input class="form-check-input" id="promaxSendDates" type="checkbox"> <span class="form-check-label fw-semibold">Enviar data</span></label>
+                    <label class="form-check mb-0"><input class="form-check-input" id="promaxPublish" type="checkbox" checked> <span class="form-check-label fw-semibold">Publicar arquivos</span></label>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="col-md-3">
-              <label class="form-check mt-2 mb-0"><input class="form-check-input" id="promaxPublish" type="checkbox" checked> <span class="form-check-label fw-semibold">Publicar arquivos</span></label>
+
+            <div class="promax-schedule-scope">
+              <h3 class="promax-schedule-section-title"><i class="bi bi-funnel"></i>Escopo</h3>
+              <div class="row g-2">
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxRunResellerButton">Revendas</label>
+                  <div class="power-slicer promax-slicer" id="promaxRunResellerSlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxRunResellerButton" aria-expanded="false" aria-controls="promaxRunResellerPanel">Todas as revendas</button>
+                    <div class="power-slicer-panel d-none" id="promaxRunResellerPanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxRunResellerSearch" placeholder="Pesquisar revenda" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxRunResellerSelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxRunResellerClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxRunResellers" role="group" aria-label="Revendas da execucao Promax"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxRunCategoryButton">Grupos</label>
+                  <div class="power-slicer promax-slicer" id="promaxRunCategorySlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxRunCategoryButton" aria-expanded="false" aria-controls="promaxRunCategoryPanel">Selecione os grupos</button>
+                    <div class="power-slicer-panel d-none" id="promaxRunCategoryPanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxRunCategorySearch" placeholder="Pesquisar grupo" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxRunCategorySelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxRunCategoryClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxRunCategories" role="group" aria-label="Grupos da execucao Promax">
+                        <span class="small text-secondary">Catalogo indisponivel.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxRunRoutineButton">Rotinas</label>
+                  <div class="power-slicer promax-slicer promax-routine-slicer" id="promaxRunRoutineSlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxRunRoutineButton" aria-expanded="false" aria-controls="promaxRunRoutinePanel">Selecione as rotinas</button>
+                    <div class="power-slicer-panel d-none" id="promaxRunRoutinePanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxRunRoutineSearch" placeholder="Pesquisar rotina" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxRunRoutineSelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxRunRoutineClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxRunRoutines" role="group" aria-label="Rotinas da execucao Promax">
+                        <span class="small text-secondary">Selecione um grupo.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="col-md-9 d-flex justify-content-end">
+
+            <div class="promax-schedule-actions">
               <button class="btn btn-primary btn-sm" id="promaxRunBtn" type="button" disabled><i class="bi bi-play-fill me-1"></i>Adicionar a fila</button>
             </div>
           </div>
@@ -885,38 +943,125 @@
 
         <section class="panel-card p-3 mb-3">
           <h2 class="h6 fw-bold mb-3"><i class="bi bi-calendar-event me-2 text-primary"></i>Agendar execucao</h2>
-          <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-              <label class="form-label small mb-1" for="promaxScheduleName">Nome</label>
-              <input class="form-control form-control-sm" id="promaxScheduleName" type="text" placeholder="Fluxo de caixa diario">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small mb-1" for="promaxScheduleType">Frequencia</label>
-              <select class="form-select form-select-sm" id="promaxScheduleType"><option value="daily">Diaria</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small mb-1" for="promaxScheduleTime">Horario</label>
-              <input class="form-control form-control-sm" id="promaxScheduleTime" type="time" value="06:00">
-            </div>
-            <div class="col-md-2 d-none" id="promaxScheduleWeekdayWrap">
-              <label class="form-label small mb-1" for="promaxScheduleWeekday">Dia da semana</label>
-              <select class="form-select form-select-sm" id="promaxScheduleWeekday"><option value="0">Segunda</option><option value="1">Terca</option><option value="2">Quarta</option><option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sabado</option><option value="6">Domingo</option></select>
-            </div>
-            <div class="col-md-2 d-none" id="promaxScheduleMonthDayWrap">
-              <label class="form-label small mb-1" for="promaxScheduleMonthDay">Dia do mes</label>
-              <input class="form-control form-control-sm" id="promaxScheduleMonthDay" type="number" min="1" max="31" value="1">
-            </div>
-            <div class="col-md-3 d-flex justify-content-end">
-              <div class="d-flex gap-2">
-                <button class="btn btn-outline-secondary btn-sm d-none" id="promaxScheduleCancelBtn" type="button">Cancelar edicao</button>
-                <button class="btn btn-primary btn-sm" id="promaxScheduleCreateBtn" type="button" disabled><i class="bi bi-calendar-plus me-1"></i>Criar agenda</button>
+          <div class="promax-schedule-form">
+            <div>
+              <h3 class="promax-schedule-section-title"><i class="bi bi-clock-history"></i>Execucao</h3>
+              <div class="row g-2 align-items-end">
+                <div class="col-xl-4 col-lg-5">
+                  <label class="form-label small mb-1" for="promaxScheduleName">Nome</label>
+                  <input class="form-control form-control-sm" id="promaxScheduleName" type="text" placeholder="Fluxo de caixa diario">
+                </div>
+                <div class="col-xl-2 col-lg-3">
+                  <label class="form-label small mb-1" for="promaxScheduleTriggerType">Gatilho inicial</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleTriggerType">
+                    <option value="time">Por horario</option>
+                    <option value="after">Apos outra agenda</option>
+                  </select>
+                </div>
+                <div class="col-xl-2 col-lg-2" id="promaxScheduleTypeWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleType">Frequencia</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleType"><option value="daily">Diaria</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
+                </div>
+                <div class="col-xl-2 col-lg-2" id="promaxScheduleTimeWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleTime">Horario</label>
+                  <input class="form-control form-control-sm" id="promaxScheduleTime" type="time" value="06:00">
+                </div>
+                <div class="col-xl-4 col-lg-4 d-none" id="promaxScheduleTriggerScheduleWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleTriggerSchedule">Executar apos</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleTriggerSchedule">
+                    <option value="">Selecione uma agenda</option>
+                  </select>
+                </div>
+                <div class="col-xl-2 col-lg-2 d-none" id="promaxScheduleWeekdayWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleWeekday">Dia da semana</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleWeekday"><option value="0">Segunda</option><option value="1">Terca</option><option value="2">Quarta</option><option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sabado</option><option value="6">Domingo</option></select>
+                </div>
+                <div class="col-xl-2 col-lg-2 d-none" id="promaxScheduleMonthDayWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleMonthDay">Dia do mes</label>
+                  <input class="form-control form-control-sm" id="promaxScheduleMonthDay" type="number" min="1" max="31" value="1">
+                </div>
+                <div class="col-xl-4 col-lg-6">
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label small mb-1" for="promaxScheduleStartDate">Data inicial</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleStartDate" type="date">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label small mb-1" for="promaxScheduleEndDate">Data final</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleEndDate" type="date">
+                    </div>
+                  </div>
+                </div>
+                <div class="col-xl-5 col-lg-6">
+                  <div class="d-flex flex-wrap gap-3 pb-1">
+                    <label class="form-check mb-0"><input class="form-check-input" id="promaxScheduleSendDates" type="checkbox"> <span class="form-check-label fw-semibold">Enviar data</span></label>
+                    <label class="form-check mb-0"><input class="form-check-input" id="promaxSchedulePublish" type="checkbox" checked> <span class="form-check-label fw-semibold">Publicar arquivos</span></label>
+                  </div>
+                </div>
               </div>
+            </div>
+
+            <div class="promax-schedule-scope">
+              <h3 class="promax-schedule-section-title"><i class="bi bi-funnel"></i>Escopo</h3>
+              <div class="row g-2">
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxScheduleResellerButton">Revendas</label>
+                  <div class="power-slicer promax-slicer" id="promaxScheduleResellerSlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxScheduleResellerButton" aria-expanded="false" aria-controls="promaxScheduleResellerPanel">Todas as revendas</button>
+                    <div class="power-slicer-panel d-none" id="promaxScheduleResellerPanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxScheduleResellerSearch" placeholder="Pesquisar revenda" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxScheduleResellerSelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxScheduleResellerClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxScheduleResellers" role="group" aria-label="Revendas da agenda Promax"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxScheduleCategoryButton">Grupos</label>
+                  <div class="power-slicer promax-slicer" id="promaxScheduleCategorySlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxScheduleCategoryButton" aria-expanded="false" aria-controls="promaxScheduleCategoryPanel">Selecione os grupos</button>
+                    <div class="power-slicer-panel d-none" id="promaxScheduleCategoryPanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxScheduleCategorySearch" placeholder="Pesquisar grupo" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxScheduleCategorySelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxScheduleCategoryClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxScheduleCategories" role="group" aria-label="Grupos da agenda Promax">
+                        <span class="small text-secondary">Catalogo indisponivel.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxScheduleRoutineButton">Rotinas</label>
+                  <div class="power-slicer promax-slicer promax-routine-slicer" id="promaxScheduleRoutineSlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxScheduleRoutineButton" aria-expanded="false" aria-controls="promaxScheduleRoutinePanel">Selecione as rotinas</button>
+                    <div class="power-slicer-panel d-none" id="promaxScheduleRoutinePanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxScheduleRoutineSearch" placeholder="Pesquisar rotina" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxScheduleRoutineSelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxScheduleRoutineClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxScheduleRoutines" role="group" aria-label="Rotinas da agenda Promax">
+                        <span class="small text-secondary">Selecione um grupo.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="promax-schedule-actions">
+              <button class="btn btn-outline-secondary btn-sm d-none" id="promaxScheduleCancelBtn" type="button">Cancelar edicao</button>
+              <button class="btn btn-primary btn-sm" id="promaxScheduleCreateBtn" type="button" disabled><i class="bi bi-calendar-plus me-1"></i>Criar agenda</button>
             </div>
           </div>
           <div class="table-scroll mt-3" style="max-height: 280px;">
             <table class="table table-hover table-sm align-middle">
-              <thead><tr><th>Nome</th><th>Frequencia</th><th>Proxima execucao</th><th>Status</th><th class="text-end">Acoes</th></tr></thead>
-              <tbody id="promaxSchedulesBody"><tr><td colspan="5" class="text-center py-3 text-secondary">Nenhuma agenda carregada.</td></tr></tbody>
+              <thead><tr><th>Nome</th><th>Grupo</th><th>Revendas</th><th>Gatilho</th><th>Proxima execucao</th><th>Status</th><th class="text-end">Acoes</th></tr></thead>
+              <tbody id="promaxSchedulesBody"><tr><td colspan="7" class="text-center py-3 text-secondary">Nenhuma agenda carregada.</td></tr></tbody>
             </table>
           </div>
         </section>
@@ -1439,12 +1584,14 @@
         promax: {
           catalog: "/api/admin/promax/catalog",
           jobs: "/api/admin/promax/jobs",
+          jobsBatch: "/api/admin/promax/jobs/batch",
           worker: "/api/admin/promax/worker/status",
           pause: "/api/admin/promax/queue/pause",
           resume: "/api/admin/promax/queue/resume",
           pending: "/api/admin/promax/queue/pending",
           reprocessPublications: "/api/admin/promax/publications/reprocess",
-          schedules: "/api/admin/promax/schedules"
+          schedules: "/api/admin/promax/schedules",
+          scheduleChains: "/api/admin/promax/schedule-chains"
         }
       },
       roles: {
@@ -1455,6 +1602,47 @@
         ADMIN: "Administrador / TI"
       },
       datasets: []
+    };
+
+    const PROMAX_RESELLERS = [
+      { id: "0640001", name: "Sousa" },
+      { id: "0640002", name: "Itaporanga" },
+      { id: "2210003", name: "Patos" },
+      { id: "2210004", name: "Sume" },
+      { id: "3480005", name: "Guarabira" },
+      { id: "3610006", name: "Brumado" },
+      { id: "3610007", name: "Barra da Estiva" },
+      { id: "3610008", name: "Cacule" }
+    ];
+
+    const PROMAX_SCHEDULE_SLICERS = {
+      reseller: {
+        prefix: "promaxScheduleReseller",
+        listId: "promaxScheduleResellers",
+        allText: "Todas as revendas",
+        emptyText: "Nenhuma revenda",
+        selectedText: "revendas"
+      },
+      category: {
+        prefix: "promaxScheduleCategory",
+        listId: "promaxScheduleCategories",
+        allText: "Todos os grupos",
+        emptyText: "Nenhum grupo",
+        selectedText: "grupos"
+      },
+      routine: {
+        prefix: "promaxScheduleRoutine",
+        listId: "promaxScheduleRoutines",
+        allText: "Todas as rotinas",
+        emptyText: "Nenhuma rotina",
+        selectedText: "rotinas"
+      }
+    };
+
+    const PROMAX_RUN_SLICERS = {
+      reseller: { ...PROMAX_SCHEDULE_SLICERS.reseller, prefix: "promaxRunReseller", listId: "promaxRunResellers" },
+      category: { ...PROMAX_SCHEDULE_SLICERS.category, prefix: "promaxRunCategory", listId: "promaxRunCategories" },
+      routine: { ...PROMAX_SCHEDULE_SLICERS.routine, prefix: "promaxRunRoutine", listId: "promaxRunRoutines" }
     };
 
     const state = {
@@ -1485,8 +1673,12 @@
         schedules: [],
         selectedJobId: "",
         editingScheduleId: "",
-        selectedCategory: "",
-        selectedRoutines: null
+        runSelectedCategories: null,
+        runSelectedRoutines: {},
+        runSelectedUnits: PROMAX_RESELLERS.map(reseller => reseller.id),
+        scheduleSelectedCategories: null,
+        scheduleSelectedRoutines: {},
+        scheduleSelectedUnits: PROMAX_RESELLERS.map(reseller => reseller.id)
       },
       recolhas: { total: 0, operations: [] },
       giroRecolha: { total: 0, summary: {}, records: [] },
@@ -1688,13 +1880,9 @@
       promaxResumeBtn: document.getElementById("promaxResumeBtn"),
       promaxClearBtn: document.getElementById("promaxClearBtn"),
       promaxReprocessPublicationsBtn: document.getElementById("promaxReprocessPublicationsBtn"),
-      promaxCategory: document.getElementById("promaxCategory"),
-      promaxCategoryHint: document.getElementById("promaxCategoryHint"),
       promaxStartDate: document.getElementById("promaxStartDate"),
       promaxEndDate: document.getElementById("promaxEndDate"),
-      promaxUnits: document.getElementById("promaxUnits"),
-      promaxUnitsHint: document.getElementById("promaxUnitsHint"),
-      promaxRoutines: document.getElementById("promaxRoutines"),
+      promaxSendDates: document.getElementById("promaxSendDates"),
       promaxPublish: document.getElementById("promaxPublish"),
       promaxRunBtn: document.getElementById("promaxRunBtn"),
       promaxJobStatusFilter: document.getElementById("promaxJobStatusFilter"),
@@ -1709,6 +1897,18 @@
       promaxScheduleCreateBtn: document.getElementById("promaxScheduleCreateBtn"),
       promaxScheduleCancelBtn: document.getElementById("promaxScheduleCancelBtn"),
       promaxSchedulesBody: document.getElementById("promaxSchedulesBody"),
+      promaxScheduleCategories: document.getElementById("promaxScheduleCategories"),
+      promaxScheduleStartDate: document.getElementById("promaxScheduleStartDate"),
+      promaxScheduleEndDate: document.getElementById("promaxScheduleEndDate"),
+      promaxScheduleSendDates: document.getElementById("promaxScheduleSendDates"),
+      promaxScheduleResellers: document.getElementById("promaxScheduleResellers"),
+      promaxScheduleRoutines: document.getElementById("promaxScheduleRoutines"),
+      promaxSchedulePublish: document.getElementById("promaxSchedulePublish"),
+      promaxScheduleTriggerType: document.getElementById("promaxScheduleTriggerType"),
+      promaxScheduleTriggerScheduleWrap: document.getElementById("promaxScheduleTriggerScheduleWrap"),
+      promaxScheduleTriggerSchedule: document.getElementById("promaxScheduleTriggerSchedule"),
+      promaxScheduleTypeWrap: document.getElementById("promaxScheduleTypeWrap"),
+      promaxScheduleTimeWrap: document.getElementById("promaxScheduleTimeWrap"),
       promaxLogJob: document.getElementById("promaxLogJob"),
       promaxLogOutput: document.getElementById("promaxLogOutput"),
       accessRole: document.getElementById("accessRole"),
@@ -2181,181 +2381,540 @@
       return promaxCatalogCategories().find(category => category.id === id) || null;
     }
 
-    function promaxSelectedRoutines() {
-      if (!E.promaxRoutines) return [];
-      return Array.from(E.promaxRoutines.querySelectorAll(".promax-routine:checked"))
-        .map(input => String(input.value || "").trim())
-        .filter(Boolean);
+    function promaxSelectionStateKeys(scope) {
+      return scope === "run"
+        ? {
+          categories: "runSelectedCategories",
+          routines: "runSelectedRoutines",
+          units: "runSelectedUnits"
+        }
+        : {
+          categories: "scheduleSelectedCategories",
+          routines: "scheduleSelectedRoutines",
+          units: "scheduleSelectedUnits"
+        };
+    }
+
+    function promaxSelectionSelectedCategories(scope) {
+      const keys = promaxSelectionStateKeys(scope);
+      const values = Array.isArray(state.promax[keys.categories])
+        ? state.promax[keys.categories]
+        : [];
+      return values
+        .map(value => String(value || "").trim())
+        .filter((value, index, items) => value && items.indexOf(value) === index);
+    }
+
+    function promaxSelectionSelectedRoutines(scope) {
+      const keys = promaxSelectionStateKeys(scope);
+      const selections = {};
+      const configured = state.promax[keys.routines] || {};
+      Object.entries(configured).forEach(([categoryId, routines]) => {
+        const normalizedCategory = String(categoryId || "").trim();
+        if (!normalizedCategory || !Array.isArray(routines)) return;
+        selections[normalizedCategory] = routines
+          .map(value => String(value || "").trim())
+          .filter((value, index, items) => value && items.indexOf(value) === index);
+      });
+      return selections;
+    }
+
+    function promaxSelectionSelectedUnits(scope) {
+      const keys = promaxSelectionStateKeys(scope);
+      const values = Array.isArray(state.promax[keys.units])
+        ? state.promax[keys.units]
+        : [];
+      return values
+        .map(value => String(value || "").trim())
+        .filter((value, index, items) => value && items.indexOf(value) === index);
+    }
+
+    function promaxRunSelectedCategories() {
+      return promaxSelectionSelectedCategories("run");
+    }
+
+    function promaxRunSelectedRoutines() {
+      return promaxSelectionSelectedRoutines("run");
+    }
+
+    function promaxRunSelectedUnits() {
+      return promaxSelectionSelectedUnits("run");
+    }
+
+    function promaxScheduleSelectedCategories() {
+      return promaxSelectionSelectedCategories("schedule");
+    }
+
+    function promaxScheduleSelectedRoutines() {
+      return promaxSelectionSelectedRoutines("schedule");
     }
 
     function updatePromaxActionState() {
-      const category = promaxCatalogCategory(E.promaxCategory && E.promaxCategory.value);
-      const enabled = Boolean(category && promaxSelectedRoutines().length);
-      if (E.promaxRunBtn) E.promaxRunBtn.disabled = !enabled;
-      if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.disabled = !enabled;
+      const runCategories = promaxRunSelectedCategories();
+      const runRoutines = promaxRunSelectedRoutines();
+      const runEnabled = Boolean(
+        runCategories.length
+        && promaxRunSelectedUnits().length
+        && runCategories.every(categoryId => (runRoutines[categoryId] || []).length)
+      );
+      const scheduleCategories = promaxScheduleSelectedCategories();
+      const scheduleRoutines = promaxScheduleSelectedRoutines();
+      const scheduleEnabled = Boolean(
+        scheduleCategories.length
+        && promaxScheduleSelectedUnits().length
+        && scheduleCategories.every(categoryId => (scheduleRoutines[categoryId] || []).length)
+      );
+      if (E.promaxRunBtn) E.promaxRunBtn.disabled = !runEnabled;
+      if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.disabled = !scheduleEnabled;
     }
 
-    function rememberPromaxCatalogSelection() {
-      const category = promaxCatalogCategory(E.promaxCategory && E.promaxCategory.value);
-      if (!category) return;
-      state.promax.selectedCategory = category.id;
-      state.promax.selectedRoutines = promaxSelectedRoutines();
+    function promaxScheduleSlicerElements(kind, scope = "schedule") {
+      const slicers = scope === "run" ? PROMAX_RUN_SLICERS : PROMAX_SCHEDULE_SLICERS;
+      const def = slicers[kind];
+      if (!def) return {};
+      return {
+        def,
+        root: document.getElementById(`${def.prefix}Slicer`),
+        button: document.getElementById(`${def.prefix}Button`),
+        panel: document.getElementById(`${def.prefix}Panel`),
+        search: document.getElementById(`${def.prefix}Search`),
+        list: document.getElementById(def.listId),
+        selectAllBtn: document.getElementById(`${def.prefix}SelectAllBtn`),
+        clearBtn: document.getElementById(`${def.prefix}ClearBtn`)
+      };
     }
 
-    function promaxRoutineSelectionChanged() {
-      rememberPromaxCatalogSelection();
+    function promaxScheduleRoutineKey(categoryId, routineId) {
+      return `${String(categoryId || "")}::${String(routineId || "")}`;
+    }
+
+    function promaxScheduleSlicerOptions(kind, scope = "schedule") {
+      if (kind === "reseller") {
+        return PROMAX_RESELLERS.map(reseller => ({
+          value: reseller.id,
+          label: `${reseller.name} (${reseller.id})`
+        }));
+      }
+      if (kind === "category") {
+        const options = promaxCatalogCategories().map(category => ({
+          value: category.id,
+          label: category.name
+        }));
+        const values = new Set(options.map(item => item.value));
+        promaxSelectionSelectedCategories(scope).forEach(categoryId => {
+          if (!values.has(categoryId)) {
+            options.unshift({ value: categoryId, label: `${categoryId} (indisponivel)` });
+            values.add(categoryId);
+          }
+        });
+        return options;
+      }
+      if (kind === "routine") {
+        return promaxSelectionSelectedCategories(scope).flatMap(categoryId => {
+          const category = promaxCatalogCategory(categoryId);
+          if (!category) return [];
+          return category.routines.map(routine => ({
+            value: promaxScheduleRoutineKey(categoryId, routine.id),
+            categoryId,
+            categoryName: category.name,
+            routineId: routine.id,
+            label: routine.name === routine.id
+              ? routine.id
+              : `${routine.id} - ${routine.name}`
+          }));
+        });
+      }
+      return [];
+    }
+
+    function promaxScheduleSlicerSelectedKeys(kind, scope = "schedule") {
+      if (kind === "reseller") return promaxSelectionSelectedUnits(scope);
+      if (kind === "category") return promaxSelectionSelectedCategories(scope);
+      if (kind === "routine") {
+        const routines = promaxSelectionSelectedRoutines(scope);
+        return promaxSelectionSelectedCategories(scope).flatMap(categoryId => (
+          (routines[categoryId] || []).map(routineId => promaxScheduleRoutineKey(categoryId, routineId))
+        ));
+      }
+      return [];
+    }
+
+    function promaxScheduleSlicerVisibleOptions(kind, scope = "schedule") {
+      const els = promaxScheduleSlicerElements(kind, scope);
+      const search = normalizeTextForSearch(els.search ? els.search.value : "");
+      return promaxScheduleSlicerOptions(kind, scope).filter(item => (
+        !search || normalizeTextForSearch(
+          `${item.label || item.value} ${item.categoryName || ""}`
+        ).includes(search)
+      ));
+    }
+
+    function updatePromaxScheduleSlicerButton(kind, scope = "schedule") {
+      const els = promaxScheduleSlicerElements(kind, scope);
+      if (!els.button || !els.def) return;
+      const options = promaxScheduleSlicerOptions(kind, scope);
+      const selectedKeys = promaxScheduleSlicerSelectedKeys(kind, scope);
+      const selected = new Set(selectedKeys);
+      const selectedOptions = options.filter(item => selected.has(item.value));
+      const allSelected = Boolean(options.length)
+        && options.every(item => selected.has(item.value));
+      if (!selectedOptions.length) {
+        els.button.textContent = els.def.emptyText;
+      } else if (allSelected) {
+        els.button.textContent = els.def.allText;
+      } else if (selectedOptions.length === 1) {
+        els.button.textContent = selectedOptions[0].label;
+      } else {
+        els.button.textContent = `${selectedOptions.length} ${els.def.selectedText}`;
+      }
+      els.button.title = selectedOptions.length
+        ? selectedOptions.map(item => item.label).join(", ")
+        : els.def.emptyText;
+    }
+
+    function createPromaxScheduleSlicerItem(kind, item, selected, scope = "schedule") {
+      const label = document.createElement("label");
+      label.className = "power-slicer-item";
+      const input = document.createElement("input");
+      input.className = `form-check-input m-0 promax-schedule-${kind}`;
+      input.type = "checkbox";
+      input.value = item.value;
+      input.checked = selected.has(item.value);
+      if (item.categoryId) input.dataset.category = item.categoryId;
+      if (item.routineId) input.dataset.routine = item.routineId;
+      input.addEventListener("change", event => onPromaxScheduleSlicerOptionChange(kind, event, scope));
+      const text = document.createElement("span");
+      text.className = kind === "routine" ? "mono" : "";
+      text.textContent = item.label;
+      label.append(input, text);
+      return label;
+    }
+
+    function renderPromaxScheduleSlicer(kind, scope = "schedule") {
+      const els = promaxScheduleSlicerElements(kind, scope);
+      if (!els.list) return;
+      const options = promaxScheduleSlicerVisibleOptions(kind, scope);
+      const selected = new Set(promaxScheduleSlicerSelectedKeys(kind, scope));
+      els.list.replaceChildren();
+      if (!options.length) {
+        const empty = document.createElement("div");
+        empty.className = "small text-secondary px-1 py-2";
+        empty.textContent = kind === "routine" && !promaxSelectionSelectedCategories(scope).length
+          ? "Selecione pelo menos um grupo."
+          : "Nenhum item corresponde a pesquisa.";
+        els.list.appendChild(empty);
+        updatePromaxScheduleSlicerButton(kind, scope);
+        return;
+      }
+
+      if (kind === "routine") {
+        const grouped = new Map();
+        options.forEach(item => {
+          if (!grouped.has(item.categoryId)) {
+            grouped.set(item.categoryId, { name: item.categoryName, items: [] });
+          }
+          grouped.get(item.categoryId).items.push(item);
+        });
+        grouped.forEach(group => {
+          const wrapper = document.createElement("div");
+          wrapper.className = "promax-slicer-group";
+          const title = document.createElement("div");
+          title.className = "promax-slicer-group-title";
+          title.textContent = group.name;
+          wrapper.appendChild(title);
+          group.items.forEach(item => {
+            wrapper.appendChild(createPromaxScheduleSlicerItem(kind, item, selected, scope));
+          });
+          els.list.appendChild(wrapper);
+        });
+      } else {
+        const fragment = document.createDocumentFragment();
+        options.forEach(item => {
+          fragment.appendChild(createPromaxScheduleSlicerItem(kind, item, selected, scope));
+        });
+        els.list.appendChild(fragment);
+      }
+      updatePromaxScheduleSlicerButton(kind, scope);
+    }
+
+    function setPromaxScheduleSlicerSelection(kind, values, scope = "schedule") {
+      const stateKeys = promaxSelectionStateKeys(scope);
+      const requested = new Set(
+        (Array.isArray(values) ? values : [])
+          .map(value => String(value || "").trim())
+          .filter(Boolean)
+      );
+      if (kind === "reseller") {
+        state.promax[stateKeys.units] = PROMAX_RESELLERS
+          .map(reseller => reseller.id)
+          .filter(value => requested.has(value));
+      } else if (kind === "category") {
+        const available = promaxCatalogCategories().map(category => category.id);
+        const ordered = available.filter(value => requested.has(value));
+        requested.forEach(value => {
+          if (!available.includes(value)) ordered.push(value);
+        });
+        state.promax[stateKeys.categories] = ordered;
+        const selectedRoutines = { ...(state.promax[stateKeys.routines] || {}) };
+        ordered.forEach(categoryId => {
+          if (Array.isArray(selectedRoutines[categoryId])) return;
+          const category = promaxCatalogCategory(categoryId);
+          selectedRoutines[categoryId] = category
+            ? category.routines.map(routine => routine.id)
+            : [];
+        });
+        state.promax[stateKeys.routines] = selectedRoutines;
+      } else if (kind === "routine") {
+        const selectedRoutines = { ...(state.promax[stateKeys.routines] || {}) };
+        promaxSelectionSelectedCategories(scope).forEach(categoryId => {
+          selectedRoutines[categoryId] = [];
+        });
+        promaxScheduleSlicerOptions("routine", scope).forEach(item => {
+          if (requested.has(item.value)) {
+            selectedRoutines[item.categoryId].push(item.routineId);
+          }
+        });
+        state.promax[stateKeys.routines] = selectedRoutines;
+      }
+      renderPromaxScheduleSlicer(kind, scope);
+      if (kind === "category") renderPromaxScheduleSlicer("routine", scope);
       updatePromaxActionState();
     }
 
-    function renderPromaxCategoryDetails(categoryId, selectedRoutines = null) {
-      const category = promaxCatalogCategory(categoryId);
-      if (E.promaxRoutines) E.promaxRoutines.replaceChildren();
+    function onPromaxScheduleSlicerOptionChange(kind, event, scope = "schedule") {
+      const value = String(event.target && event.target.value || "").trim();
+      if (!value) return;
+      const selected = new Set(promaxScheduleSlicerSelectedKeys(kind, scope));
+      if (event.target.checked) selected.add(value);
+      else selected.delete(value);
+      setPromaxScheduleSlicerSelection(kind, [...selected], scope);
+    }
 
-      if (!category) {
-        const catalogAvailable = promaxCatalogCategories().length > 0;
-        if (E.promaxCategoryHint) {
-          E.promaxCategoryHint.textContent = catalogAvailable && categoryId
-            ? `A categoria ${categoryId} nao esta disponivel no catalogo.`
-            : "Carregue o catalogo para selecionar uma categoria.";
-        }
-        if (E.promaxUnitsHint) E.promaxUnitsHint.textContent = "As unidades dependem da categoria.";
-        if (E.promaxRoutines) {
-          const empty = document.createElement("span");
-          empty.className = "small text-secondary";
-          empty.textContent = catalogAvailable ? "Selecione uma categoria valida." : "Catalogo indisponivel.";
-          E.promaxRoutines.appendChild(empty);
-        }
-        updatePromaxActionState();
-        return;
-      }
+    function selectVisiblePromaxScheduleSlicerOptions(kind, event, scope = "schedule") {
+      if (event) event.stopPropagation();
+      const selected = new Set(promaxScheduleSlicerSelectedKeys(kind, scope));
+      promaxScheduleSlicerVisibleOptions(kind, scope).forEach(item => selected.add(item.value));
+      setPromaxScheduleSlicerSelection(kind, [...selected], scope);
+    }
 
-      if (E.promaxCategoryHint) {
-        E.promaxCategoryHint.textContent = category.description || category.name;
-      }
-      if (E.promaxUnitsHint) {
-        if (category.units.length) {
-          const visibleUnits = category.units.slice(0, 8).map(unit => unit.id);
-          const remaining = category.units.length - visibleUnits.length;
-          E.promaxUnitsHint.textContent = `Disponiveis: ${visibleUnits.join(", ")}${remaining > 0 ? ` e mais ${remaining}` : ""}.`;
-        } else {
-          E.promaxUnitsHint.textContent = "Vazio = todas as unidades.";
-        }
-      }
+    function clearPromaxScheduleSlicerSelection(kind, event, scope = "schedule") {
+      if (event) event.stopPropagation();
+      setPromaxScheduleSlicerSelection(kind, [], scope);
+    }
 
-      if (!category.routines.length) {
-        state.promax.selectedCategory = category.id;
-        state.promax.selectedRoutines = [];
-        if (E.promaxRoutines) {
-          const empty = document.createElement("span");
-          empty.className = "small text-secondary";
-          empty.textContent = "Nenhuma rotina disponivel para esta categoria.";
-          E.promaxRoutines.appendChild(empty);
-        }
-        updatePromaxActionState();
-        return;
-      }
-
-      const selected = Array.isArray(selectedRoutines)
-        ? new Set(selectedRoutines.map(value => String(value)))
-        : null;
-      const fragment = document.createDocumentFragment();
-      category.routines.forEach(routine => {
-        const label = document.createElement("label");
-        label.className = "form-check mb-0";
-
-        const input = document.createElement("input");
-        input.className = "form-check-input promax-routine";
-        input.type = "checkbox";
-        input.name = "promaxRoutine";
-        input.value = routine.id;
-        input.checked = selected ? selected.has(routine.id) : true;
-        input.addEventListener("change", promaxRoutineSelectionChanged);
-
-        const text = document.createElement("span");
-        text.className = "form-check-label mono";
-        text.textContent = routine.name === routine.id
-          ? routine.id
-          : `${routine.id} - ${routine.name}`;
-
-        label.append(input, document.createTextNode(" "), text);
-        fragment.appendChild(label);
+    function togglePromaxScheduleSlicerPanel(kind, event, scope = "schedule") {
+      if (event) event.stopPropagation();
+      const slicers = scope === "run" ? PROMAX_RUN_SLICERS : PROMAX_SCHEDULE_SLICERS;
+      const els = promaxScheduleSlicerElements(kind, scope);
+      if (!els.panel) return;
+      const willOpen = els.panel.classList.contains("d-none");
+      Object.keys(slicers).forEach(otherKind => {
+        const other = promaxScheduleSlicerElements(otherKind, scope);
+        if (otherKind === kind) return;
+        if (other.panel) other.panel.classList.add("d-none");
+        if (other.button) other.button.setAttribute("aria-expanded", "false");
       });
-      if (E.promaxRoutines) E.promaxRoutines.appendChild(fragment);
-      rememberPromaxCatalogSelection();
+      els.panel.classList.toggle("d-none", !willOpen);
+      if (els.button) els.button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      if (willOpen) {
+        renderPromaxScheduleSlicer(kind, scope);
+        if (els.search) els.search.focus();
+      }
+    }
+
+    function closePromaxScheduleSlicerPanels(event) {
+      ["run", "schedule"].forEach(scope => {
+        const slicers = scope === "run" ? PROMAX_RUN_SLICERS : PROMAX_SCHEDULE_SLICERS;
+        Object.keys(slicers).forEach(kind => {
+          const els = promaxScheduleSlicerElements(kind, scope);
+          if (!els.panel || els.panel.classList.contains("d-none")) return;
+          if (event && els.root && els.root.contains(event.target)) return;
+          els.panel.classList.add("d-none");
+          if (els.button) els.button.setAttribute("aria-expanded", "false");
+        });
+      });
+    }
+
+    function setupPromaxScheduleSlicerEvents(scope = "schedule") {
+      const slicers = scope === "run" ? PROMAX_RUN_SLICERS : PROMAX_SCHEDULE_SLICERS;
+      Object.keys(slicers).forEach(kind => {
+        const els = promaxScheduleSlicerElements(kind, scope);
+        if (els.button) {
+          els.button.addEventListener("click", event => togglePromaxScheduleSlicerPanel(kind, event, scope));
+        }
+        if (els.search) {
+          els.search.addEventListener("input", () => renderPromaxScheduleSlicer(kind, scope));
+          els.search.addEventListener("keydown", event => {
+            if (event.key !== "Escape") return;
+            closePromaxScheduleSlicerPanels();
+            if (els.button) els.button.focus();
+          });
+        }
+        if (els.selectAllBtn) {
+          els.selectAllBtn.addEventListener("click", event => selectVisiblePromaxScheduleSlicerOptions(kind, event, scope));
+        }
+        if (els.clearBtn) {
+          els.clearBtn.addEventListener("click", event => clearPromaxScheduleSlicerSelection(kind, event, scope));
+        }
+      });
+      if (scope === "schedule") document.addEventListener("click", closePromaxScheduleSlicerPanels);
+    }
+
+    function renderPromaxSelectionResellers(scope, selectedUnits = null) {
+      const stateKeys = promaxSelectionStateKeys(scope);
+      if (Array.isArray(selectedUnits)) {
+        state.promax[stateKeys.units] = selectedUnits.map(String);
+      } else if (!Array.isArray(state.promax[stateKeys.units])) {
+        state.promax[stateKeys.units] = PROMAX_RESELLERS.map(reseller => reseller.id);
+      }
+      renderPromaxScheduleSlicer("reseller", scope);
+    }
+
+    function renderPromaxSelectionRoutineGroups(scope) {
+      renderPromaxScheduleSlicer("routine", scope);
       updatePromaxActionState();
     }
 
-    function renderPromaxCatalog({ categoryId = "", routines = null } = {}) {
-      if (!E.promaxCategory) return;
+    function renderPromaxSelectionCatalog(scope, { categoryIds = null, routines = null } = {}) {
+      const stateKeys = promaxSelectionStateKeys(scope);
       const categories = promaxCatalogCategories();
-      const requestedCategory = String(categoryId || "");
-      const requestedExists = categories.some(category => category.id === requestedCategory);
-      const selectedCategory = requestedExists
-        ? requestedCategory
-        : (requestedCategory || (categories[0] && categories[0].id) || "");
-
-      E.promaxCategory.replaceChildren();
-      if (!categories.length) {
-        const option = document.createElement("option");
-        option.value = selectedCategory;
-        option.textContent = selectedCategory
-          ? `${selectedCategory} (catalogo indisponivel)`
-          : "Catalogo indisponivel";
-        option.selected = true;
-        E.promaxCategory.appendChild(option);
-        E.promaxCategory.disabled = true;
-        renderPromaxCategoryDetails(selectedCategory, routines);
-        return;
+      if (Array.isArray(categoryIds)) {
+        state.promax[stateKeys.categories] = categoryIds.map(String);
+      } else if (!Array.isArray(state.promax[stateKeys.categories])) {
+        if (categories.length) state.promax[stateKeys.categories] = [categories[0].id];
       }
-
-      if (requestedCategory && !requestedExists) {
-        const missingOption = document.createElement("option");
-        missingOption.value = selectedCategory;
-        missingOption.textContent = `${selectedCategory} (indisponivel)`;
-        missingOption.disabled = true;
-        missingOption.selected = true;
-        E.promaxCategory.appendChild(missingOption);
+      if (routines && typeof routines === "object") {
+        state.promax[stateKeys.routines] = Object.fromEntries(
+          Object.entries(routines).map(([categoryId, values]) => [
+            String(categoryId),
+            Array.isArray(values) ? values.map(String) : []
+          ])
+        );
       }
-      categories.forEach(category => {
-        const option = document.createElement("option");
-        option.value = category.id;
-        option.textContent = category.name;
-        option.selected = category.id === selectedCategory;
-        E.promaxCategory.appendChild(option);
+      const selectedRoutines = { ...(state.promax[stateKeys.routines] || {}) };
+      promaxSelectionSelectedCategories(scope).forEach(categoryId => {
+        if (Array.isArray(selectedRoutines[categoryId])) return;
+        const category = promaxCatalogCategory(categoryId);
+        selectedRoutines[categoryId] = category
+          ? category.routines.map(routine => routine.id)
+          : [];
       });
-      E.promaxCategory.disabled = false;
-      renderPromaxCategoryDetails(selectedCategory, routines);
+      state.promax[stateKeys.routines] = selectedRoutines;
+      renderPromaxScheduleSlicer("category", scope);
+      renderPromaxSelectionRoutineGroups(scope);
     }
 
-    function promaxCategoryChanged() {
-      if (E.promaxUnits) E.promaxUnits.value = "";
-      renderPromaxCategoryDetails(E.promaxCategory && E.promaxCategory.value);
+    function renderPromaxRunResellers(selectedUnits = null) {
+      renderPromaxSelectionResellers("run", selectedUnits);
     }
 
-    function promaxSelectedUnits() {
-      return String(E.promaxUnits && E.promaxUnits.value || "")
-        .split(/[\s,;]+/)
-        .map(value => value.trim())
-        .filter((value, index, values) => value && values.indexOf(value) === index);
+    function renderPromaxRunCatalog(options = {}) {
+      renderPromaxSelectionCatalog("run", options);
     }
 
-    function promaxJobPayload() {
-      const category = promaxCatalogCategory(E.promaxCategory && E.promaxCategory.value);
-      if (!category) throw new Error("Catalogo Promax indisponivel ou categoria invalida.");
-      const routines = promaxSelectedRoutines();
-      if (!routines.length) throw new Error("Selecione pelo menos uma rotina.");
+    function renderPromaxScheduleResellers(selectedUnits = null) {
+      renderPromaxSelectionResellers("schedule", selectedUnits);
+    }
+
+    function renderPromaxScheduleRoutineGroups() {
+      renderPromaxSelectionRoutineGroups("schedule");
+    }
+
+    function renderPromaxScheduleCatalog(options = {}) {
+      renderPromaxSelectionCatalog("schedule", options);
+    }
+
+    function promaxRunBatchPayload() {
+      const categoryIds = promaxRunSelectedCategories();
+      if (!categoryIds.length) throw new Error("Selecione pelo menos um grupo para executar.");
+      const routinesByCategory = promaxRunSelectedRoutines();
+      const groups = categoryIds.map(categoryId => {
+        const routines = routinesByCategory[categoryId] || [];
+        if (!routines.length) {
+          const category = promaxCatalogCategory(categoryId);
+          throw new Error(`Selecione pelo menos uma rotina para ${category ? category.name : categoryId}.`);
+        }
+        return { category: categoryId, routines };
+      });
+      const units = promaxRunSelectedUnits();
+      if (!units.length) throw new Error("Selecione pelo menos uma revenda.");
       const startDate = String(E.promaxStartDate && E.promaxStartDate.value || "");
       const endDate = String(E.promaxEndDate && E.promaxEndDate.value || "");
       if (!startDate || !endDate) throw new Error("Informe o periodo da execucao.");
       if (endDate < startDate) throw new Error("A data final nao pode ser anterior a inicial.");
       return {
-        category: category.id,
-        routines,
-        units: promaxSelectedUnits(),
+        groups,
+        units,
         start_date: startDate,
         end_date: endDate,
+        send_dates: Boolean(E.promaxSendDates && E.promaxSendDates.checked),
         publish: Boolean(E.promaxPublish && E.promaxPublish.checked)
       };
+    }
+
+    function promaxScheduleSelectedUnits() {
+      return promaxSelectionSelectedUnits("schedule");
+    }
+
+    function promaxScheduleChainPayload() {
+      const categoryIds = promaxScheduleSelectedCategories();
+      if (!categoryIds.length) throw new Error("Selecione pelo menos um grupo para a agenda.");
+      const routinesByCategory = promaxScheduleSelectedRoutines();
+      const groups = categoryIds.map(categoryId => {
+        const routines = routinesByCategory[categoryId] || [];
+        if (!routines.length) {
+          const category = promaxCatalogCategory(categoryId);
+          throw new Error(`Selecione pelo menos uma rotina para ${category ? category.name : categoryId}.`);
+        }
+        return { category: categoryId, routines };
+      });
+      const units = promaxScheduleSelectedUnits();
+      if (!units.length) throw new Error("Selecione pelo menos uma revenda.");
+      const startDate = String(E.promaxScheduleStartDate && E.promaxScheduleStartDate.value || "");
+      const endDate = String(E.promaxScheduleEndDate && E.promaxScheduleEndDate.value || "");
+      if (!startDate || !endDate) throw new Error("Informe o periodo da agenda.");
+      if (endDate < startDate) throw new Error("A data final da agenda nao pode ser anterior a inicial.");
+      const triggerType = String(E.promaxScheduleTriggerType && E.promaxScheduleTriggerType.value || "time");
+      const triggerAfterScheduleId = triggerType === "after"
+        ? String(E.promaxScheduleTriggerSchedule && E.promaxScheduleTriggerSchedule.value || "")
+        : "";
+      if (triggerType === "after" && !triggerAfterScheduleId) {
+        throw new Error("Selecione a agenda que deve terminar antes desta cadeia.");
+      }
+      return {
+        groups,
+        units,
+        start_date: startDate,
+        end_date: endDate,
+        send_dates: Boolean(E.promaxScheduleSendDates && E.promaxScheduleSendDates.checked),
+        publish: Boolean(E.promaxSchedulePublish && E.promaxSchedulePublish.checked),
+        trigger_after_schedule_id: triggerAfterScheduleId || null
+      };
+    }
+
+    function renderPromaxScheduleTriggerOptions(selectedId = null) {
+      if (!E.promaxScheduleTriggerSchedule) return;
+      const currentValue = selectedId == null
+        ? String(E.promaxScheduleTriggerSchedule.value || "")
+        : String(selectedId || "");
+      const editingId = String(state.promax.editingScheduleId || "");
+      E.promaxScheduleTriggerSchedule.replaceChildren();
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Selecione uma agenda";
+      E.promaxScheduleTriggerSchedule.appendChild(placeholder);
+      (state.promax.schedules || []).forEach(schedule => {
+        const scheduleId = String(schedule.id || "");
+        if (!scheduleId || scheduleId === editingId) return;
+        const groupId = String(schedule.job_type || (schedule.payload || {}).category || "");
+        const group = promaxCatalogCategory(groupId);
+        const option = document.createElement("option");
+        option.value = scheduleId;
+        option.textContent = `${schedule.name || "Agenda"} - ${group ? group.name : groupId}`;
+        option.selected = scheduleId === currentValue;
+        E.promaxScheduleTriggerSchedule.appendChild(option);
+      });
+      E.promaxScheduleTriggerSchedule.value = currentValue;
     }
 
     function promaxStatusLabel(status) {
@@ -2380,14 +2939,24 @@
     }
 
     function renderPromax() {
-      renderPromaxCatalog({
-        categoryId: state.promax.selectedCategory,
-        routines: state.promax.selectedRoutines
+      renderPromaxRunCatalog({
+        categoryIds: state.promax.runSelectedCategories,
+        routines: state.promax.runSelectedRoutines
       });
+      renderPromaxRunResellers(state.promax.runSelectedUnits);
+      renderPromaxScheduleCatalog({
+        categoryIds: state.promax.scheduleSelectedCategories,
+        routines: state.promax.scheduleSelectedRoutines
+      });
+      renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
+      renderPromaxScheduleTriggerOptions();
 
       const workerPayload = state.promax.worker || {};
       const queue = workerPayload.queue || {};
       const workers = Array.isArray(workerPayload.workers) ? workerPayload.workers : [];
+      const jobs = Array.isArray(state.promax.jobs) ? state.promax.jobs : [];
+      const pendingJobs = jobs.filter(job => String(job && job.status || "") === "pending").length;
+      const activeJobs = jobs.filter(job => ["running", "cancel_requested"].includes(String(job && job.status || ""))).length;
       const onlineWorker = workers.find(worker => worker && worker.online);
       if (E.promaxWorkerState) {
         E.promaxWorkerState.textContent = onlineWorker
@@ -2396,7 +2965,8 @@
         E.promaxWorkerState.className = `pill ${onlineWorker ? "ok" : "warn"}`;
       }
       if (E.promaxQueueState) {
-        E.promaxQueueState.textContent = queue.paused ? "Fila pausada" : "Fila liberada";
+        const queueLabel = queue.paused ? "Fila pausada" : "Fila liberada";
+        E.promaxQueueState.textContent = `${queueLabel}: ${activeJobs} executando, ${pendingJobs} aguardando`;
         E.promaxQueueState.className = `pill ${queue.paused ? "warn" : "ok"}`;
       }
       if (E.promaxPauseBtn) E.promaxPauseBtn.disabled = Boolean(queue.paused);
@@ -2405,7 +2975,6 @@
         E.promaxReprocessPublicationsBtn.disabled = !onlineWorker || Boolean(queue.paused);
       }
 
-      const jobs = Array.isArray(state.promax.jobs) ? state.promax.jobs : [];
       if (E.promaxJobsBody) {
         E.promaxJobsBody.innerHTML = jobs.length ? jobs.map(job => {
           const payload = job && job.payload && typeof job.payload === "object" ? job.payload : {};
@@ -2445,14 +3014,29 @@
       if (E.promaxSchedulesBody) {
         E.promaxSchedulesBody.innerHTML = schedules.length ? schedules.map(schedule => {
           const enabled = Boolean(schedule.enabled);
+          const schedulePayload = schedule.payload || {};
+          const groupId = String(schedule.job_type || schedulePayload.category || "-");
+          const group = promaxCatalogCategory(groupId);
+          const units = Array.isArray(schedulePayload.units) ? schedulePayload.units : [];
+          const unitNames = units.map(unitId => {
+            const reseller = PROMAX_RESELLERS.find(item => item.id === String(unitId));
+            return reseller ? reseller.name : String(unitId);
+          });
+          const triggerScheduleId = String(schedule.trigger_after_schedule_id || "");
+          const triggerSchedule = schedules.find(item => String(item.id || "") === triggerScheduleId);
+          const triggerLabel = triggerScheduleId
+            ? `Apos ${triggerSchedule ? triggerSchedule.name : triggerScheduleId.slice(0, 8)}`
+            : `${schedule.schedule_type || "-"} ${schedule.time_of_day || ""}`;
           return `<tr>
             <td><strong>${escapeHtml(schedule.name || "-")}</strong></td>
-            <td>${escapeHtml(schedule.schedule_type || "-")} ${escapeHtml(schedule.time_of_day || "")}</td>
-            <td>${escapeHtml(formatDateTime(schedule.next_run_at))}</td>
+            <td><span class="mono">${escapeHtml(group ? group.name : groupId)}</span></td>
+            <td>${escapeHtml(unitNames.length ? unitNames.join(", ") : "Todas")}</td>
+            <td>${escapeHtml(triggerLabel)}</td>
+            <td>${triggerScheduleId ? '<span class="text-secondary">Aguardando conclusao</span>' : escapeHtml(formatDateTime(schedule.next_run_at))}</td>
             <td><span class="badge ${enabled ? "text-bg-success" : "text-bg-secondary"}">${enabled ? "Ativa" : "Pausada"}</span></td>
             <td class="text-end"><div class="d-flex gap-1 justify-content-end"><button class="btn btn-outline-primary btn-sm" title="Editar agenda" onclick="promaxEditSchedule('${escapeHtml(schedule.id)}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-outline-primary btn-sm" title="${enabled ? "Pausar agenda" : "Ativar agenda"}" onclick="promaxToggleSchedule('${escapeHtml(schedule.id)}', ${enabled ? "false" : "true"})"><i class="bi ${enabled ? "bi-pause-circle" : "bi-play-circle"}"></i></button><button class="btn btn-outline-danger btn-sm" title="Excluir agenda" onclick="promaxDeleteSchedule('${escapeHtml(schedule.id)}')"><i class="bi bi-trash3"></i></button></div></td>
           </tr>`;
-        }).join("") : '<tr><td colspan="5" class="text-center py-3 text-secondary">Nenhuma agenda cadastrada.</td></tr>';
+        }).join("") : '<tr><td colspan="7" class="text-center py-3 text-secondary">Nenhuma agenda cadastrada.</td></tr>';
       }
     }
 
@@ -2484,22 +3068,32 @@
     async function promaxRunNow() {
       let payload;
       try {
-        payload = promaxJobPayload();
+        payload = promaxRunBatchPayload();
       } catch (err) {
         addLog(err.message, "warn");
         return;
       }
-      const confirmed = await askConfirmation(`Adicionar ${payload.routines.join(", ")} a fila Promax?`);
+      const groupNames = payload.groups.map(item => {
+        const category = promaxCatalogCategory(item.category);
+        return category ? category.name : item.category;
+      });
+      const confirmed = await askConfirmation(
+        `Adicionar ${payload.groups.length} grupo(s) a fila Promax: ${groupNames.join(", ")}?`
+      );
       if (!confirmed) return;
       E.promaxRunBtn.disabled = true;
       try {
-        await req(CONFIG.endpoints.promax.jobs, {
+        const response = await req(CONFIG.endpoints.promax.jobsBatch, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
           timeoutMs: 30000
         });
-        addLog("Execucao Promax adicionada a fila.", "ok");
+        const jobs = response && Array.isArray(response.jobs) ? response.jobs : [];
+        addLog(
+          `${jobs.length || payload.groups.length} execucao(oes) Promax adicionada(s) a fila.`,
+          "ok"
+        );
         await syncPromax({ silent: true });
       } catch (err) {
         addLog(`Falha ao adicionar execucao Promax: ${err.message}`, "err");
@@ -2577,17 +3171,48 @@
       }
     }
 
+    function syncPromaxDateFields() {
+      const runEnabled = Boolean(E.promaxSendDates && E.promaxSendDates.checked);
+      const scheduleEnabled = Boolean(
+        E.promaxScheduleSendDates && E.promaxScheduleSendDates.checked
+      );
+      if (E.promaxStartDate) E.promaxStartDate.disabled = !runEnabled;
+      if (E.promaxEndDate) E.promaxEndDate.disabled = !runEnabled;
+      if (E.promaxScheduleStartDate) E.promaxScheduleStartDate.disabled = !scheduleEnabled;
+      if (E.promaxScheduleEndDate) E.promaxScheduleEndDate.disabled = !scheduleEnabled;
+    }
+
     function syncPromaxScheduleFields() {
+      const triggerType = String(E.promaxScheduleTriggerType && E.promaxScheduleTriggerType.value || "time");
       const type = String(E.promaxScheduleType && E.promaxScheduleType.value || "daily");
-      if (E.promaxScheduleWeekdayWrap) E.promaxScheduleWeekdayWrap.classList.toggle("d-none", type !== "weekly");
-      if (E.promaxScheduleMonthDayWrap) E.promaxScheduleMonthDayWrap.classList.toggle("d-none", type !== "monthly");
+      const triggered = triggerType === "after";
+      if (E.promaxScheduleTypeWrap) E.promaxScheduleTypeWrap.classList.toggle("d-none", triggered);
+      if (E.promaxScheduleTimeWrap) E.promaxScheduleTimeWrap.classList.toggle("d-none", triggered);
+      if (E.promaxScheduleTriggerScheduleWrap) E.promaxScheduleTriggerScheduleWrap.classList.toggle("d-none", !triggered);
+      if (E.promaxScheduleWeekdayWrap) {
+        E.promaxScheduleWeekdayWrap.classList.toggle("d-none", triggered || type !== "weekly");
+      }
+      if (E.promaxScheduleMonthDayWrap) {
+        E.promaxScheduleMonthDayWrap.classList.toggle("d-none", triggered || type !== "monthly");
+      }
     }
 
     function resetPromaxScheduleForm() {
       state.promax.editingScheduleId = "";
+      state.promax.scheduleSelectedCategories = null;
+      state.promax.scheduleSelectedRoutines = {};
+      state.promax.scheduleSelectedUnits = PROMAX_RESELLERS.map(reseller => reseller.id);
       if (E.promaxScheduleName) E.promaxScheduleName.value = "";
+      if (E.promaxScheduleTriggerType) E.promaxScheduleTriggerType.value = "time";
+      if (E.promaxScheduleSendDates) E.promaxScheduleSendDates.checked = false;
+      renderPromaxScheduleCatalog();
+      renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
+      renderPromaxScheduleTriggerOptions("");
       if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.innerHTML = '<i class="bi bi-calendar-plus me-1"></i>Criar agenda';
       if (E.promaxScheduleCancelBtn) E.promaxScheduleCancelBtn.classList.add("d-none");
+      syncPromaxDateFields();
+      syncPromaxScheduleFields();
+      updatePromaxActionState();
     }
 
     function promaxEditSchedule(scheduleId) {
@@ -2603,19 +3228,28 @@
       E.promaxScheduleTime.value = String(schedule.time_of_day || "06:00").slice(0, 5);
       E.promaxScheduleWeekday.value = String(schedule.weekday == null ? 0 : schedule.weekday);
       E.promaxScheduleMonthDay.value = String(schedule.day_of_month == null ? 1 : schedule.day_of_month);
-      if (payload.start_date) E.promaxStartDate.value = String(payload.start_date);
-      if (payload.end_date) E.promaxEndDate.value = String(payload.end_date);
-      E.promaxUnits.value = Array.isArray(payload.units) ? payload.units.join(", ") : "";
-      E.promaxPublish.checked = Boolean(payload.publish);
+      E.promaxScheduleStartDate.value = String(payload.start_date || "");
+      E.promaxScheduleEndDate.value = String(payload.end_date || "");
+      E.promaxScheduleSendDates.checked = Boolean(payload.send_dates);
+      E.promaxSchedulePublish.checked = Boolean(payload.publish);
+      state.promax.scheduleSelectedUnits = Array.isArray(payload.units) && payload.units.length
+        ? payload.units.map(String)
+        : PROMAX_RESELLERS.map(reseller => reseller.id);
+      renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
       const routines = Array.isArray(payload.routines) ? payload.routines.map(String) : [];
-      state.promax.selectedCategory = String(payload.category || "");
-      state.promax.selectedRoutines = routines;
-      renderPromaxCatalog({
-        categoryId: state.promax.selectedCategory,
-        routines
+      const categoryId = String(payload.category || schedule.job_type || "");
+      state.promax.scheduleSelectedCategories = [categoryId];
+      state.promax.scheduleSelectedRoutines = { [categoryId]: routines };
+      renderPromaxScheduleCatalog({
+        categoryIds: state.promax.scheduleSelectedCategories,
+        routines: state.promax.scheduleSelectedRoutines
       });
+      const triggerScheduleId = String(schedule.trigger_after_schedule_id || "");
+      E.promaxScheduleTriggerType.value = triggerScheduleId ? "after" : "time";
+      renderPromaxScheduleTriggerOptions(triggerScheduleId);
       E.promaxScheduleCreateBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Salvar agenda';
       E.promaxScheduleCancelBtn.classList.remove("d-none");
+      syncPromaxDateFields();
       syncPromaxScheduleFields();
       E.promaxScheduleName.focus();
     }
@@ -2630,36 +3264,63 @@
       const editingSchedule = (state.promax.schedules || []).find(
         item => String(item.id) === editingScheduleId
       );
-      let payload;
+      let chainPayload;
       try {
-        payload = {
-          ...promaxJobPayload(),
-          name,
-          schedule_type: E.promaxScheduleType.value,
-          time_of_day: E.promaxScheduleTime.value || "06:00",
-          timezone: "America/Fortaleza",
-          weekday: E.promaxScheduleType.value === "weekly" ? Number(E.promaxScheduleWeekday.value) : null,
-          day_of_month: E.promaxScheduleType.value === "monthly" ? Number(E.promaxScheduleMonthDay.value) : null,
-          enabled: editingSchedule ? Boolean(editingSchedule.enabled) : true
-        };
+        chainPayload = promaxScheduleChainPayload();
       } catch (err) {
         addLog(err.message, "warn");
         return;
       }
+      if (editingScheduleId && chainPayload.groups.length !== 1) {
+        addLog("Na edicao, mantenha somente o grupo desta agenda. Para varios grupos, crie uma nova cadeia.", "warn");
+        return;
+      }
+      const timingPayload = {
+        schedule_type: E.promaxScheduleType.value,
+        time_of_day: E.promaxScheduleTime.value || "06:00",
+        timezone: "America/Fortaleza",
+        weekday: E.promaxScheduleType.value === "weekly" ? Number(E.promaxScheduleWeekday.value) : null,
+        day_of_month: E.promaxScheduleType.value === "monthly" ? Number(E.promaxScheduleMonthDay.value) : null,
+        enabled: editingSchedule ? Boolean(editingSchedule.enabled) : true
+      };
+      const payload = editingScheduleId
+        ? {
+          name,
+          category: chainPayload.groups[0].category,
+          routines: chainPayload.groups[0].routines,
+          units: chainPayload.units,
+          start_date: chainPayload.start_date,
+          end_date: chainPayload.end_date,
+          send_dates: chainPayload.send_dates,
+          publish: chainPayload.publish,
+          trigger_after_schedule_id: chainPayload.trigger_after_schedule_id,
+          ...timingPayload
+        }
+        : {
+          ...chainPayload,
+          name,
+          ...timingPayload
+        };
       const actionLabel = editingScheduleId ? "Salvar as alteracoes da agenda" : "Criar a agenda";
       if (!await askConfirmation(`${actionLabel} "${name}"?`)) return;
       E.promaxScheduleCreateBtn.disabled = true;
       try {
         const endpoint = editingScheduleId
           ? `${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(editingScheduleId)}`
-          : CONFIG.endpoints.promax.schedules;
-        await req(endpoint, {
+          : CONFIG.endpoints.promax.scheduleChains;
+        const response = await req(endpoint, {
           method: editingScheduleId ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
           timeoutMs: 30000
         });
-        addLog(editingScheduleId ? "Agenda Promax atualizada." : "Agenda Promax criada.", "ok");
+        const createdSchedules = Array.isArray(response && response.schedules) ? response.schedules.length : 0;
+        addLog(
+          editingScheduleId
+            ? "Agenda Promax atualizada."
+            : `Cadeia Promax criada com ${createdSchedules || chainPayload.groups.length} agenda(s).`,
+          "ok"
+        );
         resetPromaxScheduleForm();
         await syncPromax({ silent: true });
       } catch (err) {
@@ -2723,7 +3384,12 @@
       const today = formatDateInputValue(new Date());
       if (E.promaxStartDate && !E.promaxStartDate.value) E.promaxStartDate.value = today;
       if (E.promaxEndDate && !E.promaxEndDate.value) E.promaxEndDate.value = today;
+      if (E.promaxScheduleStartDate && !E.promaxScheduleStartDate.value) E.promaxScheduleStartDate.value = today;
+      if (E.promaxScheduleEndDate && !E.promaxScheduleEndDate.value) E.promaxScheduleEndDate.value = today;
+      syncPromaxDateFields();
       syncPromaxScheduleFields();
+      setupPromaxScheduleSlicerEvents("run");
+      setupPromaxScheduleSlicerEvents("schedule");
       renderPromax();
 
       document.getElementById("refreshBtn").addEventListener("click", syncAll);
@@ -2734,10 +3400,12 @@
       if (E.promaxResumeBtn) E.promaxResumeBtn.addEventListener("click", () => promaxQueueAction("resume"));
       if (E.promaxClearBtn) E.promaxClearBtn.addEventListener("click", () => promaxQueueAction("pending"));
       if (E.promaxReprocessPublicationsBtn) E.promaxReprocessPublicationsBtn.addEventListener("click", promaxReprocessPublications);
-      if (E.promaxCategory) E.promaxCategory.addEventListener("change", promaxCategoryChanged);
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", () => syncPromax({ silent: true }));
+      if (E.promaxSendDates) E.promaxSendDates.addEventListener("change", syncPromaxDateFields);
+      if (E.promaxScheduleSendDates) E.promaxScheduleSendDates.addEventListener("change", syncPromaxDateFields);
       if (E.promaxScheduleType) E.promaxScheduleType.addEventListener("change", syncPromaxScheduleFields);
+      if (E.promaxScheduleTriggerType) E.promaxScheduleTriggerType.addEventListener("change", syncPromaxScheduleFields);
       if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.addEventListener("click", promaxCreateSchedule);
       if (E.promaxScheduleCancelBtn) E.promaxScheduleCancelBtn.addEventListener("click", resetPromaxScheduleForm);
       document.getElementById("clearLogBtn").addEventListener("click", () => { state.logs = []; renderLogs(); });

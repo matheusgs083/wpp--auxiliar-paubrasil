@@ -67,6 +67,7 @@ class JobRecord(TypedDict):
     concurrency_key: str
     idempotency_key: str | None
     source_schedule_id: str | None
+    triggered_by_job_id: str | None
     scheduled_for: str | None
     available_at: str
     attempt_count: int
@@ -114,6 +115,7 @@ class ScheduleRecord(TypedDict):
     time_of_day: str
     weekday: int | None
     day_of_month: int | None
+    trigger_after_schedule_id: str | None
     enabled: bool
     next_run_at: str
     last_enqueued_for: str | None
@@ -279,78 +281,150 @@ class PromaxJobsService:
         scheduled_for: datetime | None = None,
         created_by: str = "",
     ) -> JobRecord:
-        clean_job_type = _required_text(job_type, field_name="job_type", max_length=120)
-        clean_concurrency_key = _required_text(
-            concurrency_key,
-            field_name="concurrency_key",
-            max_length=120,
+        jobs = self.enqueue_jobs(
+            items=[
+                {
+                    "job_type": job_type,
+                    "payload": payload,
+                    "priority": priority,
+                    "concurrency_key": concurrency_key,
+                    "idempotency_key": idempotency_key,
+                    "available_at": available_at,
+                    "source_schedule_id": source_schedule_id,
+                    "scheduled_for": scheduled_for,
+                }
+            ],
+            created_by=created_by,
         )
-        clean_idempotency_key = _optional_text(idempotency_key, max_length=300)
-        normalized_available_at = _aware_utc(available_at or datetime.now(UTC), field_name="available_at")
-        normalized_scheduled_for = (
-            _aware_utc(scheduled_for, field_name="scheduled_for") if scheduled_for is not None else None
-        )
-        normalized_schedule_id = _uuid_text(source_schedule_id, field_name="source_schedule_id", allow_none=True)
-        job_id = str(uuid4())
+        return jobs[0]
 
+    def enqueue_jobs(
+        self,
+        *,
+        items: Sequence[Mapping[str, Any]],
+        created_by: str = "",
+        available_at: datetime | None = None,
+    ) -> list[JobRecord]:
+        if not 1 <= len(items) <= 50:
+            raise ValueError("items deve conter entre 1 e 50 jobs.")
+
+        base_available_at = _aware_utc(
+            available_at or datetime.now(UTC),
+            field_name="available_at",
+        )
+        prepared: list[dict[str, Any]] = []
+        for index, item in enumerate(items):
+            if not isinstance(item, Mapping):
+                raise ValueError("Cada item do lote deve ser um objeto.")
+            payload = item.get("payload")
+            if payload is not None and not isinstance(payload, Mapping):
+                raise ValueError("payload deve ser um objeto.")
+            item_available_at = item.get("available_at")
+            normalized_available_at = (
+                _aware_utc(item_available_at, field_name="available_at")
+                if item_available_at is not None
+                else base_available_at + timedelta(microseconds=index)
+            )
+            scheduled_for = item.get("scheduled_for")
+            prepared.append(
+                {
+                    "id": str(uuid4()),
+                    "job_type": _required_text(
+                        item.get("job_type"),
+                        field_name="job_type",
+                        max_length=120,
+                    ),
+                    "payload": dict(payload or {}),
+                    "priority": int(item.get("priority", 0)),
+                    "concurrency_key": _required_text(
+                        item.get("concurrency_key", DEFAULT_CONCURRENCY_KEY),
+                        field_name="concurrency_key",
+                        max_length=120,
+                    ),
+                    "idempotency_key": _optional_text(
+                        item.get("idempotency_key"),
+                        max_length=300,
+                    ),
+                    "source_schedule_id": _uuid_text(
+                        item.get("source_schedule_id"),
+                        field_name="source_schedule_id",
+                        allow_none=True,
+                    ),
+                    "scheduled_for": (
+                        _aware_utc(scheduled_for, field_name="scheduled_for")
+                        if scheduled_for is not None
+                        else None
+                    ),
+                    "available_at": normalized_available_at,
+                    "created_by": str(item.get("created_by", created_by) or "").strip(),
+                }
+            )
+
+        rows: list[Mapping[str, Any]] = []
         with self._connect() as conn:
             self._ensure_schema(conn)
             with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        INSERT INTO {schema}.{jobs} (
-                            id, job_type, payload, status, priority, concurrency_key,
-                            idempotency_key, source_schedule_id, scheduled_for,
-                            available_at, created_by
-                        )
-                        VALUES (
-                            %s, %s, %s, 'pending', %s, %s,
-                            %s, %s, %s, %s, %s
-                        )
-                        ON CONFLICT (idempotency_key) DO NOTHING
-                        RETURNING *
-                        """
-                    ).format(
-                        schema=sql.Identifier(self.schema),
-                        jobs=sql.Identifier(JOBS_TABLE),
-                    ),
-                    (
-                        job_id,
-                        clean_job_type,
-                        Jsonb(dict(payload or {})),
-                        int(priority),
-                        clean_concurrency_key,
-                        clean_idempotency_key,
-                        normalized_schedule_id,
-                        normalized_scheduled_for,
-                        normalized_available_at,
-                        str(created_by or "").strip(),
-                    ),
-                )
-                row = cur.fetchone()
-                if row is None and clean_idempotency_key is not None:
+                for index, item in enumerate(prepared):
                     cur.execute(
                         sql.SQL(
-                            "SELECT * FROM {schema}.{jobs} WHERE idempotency_key = %s"
+                            """
+                            INSERT INTO {schema}.{jobs} (
+                                id, job_type, payload, status, priority, concurrency_key,
+                                idempotency_key, source_schedule_id, scheduled_for,
+                                available_at, created_by
+                            )
+                            VALUES (
+                                %s, %s, %s, 'pending', %s, %s,
+                                %s, %s, %s, %s, %s
+                            )
+                            ON CONFLICT (idempotency_key) DO NOTHING
+                            RETURNING *
+                            """
                         ).format(
                             schema=sql.Identifier(self.schema),
                             jobs=sql.Identifier(JOBS_TABLE),
                         ),
-                        (clean_idempotency_key,),
+                        (
+                            item["id"],
+                            item["job_type"],
+                            Jsonb(item["payload"]),
+                            item["priority"],
+                            item["concurrency_key"],
+                            item["idempotency_key"],
+                            item["source_schedule_id"],
+                            item["scheduled_for"],
+                            item["available_at"],
+                            item["created_by"],
+                        ),
                     )
                     row = cur.fetchone()
-                if row is None:
-                    raise RuntimeError("Nao foi possivel enfileirar o job Promax.")
-                if str(row["id"]) == job_id:
-                    self._append_log_cursor(
-                        cur,
-                        job_id=job_id,
-                        level="info",
-                        message="Job enfileirado.",
-                        data={"created_by": str(created_by or "").strip()},
-                    )
-        return _job_record(row)
+                    if row is None and item["idempotency_key"] is not None:
+                        cur.execute(
+                            sql.SQL(
+                                "SELECT * FROM {schema}.{jobs} WHERE idempotency_key = %s"
+                            ).format(
+                                schema=sql.Identifier(self.schema),
+                                jobs=sql.Identifier(JOBS_TABLE),
+                            ),
+                            (item["idempotency_key"],),
+                        )
+                        row = cur.fetchone()
+                    if row is None:
+                        raise RuntimeError("Nao foi possivel enfileirar o job Promax.")
+                    rows.append(row)
+                    if str(row["id"]) == item["id"]:
+                        self._append_log_cursor(
+                            cur,
+                            job_id=item["id"],
+                            level="info",
+                            message="Job enfileirado.",
+                            data={
+                                "created_by": item["created_by"],
+                                "batch_position": index + 1,
+                                "batch_size": len(prepared),
+                            },
+                        )
+        return [_job_record(row) for row in rows]
 
     def claim_next_job(
         self,
@@ -942,12 +1016,64 @@ class PromaxJobsService:
         timezone_name: str = DEFAULT_TIMEZONE,
         weekday: int | None = None,
         day_of_month: int | None = None,
+        trigger_after_schedule_id: str | UUID | None = None,
         enabled: bool = True,
         created_by: str = "",
         now: datetime | None = None,
     ) -> ScheduleRecord:
-        clean_name = _required_text(name, field_name="name", max_length=160)
-        clean_job_type = _required_text(job_type, field_name="job_type", max_length=120)
+        schedules = self.create_schedule_chain(
+            items=(
+                {
+                    "name": name,
+                    "job_type": job_type,
+                    "payload": dict(payload or {}),
+                },
+            ),
+            schedule_type=schedule_type,
+            time_of_day=time_of_day,
+            timezone_name=timezone_name,
+            weekday=weekday,
+            day_of_month=day_of_month,
+            trigger_after_schedule_id=trigger_after_schedule_id,
+            enabled=enabled,
+            created_by=created_by,
+            now=now,
+        )
+        return schedules[0]
+
+    def create_schedule_chain(
+        self,
+        *,
+        items: Sequence[Mapping[str, Any]],
+        schedule_type: str,
+        time_of_day: str | time,
+        timezone_name: str = DEFAULT_TIMEZONE,
+        weekday: int | None = None,
+        day_of_month: int | None = None,
+        trigger_after_schedule_id: str | UUID | None = None,
+        enabled: bool = True,
+        created_by: str = "",
+        now: datetime | None = None,
+    ) -> list[ScheduleRecord]:
+        if not items:
+            raise ValueError("A cadeia de agendas exige pelo menos um grupo.")
+        if len(items) > 50:
+            raise ValueError("A cadeia de agendas aceita no maximo 50 grupos.")
+
+        prepared_items: list[tuple[str, str, dict[str, Any]]] = []
+        for index, item in enumerate(items, start=1):
+            prepared_items.append(
+                (
+                    _required_text(item.get("name"), field_name=f"items[{index}].name", max_length=160),
+                    _required_text(
+                        item.get("job_type"),
+                        field_name=f"items[{index}].job_type",
+                        max_length=120,
+                    ),
+                    dict(item.get("payload") or {}),
+                )
+            )
+
         definition = validate_schedule_definition(
             schedule_type=schedule_type,
             time_of_day=time_of_day,
@@ -955,47 +1081,70 @@ class PromaxJobsService:
             weekday=weekday,
             day_of_month=day_of_month,
         )
+        normalized_trigger_id = _uuid_text(
+            trigger_after_schedule_id,
+            field_name="trigger_after_schedule_id",
+            allow_none=True,
+        )
         normalized_now = _aware_utc(now or datetime.now(UTC), field_name="now")
         next_run_at = calculate_next_run(definition, after=normalized_now)
-        schedule_id = str(uuid4())
+        actor = str(created_by or "").strip()
+        rows: list[Mapping[str, Any]] = []
 
         with self._connect() as conn:
             self._ensure_schema(conn)
             with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        INSERT INTO {schema}.{schedules} (
-                            id, name, job_type, payload, schedule_type, timezone,
-                            time_of_day, weekday, day_of_month, enabled,
-                            next_run_at, created_by
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING *
-                        """
-                    ).format(
-                        schema=sql.Identifier(self.schema),
-                        schedules=sql.Identifier(SCHEDULES_TABLE),
-                    ),
-                    (
-                        schedule_id,
-                        clean_name,
-                        clean_job_type,
-                        Jsonb(dict(payload or {})),
-                        definition.schedule_type,
-                        definition.timezone,
-                        definition.time_of_day,
-                        definition.weekday,
-                        definition.day_of_month,
-                        bool(enabled),
-                        next_run_at,
-                        str(created_by or "").strip(),
-                    ),
-                )
-                row = cur.fetchone()
-        if row is None:
-            raise RuntimeError("Nao foi possivel criar a agenda Promax.")
-        return _schedule_record(row)
+                if normalized_trigger_id is not None:
+                    self._validate_schedule_trigger_cursor(
+                        cur,
+                        schedule_id=None,
+                        trigger_after_schedule_id=normalized_trigger_id,
+                    )
+
+                previous_schedule_id = normalized_trigger_id
+                for clean_name, clean_job_type, clean_payload in prepared_items:
+                    schedule_id = str(uuid4())
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            INSERT INTO {schema}.{schedules} (
+                                id, name, job_type, payload, schedule_type, timezone,
+                                time_of_day, weekday, day_of_month, trigger_after_schedule_id,
+                                enabled, next_run_at, created_by
+                            )
+                            VALUES (
+                                %s, %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s,
+                                %s, %s, %s
+                            )
+                            RETURNING *
+                            """
+                        ).format(
+                            schema=sql.Identifier(self.schema),
+                            schedules=sql.Identifier(SCHEDULES_TABLE),
+                        ),
+                        (
+                            schedule_id,
+                            clean_name,
+                            clean_job_type,
+                            Jsonb(clean_payload),
+                            definition.schedule_type,
+                            definition.timezone,
+                            definition.time_of_day,
+                            definition.weekday,
+                            definition.day_of_month,
+                            previous_schedule_id,
+                            bool(enabled),
+                            next_run_at,
+                            actor,
+                        ),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        raise RuntimeError("Nao foi possivel criar a cadeia de agendas Promax.")
+                    rows.append(row)
+                    previous_schedule_id = schedule_id
+        return [_schedule_record(row) for row in rows]
 
     def update_schedule(
         self,
@@ -1009,6 +1158,7 @@ class PromaxJobsService:
         timezone_name: str | None = None,
         weekday: int | None | object = _UNSET,
         day_of_month: int | None | object = _UNSET,
+        trigger_after_schedule_id: str | UUID | None | object = _UNSET,
         enabled: bool | None = None,
         now: datetime | None = None,
     ) -> ScheduleRecord | None:
@@ -1051,6 +1201,23 @@ class PromaxJobsService:
                     else str(current["job_type"])
                 )
                 merged_enabled = bool(current["enabled"]) if enabled is None else bool(enabled)
+                merged_trigger_id = (
+                    current.get("trigger_after_schedule_id")
+                    if trigger_after_schedule_id is _UNSET
+                    else _uuid_text(
+                        trigger_after_schedule_id,
+                        field_name="trigger_after_schedule_id",
+                        allow_none=True,
+                    )
+                )
+                normalized_trigger_id = (
+                    str(merged_trigger_id) if merged_trigger_id is not None else None
+                )
+                self._validate_schedule_trigger_cursor(
+                    cur,
+                    schedule_id=normalized_schedule_id,
+                    trigger_after_schedule_id=normalized_trigger_id,
+                )
                 recurrence_changed = any(
                     (
                         definition.schedule_type != str(current["schedule_type"]),
@@ -1060,10 +1227,15 @@ class PromaxJobsService:
                         definition.day_of_month != current["day_of_month"],
                     )
                 )
+                trigger_changed = normalized_trigger_id != (
+                    str(current["trigger_after_schedule_id"])
+                    if current.get("trigger_after_schedule_id") is not None
+                    else None
+                )
                 reenabled = merged_enabled and not bool(current["enabled"])
                 next_run_at = (
                     calculate_next_run(definition, after=normalized_now)
-                    if recurrence_changed or reenabled
+                    if recurrence_changed or reenabled or trigger_changed
                     else current["next_run_at"]
                 )
 
@@ -1080,6 +1252,7 @@ class PromaxJobsService:
                             time_of_day = %s,
                             weekday = %s,
                             day_of_month = %s,
+                            trigger_after_schedule_id = %s,
                             enabled = %s,
                             next_run_at = %s,
                             updated_at = NOW()
@@ -1099,6 +1272,7 @@ class PromaxJobsService:
                         definition.time_of_day,
                         definition.weekday,
                         definition.day_of_month,
+                        normalized_trigger_id,
                         merged_enabled,
                         next_run_at,
                         normalized_schedule_id,
@@ -1107,11 +1281,85 @@ class PromaxJobsService:
                 row = cur.fetchone()
         return _schedule_record(row) if row else None
 
+    def _validate_schedule_trigger_cursor(
+        self,
+        cur: Any,
+        *,
+        schedule_id: str | None,
+        trigger_after_schedule_id: str | None,
+    ) -> None:
+        if trigger_after_schedule_id is None:
+            return
+        if schedule_id is not None and trigger_after_schedule_id == schedule_id:
+            raise ValueError("Uma agenda nao pode depender dela mesma.")
+
+        cur.execute(
+            sql.SQL(
+                "SELECT id FROM {schema}.{schedules} WHERE id = %s"
+            ).format(
+                schema=sql.Identifier(self.schema),
+                schedules=sql.Identifier(SCHEDULES_TABLE),
+            ),
+            (trigger_after_schedule_id,),
+        )
+        if cur.fetchone() is None:
+            raise ValueError("Agenda usada como gatilho nao foi encontrada.")
+        if schedule_id is None:
+            return
+
+        cur.execute(
+            sql.SQL(
+                """
+                WITH RECURSIVE dependency_chain AS (
+                    SELECT id, trigger_after_schedule_id
+                    FROM {schema}.{schedules}
+                    WHERE id = %s
+                    UNION ALL
+                    SELECT parent.id, parent.trigger_after_schedule_id
+                    FROM {schema}.{schedules} AS parent
+                    JOIN dependency_chain AS child
+                      ON parent.id = child.trigger_after_schedule_id
+                )
+                SELECT id
+                FROM dependency_chain
+                WHERE id = %s
+                LIMIT 1
+                """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                schedules=sql.Identifier(SCHEDULES_TABLE),
+            ),
+            (trigger_after_schedule_id, schedule_id),
+        )
+        if cur.fetchone() is not None:
+            raise ValueError("O gatilho criaria um ciclo entre as agendas.")
+
     def delete_schedule(self, schedule_id: str | UUID) -> bool:
         normalized_schedule_id = _uuid_text(schedule_id, field_name="schedule_id")
         with self._connect() as conn:
             self._ensure_schema(conn)
             with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        SELECT id, name
+                        FROM {schema}.{schedules}
+                        WHERE trigger_after_schedule_id = %s
+                        ORDER BY name
+                        LIMIT 1
+                        """
+                    ).format(
+                        schema=sql.Identifier(self.schema),
+                        schedules=sql.Identifier(SCHEDULES_TABLE),
+                    ),
+                    (normalized_schedule_id,),
+                )
+                dependent = cur.fetchone()
+                if dependent is not None:
+                    raise ValueError(
+                        "Exclua primeiro a agenda dependente "
+                        f"{str(dependent.get('name') or '').strip() or dependent.get('id')}."
+                    )
                 cur.execute(
                     sql.SQL(
                         "DELETE FROM {schema}.{schedules} WHERE id = %s RETURNING id"
@@ -1173,6 +1421,7 @@ class PromaxJobsService:
                         SELECT *
                         FROM {schema}.{schedules}
                         WHERE enabled = TRUE
+                          AND trigger_after_schedule_id IS NULL
                           AND next_run_at <= %s
                         ORDER BY next_run_at, id
                         FOR UPDATE SKIP LOCKED
@@ -1187,90 +1436,177 @@ class PromaxJobsService:
                 due_schedules = cur.fetchall()
                 for schedule in due_schedules:
                     scheduled_for = _aware_utc(schedule["next_run_at"], field_name="next_run_at")
-                    schedule_id = str(schedule["id"])
-                    idempotency_key = _schedule_idempotency_key(schedule_id, scheduled_for)
-                    job_id = str(uuid4())
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            INSERT INTO {schema}.{jobs} (
-                                id, job_type, payload, status, priority, concurrency_key,
-                                idempotency_key, source_schedule_id, scheduled_for,
-                                available_at, created_by
-                            )
-                            VALUES (
-                                %s, %s, %s, 'pending', 0, %s,
-                                %s, %s, %s, %s, %s
-                            )
-                            ON CONFLICT (idempotency_key) DO NOTHING
-                            RETURNING *
-                            """
-                        ).format(
-                            schema=sql.Identifier(self.schema),
-                            jobs=sql.Identifier(JOBS_TABLE),
-                        ),
-                        (
-                            job_id,
-                            str(schedule["job_type"]),
-                            Jsonb(dict(schedule["payload"] or {})),
-                            DEFAULT_CONCURRENCY_KEY,
-                            idempotency_key,
-                            schedule_id,
-                            scheduled_for,
-                            normalized_now,
-                            f"schedule:{schedule_id}",
-                        ),
-                    )
-                    job = cur.fetchone()
-                    inserted = job is not None
-                    if job is None:
-                        cur.execute(
-                            sql.SQL(
-                                "SELECT * FROM {schema}.{jobs} WHERE idempotency_key = %s"
-                            ).format(
-                                schema=sql.Identifier(self.schema),
-                                jobs=sql.Identifier(JOBS_TABLE),
-                            ),
-                            (idempotency_key,),
+                    enqueued.append(
+                        self._enqueue_schedule_job_cursor(
+                            cur,
+                            schedule=schedule,
+                            scheduled_for=scheduled_for,
+                            available_at=normalized_now,
+                            triggered_by_job_id=None,
                         )
-                        job = cur.fetchone()
-                    if job is None:
-                        raise RuntimeError(f"Job da agenda {schedule_id} nao foi encontrado apos enqueue.")
-
-                    definition = _schedule_definition_from_row(schedule)
-                    next_run_at = calculate_next_run(
-                        definition,
-                        after=max(normalized_now, scheduled_for),
                     )
+
+                remaining = safe_limit - len(enqueued)
+                if remaining > 0:
                     cur.execute(
                         sql.SQL(
                             """
-                            UPDATE {schema}.{schedules}
-                            SET
-                                last_enqueued_for = %s,
-                                next_run_at = %s,
-                                updated_at = NOW()
-                            WHERE id = %s
+                            SELECT
+                                child.*,
+                                parent_job.id AS trigger_job_id,
+                                parent_job.finished_at AS trigger_finished_at
+                            FROM {schema}.{schedules} AS child
+                            JOIN LATERAL (
+                                SELECT parent.id, parent.finished_at
+                                FROM {schema}.{jobs} AS parent
+                                WHERE parent.source_schedule_id = child.trigger_after_schedule_id
+                                  AND parent.status IN ('success', 'partial_success')
+                                  AND parent.finished_at IS NOT NULL
+                                  AND NOT EXISTS (
+                                      SELECT 1
+                                      FROM {schema}.{jobs} AS triggered
+                                      WHERE triggered.source_schedule_id = child.id
+                                        AND triggered.triggered_by_job_id = parent.id
+                                  )
+                                ORDER BY parent.finished_at, parent.id
+                                LIMIT 1
+                            ) AS parent_job ON TRUE
+                            WHERE child.enabled = TRUE
+                              AND child.trigger_after_schedule_id IS NOT NULL
+                            ORDER BY parent_job.finished_at, child.id
+                            FOR UPDATE OF child SKIP LOCKED
+                            LIMIT %s
                             """
                         ).format(
                             schema=sql.Identifier(self.schema),
                             schedules=sql.Identifier(SCHEDULES_TABLE),
+                            jobs=sql.Identifier(JOBS_TABLE),
                         ),
-                        (scheduled_for, next_run_at, schedule_id),
+                        (remaining,),
                     )
-                    if inserted:
-                        self._append_log_cursor(
-                            cur,
-                            job_id=job_id,
-                            level="info",
-                            message="Job criado por agenda.",
-                            data={
-                                "schedule_id": schedule_id,
-                                "scheduled_for": scheduled_for.isoformat(),
-                            },
+                    triggered_schedules = cur.fetchall()
+                    for schedule in triggered_schedules:
+                        scheduled_for = _aware_utc(
+                            schedule["trigger_finished_at"],
+                            field_name="trigger_finished_at",
                         )
-                    enqueued.append(_job_record(job))
+                        enqueued.append(
+                            self._enqueue_schedule_job_cursor(
+                                cur,
+                                schedule=schedule,
+                                scheduled_for=scheduled_for,
+                                available_at=normalized_now,
+                                triggered_by_job_id=str(schedule["trigger_job_id"]),
+                            )
+                        )
         return enqueued
+
+    def _enqueue_schedule_job_cursor(
+        self,
+        cur: Any,
+        *,
+        schedule: Mapping[str, Any],
+        scheduled_for: datetime,
+        available_at: datetime,
+        triggered_by_job_id: str | None,
+    ) -> JobRecord:
+        schedule_id = str(schedule["id"])
+        idempotency_key = (
+            _schedule_trigger_idempotency_key(schedule_id, triggered_by_job_id)
+            if triggered_by_job_id is not None
+            else _schedule_idempotency_key(schedule_id, scheduled_for)
+        )
+        job_id = str(uuid4())
+        cur.execute(
+            sql.SQL(
+                """
+                INSERT INTO {schema}.{jobs} (
+                    id, job_type, payload, status, priority, concurrency_key,
+                    idempotency_key, source_schedule_id, triggered_by_job_id,
+                    scheduled_for, available_at, created_by
+                )
+                VALUES (
+                    %s, %s, %s, 'pending', 0, %s,
+                    %s, %s, %s, %s, %s, %s
+                )
+                ON CONFLICT (idempotency_key) DO NOTHING
+                RETURNING *
+                """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                jobs=sql.Identifier(JOBS_TABLE),
+            ),
+            (
+                job_id,
+                str(schedule["job_type"]),
+                Jsonb(dict(schedule["payload"] or {})),
+                DEFAULT_CONCURRENCY_KEY,
+                idempotency_key,
+                schedule_id,
+                triggered_by_job_id,
+                scheduled_for,
+                available_at,
+                f"schedule:{schedule_id}",
+            ),
+        )
+        job = cur.fetchone()
+        inserted = job is not None
+        if job is None:
+            cur.execute(
+                sql.SQL(
+                    "SELECT * FROM {schema}.{jobs} WHERE idempotency_key = %s"
+                ).format(
+                    schema=sql.Identifier(self.schema),
+                    jobs=sql.Identifier(JOBS_TABLE),
+                ),
+                (idempotency_key,),
+            )
+            job = cur.fetchone()
+        if job is None:
+            raise RuntimeError(f"Job da agenda {schedule_id} nao foi encontrado apos enqueue.")
+
+        if triggered_by_job_id is None:
+            definition = _schedule_definition_from_row(schedule)
+            next_run_at = calculate_next_run(
+                definition,
+                after=max(available_at, scheduled_for),
+            )
+        else:
+            next_run_at = schedule["next_run_at"]
+
+        cur.execute(
+            sql.SQL(
+                """
+                UPDATE {schema}.{schedules}
+                SET
+                    last_enqueued_for = %s,
+                    next_run_at = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                schedules=sql.Identifier(SCHEDULES_TABLE),
+            ),
+            (scheduled_for, next_run_at, schedule_id),
+        )
+        if inserted:
+            self._append_log_cursor(
+                cur,
+                job_id=job_id,
+                level="info",
+                message=(
+                    "Job criado por gatilho de agenda."
+                    if triggered_by_job_id is not None
+                    else "Job criado por agenda."
+                ),
+                data={
+                    "schedule_id": schedule_id,
+                    "scheduled_for": scheduled_for.isoformat(),
+                    "triggered_by_job_id": triggered_by_job_id,
+                },
+            )
+        return _job_record(job)
 
     def reap_expired_leases(self, *, limit: int = 100) -> int:
         safe_limit = _bounded_limit(limit, maximum=1_000)
@@ -1499,6 +1835,8 @@ class PromaxJobsService:
                             time_of_day TIME NOT NULL,
                             weekday SMALLINT,
                             day_of_month SMALLINT,
+                            trigger_after_schedule_id UUID
+                                REFERENCES {schema}.{schedules}(id) ON DELETE RESTRICT,
                             enabled BOOLEAN NOT NULL DEFAULT TRUE,
                             next_run_at TIMESTAMPTZ NOT NULL,
                             last_enqueued_for TIMESTAMPTZ,
@@ -1544,6 +1882,8 @@ class PromaxJobsService:
                             idempotency_key VARCHAR(300) UNIQUE,
                             source_schedule_id UUID
                                 REFERENCES {schema}.{schedules}(id) ON DELETE SET NULL,
+                            triggered_by_job_id UUID
+                                REFERENCES {schema}.{jobs}(id) ON DELETE RESTRICT,
                             scheduled_for TIMESTAMPTZ,
                             available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                             attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
@@ -1620,6 +1960,86 @@ class PromaxJobsService:
                 )
                 cur.execute(
                     sql.SQL(
+                        "ALTER TABLE {schema}.{schedules} "
+                        "ADD COLUMN IF NOT EXISTS trigger_after_schedule_id UUID"
+                    ).format(
+                        schema=schema,
+                        schedules=sql.Identifier(SCHEDULES_TABLE),
+                    )
+                )
+                cur.execute(
+                    sql.SQL(
+                        "ALTER TABLE {schema}.{jobs} "
+                        "ADD COLUMN IF NOT EXISTS triggered_by_job_id UUID"
+                    ).format(
+                        schema=schema,
+                        jobs=sql.Identifier(JOBS_TABLE),
+                    )
+                )
+                cur.execute(
+                    sql.SQL(
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint
+                                WHERE conname = 'schedules_trigger_after_schedule_id_fkey'
+                                  AND conrelid = format(
+                                      '%I.%I',
+                                      {schema_name},
+                                      {table_name}
+                                  )::regclass
+                            ) THEN
+                                ALTER TABLE {schema}.{schedules}
+                                ADD CONSTRAINT schedules_trigger_after_schedule_id_fkey
+                                FOREIGN KEY (trigger_after_schedule_id)
+                                REFERENCES {schema}.{schedules}(id)
+                                ON DELETE RESTRICT;
+                            END IF;
+                        END
+                        $$;
+                        """
+                    ).format(
+                        schema_name=sql.Literal(self.schema),
+                        table_name=sql.Literal(SCHEDULES_TABLE),
+                        schema=schema,
+                        schedules=sql.Identifier(SCHEDULES_TABLE),
+                    )
+                )
+                cur.execute(
+                    sql.SQL(
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint
+                                WHERE conname = 'jobs_triggered_by_job_id_fkey'
+                                  AND conrelid = format(
+                                      '%I.%I',
+                                      {schema_name},
+                                      {table_name}
+                                  )::regclass
+                            ) THEN
+                                ALTER TABLE {schema}.{jobs}
+                                ADD CONSTRAINT jobs_triggered_by_job_id_fkey
+                                FOREIGN KEY (triggered_by_job_id)
+                                REFERENCES {schema}.{jobs}(id)
+                                ON DELETE RESTRICT;
+                            END IF;
+                        END
+                        $$;
+                        """
+                    ).format(
+                        schema_name=sql.Literal(self.schema),
+                        table_name=sql.Literal(JOBS_TABLE),
+                        schema=schema,
+                        jobs=sql.Identifier(JOBS_TABLE),
+                    )
+                )
+                cur.execute(
+                    sql.SQL(
                         "ALTER TABLE {schema}.{jobs} "
                         "ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(80) NOT NULL DEFAULT ''"
                     ).format(
@@ -1634,6 +2054,14 @@ class PromaxJobsService:
                     ).format(
                         schema=schema,
                         jobs=sql.Identifier(JOBS_TABLE),
+                    )
+                )
+                cur.execute(
+                    sql.SQL(
+                        "DROP INDEX IF EXISTS {schema}.{index}"
+                    ).format(
+                        schema=schema,
+                        index=sql.Identifier("promax_jobs_schedule_occurrence_idx"),
                     )
                 )
                 statements = (
@@ -1683,10 +2111,21 @@ class PromaxJobsService:
                         """
                         CREATE INDEX IF NOT EXISTS {index}
                         ON {schema}.{schedules} (next_run_at)
-                        WHERE enabled = TRUE
+                        WHERE enabled = TRUE AND trigger_after_schedule_id IS NULL
                         """
                     ).format(
-                        index=sql.Identifier("promax_schedules_due_idx"),
+                        index=sql.Identifier("promax_schedules_timed_due_idx"),
+                        schema=schema,
+                        schedules=sql.Identifier(SCHEDULES_TABLE),
+                    ),
+                    sql.SQL(
+                        """
+                        CREATE INDEX IF NOT EXISTS {index}
+                        ON {schema}.{schedules} (trigger_after_schedule_id)
+                        WHERE enabled = TRUE AND trigger_after_schedule_id IS NOT NULL
+                        """
+                    ).format(
+                        index=sql.Identifier("promax_schedules_trigger_idx"),
                         schema=schema,
                         schedules=sql.Identifier(SCHEDULES_TABLE),
                     ),
@@ -1704,10 +2143,24 @@ class PromaxJobsService:
                         """
                         CREATE UNIQUE INDEX IF NOT EXISTS {index}
                         ON {schema}.{jobs} (source_schedule_id, scheduled_for)
-                        WHERE source_schedule_id IS NOT NULL AND scheduled_for IS NOT NULL
+                        WHERE source_schedule_id IS NOT NULL
+                          AND scheduled_for IS NOT NULL
+                          AND triggered_by_job_id IS NULL
                         """
                     ).format(
                         index=sql.Identifier("promax_jobs_schedule_occurrence_idx"),
+                        schema=schema,
+                        jobs=sql.Identifier(JOBS_TABLE),
+                    ),
+                    sql.SQL(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS {index}
+                        ON {schema}.{jobs} (source_schedule_id, triggered_by_job_id)
+                        WHERE source_schedule_id IS NOT NULL
+                          AND triggered_by_job_id IS NOT NULL
+                        """
+                    ).format(
+                        index=sql.Identifier("promax_jobs_schedule_trigger_idx"),
                         schema=schema,
                         jobs=sql.Identifier(JOBS_TABLE),
                     ),
@@ -1814,7 +2267,7 @@ class PromaxJobsService:
                 SET
                     current_job_id = EXCLUDED.current_job_id,
                     lease_token = EXCLUDED.lease_token,
-                    metadata = EXCLUDED.metadata,
+                    metadata = {worker_heartbeats}.metadata || EXCLUDED.metadata,
                     heartbeat_at = NOW()
                 """
             ).format(
@@ -1840,7 +2293,7 @@ class PromaxJobsService:
                 VALUES (%s, %s)
                 ON CONFLICT (worker_id) DO UPDATE
                 SET
-                    metadata = EXCLUDED.metadata,
+                    metadata = {worker_heartbeats}.metadata || EXCLUDED.metadata,
                     heartbeat_at = NOW()
                 """
             ).format(
@@ -1961,6 +2414,12 @@ def _schedule_idempotency_key(schedule_id: str, scheduled_for: datetime) -> str:
     return f"schedule:{schedule_id}:{instant.isoformat(timespec='seconds')}"
 
 
+def _schedule_trigger_idempotency_key(schedule_id: str, parent_job_id: str) -> str:
+    normalized_schedule_id = _uuid_text(schedule_id, field_name="schedule_id")
+    normalized_parent_job_id = _uuid_text(parent_job_id, field_name="parent_job_id")
+    return f"schedule-trigger:{normalized_schedule_id}:{normalized_parent_job_id}"
+
+
 def _schedule_definition_from_row(row: Mapping[str, Any]) -> ScheduleDefinition:
     return validate_schedule_definition(
         schedule_type=str(row["schedule_type"]),
@@ -1981,6 +2440,9 @@ def _job_record(row: Mapping[str, Any]) -> JobRecord:
         "concurrency_key": str(row.get("concurrency_key") or ""),
         "idempotency_key": str(row["idempotency_key"]) if row.get("idempotency_key") else None,
         "source_schedule_id": str(row["source_schedule_id"]) if row.get("source_schedule_id") else None,
+        "triggered_by_job_id": (
+            str(row["triggered_by_job_id"]) if row.get("triggered_by_job_id") else None
+        ),
         "scheduled_for": _iso(row.get("scheduled_for")),
         "available_at": _iso_required(row["available_at"]),
         "attempt_count": int(row.get("attempt_count") or 0),
@@ -2034,6 +2496,11 @@ def _schedule_record(row: Mapping[str, Any]) -> ScheduleRecord:
         ),
         "weekday": int(row["weekday"]) if row.get("weekday") is not None else None,
         "day_of_month": int(row["day_of_month"]) if row.get("day_of_month") is not None else None,
+        "trigger_after_schedule_id": (
+            str(row["trigger_after_schedule_id"])
+            if row.get("trigger_after_schedule_id")
+            else None
+        ),
         "enabled": bool(row["enabled"]),
         "next_run_at": _iso_required(row["next_run_at"]),
         "last_enqueued_for": _iso(row.get("last_enqueued_for")),

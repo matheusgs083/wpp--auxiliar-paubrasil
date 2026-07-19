@@ -41,10 +41,13 @@ do formato:
 PROMAX_PYTHON cli.py relatorios --perfil <grupo>
 ```
 
-Datas, unidades, rotinas, publicacao e `job_id` sao acrescentados somente apos
-validacao contra o catalogo anunciado e contra identificadores seguros. Os
-argumentos sao enviados ao `subprocess` como lista e com `shell=False`. Um
-pedido de cancelamento encerra somente a arvore do PID filho com:
+Unidades, rotinas, publicacao e `job_id` sao acrescentados somente apos
+validacao contra o catalogo anunciado e contra identificadores seguros. As
+datas so sao enviadas quando `send_dates=true`; no painel, isso corresponde ao
+checkbox **Enviar data**, desmarcado por padrao. Sem essa opcao, cada rotina
+mantem seu periodo configurado no driver. Os argumentos sao enviados ao
+`subprocess` como lista e com `shell=False`. Um pedido de cancelamento encerra
+somente a arvore do PID filho com:
 
 ```text
 taskkill /PID <pid> /T /F

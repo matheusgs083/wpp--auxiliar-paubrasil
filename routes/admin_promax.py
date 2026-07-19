@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, 
 
 _CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+_UUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
 _MAX_DATE_RANGE_DAYS = 366
 
 
@@ -142,6 +143,7 @@ class PromaxJobCreateRequest(_StrictPayload):
     units: list[str] = Field(default_factory=list, max_length=100)
     start_date: date
     end_date: date
+    send_dates: StrictBool = False
     publish: StrictBool = False
 
     @field_validator("category")
@@ -172,10 +174,88 @@ class PromaxScheduleCreateRequest(PromaxJobCreateRequest):
     timezone: str = Field(default="America/Fortaleza", min_length=1, max_length=64)
     weekday: int | None = Field(default=None, ge=0, le=6)
     day_of_month: int | None = Field(default=None, ge=1, le=31)
+    trigger_after_schedule_id: str | None = Field(
+        default=None,
+        pattern=_UUID_PATTERN,
+    )
     enabled: StrictBool = True
 
     @model_validator(mode="after")
     def validate_schedule(self) -> PromaxScheduleCreateRequest:
+        if self.schedule_type == "weekly" and self.weekday is None:
+            raise ValueError("weekday is required for a weekly schedule")
+        if self.schedule_type == "monthly" and self.day_of_month is None:
+            raise ValueError("day_of_month is required for a monthly schedule")
+        return self
+
+
+class PromaxGroupSelection(_StrictPayload):
+    category: str = Field(min_length=1, max_length=64)
+    routines: list[str] = Field(min_length=1, max_length=50)
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, value: str) -> str:
+        return _normalize_category(value)
+
+    @field_validator("routines")
+    @classmethod
+    def validate_routines(cls, values: list[str]) -> list[str]:
+        return _normalize_identifiers(values, field_name="routines")
+
+
+class PromaxJobBatchCreateRequest(_StrictPayload):
+    groups: list[PromaxGroupSelection] = Field(min_length=1, max_length=50)
+    units: list[str] = Field(default_factory=list, max_length=100)
+    start_date: date
+    end_date: date
+    send_dates: StrictBool = False
+    publish: StrictBool = False
+
+    @field_validator("units")
+    @classmethod
+    def validate_units(cls, values: list[str]) -> list[str]:
+        return _normalize_identifiers(values, field_name="units")
+
+    @model_validator(mode="after")
+    def validate_batch(self) -> PromaxJobBatchCreateRequest:
+        _validate_date_range(self.start_date, self.end_date)
+        categories = [group.category for group in self.groups]
+        if len(categories) != len(set(categories)):
+            raise ValueError("groups must not contain duplicate categories")
+        return self
+
+
+class PromaxScheduleChainCreateRequest(_StrictPayload):
+    name: str = Field(min_length=1, max_length=120)
+    groups: list[PromaxGroupSelection] = Field(min_length=1, max_length=50)
+    units: list[str] = Field(default_factory=list, max_length=100)
+    start_date: date
+    end_date: date
+    send_dates: StrictBool = False
+    publish: StrictBool = False
+    schedule_type: Literal["daily", "weekly", "monthly"]
+    time_of_day: time
+    timezone: str = Field(default="America/Fortaleza", min_length=1, max_length=64)
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    day_of_month: int | None = Field(default=None, ge=1, le=31)
+    trigger_after_schedule_id: str | None = Field(
+        default=None,
+        pattern=_UUID_PATTERN,
+    )
+    enabled: StrictBool = True
+
+    @field_validator("units")
+    @classmethod
+    def validate_units(cls, values: list[str]) -> list[str]:
+        return _normalize_identifiers(values, field_name="units")
+
+    @model_validator(mode="after")
+    def validate_chain(self) -> PromaxScheduleChainCreateRequest:
+        _validate_date_range(self.start_date, self.end_date)
+        categories = [group.category for group in self.groups]
+        if len(categories) != len(set(categories)):
+            raise ValueError("groups must not contain duplicate categories")
         if self.schedule_type == "weekly" and self.weekday is None:
             raise ValueError("weekday is required for a weekly schedule")
         if self.schedule_type == "monthly" and self.day_of_month is None:
@@ -190,12 +270,17 @@ class PromaxScheduleUpdateRequest(_StrictPayload):
     timezone: str | None = Field(default=None, min_length=1, max_length=64)
     weekday: int | None = Field(default=None, ge=0, le=6)
     day_of_month: int | None = Field(default=None, ge=1, le=31)
+    trigger_after_schedule_id: str | None = Field(
+        default=None,
+        pattern=_UUID_PATTERN,
+    )
     enabled: StrictBool | None = None
     category: str | None = Field(default=None, min_length=1, max_length=64)
     routines: list[str] | None = Field(default=None, min_length=1, max_length=50)
     units: list[str] | None = Field(default=None, max_length=100)
     start_date: date | None = None
     end_date: date | None = None
+    send_dates: StrictBool | None = None
     publish: StrictBool | None = None
 
     @field_validator("category")
@@ -217,7 +302,15 @@ class PromaxScheduleUpdateRequest(_StrictPayload):
     def validate_update(self) -> PromaxScheduleUpdateRequest:
         if not self.model_fields_set:
             raise ValueError("at least one schedule field must be provided")
-        selection_fields = {"category", "routines", "units", "start_date", "end_date", "publish"}
+        selection_fields = {
+            "category",
+            "routines",
+            "units",
+            "start_date",
+            "end_date",
+            "send_dates",
+            "publish",
+        }
         changed_selection_fields = selection_fields.intersection(self.model_fields_set)
         if changed_selection_fields and changed_selection_fields != selection_fields:
             raise ValueError("all job selection fields are required when a schedule payload is updated")
@@ -533,6 +626,49 @@ def create_admin_promax_router(
         record_admin_event(request, "admin_promax_job_create")
         return _item_response(job, key="job")
 
+    @router.post("/api/admin/promax/jobs/batch", status_code=202)
+    def api_admin_promax_create_job_batch(
+        request: Request,
+        payload: PromaxJobBatchCreateRequest,
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        resolved_catalog = resolve_catalog()
+        for group in payload.groups:
+            _validate_catalog_selection(
+                resolved_catalog,
+                category=group.category,
+                routines=group.routines,
+                units=payload.units,
+            )
+
+        common_payload = {
+            "units": payload.units,
+            "start_date": payload.start_date.isoformat(),
+            "end_date": payload.end_date.isoformat(),
+            "send_dates": payload.send_dates,
+            "publish": payload.publish,
+        }
+        jobs = service.enqueue_jobs(
+            items=[
+                {
+                    "job_type": group.category,
+                    "payload": {
+                        "category": group.category,
+                        "routines": group.routines,
+                        **common_payload,
+                    },
+                }
+                for group in payload.groups
+            ],
+            created_by=context_actor(context),
+        )
+        record_admin_event(
+            request,
+            "admin_promax_job_batch_create",
+            reason=f"groups={','.join(group.category for group in payload.groups)}",
+        )
+        return _mapping_or_value(jobs, key="jobs")
+
     @router.post("/api/admin/promax/publications/reprocess", status_code=202)
     def api_admin_promax_reprocess_publications(
         request: Request,
@@ -721,23 +857,88 @@ def create_admin_promax_router(
                 "timezone",
                 "weekday",
                 "day_of_month",
+                "trigger_after_schedule_id",
                 "enabled",
             },
         )
-        schedule = service.create_schedule(
-            name=payload.name,
-            job_type=payload.category,
-            payload=schedule_payload,
-            schedule_type=payload.schedule_type,
-            time_of_day=payload.time_of_day,
-            timezone_name=payload.timezone,
-            weekday=payload.weekday,
-            day_of_month=payload.day_of_month,
-            enabled=payload.enabled,
-            created_by=context_actor(context),
-        )
+        try:
+            schedule = service.create_schedule(
+                name=payload.name,
+                job_type=payload.category,
+                payload=schedule_payload,
+                schedule_type=payload.schedule_type,
+                time_of_day=payload.time_of_day,
+                timezone_name=payload.timezone,
+                weekday=payload.weekday,
+                day_of_month=payload.day_of_month,
+                trigger_after_schedule_id=payload.trigger_after_schedule_id,
+                enabled=payload.enabled,
+                created_by=context_actor(context),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         record_admin_event(request, "admin_promax_schedule_create")
         return _item_response(schedule, key="schedule")
+
+    @router.post("/api/admin/promax/schedule-chains", status_code=201)
+    def api_admin_promax_create_schedule_chain(
+        request: Request,
+        payload: PromaxScheduleChainCreateRequest,
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        resolved_catalog = resolve_catalog()
+        for group in payload.groups:
+            _validate_catalog_selection(
+                resolved_catalog,
+                category=group.category,
+                routines=group.routines,
+                units=payload.units,
+            )
+
+        multiple_groups = len(payload.groups) > 1
+        common_payload = {
+            "units": payload.units,
+            "start_date": payload.start_date.isoformat(),
+            "end_date": payload.end_date.isoformat(),
+            "send_dates": payload.send_dates,
+            "publish": payload.publish,
+        }
+        chain_items = [
+            {
+                "name": (
+                    f"{payload.name[: max(1, 157 - len(group.category))]} - {group.category}"
+                    if multiple_groups
+                    else payload.name
+                ),
+                "job_type": group.category,
+                "payload": {
+                    "category": group.category,
+                    "routines": group.routines,
+                    **common_payload,
+                },
+            }
+            for group in payload.groups
+        ]
+        try:
+            schedules = service.create_schedule_chain(
+                items=chain_items,
+                schedule_type=payload.schedule_type,
+                time_of_day=payload.time_of_day,
+                timezone_name=payload.timezone,
+                weekday=payload.weekday,
+                day_of_month=payload.day_of_month,
+                trigger_after_schedule_id=payload.trigger_after_schedule_id,
+                enabled=payload.enabled,
+                created_by=context_actor(context),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        record_admin_event(
+            request,
+            "admin_promax_schedule_chain_create",
+            reason=f"groups={','.join(group.category for group in payload.groups)}",
+        )
+        return _mapping_or_value(schedules, key="schedules")
 
     @router.get("/api/admin/promax/schedules")
     def api_admin_promax_list_schedules(
@@ -781,7 +982,15 @@ def create_admin_promax_router(
                 routines=payload.routines,
                 units=payload.units,
             )
-        selection_fields = {"category", "routines", "units", "start_date", "end_date", "publish"}
+        selection_fields = {
+            "category",
+            "routines",
+            "units",
+            "start_date",
+            "end_date",
+            "send_dates",
+            "publish",
+        }
         selection_changed = bool(selection_fields.intersection(payload.model_fields_set))
         schedule_payload = (
             payload.model_dump(mode="json", include=selection_fields)
@@ -798,13 +1007,17 @@ def create_admin_promax_router(
             ("timezone", "timezone_name"),
             ("weekday", "weekday"),
             ("day_of_month", "day_of_month"),
+            ("trigger_after_schedule_id", "trigger_after_schedule_id"),
             ("enabled", "enabled"),
         ):
             if payload_field in update_values:
                 schedule_kwargs[service_field] = update_values[payload_field]
         if selection_changed:
             schedule_kwargs["payload"] = schedule_payload
-        schedule = service.update_schedule(schedule_id, **schedule_kwargs)
+        try:
+            schedule = service.update_schedule(schedule_id, **schedule_kwargs)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         record_admin_event(request, "admin_promax_schedule_update", reason=f"schedule_id={schedule_id}")
         return _item_response(schedule, key="schedule")
 
@@ -814,7 +1027,10 @@ def create_admin_promax_router(
         schedule_id: str = Path(min_length=1, max_length=120, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$"),
         context: dict[str, Any] = Depends(require_promax_context),
     ) -> dict[str, Any]:
-        result = service.delete_schedule(schedule_id)
+        try:
+            result = service.delete_schedule(schedule_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         record_admin_event(request, "admin_promax_schedule_delete", reason=f"schedule_id={schedule_id}")
         return _mapping_or_value(result, key="schedule")
 
@@ -909,9 +1125,15 @@ def create_admin_promax_router(
     @router.get("/api/internal/promax/control")
     def api_internal_promax_control(
         worker_id: str = Query(min_length=1, max_length=120),
+        job_id: str | None = Query(
+            default=None,
+            min_length=1,
+            max_length=120,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$",
+        ),
         _worker_auth: None = Depends(require_worker_auth),
     ) -> dict[str, Any]:
-        result = worker_control(worker_id)
+        result = worker_control(worker_id, job_id)
         return _mapping_or_value(result, key="control")
 
     @router.post("/api/internal/promax/worker/claim")

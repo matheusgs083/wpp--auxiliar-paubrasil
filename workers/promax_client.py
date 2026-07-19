@@ -176,7 +176,12 @@ class PromaxClient:
         )
 
     def control(self, job_id: str) -> dict[str, Any]:
-        query = urlencode({"worker_id": self.worker_id})
+        query = urlencode(
+            {
+                "worker_id": self.worker_id,
+                "job_id": _path_identifier(job_id),
+            }
+        )
         return self._request(
             "GET",
             f"/api/internal/promax/control?{query}",

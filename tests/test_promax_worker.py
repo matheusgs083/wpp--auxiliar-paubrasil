@@ -14,7 +14,7 @@ from workers.promax_runner import (
     PromaxRunnerConfig,
     terminate_process_tree,
 )
-from workers.promax_worker import redact_log_message
+from workers.promax_worker import _control_flag, redact_log_message
 
 
 class _FakeResponse:
@@ -117,7 +117,25 @@ class PromaxClientTests(unittest.TestCase):
         self.assertIn("/api/internal/promax/jobs/job-1/finish", captured[0][0])
         self.assertIn("/api/internal/promax/jobs/job-1/heartbeat", captured[1][0])
         self.assertIn("/api/internal/promax/jobs/job-1/log", captured[2][0])
-        self.assertIn("/api/internal/promax/control?", captured[3][0])
+        self.assertIn(
+            "/api/internal/promax/control?worker_id=worker&job_id=job-1",
+            captured[3][0],
+        )
+
+    def test_control_flag_accepts_stop_job_ids_contract(self) -> None:
+        payload = {
+            "control": {
+                "stop_job_ids": ["job-1", "job-2"],
+                "cancel_requested": False,
+            }
+        }
+
+        self.assertTrue(
+            _control_flag(payload, key="cancel_requested", job_id="job-2")
+        )
+        self.assertFalse(
+            _control_flag(payload, key="cancel_requested", job_id="job-3")
+        )
 
     def test_worker_heartbeat_forwards_dynamic_catalog(self) -> None:
         captured: list[dict[str, object]] = []
@@ -188,6 +206,7 @@ class PromaxRunnerTests(unittest.TestCase):
                         "units": ["030117", "030118"],
                         "start_date": "2026-07-01",
                         "end_date": "2026-07-18",
+                        "send_dates": True,
                         "publish": False,
                     },
                 },
@@ -225,6 +244,29 @@ class PromaxRunnerTests(unittest.TestCase):
         self.assertEqual(result.status, "success")
         self.assertIn(("stdout", "linha stdout"), lines)
         self.assertIn(("stderr", "linha stderr"), lines)
+
+    def test_runner_omits_dates_unless_send_dates_is_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-default-dates",
+                    "payload": {
+                        "category": "adf",
+                        "routines": ["030237"],
+                        "units": [],
+                        "start_date": "2026-07-01",
+                        "end_date": "2026-07-18",
+                        "send_dates": False,
+                        "publish": True,
+                    },
+                }
+            )
+
+        self.assertNotIn("--data-inicial", command)
+        self.assertNotIn("--data-final", command)
 
     def test_runner_accepts_dynamic_profile_with_safe_identifiers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -328,6 +370,25 @@ class PromaxRunnerTests(unittest.TestCase):
                             "category": "../obz",
                             "routines": ["0512"],
                             "units": [],
+                            "publish": False,
+                        },
+                    }
+                )
+
+    def test_runner_rejects_non_boolean_send_dates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            with self.assertRaisesRegex(ValueError, "send_dates"):
+                runner.build_command(
+                    {
+                        "id": "job-invalid-send-dates",
+                        "payload": {
+                            "category": "adf",
+                            "routines": ["030237"],
+                            "units": [],
+                            "send_dates": "true",
                             "publish": False,
                         },
                     }
