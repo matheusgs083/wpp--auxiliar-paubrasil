@@ -12,8 +12,6 @@ from bot_api.security.security_monitor import SecurityMonitor
 from bot_api.services.admin_import_job_service import AdminImportJobService
 from bot_api.services.boletos_pdf_import_service import BoletosPdfImportService
 from bot_api.services.boletos_query_service import BoletosQueryService
-from bot_api.services.clientes_score_import_service import ClientesScoreImportService
-from bot_api.services.clientes_score_query_service import ClientesScoreQueryService
 from bot_api.services.comodatos_import_service import ComodatosImportService
 from bot_api.services.comodatos_query_service import ComodatosQueryService
 from bot_api.services.critica_operacao_import_service import CriticaOperacaoImportService
@@ -48,7 +46,6 @@ class AppServices:
     admin_import_job_service: AdminImportJobService
     promax_jobs_service: PromaxJobsService
     dclientes_query_service: DClientesQueryService
-    clientes_score_query_service: ClientesScoreQueryService
     inadimplencia_query_service: InadimplenciaQueryService
     comodatos_query_service: ComodatosQueryService
     giro_query_service: GiroQueryService
@@ -67,7 +64,6 @@ class AppServices:
     boletos_pdf_import_service: BoletosPdfImportService
     boletos_pdf_import_services: dict[str, BoletosPdfImportService]
     dclientes_import_service: DClientesImportService
-    clientes_score_import_service: ClientesScoreImportService
     inadimplencia_import_service: InadimplenciaImportService
     comodatos_import_service: ComodatosImportService
     giro_import_service: GiroImportService
@@ -98,11 +94,6 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
     dclientes_query_service = DClientesQueryService(
-        database_url=settings.reports_runtime_database_url,
-        schema=settings.reports_db_schema,
-        connect_timeout_seconds=settings.access_database_timeout_seconds,
-    )
-    clientes_score_query_service = ClientesScoreQueryService(
         database_url=settings.reports_runtime_database_url,
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -204,11 +195,6 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
-    clientes_score_import_service = ClientesScoreImportService(
-        database_url=settings.reports_database_url,
-        schema=settings.reports_db_schema,
-        connect_timeout_seconds=settings.access_database_timeout_seconds,
-    )
     inadimplencia_import_service = InadimplenciaImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
@@ -302,13 +288,11 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         payip_payments_service=payip_payments_service,
         recolha_request_service=recolha_request_service,
         access_control=access_control,
-        clientes_score_service=clientes_score_query_service,
     )
     return AppServices(
         admin_import_job_service=admin_import_job_service,
         promax_jobs_service=promax_jobs_service,
         dclientes_query_service=dclientes_query_service,
-        clientes_score_query_service=clientes_score_query_service,
         inadimplencia_query_service=inadimplencia_query_service,
         comodatos_query_service=comodatos_query_service,
         giro_query_service=giro_query_service,
@@ -327,7 +311,6 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         boletos_pdf_import_service=boletos_pdf_import_service,
         boletos_pdf_import_services=boletos_pdf_import_services,
         dclientes_import_service=dclientes_import_service,
-        clientes_score_import_service=clientes_score_import_service,
         inadimplencia_import_service=inadimplencia_import_service,
         comodatos_import_service=comodatos_import_service,
         giro_import_service=giro_import_service,

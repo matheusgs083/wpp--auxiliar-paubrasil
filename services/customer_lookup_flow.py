@@ -44,7 +44,6 @@ from bot_api.services.dclientes_query_service import (
     DClientesQueryService,
     VisitSellerSummary,
 )
-from bot_api.services.clientes_score_query_service import ClienteScoreRecord, ClientesScoreQueryService
 from bot_api.services.comodatos_query_service import (
     ComodatoClientSummary,
     ComodatoRecord,
@@ -441,7 +440,6 @@ class CustomerLookupFlow:
         payip_payments_service: PayipPaymentsService | None = None,
         recolha_request_service: RecolhaRequestService | None = None,
         critica_rn_service: CriticaRnQueryService | None = None,
-        clientes_score_service: ClientesScoreQueryService | None = None,
         session_ttl_minutes: int = 20,
     ) -> None:
         self.query_service = query_service
@@ -453,8 +451,6 @@ class CustomerLookupFlow:
         self.boletos_service = boletos_service
         self.payip_payments_service = payip_payments_service
         self.critica_rn_service = critica_rn_service
-        self.clientes_score_service = clientes_score_service
-        self._cliente_score_last_lookup_available = False
         self.recolha_request_service = recolha_request_service or RecolhaRequestService(
             Path("exports") / "recolhas" / "solicitacoes_recolha.csv"
         )
@@ -2645,26 +2641,6 @@ class CustomerLookupFlow:
             decision=decision,
             index=index,
             scope_restricted=scope_restricted,
-        )
-
-    def _safe_cliente_score_record(self, record: DClienteRecord) -> ClienteScoreRecord | None:
-        return self.search_flow._safe_cliente_score_record(
-            record=record,
-        )
-
-    def _safe_cliente_score_by_registration(self, *, filial: str, cod_pdv: str) -> ClienteScoreRecord | None:
-        return self.search_flow._safe_cliente_score_by_registration(
-            filial=filial,
-            cod_pdv=cod_pdv,
-        )
-
-    def _cliente_score_service_ready(self) -> bool:
-        return self.search_flow._cliente_score_service_ready()
-
-    def _append_cliente_score_lines(self, lines: list[str], score_record: ClienteScoreRecord | None) -> None:
-        return self.search_flow._append_cliente_score_lines(
-            lines=lines,
-            score_record=score_record,
         )
 
     def _append_documentacao_cliente_lines(self, lines: list[str], *, decision: AccessDecision, record: DClienteRecord, scope_restricted: bool = True) -> None:

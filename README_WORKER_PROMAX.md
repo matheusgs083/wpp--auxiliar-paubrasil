@@ -1,208 +1,58 @@
-it
+# Atualizacao do Worker Promax no servidor funcional
 
-# Worker Promax no servidor de producao
+Este guia considera que o servidor de producao ja esta funcionando com:
 
-Este guia mostra como instalar e manter o worker Promax em uma maquina Windows
-onde o `bot_api` e o `promax-web-driver` ficam em pastas irmas.
+- `bot_api` rodando no Docker;
+- PostgreSQL ja criado e com dados;
+- Evolution/API ja configurada;
+- `promax-web-driver` ja instalado em uma pasta irma ao `bot_api`;
+- painel admin ja acessivel.
 
-O worker nao precisa ser criado manualmente no banco. Quando o processo
-`workers.promax_worker` inicia com uma configuracao valida, ele envia um
-heartbeat para o `bot_api` e aparece automaticamente no painel Promax.
+O objetivo aqui e aplicar somente a atualizacao do Promax Admin/worker, sem
+reinstalar a stack inteira e sem perder dados.
 
-## Arquitetura
+## Arquitetura esperada
 
 ```text
 C:\Users\SEU_USUARIO\Documents\
-|-- wpp--auxiliar-paubrasil\    # bot_api, Docker e worker
-`-- promax-web-driver\          # automacao do Promax
+|-- wpp--auxiliar-paubrasil\    # bot_api, Docker, painel e fila Promax
+`-- promax-web-driver\          # automacao Windows do Promax
 ```
 
 - O `bot_api` e o PostgreSQL rodam no Docker.
-- O worker roda no Windows, fora do Docker.
-- O worker busca os jobs na API e executa o `promax-web-driver`.
-- Cada worker processa apenas um job por vez.
-- O `PROMAX_WORKER_TOKEN` autentica a comunicacao entre o host e o container.
+- O worker Promax roda no Windows, fora do Docker.
+- O worker busca jobs no `bot_api` e executa o `promax-web-driver`.
+- Cada worker processa um job por vez.
+- O `PROMAX_WORKER_TOKEN` autentica o worker com a API local.
 
-## 1. Pre-requisitos
+## 1. Antes de atualizar
 
-Confirme no servidor:
-
-```powershell
-docker version
-docker compose version
-py --version
-git --version
-```
-
-Tambem sao necessarios:
-
-- Docker Desktop iniciado;
-- Python instalado no Windows;
-- `bot_api` e `promax-web-driver` atualizados;
-- acesso local ao `bot_api` em `http://127.0.0.1:8080`;
-- configuracoes e credenciais do Promax existentes no `promax-web-driver`.
-
-## 2. Preparar os ambientes Python
-
-Ajuste os caminhos para o usuario do servidor:
-
-```powershell
-$Bot = "C:\Users\SEU_USUARIO\Documents\wpp--auxiliar-paubrasil"
-$Driver = "C:\Users\SEU_USUARIO\Documents\promax-web-driver"
-```
-
-Crie ou atualize o ambiente do `bot_api`:
-
-```powershell
-Set-Location $Bot
-if (-not (Test-Path ".\venv\Scripts\python.exe")) {
-    py -3 -m venv venv
-}
-.\venv\Scripts\python.exe -m pip install --upgrade pip
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Crie ou atualize o ambiente do driver:
-
-```powershell
-Set-Location $Driver
-if (-not (Test-Path ".\venv\Scripts\python.exe")) {
-    py -3 -m venv venv
-}
-.\venv\Scripts\python.exe -m pip install --upgrade pip
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Valide os arquivos usados pelo worker:
-
-```powershell
-Test-Path "$Bot\workers\promax_worker.py"
-Test-Path "$Driver\cli.py"
-Test-Path "$Driver\venv\Scripts\python.exe"
-```
-
-Os tres comandos devem retornar `True`.
-
-## 3. Configurar o `.env`
-
-Edite o arquivo `$Bot\.env` e mantenha estas variaveis:
-
-```dotenv
-PROMAX_API_BASE_URL=http://127.0.0.1:8080
-PROMAX_WORKER_TOKEN=
-PROMAX_WORKER_ID=promax-producao
-PROMAX_DRIVER_DIR=C:\Users\SEU_USUARIO\Documents\promax-web-driver
-PROMAX_PYTHON=C:\Users\SEU_USUARIO\Documents\promax-web-driver\venv\Scripts\python.exe
-
-PROMAX_WORKER_POLL_SECONDS=5
-PROMAX_WORKER_LEASE_SECONDS=120
-PROMAX_WORKER_HEARTBEAT_SECONDS=15
-PROMAX_WORKER_CONTROL_SECONDS=5
-PROMAX_WORKER_HTTP_TIMEOUT_SECONDS=10
-PROMAX_WORKER_BACKOFF_INITIAL_SECONDS=2
-PROMAX_WORKER_BACKOFF_MAX_SECONDS=60
-PROMAX_WORKER_LOG_LEVEL=INFO
-```
-
-Substitua `SEU_USUARIO` pelo usuario real do Windows.
-
-Regras importantes:
-
-- `PROMAX_WORKER_ID` deve ser estavel e identificar a maquina.
-- Se houver mais de uma maquina, cada uma deve ter um ID diferente.
-- O token nao e a API key do webhook da Evolution.
-- O mesmo `PROMAX_WORKER_TOKEN` precisa ser lido pelo container e pelo worker.
-- Nao grave o token em atalhos, arquivos `.bat` ou no Git.
-
-Na primeira inicializacao, `start_homelab.bat` gera um token aleatorio caso
-`PROMAX_WORKER_TOKEN` esteja ausente ou vazio. O script grava o token no `.env`
-antes de subir o Compose, garantindo que o container e o worker usem o mesmo
-valor.
-
-## 4. Subir o container e criar o worker
-
-Na primeira instalacao ou depois de uma atualizacao:
-
-```powershell
-Set-Location $Bot
-docker compose up -d --build --no-deps bot_api
-.\start_homelab.bat
-```
-
-O `start_homelab.bat`:
-
-1. valida o `.env`;
-2. gera o token se necessario;
-3. garante que o Compose esteja iniciado;
-4. inicia `workers.promax_worker` minimizado;
-5. impede uma segunda instancia do worker na mesma maquina.
-
-Depois de iniciado, o worker envia o primeiro heartbeat e se registra
-automaticamente. Nao existe etapa de cadastro manual.
-
-## 5. Validar
-
-Valide a API:
-
-```powershell
-Invoke-RestMethod "http://127.0.0.1:8080/health"
-docker compose ps
-docker compose logs --tail 100 bot_api
-```
-
-Confirme que o processo do worker esta ativo:
-
-```powershell
-Get-CimInstance Win32_Process |
-Where-Object { $_.CommandLine -match 'workers\.promax_worker' } |
-Select-Object ProcessId, Name, CommandLine
-```
-
-Abra o painel:
+Confirme que nao tem rotina Promax em execucao no painel:
 
 ```text
 http://127.0.0.1:8080/admin/promax
 ```
 
-Em ate alguns segundos o worker deve aparecer como online. Antes de liberar as
-agendas, execute um relatorio pequeno pelo painel e confira:
+Se houver job rodando, pause a fila e espere terminar.
 
-- job recebido pelo worker;
-- logs exibidos durante a execucao;
-- status final detalhado;
-- arquivo publicado no destino;
-- botao **Reprocessar publicacoes** disponivel para pendencias.
-
-## 6. Executar em primeiro plano para diagnostico
-
-Se o worker nao aparecer no painel, pare a instancia minimizada e execute em
-primeiro plano:
+Depois confira o estado dos repositorios:
 
 ```powershell
-Set-Location $Bot
-.\venv\Scripts\python.exe -m workers.promax_worker
+$Bot = "C:\Users\SEU_USUARIO\Documents\wpp--auxiliar-paubrasil"
+$Driver = "C:\Users\SEU_USUARIO\Documents\promax-web-driver"
+
+git -C $Bot status --short
+git -C $Driver status --short
 ```
 
-Mensagens comuns:
+Se aparecerem arquivos alterados que voce nao reconhece, revise antes de dar
+`pull`.
 
-- `PROMAX_WORKER_TOKEN is required`: token ausente no `.env`;
-- `HTTP 401`: token do worker diferente do token carregado pelo container;
-- `PROMAX_DRIVER_DIR is not a directory`: caminho do driver incorreto;
-- `PROMAX_PYTHON is not a file`: ambiente virtual do driver incorreto;
-- `Outro worker Promax ja esta em execucao`: ja existe uma instancia ativa;
-- `Promax API indisponivel`: API local parada ou URL incorreta.
+## 2. Parar somente o worker
 
-Depois de alterar o token no `.env`, recrie somente o `bot_api` e reinicie o
-worker:
+Nao pare o Docker e nao use `docker compose down -v`.
 
-```powershell
-Set-Location $Bot
-docker compose up -d --force-recreate --no-deps bot_api
-```
-
-## 7. Parar e reiniciar o worker
-
-Pause a fila no painel e espere o job atual terminar. Depois:
+Pare apenas o processo do worker Promax:
 
 ```powershell
 $processos = @(
@@ -222,85 +72,191 @@ ForEach-Object {
 }
 ```
 
-Para iniciar novamente:
+## 3. Atualizar os codigos
 
-```powershell
-Set-Location $Bot
-Start-Process `
-    -FilePath "$Bot\venv\Scripts\python.exe" `
-    -ArgumentList "-m", "workers.promax_worker" `
-    -WorkingDirectory $Bot `
-    -WindowStyle Hidden
-```
-
-## 8. Iniciar junto com o Windows
-
-1. Pressione `Win+R`.
-2. Execute `shell:startup`.
-3. Crie um atalho para `$Bot\start_homelab.bat`.
-4. Configure o Docker Desktop para iniciar com o Windows.
-5. Reinicie a maquina e confirme o worker no painel Promax.
-
-O atalho deve apontar somente para o `.bat`. Tokens e caminhos permanecem no
-`.env`.
-
-## 9. Atualizar em producao
-
-Pause a fila e espere o job atual terminar. Em seguida:
-
-```powershell
-$Bot = "C:\Users\SEU_USUARIO\Documents\wpp--auxiliar-paubrasil"
-$Driver = "C:\Users\SEU_USUARIO\Documents\promax-web-driver"
-
-git -C $Bot status --short
-git -C $Driver status --short
-```
-
-Se os repositorios estiverem limpos, pare o worker conforme a secao anterior e
-atualize:
+Atualize os dois repositorios:
 
 ```powershell
 git -C $Driver pull --ff-only origin main
 git -C $Bot pull --ff-only origin main
+```
 
+Atualize as dependencias Python, caso tenha mudanca em `requirements.txt`:
+
+```powershell
 & "$Driver\venv\Scripts\python.exe" -m pip install -r "$Driver\requirements.txt"
 & "$Bot\venv\Scripts\python.exe" -m pip install -r "$Bot\requirements.txt"
+```
 
+## 4. Conferir variaveis Promax no `.env`
+
+No servidor funcional, o `.env` normalmente ja possui banco, Evolution e demais
+tokens. Para o Promax, confira apenas estas variaveis:
+
+```dotenv
+PROMAX_API_BASE_URL=http://127.0.0.1:8080
+PROMAX_WORKER_TOKEN=preenchido_no_servidor
+PROMAX_WORKER_ID=promax-producao
+PROMAX_DRIVER_DIR=C:\Users\SEU_USUARIO\Documents\promax-web-driver
+PROMAX_PYTHON=C:\Users\SEU_USUARIO\Documents\promax-web-driver\venv\Scripts\python.exe
+```
+
+As demais configuracoes do worker podem usar os padroes do codigo. So altere se
+houver necessidade operacional:
+
+```dotenv
+PROMAX_WORKER_POLL_SECONDS=5
+PROMAX_WORKER_LEASE_SECONDS=120
+PROMAX_WORKER_HEARTBEAT_SECONDS=15
+PROMAX_WORKER_CONTROL_SECONDS=5
+PROMAX_WORKER_HTTP_TIMEOUT_SECONDS=10
+PROMAX_WORKER_BACKOFF_INITIAL_SECONDS=2
+PROMAX_WORKER_BACKOFF_MAX_SECONDS=60
+PROMAX_WORKER_LOG_LEVEL=INFO
+```
+
+Regras importantes:
+
+- nao troque `PROMAX_WORKER_TOKEN` se o servidor ja esta funcionando;
+- o token do worker nao e a API key do webhook da Evolution;
+- `PROMAX_WORKER_ID` deve ser fixo para essa maquina;
+- nao coloque tokens em atalhos, `.bat` novos ou Git.
+
+## 5. Rebuild seguro do `bot_api`
+
+Use rebuild somente do container da API. Isso preserva Postgres e volumes:
+
+```powershell
 Set-Location $Bot
 docker compose up -d --build --no-deps bot_api
-
-Start-Process `
-    -FilePath "$Bot\venv\Scripts\python.exe" `
-    -ArgumentList "-m", "workers.promax_worker" `
-    -WorkingDirectory $Bot `
-    -WindowStyle Hidden
 ```
 
 Nao use:
 
 ```text
-git reset --hard
-git clean -fd
 docker compose down -v
 docker volume rm
+git reset --hard
+git clean -fd
 ```
 
-Esses comandos podem apagar alteracoes locais, arquivos pendentes ou volumes de
-dados. As publicacoes que falharam ficam preservadas em:
+## 6. Iniciar o worker atualizado
+
+Se voce ja usa `start_homelab.bat`, use ele:
+
+```powershell
+Set-Location $Bot
+.\start_homelab.bat
+```
+
+Se preferir iniciar manualmente:
+
+```powershell
+Start-Process `
+    -FilePath "$Bot\venv\Scripts\python.exe" `
+    -ArgumentList "-m", "workers.promax_worker" `
+    -WorkingDirectory $Bot `
+    -WindowStyle Hidden
+```
+
+O worker se registra automaticamente no painel por heartbeat. Nao precisa criar
+cadastro manual no banco.
+
+## 7. Validar depois da atualizacao
+
+Valide a API:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8080/health"
+docker compose ps
+docker compose logs --tail 100 bot_api
+```
+
+Valide o processo do worker:
+
+```powershell
+Get-CimInstance Win32_Process |
+Where-Object { $_.CommandLine -match 'workers\.promax_worker' } |
+Select-Object ProcessId, Name, CommandLine
+```
+
+Abra:
 
 ```text
-promax-web-driver\logs\publicacao_pendente
+http://127.0.0.1:8080/admin/promax
 ```
 
-## 10. Checklist final
+Confira:
 
-- [ ] Docker Desktop iniciado;
-- [ ] `bot_api` saudavel;
-- [ ] `promax-web-driver` acessivel no caminho configurado;
-- [ ] ambientes `venv` dos dois repositorios instalados;
-- [ ] token existente no `.env`;
-- [ ] `PROMAX_WORKER_ID` unico e estavel;
-- [ ] worker visivel como online no painel;
-- [ ] fila reativada;
-- [ ] job de teste concluido e publicado;
-- [ ] inicializacao automatica configurada.
+- worker online;
+- catalogo de relatorios carregado;
+- fila sem job preso;
+- agendamentos preservados;
+- botao de reprocessar publicacoes disponivel;
+- log de execucao com data, status, grupo, rotinas e unidade.
+
+## 8. Teste recomendado
+
+Antes de liberar a agenda, execute um relatorio pequeno pelo painel:
+
+1. Abra `Promax Admin`.
+2. Va em `Executar agora`.
+3. Escolha uma revenda e um grupo pequeno.
+4. Execute.
+5. Confira o log em tempo real.
+6. Confira se o status final nao ficou apenas `parcial` sem detalhe.
+7. Se baixou mas nao publicou, use `Reprocessar publicacoes`.
+
+## 9. Se o worker nao aparecer
+
+Rode em primeiro plano para ver o erro:
+
+```powershell
+Set-Location $Bot
+.\venv\Scripts\python.exe -m workers.promax_worker
+```
+
+Erros comuns:
+
+- `PROMAX_WORKER_TOKEN is required`: token ausente no `.env`;
+- `HTTP 401`: token do worker diferente do token carregado pelo container;
+- `PROMAX_DRIVER_DIR is not a directory`: caminho do driver incorreto;
+- `PROMAX_PYTHON is not a file`: ambiente virtual do driver incorreto;
+- `Outro worker Promax ja esta em execucao`: ja existe uma instancia ativa;
+- `Promax API indisponivel`: API local parada ou URL incorreta.
+
+Depois de corrigir `.env`, recrie somente o `bot_api` e reinicie o worker:
+
+```powershell
+Set-Location $Bot
+docker compose up -d --force-recreate --no-deps bot_api
+.\start_homelab.bat
+```
+
+## 10. Inicializacao com Windows
+
+Se o servidor ja tinha o worker iniciando com Windows, normalmente nao precisa
+refazer.
+
+Para conferir:
+
+1. Pressione `Win+R`.
+2. Execute `shell:startup`.
+3. Confirme se existe atalho para `$Bot\start_homelab.bat`.
+4. Confirme se o Docker Desktop inicia com o Windows.
+
+O atalho deve apontar para o `.bat`; os caminhos e tokens ficam no `.env`.
+
+## Checklist final
+
+- [ ] fila Promax pausada antes da atualizacao;
+- [ ] nenhum job em execucao antes do `pull`;
+- [ ] repositorios atualizados;
+- [ ] dependencias Python atualizadas;
+- [ ] `.env` manteve o token Promax correto;
+- [ ] `bot_api` recriado com `--no-deps`;
+- [ ] PostgreSQL nao foi removido;
+- [ ] worker iniciado;
+- [ ] worker online no painel;
+- [ ] teste pequeno executado;
+- [ ] fila reativada.

@@ -934,14 +934,12 @@ class SearchFlow:
         if len(ordered_records) > 1:
             lines.extend(['', f'Encontrei {len(ordered_records)} cliente(s) para {criteria}.'])
         for index, record in enumerate(ordered_records, start=1):
-            score_record = self._safe_cliente_score_by_registration(filial=record.filial, cod_pdv=record.cod_pdv)
             inadimplencia_records = self._safe_inadimplencia_registration_records(decision=decision, filial=record.filial, cod_pdv=record.cod_pdv, scope_restricted=scope_restricted)
             giro_records = self._safe_giro_registration_records(decision=decision, filial=record.filial, cod_pdv=record.cod_pdv, scope_restricted=scope_restricted)
             lines.append('')
             prefix = f'{index}) ' if len(ordered_records) > 1 else ''
             lines.append(f"{prefix}Cliente: {record.nome or '-'}")
-            score_prefix = f'*Score: {score_record.score} |* ' if score_record is not None and score_record.score else ''
-            lines.append(f"{score_prefix}Revenda: {record.filial or '-'} | NB: {record.cod_pdv or '-'} | Setor: {record.setor or '-'}")
+            lines.append(f"Revenda: {record.filial or '-'} | NB: {record.cod_pdv or '-'} | Setor: {record.setor or '-'}")
             lines.append(f'RN: {flow._scope_last_code(record.seller_code or record.setor)} | GV: {flow._scope_last_code(record.manager_code)}')
             cpf_label, cnpj_label = flow._format_documento_identity(getattr(record, 'documento', ''))
             lines.append(f'CPF: {cpf_label} | CNPJ: {cnpj_label}')
@@ -951,7 +949,6 @@ class SearchFlow:
             lines.append(f"- Cond. pag.: {flow._summarize_prazo_limite_field(record.entries, 'cond_pag_atual')}")
             lines.append(f"- Limite total: {flow._summarize_prazo_limite_field(record.entries, 'limite_total')}")
             lines.append(f"- Pag. em atraso: {flow._summarize_prazo_limite_field(record.entries, 'percentual_pag_atraso')}")
-            self._append_cliente_score_lines(lines, score_record)
             lines.append('')
             lines.append('*Faturamento:*')
             for entry in record.entries:
@@ -1219,13 +1216,11 @@ class SearchFlow:
     def _append_cliente_detail_lines(self, lines: list[str], *, record: DClienteRecord, decision: AccessDecision, index: int | None=None, scope_restricted: bool=True) -> None:
         flow = _customer_flow_module()
         name = record.nome_fantasia or record.razao_social or '-'
-        score_record = self._safe_cliente_score_record(record)
         title = f'*{name}*'
         if index is not None:
             title = f'{index}) {title}'
         lines.append(title)
-        score_prefix = f'*Score: {score_record.score} |* ' if score_record is not None and score_record.score else ''
-        lines.append(f"{score_prefix}NB: {record.cod_pdv or '-'} | Revenda: {record.filial or '-'} | Setor: {record.vendedor or '-'}")
+        lines.append(f"NB: {record.cod_pdv or '-'} | Revenda: {record.filial or '-'} | Setor: {record.vendedor or '-'}")
         lines.append('')
         lines.append('*Cadastro:*')
         lines.append(f"Razao social: {record.razao_social or '-'}")
@@ -1242,56 +1237,12 @@ class SearchFlow:
         lines.append(f"Cond. pag.: {record.cond_pag_atual or '-'}")
         lines.append(f'Limite: {flow._format_currency_brl(record.limite_credito)}')
         lines.append(f'Total pendente: {flow._format_currency_brl(record.total_pendente)}')
-        self._append_cliente_score_lines(lines, score_record)
         lines.append('')
         lines.append('*Pendencias:*')
         lines.append(f'Comodatos: {record.total_comodatos_pendentes}')
         self._append_documentacao_cliente_lines(lines, decision=decision, record=record, scope_restricted=scope_restricted)
         lines.append('')
         lines.append(f"*Atualizado em:* {flow._format_display_date(record.ultima_atualizacao_tabela or '-')}")
-
-    def _safe_cliente_score_record(self, record: DClienteRecord) -> ClienteScoreRecord | None:
-        flow = _customer_flow_module()
-        return self._safe_cliente_score_by_registration(filial=record.filial, cod_pdv=record.cod_pdv)
-
-    def _safe_cliente_score_by_registration(self, *, filial: str, cod_pdv: str) -> ClienteScoreRecord | None:
-        flow = _customer_flow_module()
-        self._cliente_score_last_lookup_available = False
-        if not self._cliente_score_service_ready():
-            return None
-        try:
-            record = self.clientes_score_service.search_by_registration(filial=filial, cod_pdv=cod_pdv)
-        except Exception:
-            return None
-        self._cliente_score_last_lookup_available = True
-        return record
-
-    def _cliente_score_service_ready(self) -> bool:
-        flow = _customer_flow_module()
-        if self.clientes_score_service is None:
-            return False
-        try:
-            status = self.clientes_score_service.status()
-        except Exception:
-            return False
-        return bool(status.get('ready'))
-
-    def _append_cliente_score_lines(self, lines: list[str], score_record: ClienteScoreRecord | None) -> None:
-        flow = _customer_flow_module()
-        if not self._cliente_score_service_ready():
-            return
-        if score_record is None:
-            if not self._cliente_score_last_lookup_available:
-                return
-            lines.append('*Score:* Cliente sem registro no relatorio de score.')
-            return
-        lines.append(f'*Recebido (historico):* {flow._format_currency_brl(score_record.recebido_historico)}')
-        lines.append(f'*Titulos pagos:* {score_record.titulos_historico}')
-        lines.append(f'*% com atraso >3d:* {flow._format_percent_value(score_record.pct_atraso_historico)}')
-        lines.append(f'*Maior atraso:* {flow._format_days_count(score_record.maior_atraso_dias)}')
-        lines.append(f'*Pagos com +30d:* {score_record.vezes_mais_30d}')
-        lines.append(f'*Tarifa paga:* {flow._format_currency_brl(score_record.tarifa_paga)}')
-        lines.append(f'*Juros pagos:* {flow._format_currency_brl_compact(score_record.juros_pagos)}')
 
     def _append_documentacao_cliente_lines(self, lines: list[str], *, decision: AccessDecision, record: DClienteRecord, scope_restricted: bool=True) -> None:
         flow = _customer_flow_module()

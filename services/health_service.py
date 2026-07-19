@@ -12,7 +12,6 @@ class HealthPayloadBuilder:
         access_control: Any,
         security_monitor: Any,
         dclientes_query_service: Any,
-        clientes_score_query_service: Any,
         inadimplencia_query_service: Any,
         comodatos_query_service: Any,
         giro_query_service: Any,
@@ -26,7 +25,6 @@ class HealthPayloadBuilder:
         self.access_control = access_control
         self.security_monitor = security_monitor
         self.dclientes_query_service = dclientes_query_service
-        self.clientes_score_query_service = clientes_score_query_service
         self.inadimplencia_query_service = inadimplencia_query_service
         self.comodatos_query_service = comodatos_query_service
         self.giro_query_service = giro_query_service
@@ -40,7 +38,6 @@ class HealthPayloadBuilder:
         access_status = self.access_control.status()
         security_status = self.security_monitor.status()
         reports_status = self.dclientes_query_service.status()
-        clientes_score_status = self.clientes_score_query_service.status()
         inadimplencia_status = self.inadimplencia_query_service.status()
         comodatos_status = self.comodatos_query_service.status()
         giro_status = self.giro_query_service.status()
@@ -81,9 +78,6 @@ class HealthPayloadBuilder:
             "reports_inadimplencia_view_exists": reports_status.get("inadimplencia_view_exists", False),
             "reports_comodatos_view_exists": reports_status.get("comodatos_view_exists", False),
             "reports_last_error": reports_status["last_error"],
-            "clientes_score_ready": clientes_score_status["ready"],
-            "clientes_score_latest_view_exists": clientes_score_status["latest_view_exists"],
-            "clientes_score_last_error": clientes_score_status["last_error"],
             "inadimplencia_ready": inadimplencia_status["ready"],
             "inadimplencia_latest_view_exists": inadimplencia_status["latest_view_exists"],
             "inadimplencia_dclientes_view_exists": inadimplencia_status["dclientes_view_exists"],

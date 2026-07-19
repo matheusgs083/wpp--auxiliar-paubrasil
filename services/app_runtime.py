@@ -68,7 +68,6 @@ def configure_app_runtime(
     )
     PROMAX_CATALOG = promax_catalog_service.get_catalog
     dclientes_query_service = services.dclientes_query_service
-    clientes_score_query_service = services.clientes_score_query_service
     inadimplencia_query_service = services.inadimplencia_query_service
     comodatos_query_service = services.comodatos_query_service
     giro_query_service = services.giro_query_service
@@ -84,7 +83,6 @@ def configure_app_runtime(
     dprodutos_import_service = services.dprodutos_import_service
     produto_cestas_import_service = services.produto_cestas_import_service
     dclientes_import_service = services.dclientes_import_service
-    clientes_score_import_service = services.clientes_score_import_service
     inadimplencia_import_service = services.inadimplencia_import_service
     comodatos_import_service = services.comodatos_import_service
     giro_import_service = services.giro_import_service
@@ -436,7 +434,6 @@ def configure_app_runtime(
         access_control=access_control,
         security_monitor=security_monitor,
         dclientes_query_service=dclientes_query_service,
-        clientes_score_query_service=clientes_score_query_service,
         inadimplencia_query_service=inadimplencia_query_service,
         comodatos_query_service=comodatos_query_service,
         giro_query_service=giro_query_service,

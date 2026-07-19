@@ -57,7 +57,6 @@ class HealthPayloadBuilderTest(unittest.TestCase):
             access_control=FakeStatusService(access_status),
             security_monitor=FakeStatusService(security_status),
             dclientes_query_service=FakeStatusService({**base_report_status(), "inadimplencia_view_exists": True, "comodatos_view_exists": True}),
-            clientes_score_query_service=FakeStatusService(base_report_status()),
             inadimplencia_query_service=FakeStatusService({**base_report_status(), "dclientes_view_exists": True}),
             comodatos_query_service=FakeStatusService({**base_report_status(), "dclientes_view_exists": True}),
             giro_query_service=FakeStatusService(base_report_status()),

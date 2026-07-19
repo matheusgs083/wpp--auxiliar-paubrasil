@@ -29,13 +29,11 @@ from bot_api.services.customer_lookup_flow import (
     GiroSellerSummary,
     _current_visit_day_label,
 )
-from bot_api.services.clientes_score_query_service import ClienteScoreRecord
 from bot_api.services.dclientes_query_service import DClientesQueryService
 from bot_api.services.recolha_request_service import RecolhaRequestService
 
 from tests.test_support import (
     StubComodatosService,
-    StubClientesScoreService,
     StubCriticaRnService,
     StubDocumentacaoPendenteService,
     StubGiroService,
@@ -170,156 +168,6 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(response.extra_media[0].media_filename, "boleto-3-11305-nf-168228.pdf")
         self.assertIn("separadamente", response.text)
         self.assertTrue(boletos_service.calls[-1].get("include_pdf"))
-
-    def test_cliente_lookup_includes_score_history_when_available(self) -> None:
-        self.query_service.registration_records = [
-            DClienteRecord(
-                filial="3",
-                cod_pdv="9845",
-                razao_social="ALLAN KARDEC LOPES COSTA DA SILVA",
-                nome_fantasia="O COMILAO",
-                telefone="83 99623-0306",
-                dia_visita="SEG/",
-                vendedor="407",
-                status="Ativo",
-                cidade="SANTA LUZIA",
-                cond_pag_atual="505",
-                limite_credito="80000",
-                total_pendente="2940,75",
-                total_comodatos_pendentes=23,
-                ultima_atualizacao_tabela="2026-06-12 13:55:10 UTC",
-            )
-        ]
-        score_service = StubClientesScoreService(
-            records=[
-                ClienteScoreRecord(
-                    filial="3",
-                    cod_pdv="9845",
-                    cliente="O COMILAO",
-                    razao_social="ALLAN KARDEC LOPES COSTA DA SILVA",
-                    score="C",
-                    piorando_2026=True,
-                    pct_atraso_historico=Decimal("37.43"),
-                    titulos_historico=187,
-                    recebido_historico=Decimal("433.20"),
-                    maior_atraso_dias=20,
-                    vezes_mais_30d=0,
-                    tarifa_paga=Decimal("458.64"),
-                    juros_pagos=Decimal("6900000"),
-                    em_aberto_hoje=Decimal("2940.75"),
-                    vencido_hoje=Decimal("0"),
-                    dias_vencido_mais_antigo=0,
-                    planilha_atualizada_em="2026-06-12",
-                )
-            ]
-        )
-        flow = make_flow(query_service=self.query_service, clientes_score_service=score_service)
-
-        response = flow._build_search_response(
-            self.query_service.registration_records,
-            "revenda 3 e Cod PDV 9845",
-            decision=make_decision(allowed=True, roles=("vendedor",), sectors=("3_407",)),
-        )
-
-        self.assertIn("*Score: C |* NB: 9845 | Revenda: 3 | Setor: 407", response.text)
-        self.assertIn("*Recebido (historico):* R$ 433,20", response.text)
-        self.assertIn("*Titulos pagos:* 187", response.text)
-        self.assertIn("*% com atraso >3d:* 37,43%", response.text)
-        self.assertIn("*Maior atraso:* 20 dias", response.text)
-        self.assertIn("*Juros pagos:* R$ 6,90 mi", response.text)
-
-    def test_cliente_lookup_says_when_score_is_missing(self) -> None:
-        self.query_service.registration_records = [
-            DClienteRecord(
-                filial="3",
-                cod_pdv="123",
-                razao_social="CLIENTE SEM SCORE LTDA",
-                nome_fantasia="SEM SCORE",
-                telefone="",
-                dia_visita="SEG/",
-                vendedor="407",
-                status="Ativo",
-                cidade="PATOS",
-                cond_pag_atual="505",
-                limite_credito="0",
-                total_pendente="0",
-                total_comodatos_pendentes=0,
-                ultima_atualizacao_tabela="2026-06-12",
-            )
-        ]
-        score_service = StubClientesScoreService(records=[])
-        flow = make_flow(query_service=self.query_service, clientes_score_service=score_service)
-
-        response = flow._build_search_response(
-            self.query_service.registration_records,
-            "revenda 3 e Cod PDV 123",
-            decision=make_decision(allowed=True, roles=("vendedor",), sectors=("3_407",)),
-        )
-
-        self.assertIn("NB: 123 | Revenda: 3 | Setor: 407", response.text)
-        self.assertIn("*Score:* Cliente sem registro no relatorio de score.", response.text)
-
-    def test_cliente_lookup_omits_score_when_score_service_is_not_ready(self) -> None:
-        self.query_service.registration_records = [
-            DClienteRecord(
-                filial="3",
-                cod_pdv="123",
-                razao_social="CLIENTE SEM BASE LTDA",
-                nome_fantasia="SEM BASE",
-                telefone="",
-                dia_visita="SEG/",
-                vendedor="407",
-                status="Ativo",
-                cidade="PATOS",
-                cond_pag_atual="505",
-                limite_credito="0",
-                total_pendente="0",
-                total_comodatos_pendentes=0,
-                ultima_atualizacao_tabela="2026-06-12",
-            )
-        ]
-        score_service = StubClientesScoreService(ready=False)
-        flow = make_flow(query_service=self.query_service, clientes_score_service=score_service)
-
-        response = flow._build_search_response(
-            self.query_service.registration_records,
-            "revenda 3 e Cod PDV 123",
-            decision=make_decision(allowed=True, roles=("vendedor",), sectors=("3_407",)),
-        )
-
-        self.assertIn("NB: 123 | Revenda: 3 | Setor: 407", response.text)
-        self.assertNotIn("Cliente sem registro no relatorio de score", response.text)
-
-    def test_cliente_lookup_omits_score_when_score_lookup_fails(self) -> None:
-        self.query_service.registration_records = [
-            DClienteRecord(
-                filial="3",
-                cod_pdv="123",
-                razao_social="CLIENTE COM ERRO LTDA",
-                nome_fantasia="COM ERRO",
-                telefone="",
-                dia_visita="SEG/",
-                vendedor="407",
-                status="Ativo",
-                cidade="PATOS",
-                cond_pag_atual="505",
-                limite_credito="0",
-                total_pendente="0",
-                total_comodatos_pendentes=0,
-                ultima_atualizacao_tabela="2026-06-12",
-            )
-        ]
-        score_service = StubClientesScoreService(search_error=ValueError("falha simulada"))
-        flow = make_flow(query_service=self.query_service, clientes_score_service=score_service)
-
-        response = flow._build_search_response(
-            self.query_service.registration_records,
-            "revenda 3 e Cod PDV 123",
-            decision=make_decision(allowed=True, roles=("vendedor",), sectors=("3_407",)),
-        )
-
-        self.assertIn("NB: 123 | Revenda: 3 | Setor: 407", response.text)
-        self.assertNotIn("Cliente sem registro no relatorio de score", response.text)
 
     def test_handle_routes_natural_inadimplencia_alias_to_search_menu(self) -> None:
         response = self.flow.handle(
@@ -3212,30 +3060,6 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
                 planilha_atualizada_em="2026-04-27",
             )
         ]
-        self.flow.clientes_score_service = StubClientesScoreService(
-            records=[
-                ClienteScoreRecord(
-                    filial="3",
-                    cod_pdv="9845",
-                    cliente="CLIENTE TESTE",
-                    razao_social="CLIENTE TESTE LTDA",
-                    score="C",
-                    piorando_2026=False,
-                    pct_atraso_historico=Decimal("37.43"),
-                    titulos_historico=187,
-                    recebido_historico=Decimal("433.20"),
-                    maior_atraso_dias=20,
-                    vezes_mais_30d=0,
-                    tarifa_paga=Decimal("458.64"),
-                    juros_pagos=Decimal("6900000"),
-                    em_aberto_hoje=Decimal("2940.75"),
-                    vencido_hoje=Decimal("0"),
-                    dias_vencido_mais_antigo=0,
-                    planilha_atualizada_em="2026-06-12",
-                )
-            ]
-        )
-
         _ = self.flow.handle(IncomingMessage(sender=sender, text="financeiro"), decision)
         response = self.flow.handle(IncomingMessage(sender=sender, text="8"), decision)
 
@@ -3250,7 +3074,6 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(result.kind, "text")
         self.assertIn("Analise Financeira", result.text)
         self.assertIn("Cliente: CLIENTE TESTE", result.text)
-        self.assertIn("*Score: C |* Revenda: 3 | NB: 9845 | Setor: 400", result.text)
         self.assertIn("Revenda: 3 | NB: 9845 | Setor: 400", result.text)
         self.assertIn("RN: 400 | GV: 4", result.text)
         self.assertIn("CPF: 123.456.789-01 | CNPJ: -", result.text)
@@ -3259,13 +3082,6 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertIn("Cond. pag.: 715", result.text)
         self.assertIn("Limite total: R$ 80.000,00", result.text)
         self.assertIn("Pag. em atraso: 16%", result.text)
-        self.assertIn("*Recebido (historico):* R$ 433,20", result.text)
-        self.assertIn("*Titulos pagos:* 187", result.text)
-        self.assertIn("*% com atraso >3d:* 37,43%", result.text)
-        self.assertIn("*Maior atraso:* 20 dias", result.text)
-        self.assertIn("*Pagos com +30d:* 0", result.text)
-        self.assertIn("*Tarifa paga:* R$ 458,64", result.text)
-        self.assertIn("*Juros pagos:* R$ 6,90 mi", result.text)
         self.assertIn("Faturamento", result.text)
         self.assertIn("Jan: R$ 92.256,85", result.text)
         self.assertIn("Pedidos: 8 | Media por pedido: R$ 11.532,11", result.text)

@@ -112,17 +112,6 @@ def build_admin_import_datasets(
             "summarize_method": "summarize_csv",
             "import_method": "import_csv",
         },
-        "clientes_score": {
-            "label": "Score de Clientes",
-            "default_path": project_root / "data" / "ClientesScore" / "clientes_score.csv",
-            "allow_default_source": False,
-            "service": services.clientes_score_import_service,
-            "upload_mode": "single",
-            "accept_extensions": ".csv",
-            "validate_method": "validate_source",
-            "summarize_method": "summarize_source",
-            "import_method": "import_source",
-        },
         "inadimplencia": {
             "label": "Inadimplencia",
             "default_path": project_root / "data" / "Inadimplencia",

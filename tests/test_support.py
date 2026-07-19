@@ -226,31 +226,6 @@ class StubComodatosService(StubStatusService):
         return list(self.search_records)
 
 
-class StubClientesScoreService(StubStatusService):
-    def __init__(
-        self,
-        *,
-        ready: bool = True,
-        records: list[Any] | None = None,
-        search_error: Exception | None = None,
-    ) -> None:
-        super().__init__(ready=ready)
-        self.records = list(records or [])
-        self.search_error = search_error
-        self.search_calls: list[dict[str, Any]] = []
-
-    def search_by_registration(self, **kwargs: Any) -> Any | None:
-        self.search_calls.append(kwargs)
-        if self.search_error is not None:
-            raise self.search_error
-        filial = str(kwargs.get("filial") or "").strip()
-        cod_pdv = str(kwargs.get("cod_pdv") or "").strip()
-        for record in self.records:
-            if str(getattr(record, "filial", "") or "").strip() == filial and str(getattr(record, "cod_pdv", "") or "").strip() == cod_pdv:
-                return record
-        return None
-
-
 class StubGiroService(StubStatusService):
     def __init__(
         self,
@@ -1179,7 +1154,6 @@ def make_flow(
     critica_rn_service: StubCriticaRnService | None = None,
     documentacao_pendente_service: StubDocumentacaoPendenteService | None = None,
     prazo_limite_service: StubPrazoLimiteService | None = None,
-    clientes_score_service: StubClientesScoreService | None = None,
     payip_payments_service: StubPayipPaymentsService | None = None,
     recolha_request_service: RecolhaRequestService | None = None,
     access_control: AccessControl | None = None,
@@ -1193,7 +1167,6 @@ def make_flow(
         critica_rn_service=critica_rn_service or StubCriticaRnService(),
         documentacao_pendente_service=documentacao_pendente_service or StubDocumentacaoPendenteService(),
         prazo_limite_service=prazo_limite_service or StubPrazoLimiteService(),
-        clientes_score_service=clientes_score_service,
         payip_payments_service=payip_payments_service or StubPayipPaymentsService(),
         recolha_request_service=recolha_request_service,
         access_control=access_control

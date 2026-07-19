@@ -801,7 +801,7 @@
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
             <div>
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Power BI</h2>
-              <div class="form-text">Bases oriundas do Power BI: prazo e limite, score e giro de vasilhame.</div>
+              <div class="form-text">Bases oriundas do Power BI: prazo e limite e giro de vasilhame.</div>
             </div>
             <span class="pill">Origem Power BI</span>
           </div>
@@ -1784,8 +1784,7 @@
       inadimplencia: { id: "Inadimplencia", name: "Inadimplencia - 120601", icon: "bi-graph-down-arrow", area: "promax", group: "Promax" },
       comodatos: { id: "Comodatos", name: "Comodatos - 020220", icon: "bi-box-seam", area: "promax", group: "Promax" },
       documentacao_pendente: { id: "DocumentacaoPendente", name: "Documentacao Pendente - 031701", icon: "bi-file-earmark-check", area: "promax", group: "Promax" },
-      prazo_limite: { id: "PrazoLimite", name: "Prazo e Limite", icon: "bi-cash-stack", area: "powerbi", group: "Power BI", groupNote: "Relatorios oriundos do Power BI: prazo e limite, cliente score e giro de vasilhame." },
-      clientes_score: { id: "ClientesScore", name: "Score de Clientes", icon: "bi-stars", area: "powerbi", group: "Power BI" },
+      prazo_limite: { id: "PrazoLimite", name: "Prazo e Limite", icon: "bi-cash-stack", area: "powerbi", group: "Power BI", groupNote: "Relatorios oriundos do Power BI: prazo e limite e giro de vasilhame." },
       giro: { id: "Giro", name: "Giro de Vasilhame", icon: "bi-arrow-repeat", area: "powerbi", group: "Power BI" },
       critica_rn: { id: "CriticaRNLegacy", name: "Critica RN (legado)", icon: "bi-archive", area: "critica", group: "Rotina anterior", groupNote: "Mantida apenas para compatibilidade. O fluxo atual deve usar os uploads por operacao.", disabled: true, badge: "Legado", description: "Importacao antiga preservada no codigo, sem uso no fluxo atual do bot.", sourcePath: "data/CriticaRN/critica_rn.xlsx" }
     };
@@ -1793,7 +1792,7 @@
     const DATASET_FALLBACK_ORDER = [
       "dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "produto_cestas",
       "dclientes", "inadimplencia", "comodatos", "documentacao_pendente",
-      "prazo_limite", "clientes_score", "giro", "critica_rn"
+      "prazo_limite", "giro", "critica_rn"
     ];
 
     function datasetUiId(apiName) {
@@ -1811,7 +1810,7 @@
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].area) return DATASET_UI_OVERRIDES[name].area;
       if (name.startsWith("critica_op_")) return "critica";
       if (name.startsWith("boletos_bradesco_op_")) return "promax";
-      if (["prazo_limite", "clientes_score", "giro"].includes(name)) return "powerbi";
+      if (["prazo_limite", "giro"].includes(name)) return "powerbi";
       if (["dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "produto_cestas"].includes(name)) return "operational";
       return "promax";
     }
