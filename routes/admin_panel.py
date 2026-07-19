@@ -137,6 +137,7 @@ def create_admin_panel_router(
             "can_manage_recolhas": is_admin or is_finance,
             "can_view_giro": is_admin or is_finance,
             "can_view_critica": is_admin or is_finance or is_critica,
+            "can_manage_promax": is_admin,
         }
 
     return router

@@ -27,6 +27,8 @@ from bot_api.services.critica_operacao_import_service import CriticaOperacaoImpo
 from bot_api.services.critica_rn_query_service import CriticaPdfCurrentImportRequiredError
 from bot_api.services.filial_labels import set_filial_labels
 from bot_api.services.health_service import HealthPayloadBuilder
+from bot_api.services.promax_catalog_service import PromaxCatalogService
+from bot_api.services.promax_scheduler import PromaxScheduler
 from bot_api.services.webhook_runtime import WebhookRuntime
 from bot_api.security.http_auth import HttpAuthDependencies
 from bot_api.routes.register import register_routes
@@ -41,6 +43,30 @@ def configure_app_runtime(
     logger: Any,
 ) -> None:
     admin_import_job_service = services.admin_import_job_service
+    promax_jobs_service = services.promax_jobs_service
+    promax_scheduler = PromaxScheduler(
+        promax_jobs_service,
+        enqueue_interval_seconds=settings.promax_scheduler_interval_seconds,
+        reaper_interval_seconds=settings.promax_scheduler_interval_seconds,
+    )
+    promax_fallback_catalog = {
+        "categories": {
+            "fluxo_caixa": {
+                "name": "Fluxo de Caixa",
+                "description": "Catalogo minimo usado enquanto o worker estiver offline.",
+                "routines": [
+                    {"id": "140506", "name": "Rotina 140506"},
+                    {"id": "120606", "name": "Rotina 120606"},
+                ],
+                "units": [],
+            }
+        }
+    }
+    promax_catalog_service = PromaxCatalogService(
+        jobs_service=promax_jobs_service,
+        fallback_catalog=promax_fallback_catalog,
+    )
+    PROMAX_CATALOG = promax_catalog_service.get_catalog
     dclientes_query_service = services.dclientes_query_service
     clientes_score_query_service = services.clientes_score_query_service
     inadimplencia_query_service = services.inadimplencia_query_service
@@ -382,6 +408,8 @@ def configure_app_runtime(
         admin_broadcast_executor=admin_broadcast_executor,
         admin_payip_batch_service=admin_payip_batch_service,
         webhook_executor=webhook_executor,
+        promax_jobs_service=promax_jobs_service,
+        promax_scheduler=promax_scheduler,
         close_connection_pools=close_all_connection_pools,
     )
 
@@ -488,6 +516,8 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "snapshot_admin_broadcast_state": runtime["_snapshot_admin_broadcast_state"],
         "build_admin_broadcast_payload": runtime["_build_admin_broadcast_payload"],
         "queue_admin_broadcast": runtime["_queue_admin_broadcast"],
+        "promax_jobs_service": runtime["promax_jobs_service"],
+        "promax_catalog": runtime["PROMAX_CATALOG"],
         "require_webhook_token": runtime["_require_webhook_token"],
         "require_meta_cloud_signature": runtime["_require_meta_cloud_signature"],
         "queue_incoming_webhook": runtime["_queue_incoming_webhook"],

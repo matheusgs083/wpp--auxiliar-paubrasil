@@ -20,6 +20,8 @@ def register_app_lifecycle(
     admin_broadcast_executor: Any,
     admin_payip_batch_service: Any,
     webhook_executor: Any,
+    promax_jobs_service: Any,
+    promax_scheduler: Any,
     close_connection_pools: Any,
 ) -> None:
     @app.on_event("startup")
@@ -35,10 +37,16 @@ def register_app_lifecycle(
         maintenance_result = run_admin_import_maintenance(force_stale=True)
         if not maintenance_result.get("ok"):
             logger.warning("Manutencao de imports indisponivel no startup: %s", maintenance_result.get("error"))
+        try:
+            promax_jobs_service.ensure_schema()
+            promax_scheduler.start()
+        except Exception as exc:
+            logger.warning("Promax Admin indisponivel no startup: %s", exc)
         start_daily_route_broadcast_scheduler()
 
     @app.on_event("shutdown")
     def shutdown() -> None:
+        promax_scheduler.stop()
         stop_daily_route_broadcast_scheduler()
         security_monitor.shutdown()
         admin_imports_runtime.shutdown()

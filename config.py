@@ -49,6 +49,13 @@ class Settings:
     reports_database_url: str
     reports_runtime_database_url: str
     reports_db_schema: str
+    promax_database_url: str
+    promax_db_schema: str
+    promax_worker_token: str
+    promax_worker_poll_seconds: int
+    promax_worker_lease_seconds: int
+    promax_scheduler_interval_seconds: int
+    promax_max_concurrent_jobs: int
     payip_base_url: str
     payip_client_id: str
     payip_username: str
@@ -234,6 +241,20 @@ def get_settings() -> Settings:
             or os.getenv("ACCESS_DATABASE_URL", "").strip()
         ),
         reports_db_schema=os.getenv("REPORTS_DB_SCHEMA", "reports").strip() or "reports",
+        promax_database_url=(
+            os.getenv("PROMAX_DATABASE_URL", "").strip()
+            or os.getenv("REPORTS_DATABASE_URL", "").strip()
+            or os.getenv("ACCESS_DATABASE_URL", "").strip()
+        ),
+        promax_db_schema=os.getenv("PROMAX_DB_SCHEMA", "promax_admin").strip() or "promax_admin",
+        promax_worker_token=os.getenv("PROMAX_WORKER_TOKEN", "").strip(),
+        promax_worker_poll_seconds=max(2, int(os.getenv("PROMAX_WORKER_POLL_SECONDS", "5"))),
+        promax_worker_lease_seconds=max(30, int(os.getenv("PROMAX_WORKER_LEASE_SECONDS", "120"))),
+        promax_scheduler_interval_seconds=max(
+            15,
+            int(os.getenv("PROMAX_SCHEDULER_INTERVAL_SECONDS", "30")),
+        ),
+        promax_max_concurrent_jobs=max(1, int(os.getenv("PROMAX_MAX_CONCURRENT_JOBS", "1"))),
         payip_base_url=(
             os.getenv("PAYIP_BASE_URL", "").strip()
             or os.getenv("PAYMENTS_API_BASE_URL", "").strip()

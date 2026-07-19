@@ -199,7 +199,7 @@
     .flow-gateway-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
     .flow-gateway-title { margin: 0; color: var(--ink-900); font-size: 0.86rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
     .flow-gateway-current { color: var(--ink-500); font-size: 0.8rem; font-weight: 700; }
-    .flow-grid { display: grid; grid-template-columns: repeat(6, minmax(135px, 1fr)); gap: 0.55rem; }
+    .flow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 0.55rem; }
     .flow-path { min-height: 86px; display: grid; grid-template-columns: 30px 1fr; align-items: start; gap: 0.55rem; padding: 0.72rem; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-700); background: var(--surface); text-align: left; text-decoration: none; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease; }
     .flow-path:hover { border-color: var(--brand-600); background: var(--surface-soft); }
     .flow-path.is-active { border-color: var(--brand-700); background: linear-gradient(180deg, var(--brand-100), var(--surface)); box-shadow: 0 0 0 3px var(--focus); }
@@ -208,6 +208,7 @@
     .flow-desc { display: block; margin-top: 0.18rem; color: var(--ink-500); font-size: 0.74rem; font-weight: 650; line-height: 1.25; }
     .flow-meta { display: inline-flex; align-items: center; width: fit-content; margin-top: 0.42rem; padding: 0.16rem 0.4rem; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-500); background: var(--surface-soft); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
     body[data-theme="dark"] .flow-path.is-active { background: linear-gradient(180deg, rgba(37, 99, 235, 0.28), var(--surface)); }
+    .promax-log { min-height: 180px; max-height: 360px; margin: 0; padding: 0.8rem; overflow: auto; color: var(--log-fg); background: var(--log-bg); border-radius: 8px; white-space: pre-wrap; font-size: 0.78rem; }
     @media (max-width: 1200px) { .metric-grid, .usage-metric-grid, .recolha-dashboard-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
     @media (max-width: 1200px) { .flow-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); } }
     @media (max-width: 900px) { .recolha-insights { grid-template-columns: 1fr; } }
@@ -299,6 +300,10 @@
           <span class="flow-icon"><i class="bi bi-file-earmark-spreadsheet"></i></span>
           <span><span class="flow-title">Relatorios</span><span class="flow-desc">Uploads, histórico e jobs por origem do arquivo.</span><span class="flow-meta">Uploads</span></span>
         </a>
+        <a href="/admin/promax" class="flow-path" data-flow-target="promaxTab" data-flow-label="Promax Admin" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-pc-display-horizontal"></i></span>
+          <span><span class="flow-title">Promax</span><span class="flow-desc">Fila, execucoes, agendas e logs do robo.</span><span class="flow-meta">Automacao</span></span>
+        </a>
         <a href="/admin/critica" class="flow-path" data-flow-target="criticaTab" data-flow-label="Crítica comercial" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-clipboard-data"></i></span>
           <span><span class="flow-title">Crítica</span><span class="flow-desc">Dashboard, PDFs e crítica 030111 por operação.</span><span class="flow-meta">Análise</span></span>
@@ -328,6 +333,11 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link" id="reportsTab" href="/admin/reports" data-admin-page-link="true" data-bs-target="#reportsPane" role="tab" aria-controls="reportsPane" aria-selected="false">
             <i class="bi bi-file-earmark-spreadsheet me-1"></i>Relatorios
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="promaxTab" href="/admin/promax" data-admin-page-link="true" data-bs-target="#promaxPane" role="tab" aria-controls="promaxPane" aria-selected="false">
+            <i class="bi bi-pc-display-horizontal me-1"></i>Promax
           </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -789,6 +799,134 @@
               </div>
             </article>
           </div>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="promaxPane" role="tabpanel" aria-labelledby="promaxTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-pc-display-horizontal me-2 text-primary"></i>Promax Admin</h2>
+              <div class="form-text">Execucao controlada no worker Windows. O container gerencia fila, agenda, historico e logs.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="promaxWorkerState">Worker nao verificado</span>
+              <span class="pill" id="promaxQueueState">Fila nao verificada</span>
+              <button class="btn btn-outline-primary btn-sm" id="promaxRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-warning btn-sm" id="promaxPauseBtn" type="button"><i class="bi bi-pause-circle me-1"></i>Pausar fila</button>
+            <button class="btn btn-outline-success btn-sm" id="promaxResumeBtn" type="button"><i class="bi bi-play-circle me-1"></i>Retomar fila</button>
+            <button class="btn btn-outline-danger btn-sm" id="promaxClearBtn" type="button"><i class="bi bi-trash3 me-1"></i>Limpar pendentes</button>
+            <button class="btn btn-outline-primary btn-sm" id="promaxReprocessPublicationsBtn" type="button" disabled title="Tentar novamente o envio dos arquivos preservados no worker"><i class="bi bi-arrow-clockwise me-1"></i>Reprocessar publicacoes</button>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <h2 class="h6 fw-bold mb-3"><i class="bi bi-play-fill me-2 text-primary"></i>Executar agora</h2>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small mb-1" for="promaxCategory">Categoria</label>
+              <select class="form-select form-select-sm" id="promaxCategory" disabled>
+                <option value="">Catalogo indisponivel</option>
+              </select>
+              <div class="form-text" id="promaxCategoryHint">Carregue o catalogo para selecionar uma categoria.</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1" for="promaxStartDate">Data inicial</label>
+              <input class="form-control form-control-sm" id="promaxStartDate" type="date">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1" for="promaxEndDate">Data final</label>
+              <input class="form-control form-control-sm" id="promaxEndDate" type="date">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1" for="promaxUnits">Unidades</label>
+              <input class="form-control form-control-sm mono" id="promaxUnits" type="text" placeholder="Vazio = todas">
+              <div class="form-text" id="promaxUnitsHint">As unidades dependem da categoria.</div>
+            </div>
+            <div class="col-12">
+              <label class="form-label small mb-1">Rotinas</label>
+              <div class="d-flex flex-wrap gap-3 min-h-32 align-items-center" id="promaxRoutines" role="group" aria-label="Rotinas Promax">
+                <span class="small text-secondary">Catalogo indisponivel.</span>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-check mt-2 mb-0"><input class="form-check-input" id="promaxPublish" type="checkbox" checked> <span class="form-check-label fw-semibold">Publicar arquivos</span></label>
+            </div>
+            <div class="col-md-9 d-flex justify-content-end">
+              <button class="btn btn-primary btn-sm" id="promaxRunBtn" type="button" disabled><i class="bi bi-play-fill me-1"></i>Adicionar a fila</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-card mb-3">
+          <header class="px-3 pt-3 pb-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
+            <h2 class="h6 mb-0 fw-bold"><i class="bi bi-list-task me-2 text-primary"></i>Execucoes</h2>
+            <select class="form-select form-select-sm w-auto" id="promaxJobStatusFilter" aria-label="Filtrar status dos jobs">
+              <option value="">Todos os status</option>
+              <option value="pending">Pendente</option>
+              <option value="running">Executando</option>
+              <option value="cancel_requested">Cancelamento solicitado</option>
+              <option value="success">Concluido</option>
+              <option value="partial_success">Parcial</option>
+              <option value="failed">Falhou</option>
+              <option value="cancelled">Cancelado</option>
+            </select>
+          </header>
+          <div class="table-scroll">
+            <table class="table table-hover table-sm align-middle">
+              <thead><tr><th class="ps-3">Criado</th><th>Periodo</th><th>Rotinas</th><th>Unidades</th><th>Status</th><th>Worker</th><th class="text-end pe-3">Acoes</th></tr></thead>
+              <tbody id="promaxJobsBody"><tr><td colspan="7" class="text-center py-4 text-secondary">Abra a aba para carregar a fila.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <h2 class="h6 fw-bold mb-3"><i class="bi bi-calendar-event me-2 text-primary"></i>Agendar execucao</h2>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small mb-1" for="promaxScheduleName">Nome</label>
+              <input class="form-control form-control-sm" id="promaxScheduleName" type="text" placeholder="Fluxo de caixa diario">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-1" for="promaxScheduleType">Frequencia</label>
+              <select class="form-select form-select-sm" id="promaxScheduleType"><option value="daily">Diaria</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-1" for="promaxScheduleTime">Horario</label>
+              <input class="form-control form-control-sm" id="promaxScheduleTime" type="time" value="06:00">
+            </div>
+            <div class="col-md-2 d-none" id="promaxScheduleWeekdayWrap">
+              <label class="form-label small mb-1" for="promaxScheduleWeekday">Dia da semana</label>
+              <select class="form-select form-select-sm" id="promaxScheduleWeekday"><option value="0">Segunda</option><option value="1">Terca</option><option value="2">Quarta</option><option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sabado</option><option value="6">Domingo</option></select>
+            </div>
+            <div class="col-md-2 d-none" id="promaxScheduleMonthDayWrap">
+              <label class="form-label small mb-1" for="promaxScheduleMonthDay">Dia do mes</label>
+              <input class="form-control form-control-sm" id="promaxScheduleMonthDay" type="number" min="1" max="31" value="1">
+            </div>
+            <div class="col-md-3 d-flex justify-content-end">
+              <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm d-none" id="promaxScheduleCancelBtn" type="button">Cancelar edicao</button>
+                <button class="btn btn-primary btn-sm" id="promaxScheduleCreateBtn" type="button" disabled><i class="bi bi-calendar-plus me-1"></i>Criar agenda</button>
+              </div>
+            </div>
+          </div>
+          <div class="table-scroll mt-3" style="max-height: 280px;">
+            <table class="table table-hover table-sm align-middle">
+              <thead><tr><th>Nome</th><th>Frequencia</th><th>Proxima execucao</th><th>Status</th><th class="text-end">Acoes</th></tr></thead>
+              <tbody id="promaxSchedulesBody"><tr><td colspan="5" class="text-center py-3 text-secondary">Nenhuma agenda carregada.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h6 fw-bold mb-0"><i class="bi bi-terminal me-2 text-primary"></i>Log da execucao</h2>
+            <span class="pill mono" id="promaxLogJob">Selecione um job</span>
+          </div>
+          <pre class="promax-log" id="promaxLogOutput">Selecione "Logs" em uma execucao para acompanhar a saida.</pre>
         </section>
       </div>
 
@@ -1297,6 +1435,16 @@
         critica: {
           dashboard: "/api/admin/critica/dashboard",
           pdf: "/api/admin/critica/pdf"
+        },
+        promax: {
+          catalog: "/api/admin/promax/catalog",
+          jobs: "/api/admin/promax/jobs",
+          worker: "/api/admin/promax/worker/status",
+          pause: "/api/admin/promax/queue/pause",
+          resume: "/api/admin/promax/queue/resume",
+          pending: "/api/admin/promax/queue/pending",
+          reprocessPublications: "/api/admin/promax/publications/reprocess",
+          schedules: "/api/admin/promax/schedules"
         }
       },
       roles: {
@@ -1322,13 +1470,24 @@
         canManageRecolhas: true,
         canViewGiro: true,
         canViewCritica: true,
-        canViewUsage: true
+        canViewUsage: true,
+        canManagePromax: false
       },
       accessUsers: [], accessEditing: null, lastSyncAt: null,
       evolutionUsage: null,
       broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
       payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
+      promax: {
+        catalog: null,
+        jobs: [],
+        worker: null,
+        schedules: [],
+        selectedJobId: "",
+        editingScheduleId: "",
+        selectedCategory: "",
+        selectedRoutines: null
+      },
       recolhas: { total: 0, operations: [] },
       giroRecolha: { total: 0, summary: {}, records: [] },
       giroRecolhaOptions: { operations: [], sellers: [], managers: [], cities: [], districts: [], visit_days: [] },
@@ -1521,6 +1680,37 @@
       powerBiGrid: document.getElementById("powerBiDatasetGrid"),
       historyTable: document.getElementById("historyBody"),
       jobsTable: document.getElementById("jobsBody"),
+      promaxTab: document.getElementById("promaxTab"),
+      promaxWorkerState: document.getElementById("promaxWorkerState"),
+      promaxQueueState: document.getElementById("promaxQueueState"),
+      promaxRefreshBtn: document.getElementById("promaxRefreshBtn"),
+      promaxPauseBtn: document.getElementById("promaxPauseBtn"),
+      promaxResumeBtn: document.getElementById("promaxResumeBtn"),
+      promaxClearBtn: document.getElementById("promaxClearBtn"),
+      promaxReprocessPublicationsBtn: document.getElementById("promaxReprocessPublicationsBtn"),
+      promaxCategory: document.getElementById("promaxCategory"),
+      promaxCategoryHint: document.getElementById("promaxCategoryHint"),
+      promaxStartDate: document.getElementById("promaxStartDate"),
+      promaxEndDate: document.getElementById("promaxEndDate"),
+      promaxUnits: document.getElementById("promaxUnits"),
+      promaxUnitsHint: document.getElementById("promaxUnitsHint"),
+      promaxRoutines: document.getElementById("promaxRoutines"),
+      promaxPublish: document.getElementById("promaxPublish"),
+      promaxRunBtn: document.getElementById("promaxRunBtn"),
+      promaxJobStatusFilter: document.getElementById("promaxJobStatusFilter"),
+      promaxJobsBody: document.getElementById("promaxJobsBody"),
+      promaxScheduleName: document.getElementById("promaxScheduleName"),
+      promaxScheduleType: document.getElementById("promaxScheduleType"),
+      promaxScheduleTime: document.getElementById("promaxScheduleTime"),
+      promaxScheduleWeekdayWrap: document.getElementById("promaxScheduleWeekdayWrap"),
+      promaxScheduleWeekday: document.getElementById("promaxScheduleWeekday"),
+      promaxScheduleMonthDayWrap: document.getElementById("promaxScheduleMonthDayWrap"),
+      promaxScheduleMonthDay: document.getElementById("promaxScheduleMonthDay"),
+      promaxScheduleCreateBtn: document.getElementById("promaxScheduleCreateBtn"),
+      promaxScheduleCancelBtn: document.getElementById("promaxScheduleCancelBtn"),
+      promaxSchedulesBody: document.getElementById("promaxSchedulesBody"),
+      promaxLogJob: document.getElementById("promaxLogJob"),
+      promaxLogOutput: document.getElementById("promaxLogOutput"),
       accessRole: document.getElementById("accessRole"),
       accessScopeHint: document.getElementById("accessScopeHint"),
       accessModeHint: document.getElementById("accessModeHint"),
@@ -1833,7 +2023,7 @@
       "/admin/imports": "operationsTab",
       "/admin/operations": "operationsTab",
       "/admin/reports": "reportsTab",
-      "/admin/promax": "reportsTab",
+      "/admin/promax": "promaxTab",
       "/admin/tables": "reportsTab",
       "/admin/power-bi": "reportsTab",
       "/admin/critica": "criticaTab",
@@ -1844,6 +2034,7 @@
     const PANEL_PATH_BY_TAB = {
       operationsTab: "/admin/operations",
       reportsTab: "/admin/reports",
+      promaxTab: "/admin/promax",
       criticaTab: "/admin/critica",
       recolhasTab: "/admin/recolhas",
       giroRecolhaTab: "/admin/giro-recolha",
@@ -1952,6 +2143,560 @@
       updateFlowNavigation(activeTab ? activeTab.id : "operationsTab");
     }
 
+    function normalizePromaxCatalogItems(items) {
+      if (!Array.isArray(items)) return [];
+      const seen = new Set();
+      return items.map(item => {
+        const isObject = item && typeof item === "object";
+        const id = String(isObject ? (item.id || item.name || "") : (item || "")).trim();
+        const name = String(isObject ? (item.name || item.label || id) : id).trim();
+        return { id, name: name || id };
+      }).filter(item => {
+        if (!item.id || seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+    }
+
+    function promaxCatalogCategories() {
+      const catalog = state.promax.catalog;
+      const categories = catalog && typeof catalog === "object" ? catalog.categories : null;
+      if (!categories || typeof categories !== "object" || Array.isArray(categories)) return [];
+      return Object.entries(categories).map(([categoryId, value]) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+        const id = String(categoryId || "").trim();
+        if (!id) return null;
+        return {
+          id,
+          name: String(value.name || value.label || id).trim() || id,
+          description: String(value.description || "").trim(),
+          routines: normalizePromaxCatalogItems(value.routines),
+          units: normalizePromaxCatalogItems(value.units)
+        };
+      }).filter(Boolean);
+    }
+
+    function promaxCatalogCategory(categoryId) {
+      const id = String(categoryId || "");
+      return promaxCatalogCategories().find(category => category.id === id) || null;
+    }
+
+    function promaxSelectedRoutines() {
+      if (!E.promaxRoutines) return [];
+      return Array.from(E.promaxRoutines.querySelectorAll(".promax-routine:checked"))
+        .map(input => String(input.value || "").trim())
+        .filter(Boolean);
+    }
+
+    function updatePromaxActionState() {
+      const category = promaxCatalogCategory(E.promaxCategory && E.promaxCategory.value);
+      const enabled = Boolean(category && promaxSelectedRoutines().length);
+      if (E.promaxRunBtn) E.promaxRunBtn.disabled = !enabled;
+      if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.disabled = !enabled;
+    }
+
+    function rememberPromaxCatalogSelection() {
+      const category = promaxCatalogCategory(E.promaxCategory && E.promaxCategory.value);
+      if (!category) return;
+      state.promax.selectedCategory = category.id;
+      state.promax.selectedRoutines = promaxSelectedRoutines();
+    }
+
+    function promaxRoutineSelectionChanged() {
+      rememberPromaxCatalogSelection();
+      updatePromaxActionState();
+    }
+
+    function renderPromaxCategoryDetails(categoryId, selectedRoutines = null) {
+      const category = promaxCatalogCategory(categoryId);
+      if (E.promaxRoutines) E.promaxRoutines.replaceChildren();
+
+      if (!category) {
+        const catalogAvailable = promaxCatalogCategories().length > 0;
+        if (E.promaxCategoryHint) {
+          E.promaxCategoryHint.textContent = catalogAvailable && categoryId
+            ? `A categoria ${categoryId} nao esta disponivel no catalogo.`
+            : "Carregue o catalogo para selecionar uma categoria.";
+        }
+        if (E.promaxUnitsHint) E.promaxUnitsHint.textContent = "As unidades dependem da categoria.";
+        if (E.promaxRoutines) {
+          const empty = document.createElement("span");
+          empty.className = "small text-secondary";
+          empty.textContent = catalogAvailable ? "Selecione uma categoria valida." : "Catalogo indisponivel.";
+          E.promaxRoutines.appendChild(empty);
+        }
+        updatePromaxActionState();
+        return;
+      }
+
+      if (E.promaxCategoryHint) {
+        E.promaxCategoryHint.textContent = category.description || category.name;
+      }
+      if (E.promaxUnitsHint) {
+        if (category.units.length) {
+          const visibleUnits = category.units.slice(0, 8).map(unit => unit.id);
+          const remaining = category.units.length - visibleUnits.length;
+          E.promaxUnitsHint.textContent = `Disponiveis: ${visibleUnits.join(", ")}${remaining > 0 ? ` e mais ${remaining}` : ""}.`;
+        } else {
+          E.promaxUnitsHint.textContent = "Vazio = todas as unidades.";
+        }
+      }
+
+      if (!category.routines.length) {
+        state.promax.selectedCategory = category.id;
+        state.promax.selectedRoutines = [];
+        if (E.promaxRoutines) {
+          const empty = document.createElement("span");
+          empty.className = "small text-secondary";
+          empty.textContent = "Nenhuma rotina disponivel para esta categoria.";
+          E.promaxRoutines.appendChild(empty);
+        }
+        updatePromaxActionState();
+        return;
+      }
+
+      const selected = Array.isArray(selectedRoutines)
+        ? new Set(selectedRoutines.map(value => String(value)))
+        : null;
+      const fragment = document.createDocumentFragment();
+      category.routines.forEach(routine => {
+        const label = document.createElement("label");
+        label.className = "form-check mb-0";
+
+        const input = document.createElement("input");
+        input.className = "form-check-input promax-routine";
+        input.type = "checkbox";
+        input.name = "promaxRoutine";
+        input.value = routine.id;
+        input.checked = selected ? selected.has(routine.id) : true;
+        input.addEventListener("change", promaxRoutineSelectionChanged);
+
+        const text = document.createElement("span");
+        text.className = "form-check-label mono";
+        text.textContent = routine.name === routine.id
+          ? routine.id
+          : `${routine.id} - ${routine.name}`;
+
+        label.append(input, document.createTextNode(" "), text);
+        fragment.appendChild(label);
+      });
+      if (E.promaxRoutines) E.promaxRoutines.appendChild(fragment);
+      rememberPromaxCatalogSelection();
+      updatePromaxActionState();
+    }
+
+    function renderPromaxCatalog({ categoryId = "", routines = null } = {}) {
+      if (!E.promaxCategory) return;
+      const categories = promaxCatalogCategories();
+      const requestedCategory = String(categoryId || "");
+      const requestedExists = categories.some(category => category.id === requestedCategory);
+      const selectedCategory = requestedExists
+        ? requestedCategory
+        : (requestedCategory || (categories[0] && categories[0].id) || "");
+
+      E.promaxCategory.replaceChildren();
+      if (!categories.length) {
+        const option = document.createElement("option");
+        option.value = selectedCategory;
+        option.textContent = selectedCategory
+          ? `${selectedCategory} (catalogo indisponivel)`
+          : "Catalogo indisponivel";
+        option.selected = true;
+        E.promaxCategory.appendChild(option);
+        E.promaxCategory.disabled = true;
+        renderPromaxCategoryDetails(selectedCategory, routines);
+        return;
+      }
+
+      if (requestedCategory && !requestedExists) {
+        const missingOption = document.createElement("option");
+        missingOption.value = selectedCategory;
+        missingOption.textContent = `${selectedCategory} (indisponivel)`;
+        missingOption.disabled = true;
+        missingOption.selected = true;
+        E.promaxCategory.appendChild(missingOption);
+      }
+      categories.forEach(category => {
+        const option = document.createElement("option");
+        option.value = category.id;
+        option.textContent = category.name;
+        option.selected = category.id === selectedCategory;
+        E.promaxCategory.appendChild(option);
+      });
+      E.promaxCategory.disabled = false;
+      renderPromaxCategoryDetails(selectedCategory, routines);
+    }
+
+    function promaxCategoryChanged() {
+      if (E.promaxUnits) E.promaxUnits.value = "";
+      renderPromaxCategoryDetails(E.promaxCategory && E.promaxCategory.value);
+    }
+
+    function promaxSelectedUnits() {
+      return String(E.promaxUnits && E.promaxUnits.value || "")
+        .split(/[\s,;]+/)
+        .map(value => value.trim())
+        .filter((value, index, values) => value && values.indexOf(value) === index);
+    }
+
+    function promaxJobPayload() {
+      const category = promaxCatalogCategory(E.promaxCategory && E.promaxCategory.value);
+      if (!category) throw new Error("Catalogo Promax indisponivel ou categoria invalida.");
+      const routines = promaxSelectedRoutines();
+      if (!routines.length) throw new Error("Selecione pelo menos uma rotina.");
+      const startDate = String(E.promaxStartDate && E.promaxStartDate.value || "");
+      const endDate = String(E.promaxEndDate && E.promaxEndDate.value || "");
+      if (!startDate || !endDate) throw new Error("Informe o periodo da execucao.");
+      if (endDate < startDate) throw new Error("A data final nao pode ser anterior a inicial.");
+      return {
+        category: category.id,
+        routines,
+        units: promaxSelectedUnits(),
+        start_date: startDate,
+        end_date: endDate,
+        publish: Boolean(E.promaxPublish && E.promaxPublish.checked)
+      };
+    }
+
+    function promaxStatusLabel(status) {
+      return {
+        pending: "Pendente",
+        running: "Executando",
+        success: "Concluido",
+        partial_success: "Parcial",
+        failed: "Falhou",
+        cancel_requested: "Cancelando",
+        cancelled: "Cancelado"
+      }[String(status || "")] || String(status || "-");
+    }
+
+    function promaxStatusClass(status) {
+      const value = String(status || "");
+      if (value === "success") return "text-bg-success";
+      if (value === "running") return "text-bg-primary";
+      if (value === "pending" || value === "partial_success") return "text-bg-warning";
+      if (value === "failed") return "text-bg-danger";
+      return "text-bg-secondary";
+    }
+
+    function renderPromax() {
+      renderPromaxCatalog({
+        categoryId: state.promax.selectedCategory,
+        routines: state.promax.selectedRoutines
+      });
+
+      const workerPayload = state.promax.worker || {};
+      const queue = workerPayload.queue || {};
+      const workers = Array.isArray(workerPayload.workers) ? workerPayload.workers : [];
+      const onlineWorker = workers.find(worker => worker && worker.online);
+      if (E.promaxWorkerState) {
+        E.promaxWorkerState.textContent = onlineWorker
+          ? `Worker online: ${onlineWorker.worker_id || "-"}`
+          : "Worker offline";
+        E.promaxWorkerState.className = `pill ${onlineWorker ? "ok" : "warn"}`;
+      }
+      if (E.promaxQueueState) {
+        E.promaxQueueState.textContent = queue.paused ? "Fila pausada" : "Fila liberada";
+        E.promaxQueueState.className = `pill ${queue.paused ? "warn" : "ok"}`;
+      }
+      if (E.promaxPauseBtn) E.promaxPauseBtn.disabled = Boolean(queue.paused);
+      if (E.promaxResumeBtn) E.promaxResumeBtn.disabled = !queue.paused;
+      if (E.promaxReprocessPublicationsBtn) {
+        E.promaxReprocessPublicationsBtn.disabled = !onlineWorker || Boolean(queue.paused);
+      }
+
+      const jobs = Array.isArray(state.promax.jobs) ? state.promax.jobs : [];
+      if (E.promaxJobsBody) {
+        E.promaxJobsBody.innerHTML = jobs.length ? jobs.map(job => {
+          const payload = job && job.payload && typeof job.payload === "object" ? job.payload : {};
+          const result = job && job.result && typeof job.result === "object" ? job.result : {};
+          const isPublicationRetry = String(job.job_type || "") === "reprocess_publication";
+          const routines = isPublicationRetry
+            ? "Reprocessar publicacoes"
+            : (Array.isArray(payload.routines) ? payload.routines.join(", ") : "-");
+          const units = isPublicationRetry
+            ? "-"
+            : (Array.isArray(payload.units) && payload.units.length ? payload.units.join(", ") : "Todas");
+          const periodStart = isPublicationRetry ? "Manutencao" : (payload.start_date || "-");
+          const periodEnd = isPublicationRetry ? "Pendencias salvas" : (payload.end_date || "-");
+          const resultMessage = String(result.message || job.error || job.failure_reason || "").trim();
+          const visibleResult = resultMessage.length > 180
+            ? `${resultMessage.slice(0, 177)}...`
+            : resultMessage;
+          const status = String(job.status || "");
+          const action = status === "pending"
+            ? `<button class="btn btn-outline-danger btn-sm" onclick="promaxCancelJob('${escapeHtml(job.id)}', false)"><i class="bi bi-x-circle me-1"></i>Cancelar</button>`
+            : (status === "running" || status === "cancel_requested")
+              ? `<button class="btn btn-outline-danger btn-sm" onclick="promaxCancelJob('${escapeHtml(job.id)}', true)"><i class="bi bi-stop-circle me-1"></i>Parar</button>`
+              : "";
+          return `<tr>
+            <td class="ps-3"><span class="small">${escapeHtml(formatDateTime(job.created_at))}</span><div class="mono small text-secondary">${escapeHtml(String(job.id || "").slice(0, 8))}</div></td>
+            <td>${escapeHtml(periodStart)}<br><span class="text-secondary">${escapeHtml(periodEnd)}</span></td>
+            <td class="mono">${escapeHtml(routines)}</td>
+            <td class="mono">${escapeHtml(units)}</td>
+            <td><span class="badge ${promaxStatusClass(status)}">${escapeHtml(promaxStatusLabel(status))}</span>${visibleResult ? `<div class="small text-secondary mt-1 text-wrap" title="${escapeHtml(resultMessage)}">${escapeHtml(visibleResult)}</div>` : ""}</td>
+            <td>${escapeHtml(job.leased_by || "-")}</td>
+            <td class="text-end pe-3"><div class="d-flex gap-1 justify-content-end">${action}<button class="btn btn-outline-primary btn-sm" onclick="promaxLoadLogs('${escapeHtml(job.id)}')"><i class="bi bi-terminal me-1"></i>Logs</button></div></td>
+          </tr>`;
+        }).join("") : '<tr><td colspan="7" class="text-center py-4 text-secondary">Nenhuma execucao encontrada.</td></tr>';
+      }
+
+      const schedules = Array.isArray(state.promax.schedules) ? state.promax.schedules : [];
+      if (E.promaxSchedulesBody) {
+        E.promaxSchedulesBody.innerHTML = schedules.length ? schedules.map(schedule => {
+          const enabled = Boolean(schedule.enabled);
+          return `<tr>
+            <td><strong>${escapeHtml(schedule.name || "-")}</strong></td>
+            <td>${escapeHtml(schedule.schedule_type || "-")} ${escapeHtml(schedule.time_of_day || "")}</td>
+            <td>${escapeHtml(formatDateTime(schedule.next_run_at))}</td>
+            <td><span class="badge ${enabled ? "text-bg-success" : "text-bg-secondary"}">${enabled ? "Ativa" : "Pausada"}</span></td>
+            <td class="text-end"><div class="d-flex gap-1 justify-content-end"><button class="btn btn-outline-primary btn-sm" title="Editar agenda" onclick="promaxEditSchedule('${escapeHtml(schedule.id)}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-outline-primary btn-sm" title="${enabled ? "Pausar agenda" : "Ativar agenda"}" onclick="promaxToggleSchedule('${escapeHtml(schedule.id)}', ${enabled ? "false" : "true"})"><i class="bi ${enabled ? "bi-pause-circle" : "bi-play-circle"}"></i></button><button class="btn btn-outline-danger btn-sm" title="Excluir agenda" onclick="promaxDeleteSchedule('${escapeHtml(schedule.id)}')"><i class="bi bi-trash3"></i></button></div></td>
+          </tr>`;
+        }).join("") : '<tr><td colspan="5" class="text-center py-3 text-secondary">Nenhuma agenda cadastrada.</td></tr>';
+      }
+    }
+
+    async function syncPromax({ silent = true } = {}) {
+      if (!state.panel || !state.panel.canManagePromax) return false;
+      const params = new URLSearchParams({ limit: "100" });
+      const status = String(E.promaxJobStatusFilter && E.promaxJobStatusFilter.value || "");
+      if (status) params.set("status", status);
+      const requests = [
+        req(CONFIG.endpoints.promax.catalog, { timeoutMs: 20000 }),
+        req(`${CONFIG.endpoints.promax.jobs}?${params.toString()}`, { timeoutMs: 30000 }),
+        req(CONFIG.endpoints.promax.worker, { timeoutMs: 20000 }),
+        req(CONFIG.endpoints.promax.schedules, { timeoutMs: 20000 })
+      ];
+      const results = await Promise.allSettled(requests);
+      state.promax.catalog = results[0].status === "fulfilled"
+        ? (results[0].value.catalog || null)
+        : null;
+      if (results[1].status === "fulfilled") state.promax.jobs = Array.isArray(results[1].value.jobs) ? results[1].value.jobs : [];
+      if (results[2].status === "fulfilled") state.promax.worker = results[2].value || null;
+      if (results[3].status === "fulfilled") state.promax.schedules = Array.isArray(results[3].value.schedules) ? results[3].value.schedules : [];
+      renderPromax();
+      const failed = results.filter(result => result.status === "rejected");
+      if (failed.length && !silent) addLog(`Promax: ${failed.length} consulta(s) falharam.`, "err");
+      if (!failed.length && !silent) addLog("Promax Admin atualizado.", "ok");
+      return failed.length === 0;
+    }
+
+    async function promaxRunNow() {
+      let payload;
+      try {
+        payload = promaxJobPayload();
+      } catch (err) {
+        addLog(err.message, "warn");
+        return;
+      }
+      const confirmed = await askConfirmation(`Adicionar ${payload.routines.join(", ")} a fila Promax?`);
+      if (!confirmed) return;
+      E.promaxRunBtn.disabled = true;
+      try {
+        await req(CONFIG.endpoints.promax.jobs, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 30000
+        });
+        addLog("Execucao Promax adicionada a fila.", "ok");
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao adicionar execucao Promax: ${err.message}`, "err");
+      } finally {
+        updatePromaxActionState();
+      }
+    }
+
+    async function promaxReprocessPublications() {
+      if (!await askConfirmation("Tentar novamente a transferencia de todas as publicacoes pendentes no worker Promax?")) return;
+      E.promaxReprocessPublicationsBtn.disabled = true;
+      try {
+        const response = await req(CONFIG.endpoints.promax.reprocessPublications, {
+          method: "POST",
+          timeoutMs: 30000
+        });
+        const job = response && response.job ? response.job : {};
+        addLog(`Reprocessamento de publicacoes adicionado a fila: ${String(job.id || "").slice(0, 8) || "job existente"}.`, "ok");
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao solicitar reprocessamento das publicacoes: ${err.message}`, "err");
+      } finally {
+        const workerPayload = state.promax.worker || {};
+        const queue = workerPayload.queue || {};
+        const workers = Array.isArray(workerPayload.workers) ? workerPayload.workers : [];
+        E.promaxReprocessPublicationsBtn.disabled = !workers.some(worker => worker && worker.online) || Boolean(queue.paused);
+      }
+    }
+
+    async function promaxQueueAction(action) {
+      const messages = {
+        pause: "Pausar novas execucoes da fila Promax?",
+        resume: "Retomar a fila Promax?",
+        pending: "Cancelar todos os jobs pendentes da fila Promax?"
+      };
+      if (!await askConfirmation(messages[action] || "Confirmar acao?")) return;
+      const endpoint = CONFIG.endpoints.promax[action];
+      const method = action === "pending" ? "DELETE" : "POST";
+      try {
+        await req(endpoint, { method, timeoutMs: 20000 });
+        addLog(`Fila Promax atualizada: ${action}.`, "ok");
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha no controle da fila Promax: ${err.message}`, "err");
+      }
+    }
+
+    async function promaxCancelJob(jobId, running) {
+      if (!await askConfirmation(running ? "Parar esta execucao Promax?" : "Cancelar este job pendente?")) return;
+      try {
+        await req(`${CONFIG.endpoints.promax.jobs}/${encodeURIComponent(jobId)}/${running ? "stop" : "cancel"}`, {
+          method: "POST",
+          timeoutMs: 20000
+        });
+        addLog(running ? "Parada solicitada ao worker." : "Job pendente cancelado.", "ok");
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao cancelar job Promax: ${err.message}`, "err");
+      }
+    }
+
+    async function promaxLoadLogs(jobId) {
+      state.promax.selectedJobId = jobId;
+      if (E.promaxLogJob) E.promaxLogJob.textContent = `Job ${String(jobId).slice(0, 8)}`;
+      if (E.promaxLogOutput) E.promaxLogOutput.textContent = "Carregando logs...";
+      try {
+        const payload = await req(`${CONFIG.endpoints.promax.jobs}/${encodeURIComponent(jobId)}/logs?limit=1000`, { timeoutMs: 30000 });
+        const logs = Array.isArray(payload.logs) ? payload.logs : [];
+        E.promaxLogOutput.textContent = logs.length
+          ? logs.map(item => `[${formatDateTime(item.created_at)}] ${String(item.level || "info").toUpperCase()} ${item.message || ""}`).join("\n")
+          : "Este job ainda nao possui logs.";
+        E.promaxLogOutput.scrollTop = E.promaxLogOutput.scrollHeight;
+      } catch (err) {
+        E.promaxLogOutput.textContent = `Falha ao carregar logs: ${err.message}`;
+      }
+    }
+
+    function syncPromaxScheduleFields() {
+      const type = String(E.promaxScheduleType && E.promaxScheduleType.value || "daily");
+      if (E.promaxScheduleWeekdayWrap) E.promaxScheduleWeekdayWrap.classList.toggle("d-none", type !== "weekly");
+      if (E.promaxScheduleMonthDayWrap) E.promaxScheduleMonthDayWrap.classList.toggle("d-none", type !== "monthly");
+    }
+
+    function resetPromaxScheduleForm() {
+      state.promax.editingScheduleId = "";
+      if (E.promaxScheduleName) E.promaxScheduleName.value = "";
+      if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.innerHTML = '<i class="bi bi-calendar-plus me-1"></i>Criar agenda';
+      if (E.promaxScheduleCancelBtn) E.promaxScheduleCancelBtn.classList.add("d-none");
+    }
+
+    function promaxEditSchedule(scheduleId) {
+      const schedule = (state.promax.schedules || []).find(item => String(item.id) === String(scheduleId));
+      if (!schedule) {
+        addLog("Agenda Promax nao encontrada para edicao.", "warn");
+        return;
+      }
+      const payload = schedule.payload || {};
+      state.promax.editingScheduleId = String(schedule.id);
+      E.promaxScheduleName.value = String(schedule.name || "");
+      E.promaxScheduleType.value = String(schedule.schedule_type || "daily");
+      E.promaxScheduleTime.value = String(schedule.time_of_day || "06:00").slice(0, 5);
+      E.promaxScheduleWeekday.value = String(schedule.weekday == null ? 0 : schedule.weekday);
+      E.promaxScheduleMonthDay.value = String(schedule.day_of_month == null ? 1 : schedule.day_of_month);
+      if (payload.start_date) E.promaxStartDate.value = String(payload.start_date);
+      if (payload.end_date) E.promaxEndDate.value = String(payload.end_date);
+      E.promaxUnits.value = Array.isArray(payload.units) ? payload.units.join(", ") : "";
+      E.promaxPublish.checked = Boolean(payload.publish);
+      const routines = Array.isArray(payload.routines) ? payload.routines.map(String) : [];
+      state.promax.selectedCategory = String(payload.category || "");
+      state.promax.selectedRoutines = routines;
+      renderPromaxCatalog({
+        categoryId: state.promax.selectedCategory,
+        routines
+      });
+      E.promaxScheduleCreateBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Salvar agenda';
+      E.promaxScheduleCancelBtn.classList.remove("d-none");
+      syncPromaxScheduleFields();
+      E.promaxScheduleName.focus();
+    }
+
+    async function promaxCreateSchedule() {
+      const name = String(E.promaxScheduleName && E.promaxScheduleName.value || "").trim();
+      if (!name) {
+        addLog("Informe um nome para a agenda Promax.", "warn");
+        return;
+      }
+      const editingScheduleId = String(state.promax.editingScheduleId || "");
+      const editingSchedule = (state.promax.schedules || []).find(
+        item => String(item.id) === editingScheduleId
+      );
+      let payload;
+      try {
+        payload = {
+          ...promaxJobPayload(),
+          name,
+          schedule_type: E.promaxScheduleType.value,
+          time_of_day: E.promaxScheduleTime.value || "06:00",
+          timezone: "America/Fortaleza",
+          weekday: E.promaxScheduleType.value === "weekly" ? Number(E.promaxScheduleWeekday.value) : null,
+          day_of_month: E.promaxScheduleType.value === "monthly" ? Number(E.promaxScheduleMonthDay.value) : null,
+          enabled: editingSchedule ? Boolean(editingSchedule.enabled) : true
+        };
+      } catch (err) {
+        addLog(err.message, "warn");
+        return;
+      }
+      const actionLabel = editingScheduleId ? "Salvar as alteracoes da agenda" : "Criar a agenda";
+      if (!await askConfirmation(`${actionLabel} "${name}"?`)) return;
+      E.promaxScheduleCreateBtn.disabled = true;
+      try {
+        const endpoint = editingScheduleId
+          ? `${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(editingScheduleId)}`
+          : CONFIG.endpoints.promax.schedules;
+        await req(endpoint, {
+          method: editingScheduleId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 30000
+        });
+        addLog(editingScheduleId ? "Agenda Promax atualizada." : "Agenda Promax criada.", "ok");
+        resetPromaxScheduleForm();
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao salvar agenda Promax: ${err.message}`, "err");
+      } finally {
+        updatePromaxActionState();
+      }
+    }
+
+    async function promaxToggleSchedule(scheduleId, enabled) {
+      try {
+        await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(scheduleId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled }),
+          timeoutMs: 20000
+        });
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao atualizar agenda Promax: ${err.message}`, "err");
+      }
+    }
+
+    async function promaxDeleteSchedule(scheduleId) {
+      if (!await askConfirmation("Excluir esta agenda Promax?")) return;
+      try {
+        await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(scheduleId)}`, {
+          method: "DELETE",
+          timeoutMs: 20000
+        });
+        addLog("Agenda Promax excluida.", "ok");
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao excluir agenda Promax: ${err.message}`, "err");
+      }
+    }
+
     function init() {
       applyTheme(localStorage.getItem("bot_admin_theme") || "dark");
       setupRecolhasPane();
@@ -1975,10 +2720,26 @@
       renderPayipBatch();
       setupAllowedUsersCardSizing();
       ensureUsageFunctionDateRange();
+      const today = formatDateInputValue(new Date());
+      if (E.promaxStartDate && !E.promaxStartDate.value) E.promaxStartDate.value = today;
+      if (E.promaxEndDate && !E.promaxEndDate.value) E.promaxEndDate.value = today;
+      syncPromaxScheduleFields();
+      renderPromax();
 
       document.getElementById("refreshBtn").addEventListener("click", syncAll);
       E.themeToggle.addEventListener("click", toggleTheme);
       if (E.logoutBtn) E.logoutBtn.addEventListener("click", logoutPanel);
+      if (E.promaxRefreshBtn) E.promaxRefreshBtn.addEventListener("click", () => syncPromax({ silent: false }));
+      if (E.promaxPauseBtn) E.promaxPauseBtn.addEventListener("click", () => promaxQueueAction("pause"));
+      if (E.promaxResumeBtn) E.promaxResumeBtn.addEventListener("click", () => promaxQueueAction("resume"));
+      if (E.promaxClearBtn) E.promaxClearBtn.addEventListener("click", () => promaxQueueAction("pending"));
+      if (E.promaxReprocessPublicationsBtn) E.promaxReprocessPublicationsBtn.addEventListener("click", promaxReprocessPublications);
+      if (E.promaxCategory) E.promaxCategory.addEventListener("change", promaxCategoryChanged);
+      if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
+      if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", () => syncPromax({ silent: true }));
+      if (E.promaxScheduleType) E.promaxScheduleType.addEventListener("change", syncPromaxScheduleFields);
+      if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.addEventListener("click", promaxCreateSchedule);
+      if (E.promaxScheduleCancelBtn) E.promaxScheduleCancelBtn.addEventListener("click", resetPromaxScheduleForm);
       document.getElementById("clearLogBtn").addEventListener("click", () => { state.logs = []; renderLogs(); });
       document.getElementById("saveAccessBtn").addEventListener("click", saveAccess);
       document.getElementById("resetAccessBtn").addEventListener("click", resetAccessForm);
@@ -2075,6 +2836,12 @@
       });
 
       syncAll();
+      window.setInterval(() => {
+        if (isPaneActive("promaxPane") && state.panel && state.panel.canManagePromax) {
+          syncPromax({ silent: true });
+          if (state.promax.selectedJobId) promaxLoadLogs(state.promax.selectedJobId);
+        }
+      }, 15000);
     }
 
     function syncAllowedUsersCardSizing() {
@@ -2228,6 +2995,8 @@
         if (state.panel && state.panel.canViewGiro) tasks.push(syncGiroRecolha({ silent }));
       } else if (activeTabId === "criticaTab") {
         if (state.panel && state.panel.canViewCritica) tasks.push(syncCriticaDashboard({ silent }));
+      } else if (activeTabId === "promaxTab") {
+        if (state.panel && state.panel.canManagePromax) tasks.push(syncPromax({ silent }));
       }
 
       if (!tasks.length) {
@@ -2235,8 +3004,9 @@
         return true;
       }
       const results = await Promise.allSettled(tasks);
-      state.lazyTabs[activeTabId] = true;
-      return results.every(result => result.status === "fulfilled" && result.value !== false);
+      const allSucceeded = results.every(result => result.status === "fulfilled" && result.value !== false);
+      if (allSucceeded) state.lazyTabs[activeTabId] = true;
+      return allSucceeded;
     }
 
     function setSyncState(syncing) {
@@ -2496,6 +3266,9 @@
           : true,
         canViewUsage: payload && Object.prototype.hasOwnProperty.call(payload, "can_view_usage")
           ? Boolean(payload.can_view_usage)
+          : Boolean(payload && payload.is_admin),
+        canManagePromax: payload && Object.prototype.hasOwnProperty.call(payload, "can_manage_promax")
+          ? Boolean(payload.can_manage_promax)
           : Boolean(payload && payload.is_admin)
       };
       applyPanelPermissions();
@@ -2542,6 +3315,7 @@
       }
       setPanelTabVisible("operationsTab", !isCritica);
       setPanelTabVisible("reportsTab", !isCritica);
+      setPanelTabVisible("promaxTab", Boolean(state.panel && state.panel.canManagePromax));
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
       setPanelTabVisible("giroRecolhaTab", Boolean(state.panel && state.panel.canViewGiro));

@@ -76,6 +76,82 @@ class FakeQueryService:
         return [FakeRecord()]
 
 
+class FakePromaxJobsService:
+    job = {
+        "id": "job-1",
+        "job_type": "fluxo_caixa",
+        "payload": {"category": "fluxo_caixa"},
+        "status": "running",
+        "leased_by": "worker-1",
+        "lease_token": "lease-1",
+    }
+    schedule = {
+        "id": "schedule-1",
+        "name": "Fluxo diario",
+        "enabled": True,
+    }
+
+    def enqueue_job(self, **_kwargs: Any) -> dict[str, Any]:
+        return dict(self.job)
+
+    def list_jobs(self, **_kwargs: Any) -> list[dict[str, Any]]:
+        return []
+
+    def get_job(self, _job_id: str) -> dict[str, Any]:
+        return dict(self.job)
+
+    def list_job_logs(self, _job_id: str, **_kwargs: Any) -> list[dict[str, Any]]:
+        return []
+
+    def cancel_job(self, _job_id: str, **_kwargs: Any) -> dict[str, Any]:
+        return dict(self.job)
+
+    def pause_queue(self, **_kwargs: Any) -> dict[str, Any]:
+        return {"paused": True}
+
+    def resume_queue(self, **_kwargs: Any) -> dict[str, Any]:
+        return {"paused": False}
+
+    def clear_pending_jobs(self, **_kwargs: Any) -> dict[str, Any]:
+        return {"cleared": 0}
+
+    def get_queue_state(self) -> dict[str, Any]:
+        return {"paused": False}
+
+    def list_worker_heartbeats(self) -> list[dict[str, Any]]:
+        return []
+
+    def create_schedule(self, **_kwargs: Any) -> dict[str, Any]:
+        return dict(self.schedule)
+
+    def list_schedules(self, **_kwargs: Any) -> list[dict[str, Any]]:
+        return [dict(self.schedule)]
+
+    def get_schedule(self, _schedule_id: str) -> dict[str, Any]:
+        return dict(self.schedule)
+
+    def update_schedule(self, _schedule_id: str, **_kwargs: Any) -> dict[str, Any]:
+        return dict(self.schedule)
+
+    def delete_schedule(self, _schedule_id: str) -> dict[str, Any]:
+        return {"deleted": True}
+
+    def claim_next_job(self, **_kwargs: Any) -> dict[str, Any]:
+        return dict(self.job)
+
+    def register_worker_heartbeat(self, **_kwargs: Any) -> None:
+        return None
+
+    def heartbeat_job(self, **_kwargs: Any) -> dict[str, Any]:
+        return dict(self.job)
+
+    def append_job_log(self, **_kwargs: Any) -> dict[str, Any]:
+        return {"id": 1}
+
+    def finish_job(self, **_kwargs: Any) -> dict[str, Any]:
+        return dict(self.job)
+
+
 class RegisteredEndpointsSmokeTest(unittest.TestCase):
     def make_client(self) -> TestClient:
         app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -96,7 +172,11 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             }
 
         return {
-            "settings": SimpleNamespace(meta_cloud_enabled=False, verify_token="verify"),
+            "settings": SimpleNamespace(
+                meta_cloud_enabled=False,
+                verify_token="verify",
+                promax_worker_token="worker-token",
+            ),
             "meta_cloud_client": SimpleNamespace(config=SimpleNamespace(verify_token="verify")),
             "access_control": FakeAccessControl(),
             "dclientes_query_service": FakeQueryService(),
@@ -150,6 +230,23 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "snapshot_payip_batch": lambda **_kwargs: {"running": False, "job": {}},
             "export_payip_batch_csv": lambda **_kwargs: (b"id\n", "payip.csv"),
             "payip_batch_pdf_bytes": lambda item_id, **_kwargs: (b"%PDF-1.4\n", f"{item_id}.pdf"),
+            "validate_payip_promax_import": lambda _payload, _context: {
+                "items_count": 1,
+                "missing_client_codes": [],
+            },
+            "run_payip_promax_import": lambda _payload, _context: {
+                "items_count": 1,
+                "client_creation": {"created": []},
+            },
+            "promax_jobs_service": FakePromaxJobsService(),
+            "promax_catalog": {
+                "categories": {
+                    "fluxo_caixa": {
+                        "routines": ["140506", "120606"],
+                        "units": [],
+                    }
+                }
+            },
             "list_admin_evolution_usage": lambda **kwargs: {
                 "window_days": kwargs.get("days", 7),
                 "function_date_from": "2026-06-01",
@@ -179,6 +276,28 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
         import_payload = {"dataset": "dclientes"}
         recolha_payload = {"status_caixa_noturno": "lancado"}
         payip_payload = {"raw_text": "5583999990001;100,00"}
+        payip_import_payload = {
+            "filial": "3",
+            "start_date": "2026-07-18",
+            "end_date": "2026-07-18",
+        }
+        promax_job_payload = {
+            "category": "fluxo_caixa",
+            "routines": ["140506", "120606"],
+            "units": [],
+            "start_date": "2026-07-18",
+            "end_date": "2026-07-18",
+            "publish": True,
+        }
+        promax_schedule_payload = {
+            **promax_job_payload,
+            "name": "Fluxo diario",
+            "schedule_type": "daily",
+            "time_of_day": "06:00:00",
+            "timezone": "America/Fortaleza",
+            "enabled": True,
+        }
+        worker_headers = {"x-promax-worker-token": "worker-token"}
         broadcast_payload = {"filial": "3", "action": "rota_dia"}
         csv_file = {"file": ("recolhas.csv", b"id\n1\n", "text/csv")}
         upload_files = {"files": ("dclientes.csv", b"col\n1\n", "text/csv")}
@@ -214,11 +333,14 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/admin/imports", expected_status=303),
             EndpointCase("GET", "/admin", expected_status=303),
             EndpointCase("GET", "/admin/operations", expected_status=303),
+            EndpointCase("GET", "/admin/reports", expected_status=303),
+            EndpointCase("GET", "/admin/power-bi", expected_status=303),
             EndpointCase("GET", "/admin/tables", expected_status=303),
             EndpointCase("GET", "/admin/critica", expected_status=303),
             EndpointCase("GET", "/admin/recolhas", expected_status=303),
             EndpointCase("GET", "/admin/giro-recolha", expected_status=303),
             EndpointCase("GET", "/admin/usage", expected_status=303),
+            EndpointCase("GET", "/admin/promax", expected_status=303),
             EndpointCase("GET", "/api/admin/panel/session"),
             EndpointCase("GET", "/api/admin/recolhas"),
             EndpointCase("PATCH", "/api/admin/recolhas/bulk", kwargs={"json": {"ids": ["rec-1"], **recolha_payload}}),
@@ -232,6 +354,149 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/api/admin/payip/batch/result"),
             EndpointCase("GET", "/api/admin/payip/batch/pdf/item-1"),
             EndpointCase("GET", "/api/admin/payip/batch/export.csv"),
+            EndpointCase("POST", "/api/admin/payip/import/validate", kwargs={"json": payip_import_payload}),
+            EndpointCase("POST", "/api/admin/payip/import/run", kwargs={"json": payip_import_payload}),
+            EndpointCase("GET", "/api/admin/promax/catalog"),
+            EndpointCase(
+                "POST",
+                "/api/admin/promax/jobs",
+                expected_status=202,
+                kwargs={"json": promax_job_payload},
+            ),
+            EndpointCase("GET", "/api/admin/promax/jobs"),
+            EndpointCase("POST", "/api/admin/promax/publications/reprocess", expected_status=202),
+            EndpointCase("GET", "/api/admin/promax/jobs/job-1"),
+            EndpointCase("GET", "/api/admin/promax/jobs/job-1/logs"),
+            EndpointCase("POST", "/api/admin/promax/jobs/job-1/cancel"),
+            EndpointCase("POST", "/api/admin/promax/jobs/job-1/stop"),
+            EndpointCase("POST", "/api/admin/promax/queue/pause"),
+            EndpointCase("POST", "/api/admin/promax/queue/resume"),
+            EndpointCase("DELETE", "/api/admin/promax/queue/pending"),
+            EndpointCase("GET", "/api/admin/promax/worker/status"),
+            EndpointCase(
+                "POST",
+                "/api/admin/promax/schedules",
+                expected_status=201,
+                kwargs={"json": promax_schedule_payload},
+            ),
+            EndpointCase("GET", "/api/admin/promax/schedules"),
+            EndpointCase("GET", "/api/admin/promax/schedules/schedule-1"),
+            EndpointCase(
+                "PATCH",
+                "/api/admin/promax/schedules/schedule-1",
+                kwargs={"json": {"name": "Fluxo diario atualizado"}},
+            ),
+            EndpointCase("DELETE", "/api/admin/promax/schedules/schedule-1"),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/next-job/claim",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {"worker_id": "worker-1", "pid": 100, "lease_seconds": 120},
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/heartbeat",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {"worker_id": "worker-1", "pid": 100},
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/jobs/job-1/heartbeat",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "pid": 100,
+                        "lease_token": "lease-1",
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/jobs/job-1/log",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "lease_token": "lease-1",
+                        "message": "linha",
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/jobs/job-1/finish",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "pid": 100,
+                        "lease_token": "lease-1",
+                        "status": "success",
+                    },
+                },
+            ),
+            EndpointCase(
+                "GET",
+                "/api/internal/promax/control?worker_id=worker-1",
+                kwargs={"headers": worker_headers},
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/worker/claim",
+                kwargs={"headers": worker_headers, "json": {"worker_id": "worker-1"}},
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/worker/heartbeat",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "hostname": "host-1",
+                        "status": "running",
+                        "job_id": "job-1",
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/worker/log",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "stream": "stdout",
+                        "message": "linha",
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/worker/control",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {"worker_id": "worker-1", "job_id": "job-1"},
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/worker/finish",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "status": "succeeded",
+                        "exit_code": 0,
+                    },
+                },
+            ),
             EndpointCase("GET", "/api/admin/usage/evolution"),
             EndpointCase("GET", "/api/admin/usage/evolution/report"),
             EndpointCase("GET", "/api/admin/usage/evolution/functions/report"),
@@ -263,6 +528,14 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "/api/admin/access/users/5583999990001": "/api/admin/access/users/{phone_number}",
             "/api/admin/recolhas/rec-1": "/api/admin/recolhas/{recolha_id}",
             "/api/admin/payip/batch/pdf/item-1": "/api/admin/payip/batch/pdf/{item_id}",
+            "/api/admin/promax/jobs/job-1": "/api/admin/promax/jobs/{job_id}",
+            "/api/admin/promax/jobs/job-1/logs": "/api/admin/promax/jobs/{job_id}/logs",
+            "/api/admin/promax/jobs/job-1/cancel": "/api/admin/promax/jobs/{job_id}/cancel",
+            "/api/admin/promax/jobs/job-1/stop": "/api/admin/promax/jobs/{job_id}/stop",
+            "/api/admin/promax/schedules/schedule-1": "/api/admin/promax/schedules/{schedule_id}",
+            "/api/internal/promax/jobs/job-1/heartbeat": "/api/internal/promax/jobs/{job_id}/heartbeat",
+            "/api/internal/promax/jobs/job-1/log": "/api/internal/promax/jobs/{job_id}/log",
+            "/api/internal/promax/jobs/job-1/finish": "/api/internal/promax/jobs/{job_id}/finish",
         }.get(route_path, route_path)
 
     def test_all_registered_endpoints_smoke(self) -> None:

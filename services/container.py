@@ -39,12 +39,14 @@ from bot_api.services.payip_payments_service import PayipPaymentsService, build_
 from bot_api.services.prazo_limite_import_service import PrazoLimiteImportService
 from bot_api.services.prazo_limite_query_service import PrazoLimiteQueryService
 from bot_api.services.produto_cestas_import_service import ProdutoCestasImportService
+from bot_api.services.promax_jobs_service import PromaxJobsService
 from bot_api.services.recolha_request_service import RecolhaRequestService
 
 
 @dataclass(frozen=True)
 class AppServices:
     admin_import_job_service: AdminImportJobService
+    promax_jobs_service: PromaxJobsService
     dclientes_query_service: DClientesQueryService
     clientes_score_query_service: ClientesScoreQueryService
     inadimplencia_query_service: InadimplenciaQueryService
@@ -88,6 +90,11 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
     admin_import_job_service = AdminImportJobService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    promax_jobs_service = PromaxJobsService(
+        database_url=settings.promax_database_url or settings.reports_database_url,
+        schema=settings.promax_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
     dclientes_query_service = DClientesQueryService(
@@ -299,6 +306,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
     )
     return AppServices(
         admin_import_job_service=admin_import_job_service,
+        promax_jobs_service=promax_jobs_service,
         dclientes_query_service=dclientes_query_service,
         clientes_score_query_service=clientes_score_query_service,
         inadimplencia_query_service=inadimplencia_query_service,

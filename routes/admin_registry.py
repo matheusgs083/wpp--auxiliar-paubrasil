@@ -12,6 +12,7 @@ from bot_api.routes.admin_giro import create_admin_giro_router
 from bot_api.routes.admin_imports import create_admin_imports_router
 from bot_api.routes.admin_panel import create_admin_panel_router
 from bot_api.routes.admin_payip import create_admin_payip_router
+from bot_api.routes.admin_promax import create_admin_promax_router
 from bot_api.routes.admin_recolhas import create_admin_recolhas_router
 from bot_api.routes.admin_usage import create_admin_usage_router
 
@@ -29,6 +30,7 @@ def build_admin_route_registrars(deps: dict[str, Any]) -> tuple[RouteRegistrar, 
         lambda app: _register_admin_payip_routes(app, deps=deps),
         lambda app: _register_admin_usage_routes(app, deps=deps),
         lambda app: _register_admin_broadcast_routes(app, deps=deps),
+        lambda app: _register_admin_promax_routes(app, deps=deps),
     )
 
 
@@ -161,6 +163,19 @@ def _register_admin_broadcast_routes(app: FastAPI, *, deps: dict[str, Any]) -> N
             snapshot_admin_broadcast_state=deps["snapshot_admin_broadcast_state"],
             build_admin_broadcast_payload=deps["build_admin_broadcast_payload"],
             queue_admin_broadcast=deps["queue_admin_broadcast"],
+            record_security_event=deps["record_security_event"],
+        )
+    )
+
+
+def _register_admin_promax_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    app.include_router(
+        create_admin_promax_router(
+            service=deps["promax_jobs_service"],
+            catalog=deps["promax_catalog"],
+            worker_token=deps["settings"].promax_worker_token,
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
             record_security_event=deps["record_security_event"],
         )
     )
