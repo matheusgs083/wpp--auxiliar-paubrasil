@@ -236,6 +236,13 @@
     .promax-status--success { color: var(--success); border-color: rgba(4, 120, 87, 0.28); }
     .promax-status--warning { color: var(--warning); border-color: rgba(180, 83, 9, 0.3); }
     .promax-status--danger { color: var(--danger); border-color: rgba(185, 28, 28, 0.34); background: rgba(185, 28, 28, 0.06); }
+    .promax-unit-summary { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+    .promax-unit-modal-table th,
+    .promax-unit-modal-table td { vertical-align: middle; }
+    .promax-unit-status { display: inline-flex; align-items: center; padding: 0.22rem 0.45rem; border: 1px solid var(--promax-neutral-border); border-radius: 5px; color: var(--ink-700); background: var(--promax-neutral-bg); font-size: 0.72rem; font-weight: 800; }
+    .promax-unit-status.ok { color: var(--success); border-color: rgba(4, 120, 87, 0.28); }
+    .promax-unit-status.warn { color: var(--warning); border-color: rgba(180, 83, 9, 0.3); }
+    .promax-unit-status.err { color: var(--danger); border-color: rgba(185, 28, 28, 0.34); background: rgba(185, 28, 28, 0.06); }
     #promaxPane .badge.text-bg-success,
     #promaxPane .badge.text-bg-secondary { color: var(--ink-700) !important; background: var(--promax-neutral-bg) !important; border: 1px solid var(--promax-neutral-border); }
     .route-table-scroll { height: 260px; min-height: 180px; max-height: 1400px; }
@@ -1005,7 +1012,7 @@
           </header>
           <div class="table-scroll">
             <table class="table table-hover table-sm align-middle">
-              <thead><tr><th class="ps-3">Criado</th><th>Periodo</th><th>Rotinas</th><th>Unidades</th><th>Status</th><th>Worker</th><th class="text-end pe-3">Acoes</th></tr></thead>
+              <thead><tr><th class="ps-3">Criado</th><th>Periodo</th><th>Rotinas</th><th>Resumo</th><th>Status</th><th>Worker</th><th class="text-end pe-3">Acoes</th></tr></thead>
               <tbody id="promaxJobsBody"><tr><td colspan="7" class="text-center py-4 text-secondary">Abra a aba para carregar a fila.</td></tr></tbody>
             </table>
           </div>
@@ -1589,6 +1596,38 @@
     </div>
   </div>
 
+  <div class="modal fade" id="promaxUnitsModal" tabindex="-1" aria-labelledby="promaxUnitsModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="promaxUnitsModalTitle">Resumo da execucao</h5>
+            <div class="form-text" id="promaxUnitsModalSubtitle">Unidade e status</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="table-scroll" style="max-height: 420px;">
+            <table class="table table-sm table-hover align-middle mb-0 promax-unit-modal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Unidade</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="promaxUnitsModalBody">
+                <tr><td colspan="2" class="text-center py-3 text-secondary">Selecione uma execucao.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const CONFIG = {
@@ -1983,6 +2022,9 @@
       promaxScheduleTimeWrap: document.getElementById("promaxScheduleTimeWrap"),
       promaxLogJob: document.getElementById("promaxLogJob"),
       promaxLogOutput: document.getElementById("promaxLogOutput"),
+      promaxUnitsModalTitle: document.getElementById("promaxUnitsModalTitle"),
+      promaxUnitsModalSubtitle: document.getElementById("promaxUnitsModalSubtitle"),
+      promaxUnitsModalBody: document.getElementById("promaxUnitsModalBody"),
       accessRole: document.getElementById("accessRole"),
       accessScopeHint: document.getElementById("accessScopeHint"),
       accessModeHint: document.getElementById("accessModeHint"),
@@ -2287,6 +2329,9 @@
 
     const confirmModalInstance = document.getElementById("confirmModal")
       ? new bootstrap.Modal(document.getElementById("confirmModal"), { backdrop: "static", keyboard: true })
+      : null;
+    const promaxUnitsModalInstance = document.getElementById("promaxUnitsModal")
+      ? new bootstrap.Modal(document.getElementById("promaxUnitsModal"), { keyboard: true })
       : null;
     let allowedUsersCardResizeObserver = null;
     let giroRouteResizeObserver = null;
@@ -3010,6 +3055,117 @@
       return "";
     }
 
+    function promaxUnitLabel(unitId) {
+      const id = String(unitId || "").trim();
+      const reseller = PROMAX_RESELLERS.find(item => item.id === id);
+      return reseller ? `${reseller.name} (${id})` : id || "-";
+    }
+
+    function normalizeSearchText(value) {
+      return String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    }
+
+    function promaxJobResultText(job) {
+      const result = job && job.result && typeof job.result === "object" ? job.result : {};
+      return String(result.message || job.error || job.failure_reason || "").trim();
+    }
+
+    function promaxJobFailedUnitMap(job) {
+      const result = job && job.result && typeof job.result === "object" ? job.result : {};
+      const failedMap = new Map();
+      const addFailed = (unitId, detail) => {
+        const cleanUnit = String(unitId || "").trim();
+        if (!cleanUnit) return;
+        failedMap.set(cleanUnit, detail && typeof detail === "object" ? detail : {});
+      };
+      if (Array.isArray(result.failed_units)) {
+        result.failed_units.forEach(unitId => addFailed(unitId, {}));
+      }
+      if (Array.isArray(result.failed_unit_details)) {
+        result.failed_unit_details.forEach(detail => {
+          if (!detail || typeof detail !== "object") return;
+          const unitId = detail.unit || detail.unidade || detail.unit_id || detail.code || detail.id;
+          addFailed(unitId, detail);
+        });
+      }
+      return failedMap;
+    }
+
+    function promaxJobUnitRows(job) {
+      const payload = job && job.payload && typeof job.payload === "object" ? job.payload : {};
+      const selectedUnits = Array.isArray(payload.units) && payload.units.length
+        ? payload.units.map(String)
+        : PROMAX_RESELLERS.map(item => item.id);
+      const status = String(job && job.status || "");
+      const resultText = promaxJobResultText(job);
+      const normalizedResult = normalizeSearchText(resultText);
+      const failedMap = promaxJobFailedUnitMap(job);
+      return selectedUnits.map(unitId => {
+        const reseller = PROMAX_RESELLERS.find(item => item.id === String(unitId));
+        const unitName = reseller ? reseller.name : String(unitId);
+        const mentioned = normalizedResult.includes(normalizeSearchText(unitId))
+          || (unitName && normalizedResult.includes(normalizeSearchText(unitName)));
+        const failedDetail = failedMap.get(String(unitId));
+        let label = "Nao executado";
+        let tone = "warn";
+        if (status === "success") {
+          label = "Concluido";
+          tone = "ok";
+        } else if (status === "partial_success") {
+          label = failedDetail || mentioned ? "Falhou" : "Concluido";
+          tone = failedDetail || mentioned ? "err" : "ok";
+        } else if (status === "failed") {
+          label = "Falhou";
+          tone = "err";
+        } else if (status === "running" || status === "cancel_requested") {
+          label = status === "cancel_requested" ? "Parando" : "Executando";
+          tone = "warn";
+        } else if (status === "pending") {
+          label = "Aguardando";
+          tone = "warn";
+        } else if (status === "cancelled") {
+          label = "Cancelado";
+          tone = "err";
+        }
+        const detailText = failedDetail && typeof failedDetail === "object"
+          ? String(failedDetail.detail || failedDetail.detalhe || failedDetail.message || failedDetail.status || "").trim()
+          : "";
+        return { unitId: String(unitId), unitName, label, tone, detailText };
+      });
+    }
+
+    function promaxJobUnitSummary(job) {
+      const rows = promaxJobUnitRows(job);
+      const failed = rows.filter(row => row.tone === "err").length;
+      const ok = rows.filter(row => row.tone === "ok").length;
+      if (!rows.length) return "Sem unidades";
+      if (failed) return `${failed}/${rows.length} com problema`;
+      if (ok === rows.length) return `${rows.length}/${rows.length} concluidas`;
+      return `${rows.length} unidade(s)`;
+    }
+
+    function promaxOpenUnitsModal(jobId) {
+      const job = (Array.isArray(state.promax.jobs) ? state.promax.jobs : []).find(item => String(item && item.id || "") === String(jobId));
+      if (!job) {
+        addLog("Execucao Promax nao encontrada para resumo.", "warn");
+        return;
+      }
+      const rows = promaxJobUnitRows(job);
+      const payload = job && job.payload && typeof job.payload === "object" ? job.payload : {};
+      const routines = Array.isArray(payload.routines) ? payload.routines.join(", ") : String(job.job_type || "-");
+      if (E.promaxUnitsModalTitle) E.promaxUnitsModalTitle.textContent = `Resumo ${String(job.id || "").slice(0, 8)}`;
+      if (E.promaxUnitsModalSubtitle) E.promaxUnitsModalSubtitle.textContent = `${routines || "-"} | ${promaxStatusLabel(job.status)}`;
+      if (E.promaxUnitsModalBody) {
+        E.promaxUnitsModalBody.innerHTML = rows.length
+          ? rows.map(row => `<tr><td><strong>${escapeHtml(row.unitName)}</strong><div class="mono small text-secondary">${escapeHtml(row.unitId)}</div>${row.detailText ? `<div class="small text-secondary mt-1">${escapeHtml(row.detailText)}</div>` : ""}</td><td><span class="promax-unit-status ${escapeHtml(row.tone)}">${escapeHtml(row.label)}</span></td></tr>`).join("")
+          : '<tr><td colspan="2" class="text-center py-3 text-secondary">Esta execucao nao possui unidades no payload.</td></tr>';
+      }
+      if (promaxUnitsModalInstance) promaxUnitsModalInstance.show();
+    }
+
     function renderPromax() {
       renderPromaxRunCatalog({
         categoryIds: state.promax.runSelectedCategories,
@@ -3055,9 +3211,7 @@
           const routines = isPublicationRetry
             ? "Reprocessar publicacoes"
             : (Array.isArray(payload.routines) ? payload.routines.join(", ") : "-");
-          const units = isPublicationRetry
-            ? "-"
-            : (Array.isArray(payload.units) && payload.units.length ? payload.units.join(", ") : "Todas");
+          const unitSummary = isPublicationRetry ? "Manutencao" : promaxJobUnitSummary(job);
           const periodStart = isPublicationRetry ? "Manutencao" : (payload.start_date || "-");
           const periodEnd = isPublicationRetry ? "Pendencias salvas" : (payload.end_date || "-");
           const resultMessage = String(result.message || job.error || job.failure_reason || "").trim();
@@ -3070,14 +3224,24 @@
             : (status === "running" || status === "cancel_requested")
               ? `<button class="btn btn-outline-danger btn-sm" onclick="promaxCancelJob('${escapeHtml(job.id)}', true)"><i class="bi bi-stop-circle me-1"></i>Parar</button>`
               : "";
+          const failedUnitsCount = promaxJobFailedUnitMap(job).size;
+          const retryButtonText = status === "partial_success" && failedUnitsCount
+            ? "Retry pendentes"
+            : "Retry completo";
+          const retryAction = ["failed", "partial_success", "cancelled"].includes(status) && !isPublicationRetry
+            ? `<button class="btn btn-outline-warning btn-sm" title="Reenfileirar ${escapeHtml(failedUnitsCount ? "somente as unidades com falha" : "a execucao completa")}" onclick="promaxRetryJob('${escapeHtml(job.id)}')"><i class="bi bi-arrow-clockwise me-1"></i>${escapeHtml(retryButtonText)}</button>`
+            : "";
+          const unitAction = isPublicationRetry
+            ? `<span class="small text-secondary">-</span>`
+            : `<button class="btn btn-outline-primary btn-sm promax-unit-summary" onclick="promaxOpenUnitsModal('${escapeHtml(job.id)}')"><i class="bi bi-list-check"></i>${escapeHtml(unitSummary)}</button>`;
           return `<tr>
             <td class="ps-3"><span class="small">${escapeHtml(formatDateTime(job.created_at))}</span><div class="mono small text-secondary">${escapeHtml(String(job.id || "").slice(0, 8))}</div></td>
             <td>${escapeHtml(periodStart)}<br><span class="text-secondary">${escapeHtml(periodEnd)}</span></td>
             <td class="mono">${escapeHtml(routines)}</td>
-            <td class="mono">${escapeHtml(units)}</td>
+            <td>${unitAction}</td>
             <td><span class="promax-status ${promaxStatusClass(status)}">${escapeHtml(promaxStatusLabel(status))}</span>${visibleResult ? `<div class="small text-secondary mt-1 text-wrap" title="${escapeHtml(resultMessage)}">${escapeHtml(visibleResult)}</div>` : ""}</td>
             <td>${escapeHtml(job.leased_by || "-")}</td>
-            <td class="text-end pe-3"><div class="d-flex gap-1 justify-content-end">${action}<button class="btn btn-outline-primary btn-sm" onclick="promaxLoadLogs('${escapeHtml(job.id)}')"><i class="bi bi-terminal me-1"></i>Logs</button></div></td>
+            <td class="text-end pe-3"><div class="d-flex gap-1 justify-content-end">${action}${retryAction}<button class="btn btn-outline-primary btn-sm" onclick="promaxLoadLogs('${escapeHtml(job.id)}')"><i class="bi bi-terminal me-1"></i>Logs</button></div></td>
           </tr>`;
         }).join("") : '<tr><td colspan="7" class="text-center py-4 text-secondary">Nenhuma execucao encontrada.</td></tr>';
       }
@@ -3200,6 +3364,26 @@
         const queue = workerPayload.queue || {};
         const workers = Array.isArray(workerPayload.workers) ? workerPayload.workers : [];
         E.promaxReprocessPublicationsBtn.disabled = !workers.some(worker => worker && worker.online) || Boolean(queue.paused);
+      }
+    }
+
+    async function promaxRetryJob(jobId) {
+      const job = (Array.isArray(state.promax.jobs) ? state.promax.jobs : []).find(item => String(item && item.id || "") === String(jobId));
+      const shortId = String(jobId || "").slice(0, 8);
+      const label = job ? `${promaxStatusLabel(job.status)} ${shortId}` : shortId;
+      if (!await askConfirmation(`Adicionar retry desta execucao Promax (${label}) a fila?`)) return;
+      try {
+        const response = await req(`${CONFIG.endpoints.promax.jobs}/${encodeURIComponent(jobId)}/retry`, {
+          method: "POST",
+          timeoutMs: 30000
+        });
+        const newJob = response && response.job ? response.job : {};
+        const retryUnits = response && Array.isArray(response.retry_units) ? response.retry_units : [];
+        const retryLabel = retryUnits.length ? `somente ${retryUnits.join(", ")}` : "job completo";
+        addLog(`Retry Promax adicionado a fila (${retryLabel}): ${String(newJob.id || "").slice(0, 8) || "novo job"}.`, "ok");
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao adicionar retry Promax: ${err.message}`, "err");
       }
     }
 

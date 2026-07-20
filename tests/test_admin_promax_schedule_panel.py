@@ -70,6 +70,22 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
         self.assertIn('params.set("created_to", createdTo)', self.html)
         self.assertIn("function clearPromaxJobFilters()", self.html)
 
+    def test_execution_log_has_retry_and_unit_summary_modal(self) -> None:
+        for field_id in (
+            "promaxUnitsModal",
+            "promaxUnitsModalTitle",
+            "promaxUnitsModalSubtitle",
+            "promaxUnitsModalBody",
+        ):
+            with self.subTest(field_id=field_id):
+                self.assertEqual(self.html.count(f'id="{field_id}"'), 1)
+
+        self.assertIn('function promaxRetryJob(jobId)', self.html)
+        self.assertIn('function promaxOpenUnitsModal(jobId)', self.html)
+        self.assertIn('/retry`, {', self.html)
+        self.assertIn('promaxJobUnitSummary(job)', self.html)
+        self.assertIn('promax-unit-status', self.html)
+
     def test_promax_admin_uses_scoped_neutral_colors(self) -> None:
         self.assertIn("#promaxPane {", self.html)
         self.assertIn("--promax-neutral-bg: #f5f6f8;", self.html)

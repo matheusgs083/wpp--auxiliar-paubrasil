@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from secrets import compare_digest
 from typing import Any, Literal
+from unicodedata import normalize as unicode_normalize
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request
@@ -16,6 +17,28 @@ _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _UUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
 _MAX_DATE_RANGE_DAYS = 366
 _PROMAX_LOCAL_TIMEZONE = ZoneInfo("America/Fortaleza")
+_PROMAX_NON_RETRYABLE_UNIT_STATUSES = {"SEM CONTEUDO", "SEM CONTEÚDO", "SEM DADOS"}
+_PROMAX_RETRYABLE_ERROR_TERMS = (
+    "download(s) http falharam",
+    "falha na fila de downloads http",
+    "resposta html sem url temporaria",
+    "url temporaria nao encontrada",
+    "url temporária não encontrada",
+    "temporarily unavailable",
+    "temporariamente indisponivel",
+    "temporariamente indisponível",
+    "timeout",
+    "timed out",
+    "connection",
+    "conexao",
+    "conexão",
+    "10054",
+    "10060",
+    "10061",
+    "502",
+    "503",
+    "504",
+)
 
 
 def _normalize_category(value: str) -> str:
@@ -70,6 +93,130 @@ def _promax_job_created_bounds(
         else None
     )
     return start_at, before_at
+
+
+def _plain_text(value: Any) -> str:
+    text = str(value or "")
+    normalized = unicode_normalize("NFKD", text)
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    return ascii_text.casefold()
+
+
+def _mapping_value(source: Any, key: str, default: Any = None) -> Any:
+    if isinstance(source, Mapping):
+        return source.get(key, default)
+    return getattr(source, key, default)
+
+
+def _clean_identifier(value: Any) -> str:
+    text = str(value or "").strip()
+    return text if _IDENTIFIER_PATTERN.fullmatch(text) else ""
+
+
+def _payload_units(payload: Any) -> list[str]:
+    if not isinstance(payload, Mapping):
+        return []
+    units = payload.get("units")
+    if not isinstance(units, Sequence) or isinstance(units, (str, bytes, bytearray)):
+        return []
+    normalized: list[str] = []
+    for item in units:
+        clean = _clean_identifier(item)
+        if clean and clean not in normalized:
+            normalized.append(clean)
+    return normalized
+
+
+def _failed_units_from_result(result: Any) -> tuple[list[str], list[dict[str, Any]]]:
+    failed_units: list[str] = []
+    failed_details: list[dict[str, Any]] = []
+    if not isinstance(result, Mapping):
+        return failed_units, failed_details
+
+    explicit_units = result.get("failed_units")
+    if isinstance(explicit_units, Sequence) and not isinstance(explicit_units, (str, bytes, bytearray)):
+        for item in explicit_units:
+            clean = _clean_identifier(item)
+            if clean and clean not in failed_units:
+                failed_units.append(clean)
+
+    detail_rows = result.get("failed_unit_details")
+    if isinstance(detail_rows, Sequence) and not isinstance(detail_rows, (str, bytes, bytearray)):
+        for row in detail_rows:
+            if isinstance(row, Mapping):
+                status = str(row.get("status") or "").strip().upper()
+                if status in _PROMAX_NON_RETRYABLE_UNIT_STATUSES:
+                    continue
+                unit = next(
+                    (
+                        _clean_identifier(row.get(key))
+                        for key in ("unit", "unidade", "unit_id", "code", "id")
+                        if _clean_identifier(row.get(key))
+                    ),
+                    "",
+                )
+                detail = dict(row)
+            else:
+                status = ""
+                unit = _clean_identifier(row)
+                detail = {"unit": unit}
+            if unit and unit not in failed_units:
+                failed_units.append(unit)
+            if unit:
+                failed_details.append({"unit": unit, "status": status, **detail})
+
+    return failed_units, failed_details
+
+
+def _extract_failed_retry_units(job: Any) -> tuple[list[str], list[dict[str, Any]], str]:
+    payload = _mapping_value(job, "payload", {})
+    result = _mapping_value(job, "result", {})
+    original_units = _payload_units(payload)
+    failed_units, failed_details = _failed_units_from_result(result)
+    if original_units and failed_units:
+        allowed = set(original_units)
+        failed_units = [unit for unit in failed_units if unit in allowed]
+        failed_details = [
+            detail
+            for detail in failed_details
+            if str(detail.get("unit") or "").strip() in allowed
+        ]
+    if failed_units:
+        return failed_units, failed_details, "failed_units"
+    return original_units, failed_details, "full_job"
+
+
+def _promax_result_text(job: Any) -> str:
+    result = _mapping_value(job, "result", {})
+    parts = [
+        _mapping_value(result, "message", ""),
+        _mapping_value(job, "error", ""),
+        _mapping_value(job, "failure_reason", ""),
+    ]
+    return " ".join(str(part or "") for part in parts)
+
+
+def _is_recoverable_promax_failure(job: Any) -> bool:
+    text = _plain_text(_promax_result_text(job))
+    return any(_plain_text(term) in text for term in _PROMAX_RETRYABLE_ERROR_TERMS)
+
+
+def _has_auto_retry_marker(job: Any) -> bool:
+    payload = _mapping_value(job, "payload", {})
+    return isinstance(payload, Mapping) and bool(payload.get("auto_retry_of_job_id"))
+
+
+def _retry_payload_for_job(job: Any) -> tuple[dict[str, Any], list[str], str]:
+    payload = _mapping_value(job, "payload", {})
+    retry_payload = dict(payload or {}) if isinstance(payload, Mapping) else {}
+    retry_units, failed_details, retry_mode = _extract_failed_retry_units(job)
+    if retry_mode == "failed_units" and retry_units:
+        retry_payload["units"] = retry_units
+        retry_payload["retry_scope"] = "failed_units"
+        retry_payload["failed_unit_details"] = failed_details
+    else:
+        retry_payload["retry_scope"] = "full_job"
+    return retry_payload, retry_units, retry_mode
 
 
 def _catalog_identifiers(value: Any) -> set[str] | None:
@@ -603,6 +750,52 @@ def create_admin_promax_router(
             "stopped": "cancelled",
         }[status]
 
+    def enqueue_auto_retry_if_needed(completed_job: Any, *, worker_id: str) -> dict[str, Any] | None:
+        status = str(_mapping_value(completed_job, "status", "") or "")
+        if status not in {"failed", "partial_success"}:
+            return None
+        if _has_auto_retry_marker(completed_job):
+            return None
+
+        retry_payload, retry_units, retry_mode = _retry_payload_for_job(completed_job)
+        if retry_mode != "failed_units" and not _is_recoverable_promax_failure(completed_job):
+            return None
+        if retry_mode == "failed_units" and not retry_units:
+            return None
+
+        original_job_id = str(_mapping_value(completed_job, "id", "") or "").strip()
+        retry_payload["auto_retry_of_job_id"] = original_job_id
+        retry_payload["auto_retry_attempt"] = 1
+        job_type = str(_mapping_value(completed_job, "job_type", "") or "").strip()
+        priority = int(_mapping_value(completed_job, "priority", 0) or 0)
+        retry_job = service.enqueue_job(
+            job_type=job_type,
+            payload=retry_payload,
+            priority=priority,
+            created_by=f"auto_retry:{worker_id}",
+        )
+        append_log = getattr(service, "append_job_log", None)
+        if callable(append_log) and original_job_id:
+            append_log(
+                job_id=original_job_id,
+                level="warning",
+                message=(
+                    "Retry automatico enfileirado para unidades com falha: "
+                    + (", ".join(retry_units) if retry_units else "job completo")
+                ),
+                data={
+                    "retry_job_id": _mapping_value(retry_job, "id", ""),
+                    "retry_mode": retry_mode,
+                    "retry_units": retry_units,
+                },
+                worker_id=worker_id,
+            )
+        return {
+            "job": retry_job,
+            "retry_mode": retry_mode,
+            "retry_units": retry_units,
+        }
+
     def worker_control(worker_id: str, job_id: str | None = None) -> dict[str, Any]:
         queue = service.get_queue_state()
         cancel_jobs = service.list_jobs(statuses=["cancel_requested"], limit=500)
@@ -775,6 +968,50 @@ def create_admin_promax_router(
         job = service.get_job(job_id)
         record_admin_event(request, "admin_promax_job_detail", reason=f"job_id={job_id}")
         return _item_response(job, key="job")
+
+    @router.post("/api/admin/promax/jobs/{job_id}/retry", status_code=202)
+    def api_admin_promax_retry_job(
+        request: Request,
+        job_id: str = Path(min_length=1, max_length=120, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$"),
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        original_job = service.get_job(job_id)
+        if not original_job:
+            raise HTTPException(status_code=404, detail="Job Promax nao encontrado.")
+
+        original_status = str(
+            original_job.get("status")
+            if isinstance(original_job, Mapping)
+            else getattr(original_job, "status", "")
+        )
+        if original_status not in {"failed", "partial_success", "cancelled"}:
+            raise HTTPException(status_code=409, detail="Apenas jobs com falha, parcial ou cancelados podem ser reenfileirados.")
+
+        original_job_type = str(
+            original_job.get("job_type")
+            if isinstance(original_job, Mapping)
+            else getattr(original_job, "job_type", "")
+        ).strip()
+        original_priority = int(
+            original_job.get("priority")
+            if isinstance(original_job, Mapping)
+            else getattr(original_job, "priority", 100)
+            or 100
+        )
+        retry_payload, retry_units, retry_mode = _retry_payload_for_job(original_job)
+        job = service.enqueue_job(
+            job_type=original_job_type,
+            payload=retry_payload,
+            priority=original_priority,
+            created_by=context_actor(context),
+        )
+        record_admin_event(request, "admin_promax_job_retry", reason=f"job_id={job_id}")
+        return {
+            "ok": True,
+            "job": job,
+            "retry_mode": retry_mode,
+            "retry_units": retry_units,
+        }
 
     @router.get("/api/admin/promax/jobs/{job_id}/logs")
     def api_admin_promax_job_logs(
@@ -1156,7 +1393,11 @@ def create_admin_promax_router(
             result={"pid": payload.pid, **(payload.result or {})},
             error=payload.error or "",
         )
-        return _mapping_or_value(result, key="job")
+        auto_retry = enqueue_auto_retry_if_needed(result, worker_id=payload.worker_id)
+        response = _mapping_or_value(result, key="job")
+        if auto_retry:
+            response["auto_retry"] = auto_retry
+        return response
 
     @router.get("/api/internal/promax/control")
     def api_internal_promax_control(
@@ -1256,6 +1497,10 @@ def create_admin_promax_router(
             result={"exit_code": payload.exit_code},
             error=payload.error,
         )
-        return _mapping_or_value(result, key="job")
+        auto_retry = enqueue_auto_retry_if_needed(result, worker_id=payload.worker_id)
+        response = _mapping_or_value(result, key="job")
+        if auto_retry:
+            response["auto_retry"] = auto_retry
+        return response
 
     return router

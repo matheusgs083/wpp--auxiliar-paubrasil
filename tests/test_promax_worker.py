@@ -325,6 +325,7 @@ class PromaxRunnerTests(unittest.TestCase):
                         "operation": "reprocessar-publicacao",
                         "status": "SUCESSO_PARCIAL",
                         "message": "2/3 publicadas; 1 permanece pendente.",
+                        "failed_units": ["3610008"],
                         "exit_code": 10,
                     }
                 )
@@ -352,6 +353,7 @@ class PromaxRunnerTests(unittest.TestCase):
 
         self.assertEqual(result.status, "partial_success")
         self.assertEqual(result.message, "2/3 publicadas; 1 permanece pendente.")
+        self.assertEqual(result.details["failed_units"], ["3610008"])
         self.assertIn(
             ("stdout", "Resumo final: 2/3 publicadas; 1 permanece pendente."),
             lines,

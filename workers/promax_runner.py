@@ -84,6 +84,7 @@ class PromaxRunResult:
     stopped: bool = False
     error: str | None = None
     message: str | None = None
+    details: dict[str, Any] | None = None
 
 
 class PromaxRunner:
@@ -210,6 +211,7 @@ class PromaxRunner:
         termination_requested = False
         last_stderr = ""
         result_message = ""
+        result_details: dict[str, Any] = {}
         now = self._monotonic()
         next_heartbeat = now
         next_control = now
@@ -250,6 +252,11 @@ class PromaxRunner:
             result_event = _parse_job_result_event(line) if stream == "stdout" else None
             if result_event is not None:
                 result_message = str(result_event.get("message") or "").strip()
+                result_details = {
+                    key: value
+                    for key, value in result_event.items()
+                    if key not in {"event", "message"}
+                }
                 if result_message:
                     on_line("stdout", f"Resumo final: {result_message}")
                 continue
@@ -291,6 +298,7 @@ class PromaxRunner:
             stopped=stopped,
             error=error,
             message=result_message,
+            details=result_details,
         )
 
 

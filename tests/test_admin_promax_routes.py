@@ -65,6 +65,29 @@ class FakePromaxService:
             return_value={
                 "id": job_id,
                 "job_type": "reports",
+                "payload": {
+                    "category": "reports",
+                    "routines": ["030237"],
+                    "units": ["030117", "030118"],
+                    "start_date": "2026-07-01",
+                    "end_date": "2026-07-01",
+                    "send_dates": False,
+                    "publish": True,
+                },
+                "status": "partial_success",
+                "priority": 100,
+                "result": {
+                    "message": "Execucao parcial: unidade 030118 falhou no download.",
+                    "failed_units": ["030118"],
+                    "failed_unit_details": [
+                        {
+                            "unit": "030118",
+                            "routine": "Rotina 030237",
+                            "status": "FALHA DOWNLOAD",
+                            "detail": "Resposta HTML sem URL temporaria",
+                        }
+                    ],
+                },
                 "leased_by": "worker-1",
                 "lease_token": "lease-token",
                 "logs": [{"id": 1, "message": "started"}] if kwargs.get("include_logs") else [],
@@ -187,7 +210,24 @@ class FakePromaxService:
     def finish_job(self, **kwargs: Any) -> dict[str, Any]:
         return self._call(
             "finish_job",
-            return_value={"job_id": kwargs["job_id"], "status": kwargs["status"]},
+            return_value={
+                "id": kwargs["job_id"],
+                "job_id": kwargs["job_id"],
+                "job_type": "reports",
+                "payload": {
+                    "category": "reports",
+                    "routines": ["030237"],
+                    "units": ["030117", "030118"],
+                    "start_date": "2026-07-01",
+                    "end_date": "2026-07-01",
+                    "send_dates": False,
+                    "publish": True,
+                },
+                "priority": 100,
+                "status": kwargs["status"],
+                "result": kwargs.get("result"),
+                "error": kwargs.get("error", ""),
+            },
             **kwargs,
         )
 
@@ -305,6 +345,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 200,
             ),
             ("get", "/api/admin/promax/jobs/job-1", None, 200),
+            ("post", "/api/admin/promax/jobs/job-1/retry", None, 202),
             ("get", "/api/admin/promax/jobs/job-1/logs?limit=50&after_id=0", None, 200),
             ("post", "/api/admin/promax/jobs/job-1/cancel", None, 200),
             ("post", "/api/admin/promax/jobs/job-1/stop", None, 200),
@@ -331,6 +372,8 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 "enqueue_job",
                 "list_jobs",
                 "get_job",
+                "get_job",
+                "enqueue_job",
                 "list_job_logs",
                 "cancel_job",
                 "cancel_job",
@@ -372,6 +415,9 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             list_kwargs["created_before"],
             datetime(2026, 7, 20, 3, 0, tzinfo=UTC),
         )
+        retry_payload = service.calls[4][2]["payload"]
+        self.assertEqual(retry_payload["units"], ["030118"])
+        self.assertEqual(retry_payload["retry_scope"], "failed_units")
 
     def test_admin_authentication_failure_stops_before_service(self) -> None:
         client, service, _events, auth_calls = self.make_client(auth_status=401)
@@ -724,6 +770,44 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         worker_auth_events = [event for event in events if event["event_type"] == "promax_worker_auth"]
         self.assertEqual(len(worker_auth_events), len(responses))
         self.assertTrue(all(event["decision"] == "allowed" for event in worker_auth_events))
+
+    def test_internal_finish_auto_retries_only_failed_units_once(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/jobs/job-1/finish",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "pid": 4321,
+                "lease_token": "lease-token",
+                "status": "partial_success",
+                "result": {
+                    "message": "1 de 2 download(s) HTTP falharam: Patos",
+                    "failed_units": ["030118"],
+                    "failed_unit_details": [
+                        {
+                            "unit": "030118",
+                            "routine": "Rotina 030237",
+                            "status": "FALHA DOWNLOAD",
+                            "detail": "Resposta HTML sem URL temporaria",
+                        }
+                    ],
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(response.json()["auto_retry"]["retry_units"], ["030118"])
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["finish_job", "enqueue_job", "append_job_log"],
+        )
+        retry_payload = service.calls[1][2]["payload"]
+        self.assertEqual(retry_payload["units"], ["030118"])
+        self.assertEqual(retry_payload["retry_scope"], "failed_units")
+        self.assertEqual(retry_payload["auto_retry_of_job_id"], "job-1")
 
     def test_worker_client_compatibility_routes_map_to_service_contract(self) -> None:
         client, service, _events, _auth_calls = self.make_client()

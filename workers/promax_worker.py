@@ -292,6 +292,7 @@ class PromaxWorker:
                     lease_token,
                     status=result.status,
                     result={
+                        **dict(result.details or {}),
                         "return_code": result.return_code,
                         "child_pid": result.child_pid or None,
                         "message": result.message or "",
