@@ -8,7 +8,7 @@ import tempfile
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -31,6 +31,19 @@ _SENSITIVE_LOG_PATTERN = re.compile(
     r"(\s*[:=]\s*)([^\s,;]+)"
 )
 _BEARER_LOG_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
+_PROMAX_030206_DEFAULT_PUBLICATION_DIR = (
+    r"\\dc01n\publico_patos\ADMINISTRATIVO\FINANCEIRO\Bot Zap\030206"
+)
+_PROMAX_030206_UNIT_FILIAL_DEFAULTS = {
+    "0640001": "1",
+    "0640002": "2",
+    "2210003": "3",
+    "2210004": "4",
+    "3480005": "5",
+    "3610006": "6",
+    "3610007": "7",
+    "3610008": "8",
+}
 
 
 @dataclass(frozen=True)
@@ -187,7 +200,7 @@ class PromaxWorker:
                 "return_code": result.return_code,
             },
         )
-        self._finish_with_retry(job_id, lease_token, result)
+        self._finish_with_retry(job, job_id, lease_token, result)
         self.logger.info("Job Promax %s finalizado com status %s.", job_id, result.status)
 
     def _heartbeat_active_job(self, job_id: str, lease_token: str) -> None:
@@ -279,14 +292,19 @@ class PromaxWorker:
 
     def _finish_with_retry(
         self,
+        job: Mapping[str, Any],
         job_id: str,
         lease_token: str,
         result: PromaxRunResult,
     ) -> None:
         backoff = self.config.backoff_initial_seconds
+        boleto_import_attempted = False
         while True:
             try:
                 self._flush_logs()
+                if not boleto_import_attempted:
+                    self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
+                    boleto_import_attempted = True
                 self.client.finish(
                     job_id,
                     lease_token,
@@ -307,6 +325,114 @@ class PromaxWorker:
             except PromaxClientError as exc:
                 self.logger.error("Finalizacao rejeitada para job %s: %s", job_id, exc)
                 return
+
+    def _import_030206_boletos_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        routines = _string_list(payload.get("routines"))
+        if "030206_BOT" not in routines:
+            return
+        if payload.get("publish", True) is False:
+            return
+
+        requested_units = _string_list(payload.get("units"))
+        unit_filial_map = _promax_030206_unit_filial_map()
+        source_dir = Path(
+            os.environ.get("PROMAX_030206_PUBLICATION_DIR")
+            or _PROMAX_030206_DEFAULT_PUBLICATION_DIR
+        )
+        if not source_dir.is_dir():
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica 030206 ignorada: pasta nao encontrada {source_dir}",
+                "warning",
+                {"event": "promax_030206_auto_import_missing_dir", "source_dir": str(source_dir)},
+            )
+            return
+        units = requested_units or [
+            match.group(1)
+            for pdf_path in source_dir.glob("03,02,06_*.pdf")
+            if (match := re.fullmatch(r"03,02,06_([A-Za-z0-9_.-]+)\.pdf", pdf_path.name))
+        ]
+
+        imported = 0
+        missing: list[str] = []
+        failed: list[str] = []
+        for unit in units:
+            filial = unit_filial_map.get(unit)
+            if not filial:
+                continue
+            pdf_path = source_dir / f"03,02,06_{unit}.pdf"
+            if not pdf_path.is_file():
+                missing.append(unit)
+                continue
+            try:
+                response = self.client.import_boleto_pdf(
+                    job_id=job_id,
+                    lease_token=lease_token,
+                    filial=filial,
+                    filename=pdf_path.name,
+                    pdf_bytes=pdf_path.read_bytes(),
+                    reference_date=str(payload.get("end_date") or payload.get("start_date") or "") or None,
+                )
+                result_payload = response.get("result") if isinstance(response, Mapping) else None
+                imported += 1
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    (
+                        "Boletos 030206 importados automaticamente para filial "
+                        f"{filial}: {pdf_path.name}"
+                    ),
+                    "info",
+                    {
+                        "event": "promax_030206_auto_import_uploaded",
+                        "filial": filial,
+                        "unit": unit,
+                        "filename": pdf_path.name,
+                        "result": result_payload if isinstance(result_payload, Mapping) else {},
+                    },
+                )
+            except (OSError, PromaxClientError, ValueError) as exc:
+                failed.append(unit)
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Falha na importacao automatica 030206 da unidade {unit}: {exc}",
+                    "error",
+                    {"event": "promax_030206_auto_import_failed", "unit": unit, "filial": filial},
+                )
+
+        if missing:
+            self._send_log(
+                job_id,
+                lease_token,
+                "Importacao automatica 030206 sem PDF para unidade(s): " + ", ".join(missing),
+                "warning",
+                {"event": "promax_030206_auto_import_missing_files", "units": missing},
+            )
+        self._send_log(
+            job_id,
+            lease_token,
+            f"Importacao automatica 030206 finalizada: {imported} arquivo(s), {len(failed)} falha(s).",
+            "info" if not failed else "warning",
+            {
+                "event": "promax_030206_auto_import_summary",
+                "imported": imported,
+                "failed_units": failed,
+                "missing_units": missing,
+            },
+        )
 
 
 def build_worker(config: WorkerConfig) -> PromaxWorker:
@@ -330,6 +456,29 @@ def build_worker(config: WorkerConfig) -> PromaxWorker:
         runner=PromaxRunner(runner_config),
         catalog_provider=lambda: discover_report_catalog(config.driver_dir),
     )
+
+
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Sequence):
+        return []
+    normalized: list[str] = []
+    for item in value:
+        text = str(item or "").strip()
+        if text and text not in normalized:
+            normalized.append(text)
+    return normalized
+
+
+def _promax_030206_unit_filial_map() -> dict[str, str]:
+    mapping = dict(_PROMAX_030206_UNIT_FILIAL_DEFAULTS)
+    raw_value = os.environ.get("PROMAX_030206_UNIT_FILIAL_MAP", "")
+    for chunk in raw_value.split(","):
+        if ":" not in chunk:
+            continue
+        unit, filial = (part.strip() for part in chunk.split(":", 1))
+        if unit and filial:
+            mapping[unit] = filial
+    return mapping
 
 
 def load_project_env(project_root: Path = PROJECT_ROOT) -> Path | None:

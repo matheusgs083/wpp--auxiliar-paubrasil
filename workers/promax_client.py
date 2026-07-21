@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import socket
@@ -219,6 +220,30 @@ class PromaxClient:
                 "error": clean_error[:8000] if clean_error else "",
             },
         )
+
+    def import_boleto_pdf(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        filial: str,
+        filename: str,
+        pdf_bytes: bytes,
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        if not pdf_bytes:
+            raise ValueError("PDF bytes must not be empty.")
+        payload: dict[str, Any] = {
+            "worker_id": self.worker_id,
+            "job_id": _path_identifier(job_id),
+            "lease_token": _path_identifier(lease_token),
+            "filial": str(filial or "").strip(),
+            "filename": str(filename or "").strip(),
+            "file_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+        }
+        if reference_date:
+            payload["reference_date"] = str(reference_date)
+        return self._request("POST", "/api/internal/promax/boletos/import", payload)
 
     def _validate(self) -> None:
         if not self.base_url.startswith(("http://", "https://")):

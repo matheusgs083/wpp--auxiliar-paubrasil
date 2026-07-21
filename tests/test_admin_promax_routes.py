@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import secrets
 import sys
 import unittest
@@ -234,6 +235,20 @@ class FakePromaxService:
         )
 
 
+class FakeBoletoImportService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Path, Any]] = []
+
+    def import_source(self, source_path: Path, reference_date: Any = None) -> dict[str, Any]:
+        self.calls.append((source_path, reference_date))
+        return {
+            "dataset_name": "boletos_bradesco_op_3",
+            "filial": "3",
+            "imported": 2,
+            "matched": 2,
+        }
+
+
 class AdminPromaxRoutesTests(unittest.TestCase):
     context = {"mode": "admin", "is_admin": True, "filiais": ()}
     worker_headers = {"x-promax-worker-token": "worker-secret"}
@@ -307,6 +322,8 @@ class AdminPromaxRoutesTests(unittest.TestCase):
 
         app = FastAPI()
         app.state.promax_feature_calls = feature_calls
+        boleto_import_service = FakeBoletoImportService()
+        app.state.boleto_import_service = boleto_import_service
         catalog_source = (
             catalog_value
             if catalog_value is not None
@@ -322,6 +339,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 service=service,
                 catalog=lambda: catalog_source,
                 worker_token=worker_token,
+                boletos_pdf_import_services={"3": boleto_import_service},
                 require_admin_panel_auth=require_auth,
                 require_admin_panel_feature=require_feature,
                 record_security_event=lambda _request, **kwargs: events.append(kwargs),
@@ -827,6 +845,36 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         self.assertEqual(retry_payload["units"], ["030118"])
         self.assertEqual(retry_payload["retry_scope"], "failed_units")
         self.assertEqual(retry_payload["auto_retry_of_job_id"], "job-1")
+
+    def test_internal_worker_imports_030206_boleto_pdf_for_filial(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/boletos/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "filial": "3",
+                "filename": "03,02,06_2210003.pdf",
+                "file_base64": base64.b64encode(b"%PDF-1.4\nboleto").decode("ascii"),
+                "reference_date": "2026-07-20",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(response.json()["result"]["dataset_name"], "boletos_bradesco_op_3")
+        boleto_import_service = client.app.state.boleto_import_service
+        self.assertEqual(len(boleto_import_service.calls), 1)
+        source_path, reference_date = boleto_import_service.calls[0]
+        self.assertEqual(source_path.suffix, ".pdf")
+        self.assertEqual(str(reference_date), "2026-07-20")
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["append_job_log", "append_job_log"],
+        )
 
     def test_worker_client_compatibility_routes_map_to_service_contract(self) -> None:
         client, service, _events, _auth_calls = self.make_client()

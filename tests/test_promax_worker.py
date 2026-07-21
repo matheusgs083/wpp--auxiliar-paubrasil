@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import io
 import json
 import subprocess
@@ -121,6 +122,39 @@ class PromaxClientTests(unittest.TestCase):
             "/api/internal/promax/control?worker_id=worker&job_id=job-1",
             captured[3][0],
         )
+
+    def test_client_uploads_boleto_pdf_to_internal_import_route(self) -> None:
+        captured: list[tuple[str, dict[str, object]]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data)))
+            return _FakeResponse({"ok": True, "result": {"imported": 1}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            opener=opener,
+        )
+
+        client.import_boleto_pdf(
+            job_id="job-1",
+            lease_token="lease-token",
+            filial="3",
+            filename="03,02,06_2210003.pdf",
+            pdf_bytes=b"%PDF-1.4\nconteudo",
+            reference_date="2026-07-20",
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/boletos/import")
+        payload = captured[0][1]
+        self.assertEqual(payload["worker_id"], "worker")
+        self.assertEqual(payload["job_id"], "job-1")
+        self.assertEqual(payload["lease_token"], "lease-token")
+        self.assertEqual(payload["filial"], "3")
+        self.assertEqual(payload["filename"], "03,02,06_2210003.pdf")
+        self.assertEqual(base64.b64decode(payload["file_base64"]), b"%PDF-1.4\nconteudo")
 
     def test_control_flag_accepts_stop_job_ids_contract(self) -> None:
         payload = {

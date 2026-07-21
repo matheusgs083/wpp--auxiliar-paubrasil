@@ -253,6 +253,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                 "client_creation": {"created": []},
             },
             "promax_jobs_service": FakePromaxJobsService(),
+            "boletos_pdf_import_services": {},
             "promax_catalog": {
                 "categories": {
                     "fluxo_caixa": {
@@ -496,6 +497,22 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                         "pid": 100,
                         "lease_token": "lease-1",
                         "status": "success",
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/boletos/import",
+                expected_status=400,
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "lease_token": "lease-1",
+                        "filial": "3",
+                        "filename": "03,02,06_2210003.pdf",
+                        "file_base64": "JVBERi0xLjQK",
                     },
                 },
             ),

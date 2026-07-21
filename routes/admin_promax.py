@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import re
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path as FilePath
 from secrets import compare_digest
 from typing import Any, Literal
 from unicodedata import normalize as unicode_normalize
@@ -568,6 +572,32 @@ class PromaxJobFinishRequest(_StrictPayload):
         return self
 
 
+class PromaxBoletoImportRequest(_StrictPayload):
+    worker_id: str = Field(min_length=1, max_length=120)
+    job_id: str = Field(min_length=1, max_length=120)
+    lease_token: str | None = Field(default=None, min_length=1, max_length=120)
+    filial: str = Field(min_length=1, max_length=16)
+    filename: str = Field(min_length=1, max_length=255)
+    file_base64: str = Field(min_length=1)
+    reference_date: date | None = None
+
+    @field_validator("filial")
+    @classmethod
+    def validate_filial(cls, value: str) -> str:
+        normalized = "".join(ch for ch in str(value or "").strip() if ch.isdigit())
+        if not normalized:
+            raise ValueError("filial deve conter ao menos um digito")
+        return normalized
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        name = FilePath(str(value or "").strip()).name
+        if not name or name.lower().endswith(".pdf") is False:
+            raise ValueError("filename deve ser um PDF")
+        return name
+
+
 class PromaxWorkerClientClaimRequest(_StrictPayload):
     worker_id: str = Field(min_length=1, max_length=120)
 
@@ -626,12 +656,14 @@ def create_admin_promax_router(
     service: Any,
     catalog: Callable[[], Any] | Mapping[str, Any],
     worker_token: str | None,
+    boletos_pdf_import_services: Mapping[str, Any] | None = None,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     record_security_event: Callable[..., None],
 ) -> APIRouter:
     router = APIRouter()
     expected_worker_token = worker_token.strip() if isinstance(worker_token, str) else ""
+    boleto_import_services = dict(boletos_pdf_import_services or {})
 
     def require_promax_context(
         request: Request,
@@ -1424,6 +1456,68 @@ def create_admin_promax_router(
     ) -> dict[str, Any]:
         result = worker_control(worker_id, job_id)
         return _mapping_or_value(result, key="control")
+
+    @router.post("/api/internal/promax/boletos/import")
+    def api_internal_promax_import_boleto_pdf(
+        payload: PromaxBoletoImportRequest,
+        _worker_auth: None = Depends(require_worker_auth),
+    ) -> dict[str, Any]:
+        import_service = boleto_import_services.get(payload.filial)
+        if import_service is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Importador de boletos nao configurado para a filial {payload.filial}.",
+            )
+        lease_token = resolve_job_lease_token(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            provided_lease_token=payload.lease_token,
+        )
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=f"Importacao automatica 030206 iniciada para filial {payload.filial}: {payload.filename}",
+            data={"event": "promax_030206_auto_import_start", "filial": payload.filial, "filename": payload.filename},
+        )
+        try:
+            pdf_bytes = base64.b64decode(payload.file_base64.encode("ascii"), validate=True)
+        except (UnicodeEncodeError, binascii.Error) as exc:
+            raise HTTPException(status_code=400, detail="Arquivo PDF em base64 invalido.") from exc
+        if not pdf_bytes.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="Arquivo enviado nao parece ser um PDF valido.")
+
+        temp_path = ""
+        try:
+            with tempfile.NamedTemporaryFile(prefix="promax_030206_", suffix=".pdf", delete=False) as tmp:
+                tmp.write(pdf_bytes)
+                temp_path = tmp.name
+            result = import_service.import_source(FilePath(temp_path), reference_date=payload.reference_date)
+        finally:
+            if temp_path:
+                try:
+                    FilePath(temp_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                "Importacao automatica 030206 concluida para filial "
+                f"{payload.filial}: {result.get('imported', 0)} pagina(s), "
+                f"{result.get('matched', 0)} boleto(s) vinculados."
+            ),
+            data={
+                "event": "promax_030206_auto_import_success",
+                "filial": payload.filial,
+                "filename": payload.filename,
+                "result": result,
+            },
+        )
+        return {"ok": True, "result": result}
 
     @router.post("/api/internal/promax/worker/claim")
     def api_internal_promax_worker_client_claim(

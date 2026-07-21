@@ -502,6 +502,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "queue_admin_broadcast": runtime["_queue_admin_broadcast"],
         "promax_jobs_service": runtime["promax_jobs_service"],
         "promax_catalog": runtime["PROMAX_CATALOG"],
+        "boletos_pdf_import_services": runtime["services"].boletos_pdf_import_services,
         "require_webhook_token": runtime["_require_webhook_token"],
         "require_meta_cloud_signature": runtime["_require_meta_cloud_signature"],
         "queue_incoming_webhook": runtime["_queue_incoming_webhook"],

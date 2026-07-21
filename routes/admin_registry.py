@@ -174,6 +174,7 @@ def _register_admin_promax_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             service=deps["promax_jobs_service"],
             catalog=deps["promax_catalog"],
             worker_token=deps["settings"].promax_worker_token,
+            boletos_pdf_import_services=deps["boletos_pdf_import_services"],
             require_admin_panel_auth=deps["require_admin_panel_auth"],
             require_admin_panel_feature=deps["require_admin_panel_feature"],
             record_security_event=deps["record_security_event"],
