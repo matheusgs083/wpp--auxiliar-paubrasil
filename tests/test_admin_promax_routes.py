@@ -21,6 +21,7 @@ from bot_api.routes.admin_promax import create_admin_promax_router
 class FakePromaxService:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+        self.job_result: dict[str, Any] | None = None
 
     def _call(self, operation: str, *args: Any, return_value: Any, **kwargs: Any) -> Any:
         self.calls.append((operation, args, kwargs))
@@ -59,6 +60,18 @@ class FakePromaxService:
         )
 
     def get_job(self, job_id: str, **kwargs: Any) -> dict[str, Any]:
+        result = self.job_result if self.job_result is not None else {
+            "message": "Execucao parcial: unidade 030118 falhou no download.",
+            "failed_units": ["030118"],
+            "failed_unit_details": [
+                {
+                    "unit": "030118",
+                    "routine": "Rotina 030237",
+                    "status": "FALHA DOWNLOAD",
+                    "detail": "Resposta HTML sem URL temporaria",
+                }
+            ],
+        }
         return self._call(
             "get_job",
             job_id,
@@ -76,18 +89,7 @@ class FakePromaxService:
                 },
                 "status": "partial_success",
                 "priority": 100,
-                "result": {
-                    "message": "Execucao parcial: unidade 030118 falhou no download.",
-                    "failed_units": ["030118"],
-                    "failed_unit_details": [
-                        {
-                            "unit": "030118",
-                            "routine": "Rotina 030237",
-                            "status": "FALHA DOWNLOAD",
-                            "detail": "Resposta HTML sem URL temporaria",
-                        }
-                    ],
-                },
+                "result": result,
                 "leased_by": "worker-1",
                 "lease_token": "lease-token",
                 "logs": [{"id": 1, "message": "started"}] if kwargs.get("include_logs") else [],
@@ -427,6 +429,23 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(len(auth_calls), 1)
         self.assertEqual(service.calls, [])
+
+    def test_retry_infers_failed_unit_from_legacy_result_text(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+        service.job_result = {
+            "message": (
+                "Job concluido com pendencias: 1 de 8 download(s) HTTP falharam: "
+                "01-07-2026 120601_nomeUnidade120601_030118.csv: Resposta HTML sem URL temporaria"
+            )
+        }
+
+        response = client.post("/api/admin/promax/jobs/job-1/retry")
+
+        self.assertEqual(response.status_code, 202, response.text)
+        self.assertEqual(response.json()["retry_units"], ["030118"])
+        retry_payload = service.calls[1][2]["payload"]
+        self.assertEqual(retry_payload["units"], ["030118"])
+        self.assertEqual(retry_payload["retry_scope"], "failed_units")
 
     def test_job_batch_enqueues_all_groups_in_selected_order(self) -> None:
         catalog = {

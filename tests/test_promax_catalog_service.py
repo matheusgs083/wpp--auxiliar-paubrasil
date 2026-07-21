@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from bot_api.services.promax_catalog_service import PromaxCatalogService, normalize_catalog
+from bot_api.services.promax_catalog_service import (
+    DEFAULT_PROMAX_CATALOG,
+    PromaxCatalogService,
+    normalize_catalog,
+)
 
 
 FALLBACK = {
@@ -76,6 +80,29 @@ class PromaxCatalogServiceTest(unittest.TestCase):
 
                 self.assertEqual(catalog["source"], "fallback")
                 self.assertIn("fluxo_caixa", catalog["categories"])
+
+    def test_default_fallback_keeps_all_standard_groups_visible(self) -> None:
+        service = PromaxCatalogService(
+            jobs_service=FakeJobsService(),
+            fallback_catalog=DEFAULT_PROMAX_CATALOG,
+        )
+
+        catalog = service.get_catalog()
+
+        self.assertEqual(catalog["source"], "fallback")
+        self.assertEqual(
+            set(catalog["categories"]),
+            {
+                "adf",
+                "bot_zap",
+                "estoque",
+                "fluxo_caixa",
+                "giro",
+                "inadimplencia",
+                "obz",
+                "outros",
+            },
+        )
 
     def test_rejects_invalid_identifiers(self) -> None:
         with self.assertRaisesRegex(ValueError, "categoria invalida"):

@@ -27,7 +27,7 @@ from bot_api.services.critica_operacao_import_service import CriticaOperacaoImpo
 from bot_api.services.critica_rn_query_service import CriticaPdfCurrentImportRequiredError
 from bot_api.services.filial_labels import set_filial_labels
 from bot_api.services.health_service import HealthPayloadBuilder
-from bot_api.services.promax_catalog_service import PromaxCatalogService
+from bot_api.services.promax_catalog_service import DEFAULT_PROMAX_CATALOG, PromaxCatalogService
 from bot_api.services.promax_scheduler import PromaxScheduler
 from bot_api.services.webhook_runtime import WebhookRuntime
 from bot_api.security.http_auth import HttpAuthDependencies
@@ -49,22 +49,9 @@ def configure_app_runtime(
         enqueue_interval_seconds=settings.promax_scheduler_interval_seconds,
         reaper_interval_seconds=settings.promax_scheduler_interval_seconds,
     )
-    promax_fallback_catalog = {
-        "categories": {
-            "fluxo_caixa": {
-                "name": "Fluxo de Caixa",
-                "description": "Catalogo minimo usado enquanto o worker estiver offline.",
-                "routines": [
-                    {"id": "140506", "name": "Rotina 140506"},
-                    {"id": "120606", "name": "Rotina 120606"},
-                ],
-                "units": [],
-            }
-        }
-    }
     promax_catalog_service = PromaxCatalogService(
         jobs_service=promax_jobs_service,
-        fallback_catalog=promax_fallback_catalog,
+        fallback_catalog=DEFAULT_PROMAX_CATALOG,
     )
     PROMAX_CATALOG = promax_catalog_service.get_catalog
     dclientes_query_service = services.dclientes_query_service

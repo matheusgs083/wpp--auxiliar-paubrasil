@@ -22,6 +22,12 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
             "promaxSchedulePublish",
             "promaxScheduleTriggerType",
             "promaxScheduleTriggerSchedule",
+            "promaxScheduleDailyDays",
+            "promaxScheduleSpecificHours",
+            "promaxScheduleSpecificStart",
+            "promaxScheduleSpecificEnd",
+            "promaxScheduleSpecificStep",
+            "promaxScheduleSpecificPreview",
         )
         for field_id in field_ids:
             with self.subTest(field_id=field_id):
@@ -33,6 +39,17 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
             'E.promaxScheduleTriggerType.addEventListener("change", syncPromaxScheduleFields);',
             self.html,
         )
+
+    def test_schedule_supports_daily_days_and_specific_intervals(self) -> None:
+        self.assertIn('<option value="daily_specific">Diaria especifica</option>', self.html)
+        self.assertIn("function promaxSelectedScheduleDays()", self.html)
+        self.assertIn("function promaxSpecificScheduleTimes()", self.html)
+        self.assertIn("function promaxScheduleTimingPayloads(name)", self.html)
+        self.assertIn('type === "daily_specific"', self.html)
+        self.assertIn("createdSchedules += Array.isArray(response && response.schedules)", self.html)
+        for value in range(7):
+            with self.subTest(value=value):
+                self.assertIn(f'class="form-check-input promax-schedule-day" type="checkbox" value="{value}"', self.html)
 
     def test_dates_are_opt_in_for_run_now_and_schedules(self) -> None:
         for field_id in ("promaxSendDates", "promaxScheduleSendDates"):

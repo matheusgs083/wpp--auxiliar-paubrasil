@@ -173,6 +173,18 @@ def _extract_failed_retry_units(job: Any) -> tuple[list[str], list[dict[str, Any
     result = _mapping_value(job, "result", {})
     original_units = _payload_units(payload)
     failed_units, failed_details = _failed_units_from_result(result)
+    if original_units and not failed_units:
+        result_text = _plain_text(_promax_result_text(job))
+        for unit in original_units:
+            if _plain_text(unit) in result_text:
+                failed_units.append(unit)
+                failed_details.append(
+                    {
+                        "unit": unit,
+                        "status": "FALHA DETECTADA",
+                        "detail": _mapping_value(result, "message", "") or _mapping_value(job, "error", ""),
+                    }
+                )
     if original_units and failed_units:
         allowed = set(original_units)
         failed_units = [unit for unit in failed_units if unit in allowed]

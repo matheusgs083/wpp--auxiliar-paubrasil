@@ -1037,7 +1037,7 @@
                 </div>
                 <div class="col-xl-2 col-lg-2" id="promaxScheduleTypeWrap">
                   <label class="form-label small mb-1" for="promaxScheduleType">Frequencia</label>
-                  <select class="form-select form-select-sm" id="promaxScheduleType"><option value="daily">Diaria</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
+                  <select class="form-select form-select-sm" id="promaxScheduleType"><option value="daily">Diaria</option><option value="daily_specific">Diaria especifica</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
                 </div>
                 <div class="col-xl-2 col-lg-2" id="promaxScheduleTimeWrap">
                   <label class="form-label small mb-1" for="promaxScheduleTime">Horario</label>
@@ -1056,6 +1056,41 @@
                 <div class="col-xl-2 col-lg-2 d-none" id="promaxScheduleMonthDayWrap">
                   <label class="form-label small mb-1" for="promaxScheduleMonthDay">Dia do mes</label>
                   <input class="form-control form-control-sm" id="promaxScheduleMonthDay" type="number" min="1" max="31" value="1">
+                </div>
+                <div class="col-xl-4 col-lg-6 d-none" id="promaxScheduleDailyDaysWrap">
+                  <label class="form-label small mb-1">Dias da execucao diaria</label>
+                  <div class="d-flex flex-wrap gap-2 small" id="promaxScheduleDailyDays">
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="0" checked> Seg</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="1" checked> Ter</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="2" checked> Qua</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="3" checked> Qui</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="4" checked> Sex</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="5"> Sab</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="6"> Dom</label>
+                  </div>
+                </div>
+                <div class="col-12 d-none" id="promaxScheduleSpecificWrap">
+                  <div class="row g-2 align-items-end">
+                    <div class="col-xl-4 col-lg-5">
+                      <label class="form-label small mb-1" for="promaxScheduleSpecificHours">Horas cheias</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleSpecificHours" type="text" placeholder="12, 13, 14, 15, 16, 17">
+                    </div>
+                    <div class="col-xl-2 col-lg-2">
+                      <label class="form-label small mb-1" for="promaxScheduleSpecificStart">De</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleSpecificStart" type="time" value="17:05">
+                    </div>
+                    <div class="col-xl-2 col-lg-2">
+                      <label class="form-label small mb-1" for="promaxScheduleSpecificEnd">Ate</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleSpecificEnd" type="time" value="18:00">
+                    </div>
+                    <div class="col-xl-2 col-lg-2">
+                      <label class="form-label small mb-1" for="promaxScheduleSpecificStep">Intervalo min.</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleSpecificStep" type="number" min="1" max="120" value="5">
+                    </div>
+                    <div class="col-xl-2 col-lg-3">
+                      <div class="form-text" id="promaxScheduleSpecificPreview">Informe os horarios.</div>
+                    </div>
+                  </div>
                 </div>
                 <div class="col-xl-4 col-lg-6">
                   <div class="row g-2">
@@ -1724,6 +1759,16 @@
       { id: "3610008", name: "Cacule" }
     ];
 
+    const PROMAX_WEEKDAYS = [
+      { value: 0, short: "Seg", name: "Segunda" },
+      { value: 1, short: "Ter", name: "Terca" },
+      { value: 2, short: "Qua", name: "Quarta" },
+      { value: 3, short: "Qui", name: "Quinta" },
+      { value: 4, short: "Sex", name: "Sexta" },
+      { value: 5, short: "Sab", name: "Sabado" },
+      { value: 6, short: "Dom", name: "Domingo" }
+    ];
+
     const PROMAX_SCHEDULE_SLICERS = {
       reseller: {
         prefix: "promaxScheduleReseller",
@@ -2005,6 +2050,14 @@
       promaxScheduleWeekday: document.getElementById("promaxScheduleWeekday"),
       promaxScheduleMonthDayWrap: document.getElementById("promaxScheduleMonthDayWrap"),
       promaxScheduleMonthDay: document.getElementById("promaxScheduleMonthDay"),
+      promaxScheduleDailyDaysWrap: document.getElementById("promaxScheduleDailyDaysWrap"),
+      promaxScheduleDailyDays: document.getElementById("promaxScheduleDailyDays"),
+      promaxScheduleSpecificWrap: document.getElementById("promaxScheduleSpecificWrap"),
+      promaxScheduleSpecificHours: document.getElementById("promaxScheduleSpecificHours"),
+      promaxScheduleSpecificStart: document.getElementById("promaxScheduleSpecificStart"),
+      promaxScheduleSpecificEnd: document.getElementById("promaxScheduleSpecificEnd"),
+      promaxScheduleSpecificStep: document.getElementById("promaxScheduleSpecificStep"),
+      promaxScheduleSpecificPreview: document.getElementById("promaxScheduleSpecificPreview"),
       promaxScheduleCreateBtn: document.getElementById("promaxScheduleCreateBtn"),
       promaxScheduleCancelBtn: document.getElementById("promaxScheduleCancelBtn"),
       promaxSchedulesBody: document.getElementById("promaxSchedulesBody"),
@@ -2973,6 +3026,150 @@
       return promaxSelectionSelectedUnits("schedule");
     }
 
+    function promaxSelectedScheduleDays() {
+      const inputs = E.promaxScheduleDailyDays
+        ? Array.from(E.promaxScheduleDailyDays.querySelectorAll(".promax-schedule-day"))
+        : [];
+      return inputs
+        .filter(input => input.checked)
+        .map(input => Number(input.value))
+        .filter(value => Number.isInteger(value) && value >= 0 && value <= 6);
+    }
+
+    function setPromaxSelectedScheduleDays(days) {
+      const selected = new Set((Array.isArray(days) ? days : []).map(Number));
+      if (!E.promaxScheduleDailyDays) return;
+      E.promaxScheduleDailyDays.querySelectorAll(".promax-schedule-day").forEach(input => {
+        input.checked = selected.has(Number(input.value));
+      });
+    }
+
+    function promaxFormatWeekday(value) {
+      const day = PROMAX_WEEKDAYS.find(item => item.value === Number(value));
+      return day ? day.short : String(value);
+    }
+
+    function promaxTimeToMinutes(value) {
+      const text = String(value || "").trim();
+      const match = text.match(/^(\d{1,2})(?::(\d{2}))?$/);
+      if (!match) return null;
+      const hours = Number(match[1]);
+      const minutes = Number(match[2] || 0);
+      if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+      return hours * 60 + minutes;
+    }
+
+    function promaxMinutesToTime(minutes) {
+      const normalized = Number(minutes);
+      const hours = Math.floor(normalized / 60);
+      const mins = normalized % 60;
+      return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+    }
+
+    function promaxSpecificScheduleTimes() {
+      const times = new Set();
+      const rawHours = String(E.promaxScheduleSpecificHours && E.promaxScheduleSpecificHours.value || "");
+      rawHours.split(/[,\s;]+/).forEach(part => {
+        const text = String(part || "").trim();
+        if (!text) return;
+        const minutes = promaxTimeToMinutes(text.includes(":") ? text : `${text}:00`);
+        if (minutes != null) times.add(promaxMinutesToTime(minutes));
+      });
+      const start = promaxTimeToMinutes(E.promaxScheduleSpecificStart && E.promaxScheduleSpecificStart.value);
+      const end = promaxTimeToMinutes(E.promaxScheduleSpecificEnd && E.promaxScheduleSpecificEnd.value);
+      const step = Number(E.promaxScheduleSpecificStep && E.promaxScheduleSpecificStep.value || 0);
+      if (start != null || end != null || step) {
+        if (start == null || end == null || start > end) throw new Error("Confira o intervalo de horarios da agenda especifica.");
+        if (!Number.isInteger(step) || step < 1 || step > 120) throw new Error("O intervalo em minutos deve ficar entre 1 e 120.");
+        for (let current = start; current <= end; current += step) {
+          times.add(promaxMinutesToTime(current));
+        }
+      }
+      return Array.from(times).sort();
+    }
+
+    function updatePromaxSpecificSchedulePreview() {
+      if (!E.promaxScheduleSpecificPreview) return;
+      try {
+        const times = promaxSpecificScheduleTimes();
+        E.promaxScheduleSpecificPreview.textContent = times.length
+          ? `${times.length} horario(s): ${times.slice(0, 8).join(", ")}${times.length > 8 ? "..." : ""}`
+          : "Informe os horarios.";
+      } catch (_err) {
+        E.promaxScheduleSpecificPreview.textContent = "Intervalo invalido.";
+      }
+    }
+
+    function promaxScheduleTimingPayloads(name) {
+      const triggerType = String(E.promaxScheduleTriggerType && E.promaxScheduleTriggerType.value || "time");
+      const type = String(E.promaxScheduleType && E.promaxScheduleType.value || "daily");
+      if (triggerType === "after") {
+        return [{
+          name,
+          schedule_type: "daily",
+          time_of_day: "00:00",
+          timezone: "America/Fortaleza",
+          weekday: null,
+          day_of_month: null
+        }];
+      }
+      if (type === "monthly") {
+        return [{
+          name,
+          schedule_type: "monthly",
+          time_of_day: E.promaxScheduleTime.value || "06:00",
+          timezone: "America/Fortaleza",
+          weekday: null,
+          day_of_month: Number(E.promaxScheduleMonthDay.value || 1)
+        }];
+      }
+      if (type === "weekly") {
+        return [{
+          name,
+          schedule_type: "weekly",
+          time_of_day: E.promaxScheduleTime.value || "06:00",
+          timezone: "America/Fortaleza",
+          weekday: Number(E.promaxScheduleWeekday.value || 0),
+          day_of_month: null
+        }];
+      }
+      const selectedDays = promaxSelectedScheduleDays();
+      if (!selectedDays.length) throw new Error("Selecione pelo menos um dia para a agenda diaria.");
+      const allDays = selectedDays.length === 7;
+      const times = type === "daily_specific"
+        ? promaxSpecificScheduleTimes()
+        : [E.promaxScheduleTime.value || "06:00"];
+      if (!times.length) throw new Error("Informe pelo menos um horario para a agenda diaria especifica.");
+      const payloads = [];
+      times.forEach(timeValue => {
+        if (allDays) {
+          payloads.push({
+            name: times.length > 1 ? `${name} ${timeValue}` : name,
+            schedule_type: "daily",
+            time_of_day: timeValue,
+            timezone: "America/Fortaleza",
+            weekday: null,
+            day_of_month: null
+          });
+          return;
+        }
+        selectedDays.forEach(day => {
+          payloads.push({
+            name: `${name} ${promaxFormatWeekday(day)} ${timeValue}`,
+            schedule_type: "weekly",
+            time_of_day: timeValue,
+            timezone: "America/Fortaleza",
+            weekday: day,
+            day_of_month: null
+          });
+        });
+      });
+      return payloads.map(item => ({
+        ...item,
+        name: String(item.name || name).slice(0, 120)
+      }));
+    }
+
     function promaxScheduleChainPayload() {
       const categoryIds = promaxScheduleSelectedCategories();
       if (!categoryIds.length) throw new Error("Selecione pelo menos um grupo para a agenda.");
@@ -3053,6 +3250,15 @@
       if (value === "pending" || value === "partial_success") return "promax-status--warning";
       if (value === "failed" || value === "cancel_requested") return "promax-status--danger";
       return "";
+    }
+
+    function promaxScheduleTimingLabel(schedule) {
+      const type = String(schedule && schedule.schedule_type || "");
+      const timeValue = String(schedule && schedule.time_of_day || "").slice(0, 5);
+      if (type === "weekly") return `${promaxFormatWeekday(schedule.weekday)} ${timeValue}`;
+      if (type === "monthly") return `Dia ${schedule.day_of_month || "-"} ${timeValue}`;
+      if (type === "daily") return `Diaria ${timeValue}`;
+      return `${type || "-"} ${timeValue}`;
     }
 
     function promaxUnitLabel(unitId) {
@@ -3224,7 +3430,7 @@
             : (status === "running" || status === "cancel_requested")
               ? `<button class="btn btn-outline-danger btn-sm" onclick="promaxCancelJob('${escapeHtml(job.id)}', true)"><i class="bi bi-stop-circle me-1"></i>Parar</button>`
               : "";
-          const failedUnitsCount = promaxJobFailedUnitMap(job).size;
+          const failedUnitsCount = promaxJobUnitRows(job).filter(row => row.tone === "err").length;
           const retryButtonText = status === "partial_success" && failedUnitsCount
             ? "Retry pendentes"
             : "Retry completo";
@@ -3262,7 +3468,7 @@
           const triggerSchedule = schedules.find(item => String(item.id || "") === triggerScheduleId);
           const triggerLabel = triggerScheduleId
             ? `Apos ${triggerSchedule ? triggerSchedule.name : triggerScheduleId.slice(0, 8)}`
-            : `${schedule.schedule_type || "-"} ${schedule.time_of_day || ""}`;
+            : promaxScheduleTimingLabel(schedule);
           return `<tr>
             <td><strong>${escapeHtml(schedule.name || "-")}</strong></td>
             <td><span class="mono">${escapeHtml(group ? group.name : groupId)}</span></td>
@@ -3477,7 +3683,7 @@
       const type = String(E.promaxScheduleType && E.promaxScheduleType.value || "daily");
       const triggered = triggerType === "after";
       if (E.promaxScheduleTypeWrap) E.promaxScheduleTypeWrap.classList.toggle("d-none", triggered);
-      if (E.promaxScheduleTimeWrap) E.promaxScheduleTimeWrap.classList.toggle("d-none", triggered);
+      if (E.promaxScheduleTimeWrap) E.promaxScheduleTimeWrap.classList.toggle("d-none", triggered || type === "daily_specific");
       if (E.promaxScheduleTriggerScheduleWrap) E.promaxScheduleTriggerScheduleWrap.classList.toggle("d-none", !triggered);
       if (E.promaxScheduleWeekdayWrap) {
         E.promaxScheduleWeekdayWrap.classList.toggle("d-none", triggered || type !== "weekly");
@@ -3485,6 +3691,13 @@
       if (E.promaxScheduleMonthDayWrap) {
         E.promaxScheduleMonthDayWrap.classList.toggle("d-none", triggered || type !== "monthly");
       }
+      if (E.promaxScheduleDailyDaysWrap) {
+        E.promaxScheduleDailyDaysWrap.classList.toggle("d-none", triggered || !["daily", "daily_specific"].includes(type));
+      }
+      if (E.promaxScheduleSpecificWrap) {
+        E.promaxScheduleSpecificWrap.classList.toggle("d-none", triggered || type !== "daily_specific");
+      }
+      updatePromaxSpecificSchedulePreview();
     }
 
     function resetPromaxScheduleForm() {
@@ -3494,6 +3707,13 @@
       state.promax.scheduleSelectedUnits = PROMAX_RESELLERS.map(reseller => reseller.id);
       if (E.promaxScheduleName) E.promaxScheduleName.value = "";
       if (E.promaxScheduleTriggerType) E.promaxScheduleTriggerType.value = "time";
+      if (E.promaxScheduleType) E.promaxScheduleType.value = "daily";
+      if (E.promaxScheduleTime) E.promaxScheduleTime.value = "06:00";
+      if (E.promaxScheduleSpecificHours) E.promaxScheduleSpecificHours.value = "";
+      if (E.promaxScheduleSpecificStart) E.promaxScheduleSpecificStart.value = "17:05";
+      if (E.promaxScheduleSpecificEnd) E.promaxScheduleSpecificEnd.value = "18:00";
+      if (E.promaxScheduleSpecificStep) E.promaxScheduleSpecificStep.value = "5";
+      setPromaxSelectedScheduleDays([0, 1, 2, 3, 4]);
       if (E.promaxScheduleSendDates) E.promaxScheduleSendDates.checked = false;
       renderPromaxScheduleCatalog();
       renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
@@ -3517,6 +3737,7 @@
       E.promaxScheduleType.value = String(schedule.schedule_type || "daily");
       E.promaxScheduleTime.value = String(schedule.time_of_day || "06:00").slice(0, 5);
       E.promaxScheduleWeekday.value = String(schedule.weekday == null ? 0 : schedule.weekday);
+      setPromaxSelectedScheduleDays(schedule.weekday == null ? [0, 1, 2, 3, 4, 5, 6] : [Number(schedule.weekday)]);
       E.promaxScheduleMonthDay.value = String(schedule.day_of_month == null ? 1 : schedule.day_of_month);
       E.promaxScheduleStartDate.value = String(payload.start_date || "");
       E.promaxScheduleEndDate.value = String(payload.end_date || "");
@@ -3565,17 +3786,20 @@
         addLog("Na edicao, mantenha somente o grupo desta agenda. Para varios grupos, crie uma nova cadeia.", "warn");
         return;
       }
-      const timingPayload = {
-        schedule_type: E.promaxScheduleType.value,
-        time_of_day: E.promaxScheduleTime.value || "06:00",
-        timezone: "America/Fortaleza",
-        weekday: E.promaxScheduleType.value === "weekly" ? Number(E.promaxScheduleWeekday.value) : null,
-        day_of_month: E.promaxScheduleType.value === "monthly" ? Number(E.promaxScheduleMonthDay.value) : null,
-        enabled: editingSchedule ? Boolean(editingSchedule.enabled) : true
-      };
+      let timingPayloads;
+      try {
+        timingPayloads = promaxScheduleTimingPayloads(name);
+      } catch (err) {
+        addLog(err.message, "warn");
+        return;
+      }
+      if (editingScheduleId && timingPayloads.length !== 1) {
+        addLog("Na edicao, mantenha somente um dia e um horario. Para varios horarios, crie uma nova agenda.", "warn");
+        return;
+      }
       const payload = editingScheduleId
         ? {
-          name,
+          name: timingPayloads[0].name,
           category: chainPayload.groups[0].category,
           routines: chainPayload.groups[0].routines,
           units: chainPayload.units,
@@ -3584,31 +3808,50 @@
           send_dates: chainPayload.send_dates,
           publish: chainPayload.publish,
           trigger_after_schedule_id: chainPayload.trigger_after_schedule_id,
-          ...timingPayload
+          ...timingPayloads[0],
+          enabled: editingSchedule ? Boolean(editingSchedule.enabled) : true
         }
         : {
           ...chainPayload,
           name,
-          ...timingPayload
+          ...timingPayloads[0],
+          enabled: true
         };
-      const actionLabel = editingScheduleId ? "Salvar as alteracoes da agenda" : "Criar a agenda";
+      const totalCreations = editingScheduleId ? 1 : timingPayloads.length;
+      const actionLabel = editingScheduleId ? "Salvar as alteracoes da agenda" : `Criar ${totalCreations} agenda(s)`;
       if (!await askConfirmation(`${actionLabel} "${name}"?`)) return;
       E.promaxScheduleCreateBtn.disabled = true;
       try {
-        const endpoint = editingScheduleId
-          ? `${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(editingScheduleId)}`
-          : CONFIG.endpoints.promax.scheduleChains;
-        const response = await req(endpoint, {
-          method: editingScheduleId ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          timeoutMs: 30000
-        });
-        const createdSchedules = Array.isArray(response && response.schedules) ? response.schedules.length : 0;
+        let createdSchedules = 0;
+        if (editingScheduleId) {
+          await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(editingScheduleId)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            timeoutMs: 30000
+          });
+        } else {
+          for (const timingPayload of timingPayloads) {
+            const response = await req(CONFIG.endpoints.promax.scheduleChains, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...chainPayload,
+                name: timingPayload.name,
+                ...timingPayload,
+                enabled: true
+              }),
+              timeoutMs: 30000
+            });
+            createdSchedules += Array.isArray(response && response.schedules)
+              ? response.schedules.length
+              : chainPayload.groups.length;
+          }
+        }
         addLog(
           editingScheduleId
             ? "Agenda Promax atualizada."
-            : `Cadeia Promax criada com ${createdSchedules || chainPayload.groups.length} agenda(s).`,
+            : `Agenda Promax criada com ${createdSchedules || (chainPayload.groups.length * totalCreations)} item(ns).`,
           "ok"
         );
         resetPromaxScheduleForm();
@@ -3700,6 +3943,22 @@
       if (E.promaxScheduleSendDates) E.promaxScheduleSendDates.addEventListener("change", syncPromaxDateFields);
       if (E.promaxScheduleType) E.promaxScheduleType.addEventListener("change", syncPromaxScheduleFields);
       if (E.promaxScheduleTriggerType) E.promaxScheduleTriggerType.addEventListener("change", syncPromaxScheduleFields);
+      if (E.promaxScheduleDailyDays) {
+        E.promaxScheduleDailyDays.querySelectorAll(".promax-schedule-day").forEach(input => {
+          input.addEventListener("change", updatePromaxActionState);
+        });
+      }
+      [
+        E.promaxScheduleSpecificHours,
+        E.promaxScheduleSpecificStart,
+        E.promaxScheduleSpecificEnd,
+        E.promaxScheduleSpecificStep
+      ].forEach(input => {
+        if (input) input.addEventListener("input", () => {
+          updatePromaxSpecificSchedulePreview();
+          updatePromaxActionState();
+        });
+      });
       if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.addEventListener("click", promaxCreateSchedule);
       if (E.promaxScheduleCancelBtn) E.promaxScheduleCancelBtn.addEventListener("click", resetPromaxScheduleForm);
       document.getElementById("clearLogBtn").addEventListener("click", () => { state.logs = []; renderLogs(); });

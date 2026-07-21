@@ -11,6 +11,87 @@ _CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 
+DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
+    "categories": {
+        "adf": {
+            "name": "ADF",
+            "description": "Relatorios de dados para o ADF.",
+            "routines": [
+                {"id": "030237", "name": "Rotina 030237"},
+            ],
+            "units": [],
+        },
+        "bot_zap": {
+            "name": "Bot Zap",
+            "description": "Relatorios consumidos pelos fluxos do bot de WhatsApp.",
+            "routines": [
+                {"id": "120601_BOT", "name": "Rotina 120601 Bot"},
+                {"id": "020220_BOT", "name": "Rotina 020220 Bot"},
+                {"id": "030206_BOT", "name": "Rotina 030206 Bot"},
+            ],
+            "units": [],
+        },
+        "estoque": {
+            "name": "Estoque",
+            "description": "Relatorios de posicao e movimentacao de estoque.",
+            "routines": [
+                {"id": "030237_ESTOQUE", "name": "Rotina 030237 Estoque"},
+                {"id": "020502", "name": "Rotina 020502"},
+            ],
+            "units": [],
+        },
+        "fluxo_caixa": {
+            "name": "Fluxo de Caixa",
+            "description": "Relatorios usados na consolidacao do fluxo de caixa.",
+            "routines": [
+                {"id": "140506", "name": "Rotina 140506"},
+                {"id": "120606", "name": "Rotina 120606"},
+                {"id": "020502_FLUXO_DE_CAIXA", "name": "Rotina 020502 Fluxo de Caixa"},
+                {"id": "150501_FLUXO_DE_CAIXA", "name": "Rotina 150501 Fluxo de Caixa"},
+            ],
+            "units": [],
+        },
+        "giro": {
+            "name": "Giro",
+            "description": "Relatorios de giro de estoque e comodatos.",
+            "routines": [
+                {"id": "030237_GIRO", "name": "Rotina 030237 Giro"},
+                {"id": "020220_GIRO", "name": "Rotina 020220 Giro"},
+            ],
+            "units": [],
+        },
+        "inadimplencia": {
+            "name": "Inadimplencia",
+            "description": "Relatorios operacionais de inadimplencia.",
+            "routines": [
+                {"id": "0513", "name": "Rotina 0513"},
+                {"id": "120616", "name": "Rotina 120616"},
+                {"id": "120601", "name": "Rotina 120601"},
+            ],
+            "units": [],
+        },
+        "obz": {
+            "name": "OBZ",
+            "description": "Relatorios de acompanhamento do OBZ.",
+            "routines": [
+                {"id": "0512", "name": "Rotina 0512"},
+                {"id": "150501", "name": "Rotina 150501"},
+            ],
+            "units": [],
+        },
+        "outros": {
+            "name": "Outros",
+            "description": "Relatorios administrativos fora dos grupos especializados.",
+            "routines": [
+                {"id": "020220_AUDITOOL", "name": "Rotina 020220 Auditool"},
+                {"id": "020220_RECOLHAS", "name": "Rotina 020220 Recolhas"},
+            ],
+            "units": [],
+        },
+    }
+}
+
+
 class PromaxCatalogService:
     def __init__(
         self,
