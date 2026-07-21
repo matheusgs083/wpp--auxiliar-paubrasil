@@ -11,11 +11,12 @@ from unittest.mock import Mock
 
 from workers.promax_client import PromaxClient, normalize_status
 from workers.promax_runner import (
+    PromaxRunResult,
     PromaxRunner,
     PromaxRunnerConfig,
     terminate_process_tree,
 )
-from workers.promax_worker import _control_flag, redact_log_message
+from workers.promax_worker import PromaxWorker, _control_flag, redact_log_message
 
 
 class _FakeResponse:
@@ -200,6 +201,17 @@ class PromaxClientTests(unittest.TestCase):
         )
 
         self.assertIn("obz", captured[0]["details"]["catalog"]["categories"])
+
+    def test_030206_import_gate_handles_completed_status(self) -> None:
+        worker = object.__new__(PromaxWorker)
+        result = PromaxRunResult(status="completed", return_code=0, child_pid=123)
+
+        worker._import_030206_boletos_if_needed(
+            {"payload": {"routines": ["120601_BOT"]}},
+            "job-1",
+            "lease-token",
+            result,
+        )
 
 
 class PromaxRunnerTests(unittest.TestCase):

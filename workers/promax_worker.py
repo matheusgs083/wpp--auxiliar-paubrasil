@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from .promax_client import PromaxApiUnavailable, PromaxClient, PromaxClientError
+from .promax_client import PromaxApiUnavailable, PromaxClient, PromaxClientError, normalize_status
 from .promax_catalog import discover_report_catalog
 from .promax_runner import (
     PromaxRunResult,
