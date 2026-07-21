@@ -57,6 +57,7 @@ class WorkerConfig:
     poll_interval_seconds: float = 5.0
     backoff_initial_seconds: float = 2.0
     backoff_max_seconds: float = 60.0
+    boleto_import_timeout_seconds: float = 120.0
 
     @classmethod
     def from_env(cls) -> WorkerConfig:
@@ -86,6 +87,10 @@ class WorkerConfig:
             poll_interval_seconds=_env_float("PROMAX_WORKER_POLL_SECONDS", 5.0),
             backoff_initial_seconds=_env_float("PROMAX_WORKER_BACKOFF_INITIAL_SECONDS", 2.0),
             backoff_max_seconds=_env_float("PROMAX_WORKER_BACKOFF_MAX_SECONDS", 60.0),
+            boleto_import_timeout_seconds=_env_float(
+                "PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS",
+                120.0,
+            ),
         )
 
     def validate(self) -> None:
@@ -449,6 +454,7 @@ def build_worker(config: WorkerConfig) -> PromaxWorker:
         worker_id=config.worker_id,
         lease_seconds=config.lease_seconds,
         timeout_seconds=config.http_timeout_seconds,
+        boleto_import_timeout_seconds=config.boleto_import_timeout_seconds,
     )
     runner_config = PromaxRunnerConfig.from_values(
         driver_dir=config.driver_dir,

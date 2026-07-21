@@ -126,10 +126,10 @@ class PromaxClientTests(unittest.TestCase):
         )
 
     def test_client_uploads_boleto_pdf_to_internal_import_route(self) -> None:
-        captured: list[tuple[str, dict[str, object]]] = []
+        captured: list[tuple[str, dict[str, object], float]] = []
 
         def opener(request: object, *, timeout: float) -> _FakeResponse:
-            captured.append((request.full_url, json.loads(request.data)))
+            captured.append((request.full_url, json.loads(request.data), timeout))
             return _FakeResponse({"ok": True, "result": {"imported": 1}})
 
         client = PromaxClient(
@@ -137,6 +137,8 @@ class PromaxClientTests(unittest.TestCase):
             token="token",
             worker_id="worker",
             pid=321,
+            timeout_seconds=10,
+            boleto_import_timeout_seconds=120,
             opener=opener,
         )
 
@@ -151,6 +153,7 @@ class PromaxClientTests(unittest.TestCase):
 
         self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/boletos/import")
         payload = captured[0][1]
+        self.assertEqual(captured[0][2], 120)
         self.assertEqual(payload["worker_id"], "worker")
         self.assertEqual(payload["job_id"], "job-1")
         self.assertEqual(payload["lease_token"], "lease-token")

@@ -73,6 +73,7 @@ class PromaxClient:
         pid: int | None = None,
         lease_seconds: int = 120,
         timeout_seconds: float = 10.0,
+        boleto_import_timeout_seconds: float = 120.0,
         opener: Callable[..., Any] = urlopen,
     ) -> None:
         self.base_url = str(base_url or "").strip().rstrip("/")
@@ -81,6 +82,7 @@ class PromaxClient:
         self.pid = int(pid if pid is not None else os.getpid())
         self.lease_seconds = int(lease_seconds)
         self.timeout_seconds = float(timeout_seconds)
+        self.boleto_import_timeout_seconds = float(boleto_import_timeout_seconds)
         self._opener = opener
         self._validate()
 
@@ -243,7 +245,12 @@ class PromaxClient:
         }
         if reference_date:
             payload["reference_date"] = str(reference_date)
-        return self._request("POST", "/api/internal/promax/boletos/import", payload)
+        return self._request(
+            "POST",
+            "/api/internal/promax/boletos/import",
+            payload,
+            timeout_seconds=self.boleto_import_timeout_seconds,
+        )
 
     def _validate(self) -> None:
         if not self.base_url.startswith(("http://", "https://")):
@@ -258,12 +265,16 @@ class PromaxClient:
             raise ValueError("PROMAX_WORKER_LEASE_SECONDS must be between 15 and 3600.")
         if self.timeout_seconds <= 0:
             raise ValueError("PROMAX_WORKER_HTTP_TIMEOUT_SECONDS must be positive.")
+        if self.boleto_import_timeout_seconds <= 0:
+            raise ValueError("PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS must be positive.")
 
     def _request(
         self,
         method: str,
         path: str,
         payload: Mapping[str, Any] | None = None,
+        *,
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
         data = None
         headers = {
@@ -279,8 +290,9 @@ class PromaxClient:
             headers=headers,
             method=method,
         )
+        request_timeout = self.timeout_seconds if timeout_seconds is None else float(timeout_seconds)
         try:
-            response = self._opener(request, timeout=self.timeout_seconds)
+            response = self._opener(request, timeout=request_timeout)
             try:
                 raw_body = response.read()
             finally:
