@@ -31,9 +31,6 @@ _SENSITIVE_LOG_PATTERN = re.compile(
     r"(\s*[:=]\s*)([^\s,;]+)"
 )
 _BEARER_LOG_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
-_PROMAX_030206_DEFAULT_PUBLICATION_DIR = (
-    r"\\dc01n\publico_patos\ADMINISTRATIVO\FINANCEIRO\Bot Zap\030206"
-)
 _PROMAX_030206_UNIT_FILIAL_DEFAULTS = {
     "0640001": "1",
     "0640002": "2",
@@ -346,10 +343,19 @@ class PromaxWorker:
 
         requested_units = _string_list(payload.get("units"))
         unit_filial_map = _promax_030206_unit_filial_map()
-        source_dir = Path(
-            os.environ.get("PROMAX_030206_PUBLICATION_DIR")
-            or _PROMAX_030206_DEFAULT_PUBLICATION_DIR
-        )
+        source_dir = _promax_030206_publication_dir(result.details)
+        if source_dir is None:
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    "Importacao automatica 030206 ignorada: o driver nao informou "
+                    "a pasta publicada em metadata.publication_mapping."
+                ),
+                "warning",
+                {"event": "promax_030206_auto_import_missing_publication_mapping"},
+            )
+            return
         if not source_dir.is_dir():
             self._send_log(
                 job_id,
@@ -479,6 +485,19 @@ def _promax_030206_unit_filial_map() -> dict[str, str]:
         if unit and filial:
             mapping[unit] = filial
     return mapping
+
+
+def _promax_030206_publication_dir(result_details: Mapping[str, Any] | None) -> Path | None:
+    metadata = result_details.get("metadata") if isinstance(result_details, Mapping) else None
+    publication_mapping = metadata.get("publication_mapping") if isinstance(metadata, Mapping) else None
+    if isinstance(publication_mapping, Mapping):
+        for source, destination in publication_mapping.items():
+            source_text = str(source or "")
+            if Path(source_text).name.casefold() == "030206 bot":
+                destination_text = str(destination or "").strip()
+                if destination_text:
+                    return Path(destination_text)
+    return None
 
 
 def load_project_env(project_root: Path = PROJECT_ROOT) -> Path | None:

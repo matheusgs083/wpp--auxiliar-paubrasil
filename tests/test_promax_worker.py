@@ -17,6 +17,7 @@ from workers.promax_runner import (
     terminate_process_tree,
 )
 from workers.promax_worker import PromaxWorker, _control_flag, redact_log_message
+from workers.promax_worker import _promax_030206_publication_dir
 
 
 class _FakeResponse:
@@ -212,6 +213,22 @@ class PromaxClientTests(unittest.TestCase):
             "lease-token",
             result,
         )
+
+    def test_030206_publication_dir_prefers_driver_metadata(self) -> None:
+        source_dir = _promax_030206_publication_dir(
+            {
+                "metadata": {
+                    "publication_mapping": {
+                        r"C:\Relatorios\030206 bot": r"\\servidor\financeiro\Bot Zap\030206",
+                    }
+                }
+            }
+        )
+
+        self.assertEqual(str(source_dir), r"\\servidor\financeiro\Bot Zap\030206")
+
+    def test_030206_publication_dir_has_no_project_fallback(self) -> None:
+        self.assertIsNone(_promax_030206_publication_dir({}))
 
 
 class PromaxRunnerTests(unittest.TestCase):
