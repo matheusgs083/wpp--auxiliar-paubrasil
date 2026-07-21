@@ -254,6 +254,9 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             },
             "promax_jobs_service": FakePromaxJobsService(),
             "boletos_pdf_import_services": {},
+            "inadimplencia_import_service": None,
+            "comodatos_import_service": None,
+            "dclientes_import_service": None,
             "promax_catalog": {
                 "categories": {
                     "fluxo_caixa": {
@@ -529,6 +532,44 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                         "files": [
                             {
                                 "filename": "2026-07 Patos.csv",
+                                "file_base64": "Q2xpZW50ZTtWYWxvcgoxOzEwCg==",
+                            }
+                        ],
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/comodatos/import",
+                expected_status=400,
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "lease_token": "lease-1",
+                        "files": [
+                            {
+                                "filename": "020220 bot - Patos.csv",
+                                "file_base64": "Q2xpZW50ZTtWYWxvcgoxOzEwCg==",
+                            }
+                        ],
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/dclientes/import",
+                expected_status=400,
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "lease_token": "lease-1",
+                        "files": [
+                            {
+                                "filename": "0105070402 bot - dClientes.csv",
                                 "file_base64": "Q2xpZW50ZTtWYWxvcgoxOzEwCg==",
                             }
                         ],

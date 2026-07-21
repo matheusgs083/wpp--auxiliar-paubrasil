@@ -318,6 +318,8 @@ class PromaxWorker:
                 if not post_import_attempted:
                     self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
                     self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
+                    self._import_020220_comodatos_if_needed(job, job_id, lease_token, result)
+                    self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
                     post_import_attempted = True
                 self.client.finish(
                     job_id,
@@ -550,6 +552,154 @@ class PromaxWorker:
                 f"Falha na importacao automatica 120601_BOT: {exc}",
                 "error",
                 {"event": "promax_120601_auto_import_failed", "file_count": len(csv_paths)},
+            )
+
+    def _import_020220_comodatos_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        self._import_csv_folder_if_needed(
+            job,
+            job_id,
+            lease_token,
+            result,
+            routine_id="020220_BOT",
+            folder_name="020220 bot",
+            label="Comodatos 020220_BOT",
+            event_prefix="promax_020220_auto_import",
+            importer=lambda files, reference_date: self.client.import_comodatos_csvs(
+                job_id=job_id,
+                lease_token=lease_token,
+                files=files,
+                reference_date=reference_date,
+            ),
+        )
+
+    def _import_0105070402_dclientes_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        def import_dclientes(files: Mapping[str, bytes], reference_date: str | None) -> dict[str, Any]:
+            filename, file_bytes = next(iter(files.items()))
+            return self.client.import_dclientes_csv(
+                job_id=job_id,
+                lease_token=lease_token,
+                filename=filename,
+                csv_bytes=file_bytes,
+                reference_date=reference_date,
+            )
+
+        self._import_csv_folder_if_needed(
+            job,
+            job_id,
+            lease_token,
+            result,
+            routine_id="0105070402_BOT",
+            folder_name="0105070402 bot",
+            label="dClientes 0105070402_BOT",
+            event_prefix="promax_0105070402_auto_import",
+            importer=import_dclientes,
+            single_latest_file=True,
+        )
+
+    def _import_csv_folder_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+        *,
+        routine_id: str,
+        folder_name: str,
+        label: str,
+        event_prefix: str,
+        importer: Callable[[Mapping[str, bytes], str | None], Mapping[str, Any]],
+        single_latest_file: bool = False,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        routines = _string_list(payload.get("routines"))
+        if routine_id not in routines:
+            return
+        if payload.get("publish", True) is False:
+            return
+
+        source_dir = _promax_publication_dir(result.details, folder_name)
+        if source_dir is None:
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    f"Importacao automatica {routine_id} ignorada: o driver nao informou "
+                    "a pasta publicada em metadata.publication_mapping."
+                ),
+                "warning",
+                {"event": f"{event_prefix}_missing_publication_mapping"},
+            )
+            return
+        if not source_dir.is_dir():
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica {routine_id} ignorada: pasta nao encontrada {source_dir}",
+                "warning",
+                {"event": f"{event_prefix}_missing_dir", "source_dir": str(source_dir)},
+            )
+            return
+
+        csv_paths = sorted(
+            (path for path in source_dir.glob("*.csv") if path.is_file() and not path.name.startswith(".")),
+            key=lambda path: (path.stat().st_mtime, path.name),
+        )
+        if single_latest_file and csv_paths:
+            csv_paths = [csv_paths[-1]]
+        if not csv_paths:
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica {routine_id} ignorada: nenhum CSV encontrado em {source_dir}",
+                "warning",
+                {"event": f"{event_prefix}_no_files", "source_dir": str(source_dir)},
+            )
+            return
+
+        try:
+            reference_date = str(payload.get("end_date") or payload.get("start_date") or "") or None
+            self._heartbeat_active_job(job_id, lease_token)
+            response = importer({path.name: path.read_bytes() for path in csv_paths}, reference_date)
+            self._heartbeat_active_job(job_id, lease_token)
+            result_payload = response.get("result") if isinstance(response, Mapping) else None
+            rows = result_payload.get("rows") if isinstance(result_payload, Mapping) else None
+            batch_id = result_payload.get("batch_id") if isinstance(result_payload, Mapping) else None
+            self._send_log(
+                job_id,
+                lease_token,
+                f"{label} importado automaticamente: {len(csv_paths)} arquivo(s), {rows or 0} linha(s).",
+                "info",
+                {
+                    "event": f"{event_prefix}_success",
+                    "file_count": len(csv_paths),
+                    "files": [path.name for path in csv_paths],
+                    "rows": rows,
+                    "batch_id": batch_id,
+                },
+            )
+        except (OSError, PromaxClientError, ValueError) as exc:
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Falha na importacao automatica {routine_id}: {exc}",
+                "error",
+                {"event": f"{event_prefix}_failed", "file_count": len(csv_paths)},
             )
 
 

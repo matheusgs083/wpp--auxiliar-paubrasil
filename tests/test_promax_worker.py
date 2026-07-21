@@ -199,6 +199,59 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual([item["filename"] for item in payload["files"]], ["2026-07 Sousa.csv", "2026-07 Patos.csv"])
         self.assertEqual(base64.b64decode(payload["files"][0]["file_base64"]), b"Cliente;Valor\n1;10\n")
 
+    def test_client_uploads_comodatos_csvs_to_internal_import_route(self) -> None:
+        captured: list[tuple[str, dict[str, object], float]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data), timeout))
+            return _FakeResponse({"ok": True, "result": {"file_count": 1}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            boleto_import_timeout_seconds=120,
+            opener=opener,
+        )
+
+        client.import_comodatos_csvs(
+            job_id="job-1",
+            lease_token="lease-token",
+            files={"020220 bot - Sousa.csv": b"Cliente;Valor\n1;10\n"},
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/comodatos/import")
+        self.assertEqual(captured[0][2], 120)
+        self.assertEqual(captured[0][1]["files"][0]["filename"], "020220 bot - Sousa.csv")
+
+    def test_client_uploads_dclientes_csv_to_internal_import_route(self) -> None:
+        captured: list[tuple[str, dict[str, object], float]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data), timeout))
+            return _FakeResponse({"ok": True, "result": {"rows": 10}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            boleto_import_timeout_seconds=120,
+            opener=opener,
+        )
+
+        client.import_dclientes_csv(
+            job_id="job-1",
+            lease_token="lease-token",
+            filename="0105070402 bot - dClientes.csv",
+            csv_bytes=b"Cliente;Valor\n1;10\n",
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/dclientes/import")
+        self.assertEqual(captured[0][2], 120)
+        self.assertEqual(captured[0][1]["files"][0]["filename"], "0105070402 bot - dClientes.csv")
+
     def test_control_flag_accepts_stop_job_ids_contract(self) -> None:
         payload = {
             "control": {
@@ -387,6 +440,94 @@ class PromaxClientTests(unittest.TestCase):
         call_kwargs = client.import_inadimplencia_csvs.call_args.kwargs
         self.assertEqual(call_kwargs["reference_date"], "2026-07-21")
         self.assertEqual(sorted(call_kwargs["files"]), ["2026-07 Patos.csv", "2026-07 Sousa.csv"])
+        self.assertEqual(client.heartbeat_job.call_count, 2)
+
+    def test_020220_bot_imports_comodatos_csvs_in_one_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "020220 bot - Sousa.csv").write_bytes(b"Cliente;Valor\n1;10\n")
+            client = Mock()
+            client.import_comodatos_csvs.return_value = {
+                "ok": True,
+                "result": {"file_count": 1, "rows": 5, "batch_id": 43},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_020220_comodatos_if_needed(
+                {"payload": {"routines": ["020220_BOT"], "end_date": "2026-07-21"}},
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={"metadata": {"publication_mapping": {str(source_dir.parent / "020220 bot"): str(source_dir)}}},
+                ),
+            )
+
+        client.import_comodatos_csvs.assert_called_once()
+        self.assertEqual(client.heartbeat_job.call_count, 2)
+
+    def test_0105070402_bot_imports_latest_dclientes_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            old_path = source_dir / "0105070402 bot - velho.csv"
+            new_path = source_dir / "0105070402 bot - novo.csv"
+            old_path.write_bytes(b"Cliente;Valor\n1;10\n")
+            new_path.write_bytes(b"Cliente;Valor\n2;20\n")
+            os.utime(old_path, (1, 1))
+            os.utime(new_path, (2, 2))
+            client = Mock()
+            client.import_dclientes_csv.return_value = {
+                "ok": True,
+                "result": {"rows": 500, "batch_id": 44},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_0105070402_dclientes_if_needed(
+                {"payload": {"routines": ["0105070402_BOT"], "end_date": "2026-07-21"}},
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "0105070402 bot"): str(source_dir)}
+                        }
+                    },
+                ),
+            )
+
+        client.import_dclientes_csv.assert_called_once()
+        self.assertEqual(client.import_dclientes_csv.call_args.kwargs["filename"], "0105070402 bot - novo.csv")
         self.assertEqual(client.heartbeat_job.call_count, 2)
 
 

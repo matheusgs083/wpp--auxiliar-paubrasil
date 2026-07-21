@@ -265,6 +265,31 @@ class FakeInadimplenciaImportService:
         }
 
 
+class FakeComodatosImportService(FakeInadimplenciaImportService):
+    def import_source(self, source_path: Path, reference_date: Any = None) -> dict[str, Any]:
+        self.calls.append((source_path, reference_date))
+        self.imported_files = sorted(path.name for path in source_path.glob("*.csv"))
+        return {
+            "dataset_name": "comodatos",
+            "file_count": len(self.imported_files),
+            "rows": 5,
+            "batch_id": 43,
+        }
+
+
+class FakeDClientesImportService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Path, Any]] = []
+
+    def import_csv(self, file_path: Path, reference_date: Any = None) -> dict[str, Any]:
+        self.calls.append((file_path, reference_date))
+        return {
+            "dataset_name": "dclientes",
+            "rows": 500,
+            "batch_id": 44,
+        }
+
+
 class AdminPromaxRoutesTests(unittest.TestCase):
     context = {"mode": "admin", "is_admin": True, "filiais": ()}
     worker_headers = {"x-promax-worker-token": "worker-secret"}
@@ -340,8 +365,12 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         app.state.promax_feature_calls = feature_calls
         boleto_import_service = FakeBoletoImportService()
         inadimplencia_import_service = FakeInadimplenciaImportService()
+        comodatos_import_service = FakeComodatosImportService()
+        dclientes_import_service = FakeDClientesImportService()
         app.state.boleto_import_service = boleto_import_service
         app.state.inadimplencia_import_service = inadimplencia_import_service
+        app.state.comodatos_import_service = comodatos_import_service
+        app.state.dclientes_import_service = dclientes_import_service
         catalog_source = (
             catalog_value
             if catalog_value is not None
@@ -359,6 +388,8 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 worker_token=worker_token,
                 boletos_pdf_import_services={"3": boleto_import_service},
                 inadimplencia_import_service=inadimplencia_import_service,
+                comodatos_import_service=comodatos_import_service,
+                dclientes_import_service=dclientes_import_service,
                 require_admin_panel_auth=require_auth,
                 require_admin_panel_feature=require_feature,
                 record_security_event=lambda _request, **kwargs: events.append(kwargs),
@@ -928,6 +959,69 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         _source_path, reference_date = import_service.calls[0]
         self.assertEqual(str(reference_date), "2026-07-20")
         self.assertEqual(import_service.imported_files, ["2026-07 Patos.csv", "2026-07 Sousa.csv"])
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["append_job_log", "append_job_log"],
+        )
+
+    def test_internal_worker_imports_020220_comodatos_csvs_as_batch(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/comodatos/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "files": [
+                    {
+                        "filename": "020220 bot - Sousa.csv",
+                        "file_base64": base64.b64encode(b"Cliente;Valor\n1;10\n").decode("ascii"),
+                    }
+                ],
+                "reference_date": "2026-07-20",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(response.json()["result"]["dataset_name"], "comodatos")
+        import_service = client.app.state.comodatos_import_service
+        self.assertEqual(len(import_service.calls), 1)
+        self.assertEqual(import_service.imported_files, ["020220 bot - Sousa.csv"])
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["append_job_log", "append_job_log"],
+        )
+
+    def test_internal_worker_imports_0105070402_dclientes_csv(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/dclientes/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "files": [
+                    {
+                        "filename": "0105070402 bot - dClientes.csv",
+                        "file_base64": base64.b64encode(b"Cliente;Valor\n1;10\n").decode("ascii"),
+                    }
+                ],
+                "reference_date": "2026-07-20",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(response.json()["result"]["dataset_name"], "dclientes")
+        import_service = client.app.state.dclientes_import_service
+        self.assertEqual(len(import_service.calls), 1)
+        _source_path, reference_date = import_service.calls[0]
+        self.assertEqual(str(reference_date), "2026-07-20")
         self.assertEqual(
             [name for name, _args, _kwargs in service.calls],
             ["append_job_log", "append_job_log"],
