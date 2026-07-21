@@ -598,6 +598,34 @@ class PromaxBoletoImportRequest(_StrictPayload):
         return name
 
 
+class PromaxCsvImportFile(_StrictPayload):
+    filename: str = Field(min_length=1, max_length=255)
+    file_base64: str = Field(min_length=1)
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        name = FilePath(str(value or "").strip()).name
+        if not name or name.lower().endswith(".csv") is False:
+            raise ValueError("filename deve ser um CSV")
+        return name
+
+
+class PromaxInadimplenciaImportRequest(_StrictPayload):
+    worker_id: str = Field(min_length=1, max_length=120)
+    job_id: str = Field(min_length=1, max_length=120)
+    lease_token: str | None = Field(default=None, min_length=1, max_length=120)
+    files: list[PromaxCsvImportFile] = Field(min_length=1, max_length=200)
+    reference_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_files(self) -> PromaxInadimplenciaImportRequest:
+        filenames = [item.filename for item in self.files]
+        if len(filenames) != len(set(filenames)):
+            raise ValueError("files contem nomes duplicados")
+        return self
+
+
 class PromaxWorkerClientClaimRequest(_StrictPayload):
     worker_id: str = Field(min_length=1, max_length=120)
 
@@ -657,6 +685,7 @@ def create_admin_promax_router(
     catalog: Callable[[], Any] | Mapping[str, Any],
     worker_token: str | None,
     boletos_pdf_import_services: Mapping[str, Any] | None = None,
+    inadimplencia_import_service: Any | None = None,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     record_security_event: Callable[..., None],
@@ -1514,6 +1543,69 @@ def create_admin_promax_router(
                 "event": "promax_030206_auto_import_success",
                 "filial": payload.filial,
                 "filename": payload.filename,
+                "result": result,
+            },
+        )
+        return {"ok": True, "result": result}
+
+    @router.post("/api/internal/promax/inadimplencia/import")
+    def api_internal_promax_import_inadimplencia_csvs(
+        payload: PromaxInadimplenciaImportRequest,
+        _worker_auth: None = Depends(require_worker_auth),
+    ) -> dict[str, Any]:
+        if inadimplencia_import_service is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Importador de inadimplencia nao configurado.",
+            )
+        lease_token = resolve_job_lease_token(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            provided_lease_token=payload.lease_token,
+        )
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                "Importacao automatica 120601_BOT iniciada: "
+                f"{len(payload.files)} arquivo(s) CSV."
+            ),
+            data={
+                "event": "promax_120601_auto_import_start",
+                "file_count": len(payload.files),
+                "files": [item.filename for item in payload.files],
+            },
+        )
+        with tempfile.TemporaryDirectory(prefix="promax_120601_") as temp_dir:
+            temp_root = FilePath(temp_dir)
+            for item in payload.files:
+                try:
+                    csv_bytes = base64.b64decode(item.file_base64.encode("ascii"), validate=True)
+                except (UnicodeEncodeError, binascii.Error) as exc:
+                    raise HTTPException(status_code=400, detail="Arquivo CSV em base64 invalido.") from exc
+                if not csv_bytes.strip():
+                    raise HTTPException(status_code=400, detail=f"Arquivo CSV vazio: {item.filename}.")
+                (temp_root / item.filename).write_bytes(csv_bytes)
+
+            result = inadimplencia_import_service.import_source(
+                temp_root,
+                reference_date=payload.reference_date,
+            )
+
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                "Importacao automatica 120601_BOT concluida: "
+                f"{result.get('file_count', len(payload.files))} arquivo(s), "
+                f"{result.get('rows', 0)} linha(s)."
+            ),
+            data={
+                "event": "promax_120601_auto_import_success",
                 "result": result,
             },
         )

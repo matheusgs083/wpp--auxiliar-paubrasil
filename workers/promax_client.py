@@ -252,6 +252,41 @@ class PromaxClient:
             timeout_seconds=self.boleto_import_timeout_seconds,
         )
 
+    def import_inadimplencia_csvs(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        files: Mapping[str, bytes],
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        if not files:
+            raise ValueError("CSV files must not be empty.")
+        payload_files: list[dict[str, str]] = []
+        for filename, file_bytes in files.items():
+            if not file_bytes:
+                raise ValueError(f"CSV file {filename!r} must not be empty.")
+            payload_files.append(
+                {
+                    "filename": str(filename or "").strip(),
+                    "file_base64": base64.b64encode(file_bytes).decode("ascii"),
+                }
+            )
+        payload: dict[str, Any] = {
+            "worker_id": self.worker_id,
+            "job_id": _path_identifier(job_id),
+            "lease_token": _path_identifier(lease_token),
+            "files": payload_files,
+        }
+        if reference_date:
+            payload["reference_date"] = str(reference_date)
+        return self._request(
+            "POST",
+            "/api/internal/promax/inadimplencia/import",
+            payload,
+            timeout_seconds=self.boleto_import_timeout_seconds,
+        )
+
     def _validate(self) -> None:
         if not self.base_url.startswith(("http://", "https://")):
             raise ValueError("PROMAX_API_BASE_URL must start with http:// or https://.")

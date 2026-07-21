@@ -311,13 +311,14 @@ class PromaxWorker:
         result: PromaxRunResult,
     ) -> None:
         backoff = self.config.backoff_initial_seconds
-        boleto_import_attempted = False
+        post_import_attempted = False
         while True:
             try:
                 self._flush_logs()
-                if not boleto_import_attempted:
+                if not post_import_attempted:
                     self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
-                    boleto_import_attempted = True
+                    self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
+                    post_import_attempted = True
                 self.client.finish(
                     job_id,
                     lease_token,
@@ -458,6 +459,99 @@ class PromaxWorker:
             },
         )
 
+    def _import_120601_inadimplencia_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        routines = _string_list(payload.get("routines"))
+        if "120601_BOT" not in routines:
+            return
+        if payload.get("publish", True) is False:
+            return
+
+        source_dir = _promax_publication_dir(result.details, "120601 bot")
+        if source_dir is None:
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    "Importacao automatica 120601_BOT ignorada: o driver nao informou "
+                    "a pasta publicada em metadata.publication_mapping."
+                ),
+                "warning",
+                {"event": "promax_120601_auto_import_missing_publication_mapping"},
+            )
+            return
+        if not source_dir.is_dir():
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica 120601_BOT ignorada: pasta nao encontrada {source_dir}",
+                "warning",
+                {"event": "promax_120601_auto_import_missing_dir", "source_dir": str(source_dir)},
+            )
+            return
+
+        csv_paths = sorted(
+            path
+            for path in source_dir.glob("*.csv")
+            if path.is_file() and not path.name.startswith(".")
+        )
+        if not csv_paths:
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica 120601_BOT ignorada: nenhum CSV encontrado em {source_dir}",
+                "warning",
+                {"event": "promax_120601_auto_import_no_files", "source_dir": str(source_dir)},
+            )
+            return
+
+        try:
+            self._heartbeat_active_job(job_id, lease_token)
+            response = self.client.import_inadimplencia_csvs(
+                job_id=job_id,
+                lease_token=lease_token,
+                files={path.name: path.read_bytes() for path in csv_paths},
+                reference_date=str(payload.get("end_date") or payload.get("start_date") or "") or None,
+            )
+            self._heartbeat_active_job(job_id, lease_token)
+            result_payload = response.get("result") if isinstance(response, Mapping) else None
+            rows = result_payload.get("rows") if isinstance(result_payload, Mapping) else None
+            batch_id = result_payload.get("batch_id") if isinstance(result_payload, Mapping) else None
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    "Inadimplencia 120601_BOT importada automaticamente: "
+                    f"{len(csv_paths)} arquivo(s), {rows or 0} linha(s)."
+                ),
+                "info",
+                {
+                    "event": "promax_120601_auto_import_success",
+                    "file_count": len(csv_paths),
+                    "files": [path.name for path in csv_paths],
+                    "rows": rows,
+                    "batch_id": batch_id,
+                },
+            )
+        except (OSError, PromaxClientError, ValueError) as exc:
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Falha na importacao automatica 120601_BOT: {exc}",
+                "error",
+                {"event": "promax_120601_auto_import_failed", "file_count": len(csv_paths)},
+            )
+
 
 def build_worker(config: WorkerConfig) -> PromaxWorker:
     config.validate()
@@ -507,12 +601,16 @@ def _promax_030206_unit_filial_map() -> dict[str, str]:
 
 
 def _promax_030206_publication_dir(result_details: Mapping[str, Any] | None) -> Path | None:
+    return _promax_publication_dir(result_details, "030206 bot")
+
+
+def _promax_publication_dir(result_details: Mapping[str, Any] | None, folder_name: str) -> Path | None:
     metadata = result_details.get("metadata") if isinstance(result_details, Mapping) else None
     publication_mapping = metadata.get("publication_mapping") if isinstance(metadata, Mapping) else None
     if isinstance(publication_mapping, Mapping):
         for source, destination in publication_mapping.items():
             source_text = str(source or "")
-            if Path(source_text).name.casefold() == "030206 bot":
+            if Path(source_text).name.casefold() == folder_name.casefold():
                 destination_text = str(destination or "").strip()
                 if destination_text:
                     return Path(destination_text)

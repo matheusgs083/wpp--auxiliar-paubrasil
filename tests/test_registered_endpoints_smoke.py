@@ -517,6 +517,25 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                 },
             ),
             EndpointCase(
+                "POST",
+                "/api/internal/promax/inadimplencia/import",
+                expected_status=400,
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "lease_token": "lease-1",
+                        "files": [
+                            {
+                                "filename": "2026-07 Patos.csv",
+                                "file_base64": "Q2xpZW50ZTtWYWxvcgoxOzEwCg==",
+                            }
+                        ],
+                    },
+                },
+            ),
+            EndpointCase(
                 "GET",
                 "/api/internal/promax/control?worker_id=worker-1",
                 kwargs={"headers": worker_headers},

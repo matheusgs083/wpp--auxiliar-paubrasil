@@ -162,6 +162,43 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(payload["filename"], "03,02,06_2210003.pdf")
         self.assertEqual(base64.b64decode(payload["file_base64"]), b"%PDF-1.4\nconteudo")
 
+    def test_client_uploads_inadimplencia_csvs_to_internal_import_route(self) -> None:
+        captured: list[tuple[str, dict[str, object], float]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data), timeout))
+            return _FakeResponse({"ok": True, "result": {"file_count": 2}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            timeout_seconds=10,
+            boleto_import_timeout_seconds=120,
+            opener=opener,
+        )
+
+        client.import_inadimplencia_csvs(
+            job_id="job-1",
+            lease_token="lease-token",
+            files={
+                "2026-07 Sousa.csv": b"Cliente;Valor\n1;10\n",
+                "2026-07 Patos.csv": b"Cliente;Valor\n2;20\n",
+            },
+            reference_date="2026-07-20",
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/inadimplencia/import")
+        payload = captured[0][1]
+        self.assertEqual(captured[0][2], 120)
+        self.assertEqual(payload["worker_id"], "worker")
+        self.assertEqual(payload["job_id"], "job-1")
+        self.assertEqual(payload["lease_token"], "lease-token")
+        self.assertEqual(payload["reference_date"], "2026-07-20")
+        self.assertEqual([item["filename"] for item in payload["files"]], ["2026-07 Sousa.csv", "2026-07 Patos.csv"])
+        self.assertEqual(base64.b64decode(payload["files"][0]["file_base64"]), b"Cliente;Valor\n1;10\n")
+
     def test_control_flag_accepts_stop_job_ids_contract(self) -> None:
         payload = {
             "control": {
@@ -296,6 +333,61 @@ class PromaxClientTests(unittest.TestCase):
 
         self.assertEqual(client.import_boleto_pdf.call_count, 2)
         self.assertEqual(client.heartbeat_job.call_count, 4)
+
+    def test_120601_bot_imports_all_csvs_in_one_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "2026-07 Sousa.csv").write_bytes(b"Cliente;Valor\n1;10\n")
+            (source_dir / "2026-07 Patos.csv").write_bytes(b"Cliente;Valor\n2;20\n")
+            client = Mock()
+            client.import_inadimplencia_csvs.return_value = {
+                "ok": True,
+                "result": {"file_count": 2, "rows": 2, "batch_id": 42},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_120601_inadimplencia_if_needed(
+                {
+                    "payload": {
+                        "routines": ["120601_BOT"],
+                        "units": ["0640001", "2210003"],
+                        "end_date": "2026-07-21",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {
+                                str(source_dir.parent / "120601 bot"): str(source_dir),
+                            }
+                        }
+                    },
+                ),
+            )
+
+        client.import_inadimplencia_csvs.assert_called_once()
+        call_kwargs = client.import_inadimplencia_csvs.call_args.kwargs
+        self.assertEqual(call_kwargs["reference_date"], "2026-07-21")
+        self.assertEqual(sorted(call_kwargs["files"]), ["2026-07 Patos.csv", "2026-07 Sousa.csv"])
+        self.assertEqual(client.heartbeat_job.call_count, 2)
 
 
 class PromaxRunnerTests(unittest.TestCase):
