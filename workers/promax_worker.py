@@ -74,26 +74,37 @@ class WorkerConfig:
             or os.environ.get("PROMAX_WORKER_API_URL")
             or "http://127.0.0.1:8080"
         )
+        boleto_import_timeout_seconds = _env_float(
+            "PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS",
+            300.0,
+        )
+        lease_seconds = _env_int("PROMAX_WORKER_LEASE_SECONDS", 120)
+        lease_seconds = max(lease_seconds, min(int(boleto_import_timeout_seconds) + 60, 3600))
         return cls(
             api_url=api_url,
             token=os.environ.get("PROMAX_WORKER_TOKEN", ""),
             worker_id=os.environ.get("PROMAX_WORKER_ID", socket.gethostname()),
             driver_dir=str(configured_driver_dir),
             python_executable=os.environ.get("PROMAX_PYTHON", str(default_python)),
-            lease_seconds=_env_int("PROMAX_WORKER_LEASE_SECONDS", 120),
+            lease_seconds=lease_seconds,
             http_timeout_seconds=_env_float("PROMAX_WORKER_HTTP_TIMEOUT_SECONDS", 10.0),
             heartbeat_interval_seconds=_env_float("PROMAX_WORKER_HEARTBEAT_SECONDS", 15.0),
             control_interval_seconds=_env_float("PROMAX_WORKER_CONTROL_SECONDS", 5.0),
             poll_interval_seconds=_env_float("PROMAX_WORKER_POLL_SECONDS", 5.0),
             backoff_initial_seconds=_env_float("PROMAX_WORKER_BACKOFF_INITIAL_SECONDS", 2.0),
             backoff_max_seconds=_env_float("PROMAX_WORKER_BACKOFF_MAX_SECONDS", 60.0),
-            boleto_import_timeout_seconds=_env_float(
-                "PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS",
-                120.0,
-            ),
+            boleto_import_timeout_seconds=boleto_import_timeout_seconds,
         )
 
     def validate(self) -> None:
+        if self.lease_seconds < 15 or self.lease_seconds > 3600:
+            raise ValueError("PROMAX_WORKER_LEASE_SECONDS must be between 15 and 3600.")
+        if self.boleto_import_timeout_seconds <= 0:
+            raise ValueError("PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS must be positive.")
+        if self.boleto_import_timeout_seconds > self.lease_seconds:
+            raise ValueError(
+                "PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS must not exceed the active job lease."
+            )
         if self.poll_interval_seconds <= 0:
             raise ValueError("PROMAX_WORKER_POLL_SECONDS must be positive.")
         if self.backoff_initial_seconds <= 0:
@@ -388,6 +399,7 @@ class PromaxWorker:
                 missing.append(unit)
                 continue
             try:
+                self._heartbeat_active_job(job_id, lease_token)
                 response = self.client.import_boleto_pdf(
                     job_id=job_id,
                     lease_token=lease_token,
@@ -396,6 +408,7 @@ class PromaxWorker:
                     pdf_bytes=pdf_path.read_bytes(),
                     reference_date=str(payload.get("end_date") or payload.get("start_date") or "") or None,
                 )
+                self._heartbeat_active_job(job_id, lease_token)
                 result_payload = response.get("result") if isinstance(response, Mapping) else None
                 imported += 1
                 self._send_log(

@@ -3,11 +3,12 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from workers.promax_client import PromaxClient, normalize_status
 from workers.promax_runner import (
@@ -16,7 +17,7 @@ from workers.promax_runner import (
     PromaxRunnerConfig,
     terminate_process_tree,
 )
-from workers.promax_worker import PromaxWorker, _control_flag, redact_log_message
+from workers.promax_worker import PromaxWorker, WorkerConfig, _control_flag, redact_log_message
 from workers.promax_worker import _promax_030206_publication_dir
 
 
@@ -232,6 +233,69 @@ class PromaxClientTests(unittest.TestCase):
 
     def test_030206_publication_dir_has_no_project_fallback(self) -> None:
         self.assertIsNone(_promax_030206_publication_dir({}))
+
+    def test_worker_config_extends_lease_for_boleto_import_timeout(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "PROMAX_WORKER_TOKEN": "token",
+                "PROMAX_WORKER_LEASE_SECONDS": "120",
+                "PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS": "300",
+            },
+        ):
+            config = WorkerConfig.from_env()
+
+        self.assertEqual(config.boleto_import_timeout_seconds, 300)
+        self.assertEqual(config.lease_seconds, 360)
+
+    def test_030206_import_renews_job_lease_around_each_pdf(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            for unit in ("0640001", "0640002"):
+                (source_dir / f"03,02,06_{unit}.pdf").write_bytes(b"%PDF-1.4\nconteudo")
+            client = Mock()
+            client.import_boleto_pdf.return_value = {"ok": True, "result": {"imported": 1}}
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_030206_boletos_if_needed(
+                {
+                    "payload": {
+                        "routines": ["030206_BOT"],
+                        "units": ["0640001", "0640002"],
+                        "end_date": "2026-07-21",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {
+                                str(source_dir.parent / "030206 bot"): str(source_dir),
+                            }
+                        }
+                    },
+                ),
+            )
+
+        self.assertEqual(client.import_boleto_pdf.call_count, 2)
+        self.assertEqual(client.heartbeat_job.call_count, 4)
 
 
 class PromaxRunnerTests(unittest.TestCase):
