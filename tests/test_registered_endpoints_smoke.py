@@ -272,6 +272,15 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                 "items_count": 1,
                 "missing_client_codes": [],
             },
+            "create_payip_promax_import_clients": lambda payload, _context: {
+                "items_count": 1,
+                "missing_client_codes": [],
+                "client_creation": {
+                    "created": list(getattr(payload, "missing_client_codes", []) or []),
+                    "not_found": [],
+                    "failed": [],
+                },
+            },
             "run_payip_promax_import": lambda _payload, _context: {
                 "items_count": 1,
                 "client_creation": {"created": []},
@@ -451,6 +460,11 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/api/admin/payip/batch/pdf/item-1"),
             EndpointCase("GET", "/api/admin/payip/batch/export.csv"),
             EndpointCase("POST", "/api/admin/payip/import/validate", kwargs={"json": payip_import_payload}),
+            EndpointCase(
+                "POST",
+                "/api/admin/payip/import/create-clients",
+                kwargs={"json": {**payip_import_payload, "missing_client_codes": ["19167"]}},
+            ),
             EndpointCase("POST", "/api/admin/payip/import/run", kwargs={"json": payip_import_payload}),
             EndpointCase("GET", "/api/admin/promax/catalog"),
             EndpointCase(

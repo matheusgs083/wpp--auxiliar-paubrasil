@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Header, Query, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AdminPayipBatchRequest(BaseModel):
@@ -25,6 +25,14 @@ class AdminPayipPromaxImportRequest(BaseModel):
     auto_create_clients: bool = False
 
 
+class AdminPayipPromaxCreateClientsRequest(BaseModel):
+    filial: str
+    start_date: str = ""
+    end_date: str = ""
+    missing_client_codes: list[str] = Field(default_factory=list)
+    mfa_code: str = ""
+
+
 def create_admin_payip_router(
     *,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
@@ -35,6 +43,7 @@ def create_admin_payip_router(
     export_payip_batch_csv: Callable[..., tuple[bytes, str]],
     payip_batch_pdf_bytes: Callable[..., tuple[bytes, str]],
     validate_payip_promax_import: Callable[[AdminPayipPromaxImportRequest, dict[str, Any] | None], dict[str, Any]],
+    create_payip_promax_import_clients: Callable[[AdminPayipPromaxCreateClientsRequest, dict[str, Any] | None], dict[str, Any]],
     run_payip_promax_import: Callable[[AdminPayipPromaxImportRequest, dict[str, Any] | None], dict[str, Any]],
     record_security_event: Callable[..., None],
 ) -> APIRouter:
@@ -144,6 +153,31 @@ def create_admin_payip_router(
             event_type="admin_payip_import_validate",
             decision="allowed",
             reason=f"filial={payload.filial};items={result.get('items_count')};missing={len(result.get('missing_client_codes') or [])}",
+        )
+        return {"ok": True, **result}
+
+    @router.post("/api/admin/payip/import/create-clients")
+    def api_admin_payip_import_create_clients(
+        request: Request,
+        payload: AdminPayipPromaxCreateClientsRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_payip_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        result = create_payip_promax_import_clients(payload, context)
+        creation = result.get("client_creation") if isinstance(result, dict) else {}
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_payip_import_create_clients",
+            decision="allowed",
+            reason=f"filial={payload.filial};created={len((creation or {}).get('created') or [])};failed={len((creation or {}).get('failed') or [])}",
         )
         return {"ok": True, **result}
 

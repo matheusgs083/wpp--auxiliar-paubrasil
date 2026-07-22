@@ -33,6 +33,12 @@ class AdminPayipRoutesTests(unittest.TestCase):
                 export_payip_batch_csv=lambda **_kwargs: (b"linha;status\n", "payip.csv"),
                 payip_batch_pdf_bytes=lambda item_id, **_kwargs: (b"%PDF-route", f"{item_id}.pdf"),
                 validate_payip_promax_import=lambda payload, context: {"items_count": 1, "items": [{"clientCode": "19167"}], "missing_client_codes": []},
+                create_payip_promax_import_clients=lambda payload, context: {
+                    "items_count": 1,
+                    "items": [{"clientCode": "19167"}],
+                    "missing_client_codes": [],
+                    "client_creation": {"created": list(payload.missing_client_codes), "not_found": [], "failed": []},
+                },
                 run_payip_promax_import=lambda payload, context: {"items_count": 1, "items": [{"clientCode": "19167"}], "missing_client_codes": [], "imported": True},
                 record_security_event=lambda *_args, **_kwargs: None,
             )
@@ -73,6 +79,20 @@ class AdminPayipRoutesTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["items_count"], 1)
+
+    def test_promax_import_create_clients_route_returns_payload(self) -> None:
+        client = self.make_client()
+        response = client.post(
+            "/api/admin/payip/import/create-clients",
+            json={
+                "filial": "3",
+                "start_date": "2026-07-07",
+                "end_date": "2026-07-07",
+                "missing_client_codes": ["19167"],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["client_creation"]["created"], ["19167"])
 
     def test_promax_import_run_route_returns_payload(self) -> None:
         client = self.make_client()

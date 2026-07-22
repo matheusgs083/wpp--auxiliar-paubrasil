@@ -776,6 +776,66 @@ class PayipClientTests(unittest.TestCase):
         self.assertEqual(requests[1].method, "POST")
         self.assertEqual(requests[1].url.path, "/v1/clients")
 
+    def test_create_client_continues_when_verify_returns_not_found(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if request.url.path == "/v1/clients/verify/12467128490":
+                return httpx.Response(404, json={"message": "Cliente nao encontrado"})
+            if request.url.path == "/v1/clients":
+                return httpx.Response(201, json={"id": "client-company-1"})
+            return httpx.Response(404, json={"message": "not found"})
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+        service = PayipPaymentsService(client)
+        profile = type(
+            "Profile",
+            (),
+            {
+                "filial": "3",
+                "cod_pdv": "19167",
+                "documento": "12467128490",
+                "razao_social": "JHEFFERSON KAUA",
+                "nome_fantasia": "Kaua",
+                "email": "",
+                "telefone": "",
+                "cep": "58706560",
+                "endereco": "Rua Professora Cristina Lima",
+                "numero": "SN",
+                "complemento": "",
+                "bairro": "Salgadinho",
+                "cidade": "Patos",
+                "uf": "PB",
+            },
+        )()
+
+        result = service.create_client_from_profile(profile=profile)
+
+        self.assertEqual(result.verify_raw["found"], False)
+        self.assertEqual(result.raw["id"], "client-company-1")
+        self.assertEqual(requests[0].method, "GET")
+        self.assertEqual(requests[1].method, "POST")
+
 
 if __name__ == "__main__":
     unittest.main()

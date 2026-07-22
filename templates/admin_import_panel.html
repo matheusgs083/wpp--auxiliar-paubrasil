@@ -830,17 +830,11 @@
               <label class="form-label small fw-semibold mb-1" for="payipImportEndDate">Ate</label>
               <input id="payipImportEndDate" class="form-control form-control-sm" type="date">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3">
               <label class="form-label small fw-semibold mb-1" for="payipImportMfaCode">Token MFA</label>
               <input id="payipImportMfaCode" class="form-control form-control-sm mono" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Use se a PayIP pedir MFA">
             </div>
-            <div class="col-md-2">
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="payipImportAutoCreate">
-                <label class="form-check-label" for="payipImportAutoCreate">Criar clientes faltantes</label>
-              </div>
-            </div>
-            <div class="col-md-2 d-flex flex-wrap gap-2">
+            <div class="col-md-3 d-flex flex-wrap gap-2">
               <button type="button" class="btn btn-outline-primary btn-sm" id="payipImportValidateBtn" onclick="validatePayipImport()"><i class="bi bi-search me-1"></i>Validar</button>
               <button type="button" class="btn btn-success btn-sm" id="payipImportRunBtn" onclick="runPayipImport()" disabled><i class="bi bi-check2-circle me-1"></i>Importar</button>
             </div>
@@ -1964,6 +1958,7 @@
         },
         payipImport: {
           validate: "/api/admin/payip/import/validate",
+          createClients: "/api/admin/payip/import/create-clients",
           run: "/api/admin/payip/import/run"
         },
         recolhas: {
@@ -2437,7 +2432,6 @@
       payipImportStartDate: document.getElementById("payipImportStartDate"),
       payipImportEndDate: document.getElementById("payipImportEndDate"),
       payipImportMfaCode: document.getElementById("payipImportMfaCode"),
-      payipImportAutoCreate: document.getElementById("payipImportAutoCreate"),
       payipImportValidateBtn: document.getElementById("payipImportValidateBtn"),
       payipImportRunBtn: document.getElementById("payipImportRunBtn"),
       payipImportBody: document.getElementById("payipImportBody"),
@@ -4325,7 +4319,7 @@
       if (E.payipBatchRunBtn) E.payipBatchRunBtn.addEventListener("click", runPayipBatch);
       if (E.payipBatchStatusBtn) E.payipBatchStatusBtn.addEventListener("click", () => syncPayipBatchStatus({ silent: false }));
       if (E.payipBatchExportBtn) E.payipBatchExportBtn.addEventListener("click", exportPayipBatchCsv);
-      [E.payipImportFilial, E.payipImportStartDate, E.payipImportEndDate, E.payipImportAutoCreate]
+      [E.payipImportFilial, E.payipImportStartDate, E.payipImportEndDate]
         .forEach(element => {
           if (element) element.addEventListener("change", resetPayipImportValidation);
         });
@@ -5875,7 +5869,7 @@
         filial: E.payipImportFilial ? String(E.payipImportFilial.value || "").trim() : "",
         start_date: E.payipImportStartDate ? String(E.payipImportStartDate.value || "").trim() : "",
         end_date: E.payipImportEndDate ? String(E.payipImportEndDate.value || "").trim() : "",
-        auto_create_clients: Boolean(E.payipImportAutoCreate && E.payipImportAutoCreate.checked),
+        auto_create_clients: false,
         mfa_code: E.payipImportMfaCode ? String(E.payipImportMfaCode.value || "").trim() : ""
       };
     }
@@ -5884,8 +5878,7 @@
       return JSON.stringify({
         filial: String(payload && payload.filial || ""),
         start_date: String(payload && payload.start_date || ""),
-        end_date: String(payload && payload.end_date || ""),
-        auto_create_clients: Boolean(payload && payload.auto_create_clients)
+        end_date: String(payload && payload.end_date || "")
       });
     }
 
@@ -5952,7 +5945,18 @@
         return;
       }
       const helperRows = [];
-      if (missing.length) helperRows.push(`<tr><td colspan="5" class="text-danger"><strong>Clientes nao encontrados na PayIP:</strong> ${escapeHtml(missing.slice(0, 40).join(", "))}${missing.length > 40 ? "..." : ""}</td></tr>`);
+      if (missing.length) {
+        helperRows.push(`
+          <tr>
+            <td colspan="5" class="text-danger">
+              <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div><strong>Clientes nao encontrados na PayIP:</strong> ${escapeHtml(missing.slice(0, 40).join(", "))}${missing.length > 40 ? "..." : ""}</div>
+                <button type="button" class="btn btn-outline-warning btn-sm" onclick="createPayipImportClients()"><i class="bi bi-person-plus me-1"></i>Criar cadastros</button>
+              </div>
+            </td>
+          </tr>
+        `);
+      }
       if (created.length) helperRows.push(`<tr><td colspan="5" class="text-success"><strong>Criados pela dClientes:</strong> ${escapeHtml(created.join(", "))}</td></tr>`);
       if (notFound.length) helperRows.push(`<tr><td colspan="5" class="text-danger"><strong>Nao encontrados na dClientes:</strong> ${escapeHtml(notFound.join(", "))}</td></tr>`);
       if (failed.length) helperRows.push(`<tr><td colspan="5" class="text-danger"><strong>Falhas ao criar:</strong> ${escapeHtml(failed.join(" | "))}</td></tr>`);
@@ -6019,16 +6023,68 @@
       }
     }
 
+    async function createPayipImportClients() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const validation = state.payipImport && state.payipImport.validation ? state.payipImport.validation : null;
+      const missing = validation && Array.isArray(validation.missing_client_codes) ? validation.missing_client_codes : [];
+      if (!missing.length) {
+        addLog("Nao ha clientes faltantes para criar.", "warn");
+        return;
+      }
+      const payload = currentPayipImportPayload();
+      if (!payload.filial || !payload.start_date || !payload.end_date) {
+        addLog("Informe revenda, data inicial e data final antes de criar clientes PayIP.", "warn");
+        return;
+      }
+      const confirmed = await askConfirmation(`Criar ${missing.length} cadastro(s) na PayIP usando a dClientes?`);
+      if (!confirmed) return;
+      payload.missing_client_codes = missing;
+      state.payipImport.loading = true;
+      state.payipImport.error = "";
+      renderPayipImport();
+      try {
+        const result = await req(CONFIG.endpoints.payipImport.createClients, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 120000
+        });
+        state.payipImport.validation = result;
+        state.payipImport.validationPayload = payipImportSignature(payload);
+        state.payipImport.error = "";
+        renderPayipImport();
+        const creation = result.client_creation || {};
+        const created = Array.isArray(creation.created) ? creation.created.length : 0;
+        const failed = Array.isArray(creation.failed) ? creation.failed.length : 0;
+        const notFound = Array.isArray(creation.not_found) ? creation.not_found.length : 0;
+        const stillMissing = Array.isArray(result.missing_client_codes) ? result.missing_client_codes.length : 0;
+        addLog(`Criacao PayIP finalizada: ${created} criado(s), ${notFound} nao encontrado(s) na dClientes, ${failed} falha(s), ${stillMissing} ainda faltante(s).`, stillMissing || failed || notFound ? "warn" : "ok");
+      } catch (err) {
+        state.payipImport.error = err.message || "Falha ao criar clientes PayIP.";
+        renderPayipImport();
+        addLog(`Falha ao criar clientes PayIP: ${err.message}`, "err");
+      } finally {
+        state.payipImport.loading = false;
+        renderPayipImport();
+      }
+    }
+
     async function runPayipImport() {
       updateTokens();
       if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
       const payload = currentPayipImportPayload();
-      if (!payload.mfa_code) {
-        addLog("Informe o token MFA PayIP para confirmar a importacao.", "warn");
-        return;
-      }
       if (!state.payipImport.validation || state.payipImport.validationPayload !== payipImportSignature(payload)) {
         addLog("Valide a importacao PayIP antes de confirmar.", "warn");
+        return;
+      }
+      const missing = Array.isArray(state.payipImport.validation.missing_client_codes) ? state.payipImport.validation.missing_client_codes : [];
+      if (missing.length) {
+        addLog("Crie os cadastros faltantes antes de importar.", "warn");
+        return;
+      }
+      if (!payload.mfa_code) {
+        addLog("Informe o token MFA PayIP para confirmar a importacao.", "warn");
         return;
       }
       const total = state.payipImport.validation.items_count || (Array.isArray(state.payipImport.validation.items) ? state.payipImport.validation.items.length : 0);

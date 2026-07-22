@@ -27,6 +27,8 @@ PAYIP_PDF_ATTEMPTS = 5
 PAYIP_PDF_RETRY_DELAY_SECONDS = 2.0
 PAYIP_CHARGE_ATTEMPTS = 3
 PAYIP_CHARGE_RETRY_DELAY_SECONDS = 1.5
+PAYIP_CLIENT_CREATION_REVALIDATE_ATTEMPTS = 3
+PAYIP_CLIENT_CREATION_REVALIDATE_DELAY_SECONDS = 1.0
 
 
 @dataclass(frozen=True)
@@ -99,8 +101,42 @@ class AdminPayipBatchService:
         if missing_codes and options.auto_create_clients:
             self._bootstrap_mfa_if_provided(options.mfa_code)
             client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
-            validation = self._validate_promax_import(options)
+            validation = self._validate_promax_import_after_client_creation(options, client_creation=client_creation)
         return _promax_import_payload(validation, client_creation=client_creation)
+
+    def create_promax_import_clients(self, payload: Any, context: dict[str, Any] | None) -> dict[str, Any]:
+        options = _promax_import_options(payload, require_dates=False)
+        self._ensure_filial_allowed(options.filial, context)
+        missing_codes = _payload_missing_client_codes(payload)
+        if not missing_codes and options.start_date and options.end_date:
+            validation = self._validate_promax_import(options)
+            missing_codes = tuple(
+                str(item or "").strip()
+                for item in getattr(validation, "missing_client_codes", ()) or ()
+                if str(item or "").strip()
+            )
+        if not missing_codes:
+            raise HTTPException(status_code=400, detail="Nenhum cliente faltante informado para criar na PayIP.")
+
+        self._bootstrap_mfa_if_provided(options.mfa_code)
+        client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
+        if options.start_date and options.end_date:
+            validation = self._validate_promax_import_after_client_creation(options, client_creation=client_creation)
+            return _promax_import_payload(validation, client_creation=client_creation)
+
+        return {
+            "filial": options.filial,
+            "company_id": "",
+            "date_start": options.start_date,
+            "date_end": options.end_date,
+            "items": [],
+            "items_count": 0,
+            "missing_client_codes": [],
+            "total_amount": "0.00",
+            "client_creation": client_creation,
+            "imported": False,
+            "ok": not bool(client_creation.get("not_found") or client_creation.get("failed")),
+        }
 
     def run_promax_import(self, payload: Any, context: dict[str, Any] | None) -> dict[str, Any]:
         options = _promax_import_options(payload)
@@ -113,7 +149,7 @@ class AdminPayipBatchService:
         if missing_codes and options.auto_create_clients:
             self._bootstrap_mfa_if_provided(options.mfa_code)
             client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
-            validation = self._validate_promax_import(options)
+            validation = self._validate_promax_import_after_client_creation(options, client_creation=client_creation)
             missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
         if missing_codes:
             raise HTTPException(
@@ -322,6 +358,32 @@ class AdminPayipBatchService:
         except Exception as exc:
             self.logger.exception("Falha ao validar MFA PayIP antes de criar clientes: %s", exc)
             raise HTTPException(status_code=503, detail=f"Falha ao validar MFA PayIP: {_short_error(str(exc))}") from exc
+
+    def _validate_promax_import_after_client_creation(
+        self,
+        options: PayipPromaxImportOptions,
+        *,
+        client_creation: dict[str, list[str]],
+    ) -> Any:
+        created_codes = {
+            normalize_numeric_code(item)
+            for item in client_creation.get("created", [])
+            if normalize_numeric_code(item)
+        }
+        attempts = PAYIP_CLIENT_CREATION_REVALIDATE_ATTEMPTS if created_codes else 1
+        validation: Any = None
+        for attempt in range(1, max(1, attempts) + 1):
+            if attempt > 1:
+                time.sleep(PAYIP_CLIENT_CREATION_REVALIDATE_DELAY_SECONDS)
+            validation = self._validate_promax_import(options)
+            missing_codes = {
+                normalize_numeric_code(item)
+                for item in getattr(validation, "missing_client_codes", ()) or ()
+                if normalize_numeric_code(item)
+            }
+            if not (created_codes & missing_codes):
+                return validation
+        return validation
 
     def _create_missing_clients(self, *, filial: str, codes: tuple[str, ...]) -> dict[str, list[str]]:
         if self.dclientes_query_service is None:
@@ -621,13 +683,13 @@ def _options_payload(options: PayipBatchOptions) -> dict[str, Any]:
     }
 
 
-def _promax_import_options(payload: Any) -> PayipPromaxImportOptions:
+def _promax_import_options(payload: Any, *, require_dates: bool = True) -> PayipPromaxImportOptions:
     filial = normalize_numeric_code(getattr(payload, "filial", "") or getattr(payload, "revenda", ""))
     start_date = _promax_import_date_text(getattr(payload, "start_date", "") or getattr(payload, "date_start", ""))
     end_date = _promax_import_date_text(getattr(payload, "end_date", "") or getattr(payload, "date_end", ""))
     if not filial:
         raise HTTPException(status_code=400, detail="Informe a revenda da importacao PayIP.")
-    if not start_date or not end_date:
+    if require_dates and (not start_date or not end_date):
         raise HTTPException(status_code=400, detail="Informe data inicial e final no formato AAAA-MM-DD ou DD/MM/AAAA.")
     return PayipPromaxImportOptions(
         filial=filial,
@@ -641,6 +703,24 @@ def _promax_import_options(payload: Any) -> PayipPromaxImportOptions:
 def _promax_import_date_text(value: Any) -> str:
     parsed = _parse_date(value)
     return parsed.isoformat() if parsed is not None else ""
+
+
+def _payload_missing_client_codes(payload: Any) -> tuple[str, ...]:
+    raw_codes = getattr(payload, "missing_client_codes", None)
+    if raw_codes is None:
+        raw_codes = getattr(payload, "codes_client", None)
+    if raw_codes is None:
+        raw_codes = getattr(payload, "codes", None)
+    if raw_codes is None:
+        raw_codes = []
+    if isinstance(raw_codes, str):
+        raw_codes = re.split(r"[,;\s]+", raw_codes)
+    codes: list[str] = []
+    for item in raw_codes:
+        normalized = normalize_numeric_code(str(item or ""))
+        if normalized and normalized not in codes:
+            codes.append(normalized)
+    return tuple(codes)
 
 
 def _promax_import_payload(result: Any, *, client_creation: dict[str, list[str]], imported: bool = False) -> dict[str, Any]:

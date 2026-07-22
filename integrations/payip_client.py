@@ -659,6 +659,16 @@ class PayipClient:
                 headers={"Authorization": token_pair.authorization_header()},
             )
             logger.info("PayIP verify client retry response status=%s", response.status_code)
+        if response.status_code == 404:
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = {"message": _safe_response_body(response)}
+            return {
+                "found": False,
+                "statusCode": 404,
+                "payload": payload,
+            }
         if not 200 <= response.status_code < 300:
             raise PayipError(
                 f"PayIP verify client failed: HTTP {response.status_code}. "

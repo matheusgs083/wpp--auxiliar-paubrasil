@@ -379,6 +379,7 @@ def configure_app_runtime(
     _export_payip_batch_csv = admin_payip_batch_service.export_csv
     _payip_batch_pdf_bytes = admin_payip_batch_service.pdf_bytes
     _validate_payip_promax_import = admin_payip_batch_service.validate_promax_import
+    _create_payip_promax_import_clients = admin_payip_batch_service.create_promax_import_clients
     _run_payip_promax_import = admin_payip_batch_service.run_promax_import
 
 
@@ -510,6 +511,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "export_payip_batch_csv": runtime["_export_payip_batch_csv"],
         "payip_batch_pdf_bytes": runtime["_payip_batch_pdf_bytes"],
         "validate_payip_promax_import": runtime["_validate_payip_promax_import"],
+        "create_payip_promax_import_clients": runtime["_create_payip_promax_import_clients"],
         "run_payip_promax_import": runtime["_run_payip_promax_import"],
         "list_admin_evolution_usage": runtime["_list_admin_evolution_usage"],
         "build_evolution_usage_avg_report_csv": runtime["_build_evolution_usage_avg_report_csv"],
