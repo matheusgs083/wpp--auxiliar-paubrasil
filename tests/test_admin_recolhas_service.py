@@ -143,6 +143,40 @@ class AdminRecolhasServiceTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 403)
 
+    def test_update_recolha_requires_detail_for_partial_collection(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = self.make_service(Path(tmp) / "recolhas.csv")
+            record = service.recolha_request_service.create_request(
+                solicitante="5583",
+                revenda="3",
+                data="15/06/2026",
+                setor="400",
+                cidade="Patos",
+                rn="400",
+                nb="9845",
+                comodato="Comodato 10",
+                created_at=datetime(2026, 6, 15, 8, 0),
+            )
+
+            with self.assertRaises(HTTPException) as raised:
+                service.update_recolha(
+                    record.id,
+                    SimpleNamespace(status_caixa_noturno="Nao Recolhido", motivo_caixa_noturno="Recolha parcial"),
+                    {"mode": "financeiro", "is_admin": False, "filiais": ["3"]},
+                )
+
+            self.assertEqual(raised.exception.status_code, 400)
+            result = service.update_recolha(
+                record.id,
+                SimpleNamespace(
+                    status_caixa_noturno="Nao Recolhido",
+                    motivo_caixa_noturno="Recolha parcial: 2 caixas litrinho",
+                ),
+                {"mode": "financeiro", "is_admin": False, "filiais": ["3"]},
+            )
+
+        self.assertEqual(result["record"]["motivo_caixa_noturno"], "Recolha parcial: 2 caixas litrinho")
+
 
 if __name__ == "__main__":
     unittest.main()

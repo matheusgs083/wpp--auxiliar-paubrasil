@@ -20,6 +20,7 @@ from bot_api.services.admin_import_config import ADMIN_IMPORT_CRITICA_PIPELINE_D
 from bot_api.services.admin_templates import AdminTemplateLoader
 from bot_api.services.app_lifecycle import register_app_lifecycle
 from bot_api.services.admin_panel_session_service import AdminPanelSessionService
+from bot_api.services.admin_panel_user_service import AdminPanelUserService
 from bot_api.services.admin_payip_batch_service import AdminPayipBatchService
 from bot_api.services.admin_recolhas_service import AdminRecolhasService
 from bot_api.services.boletos_pdf_import_service import BoletosPdfImportService
@@ -93,6 +94,7 @@ def configure_app_runtime(
     PROJECT_ROOT = project_root
     ADMIN_IMPORT_PANEL_TEMPLATE = PROJECT_ROOT / "templates" / "admin_import_panel.html"
     ADMIN_LOGIN_TEMPLATE = PROJECT_ROOT / "templates" / "admin_login.html"
+    ADMIN_CHANGE_PASSWORD_TEMPLATE = PROJECT_ROOT / "templates" / "admin_change_password.html"
     ADMIN_IMPORT_RUNTIME_ROOT = (
         Path("/tmp/bot_api_admin_imports") if Path("/tmp").exists() else PROJECT_ROOT / "exports" / "admin_import_uploads"
     )
@@ -101,8 +103,15 @@ def configure_app_runtime(
     ADMIN_PANEL_SESSION_TTL_SECONDS = 12 * 60 * 60
     ADMIN_PANEL_LOGIN_WINDOW_SECONDS = 5 * 60
     ADMIN_PANEL_LOGIN_MAX_FAILURES = 10
+    admin_panel_user_service = AdminPanelUserService(
+        database_url=settings.access_database_url,
+        schema=settings.access_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+        bootstrap_database_url=settings.reports_database_url,
+    )
     admin_panel_session_service = AdminPanelSessionService(
         admin_api_token=settings.admin_api_token,
+        session_secret=settings.admin_panel_session_secret,
         verify_token=settings.verify_token,
         api_auth_tokens=settings.api_auth_tokens,
         finance_panel_tokens=settings.finance_panel_tokens,
@@ -111,6 +120,7 @@ def configure_app_runtime(
         session_ttl_seconds=ADMIN_PANEL_SESSION_TTL_SECONDS,
         login_window_seconds=ADMIN_PANEL_LOGIN_WINDOW_SECONDS,
         login_max_failures=ADMIN_PANEL_LOGIN_MAX_FAILURES,
+        panel_user_service=admin_panel_user_service,
     )
 
 
@@ -190,6 +200,7 @@ def configure_app_runtime(
     auth_deps.add_security_middleware(app)
 
     _admin_panel_context_from_token = admin_panel_session_service.context_from_token
+    _admin_panel_context_from_credentials = admin_panel_session_service.context_from_credentials
     _admin_panel_context_from_session_cookie = admin_panel_session_service.context_from_session_cookie
     _set_admin_panel_session_cookie = admin_panel_session_service.set_session_cookie
     _check_admin_panel_login_rate_limit = admin_panel_session_service.check_login_rate_limit
@@ -374,10 +385,12 @@ def configure_app_runtime(
     admin_template_loader = AdminTemplateLoader(
         import_panel_template=ADMIN_IMPORT_PANEL_TEMPLATE,
         login_template=ADMIN_LOGIN_TEMPLATE,
+        change_password_template=ADMIN_CHANGE_PASSWORD_TEMPLATE,
         api_auth_enabled=settings.api_auth_enabled,
     )
     _load_admin_import_panel_html = admin_template_loader.load_import_panel_html
     _load_admin_login_html = admin_template_loader.load_login_html
+    _load_admin_change_password_html = admin_template_loader.load_change_password_html
 
     register_app_lifecycle(
         app,
@@ -389,6 +402,7 @@ def configure_app_runtime(
         start_daily_route_broadcast_scheduler=_start_daily_route_broadcast_scheduler,
         stop_daily_route_broadcast_scheduler=_stop_daily_route_broadcast_scheduler,
         admin_imports_runtime=admin_imports_runtime,
+        admin_panel_user_service=admin_panel_user_service,
         critica_pdf_prebuild_executor=critica_pdf_prebuild_executor,
         admin_broadcast_executor=admin_broadcast_executor,
         admin_payip_batch_service=admin_payip_batch_service,
@@ -458,6 +472,9 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "decision_has_unrestricted_lookup_access": runtime["_decision_has_unrestricted_lookup_access"],
         "admin_panel_context_from_session_cookie": runtime["_admin_panel_context_from_session_cookie"],
         "admin_panel_context_from_token": runtime["_admin_panel_context_from_token"],
+        "admin_panel_context_from_credentials": runtime["_admin_panel_context_from_credentials"],
+        "panel_context_can_access_feature": runtime["_panel_context_can_access_feature"],
+        "admin_panel_user_service": runtime["admin_panel_user_service"],
         "check_admin_panel_login_rate_limit": runtime["_check_admin_panel_login_rate_limit"],
         "record_admin_panel_login_failure": runtime["_record_admin_panel_login_failure"],
         "clear_admin_panel_login_failures": runtime["_clear_admin_panel_login_failures"],
@@ -466,6 +483,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "admin_panel_session_cookie": runtime["ADMIN_PANEL_SESSION_COOKIE"],
         "admin_panel_session_ttl_seconds": runtime["ADMIN_PANEL_SESSION_TTL_SECONDS"],
         "load_admin_login_html": runtime["_load_admin_login_html"],
+        "load_admin_change_password_html": runtime["_load_admin_change_password_html"],
         "load_admin_import_panel_html": runtime["_load_admin_import_panel_html"],
         "list_admin_import_status": runtime["_list_admin_import_status"],
         "filter_admin_import_status_for_context": runtime["_filter_admin_import_status_for_context"],

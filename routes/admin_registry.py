@@ -50,6 +50,7 @@ def _register_admin_import_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
         create_admin_imports_router(
             access_call=deps["access_call"],
             require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
             require_admin_panel_import_dataset=deps["require_admin_panel_import_dataset"],
             list_admin_import_status=deps["list_admin_import_status"],
             filter_admin_import_status_for_context=deps["filter_admin_import_status_for_context"],
@@ -94,14 +95,18 @@ def _register_admin_panel_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
         create_admin_panel_router(
             admin_panel_context_from_session_cookie=deps["admin_panel_context_from_session_cookie"],
             load_admin_login_html=deps["load_admin_login_html"],
+            load_admin_change_password_html=deps["load_admin_change_password_html"],
             load_admin_import_panel_html=deps["load_admin_import_panel_html"],
             check_admin_panel_login_rate_limit=deps["check_admin_panel_login_rate_limit"],
             admin_panel_context_from_token=deps["admin_panel_context_from_token"],
+            admin_panel_context_from_credentials=deps["admin_panel_context_from_credentials"],
             record_admin_panel_login_failure=deps["record_admin_panel_login_failure"],
             clear_admin_panel_login_failures=deps["clear_admin_panel_login_failures"],
             set_admin_panel_session_cookie=deps["set_admin_panel_session_cookie"],
             require_admin_panel_auth=deps["require_admin_panel_auth"],
             panel_context_mode=deps["panel_context_mode"],
+            panel_context_can_access_feature=deps["panel_context_can_access_feature"],
+            admin_panel_user_service=deps["admin_panel_user_service"],
             record_security_event=deps["record_security_event"],
             session_cookie_name=deps["admin_panel_session_cookie"],
             session_ttl_seconds=deps["admin_panel_session_ttl_seconds"],
@@ -145,7 +150,8 @@ def _register_admin_payip_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
 def _register_admin_usage_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
     app.include_router(
         create_admin_usage_router(
-            require_admin_api_auth=deps["require_admin_api_auth"],
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
             list_admin_evolution_usage=deps["list_admin_evolution_usage"],
             build_evolution_usage_avg_report_csv=deps["build_evolution_usage_avg_report_csv"],
             build_evolution_function_usage_report_csv=deps["build_evolution_function_usage_report_csv"],

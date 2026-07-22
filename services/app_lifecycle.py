@@ -16,6 +16,7 @@ def register_app_lifecycle(
     start_daily_route_broadcast_scheduler: Any,
     stop_daily_route_broadcast_scheduler: Any,
     admin_imports_runtime: Any,
+    admin_panel_user_service: Any,
     critica_pdf_prebuild_executor: Any,
     admin_broadcast_executor: Any,
     admin_payip_batch_service: Any,
@@ -34,6 +35,10 @@ def register_app_lifecycle(
             ready = security_monitor.initialize()
             if not ready:
                 logger.warning("Auditoria de seguranca indisponivel no startup: %s", security_monitor.status().get("last_error"))
+        try:
+            admin_panel_user_service.ensure_schema()
+        except Exception as exc:
+            logger.warning("Usuarios do painel indisponiveis no startup: %s", exc)
         maintenance_result = run_admin_import_maintenance(force_stale=True)
         if not maintenance_result.get("ok"):
             logger.warning("Manutencao de imports indisponivel no startup: %s", maintenance_result.get("error"))

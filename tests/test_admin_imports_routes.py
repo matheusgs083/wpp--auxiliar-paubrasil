@@ -21,6 +21,7 @@ class AdminImportsRoutesTest(unittest.TestCase):
             create_admin_imports_router(
                 access_call=lambda func, *args, **kwargs: func(*args, **kwargs),
                 require_admin_panel_auth=lambda **_kwargs: {"mode": "admin", "is_admin": True},
+                require_admin_panel_feature=lambda _context, _feature: None,
                 require_admin_panel_import_dataset=lambda _context, dataset: f"normalized_{dataset}",
                 list_admin_import_status=lambda: {"items": [{"dataset": "dclientes"}]},
                 filter_admin_import_status_for_context=lambda payload, _context: {**payload, "filtered": True},

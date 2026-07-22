@@ -42,6 +42,7 @@ class Settings:
     denied_reply_cooldown_minutes: int
     denied_unregistered_reply_cooldown_minutes: int
     admin_api_token: str
+    admin_panel_session_secret: str
     finance_panel_tokens: tuple[tuple[str, tuple[str, ...]], ...]
     critica_panel_tokens: tuple[tuple[str, tuple[str, ...]], ...]
     admin_upload_max_file_size_mb: int
@@ -230,6 +231,7 @@ def get_settings() -> Settings:
             int(os.getenv("DENIED_UNREGISTERED_REPLY_COOLDOWN_MINUTES", "720")),
         ),
         admin_api_token=os.getenv("ADMIN_API_TOKEN", "").strip(),
+        admin_panel_session_secret=os.getenv("ADMIN_PANEL_SESSION_SECRET", "").strip(),
         finance_panel_tokens=_parse_finance_panel_tokens(os.getenv("FINANCE_PANEL_TOKENS", "")),
         critica_panel_tokens=_parse_critica_panel_tokens(os.getenv("CRITICA_PANEL_TOKENS", "")),
         admin_upload_max_file_size_mb=max(0, int(os.getenv("ADMIN_UPLOAD_MAX_FILE_SIZE_MB", "0"))),

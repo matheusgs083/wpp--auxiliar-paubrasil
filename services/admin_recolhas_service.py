@@ -365,6 +365,9 @@ class AdminRecolhasService:
             if status == "Recolhido" and getattr(payload, "motivo_caixa_noturno", None) is None:
                 updates["motivo_caixa_noturno"] = ""
 
+        if _recolha_partial_detail_missing(updates.get("motivo_caixa_noturno")):
+            raise HTTPException(status_code=400, detail="Informe o que foi recolhido na recolha parcial.")
+
         if not updates:
             raise HTTPException(status_code=400, detail="Nenhum campo de recolha informado para atualizar.")
 
@@ -608,6 +611,21 @@ def _normalize_recolha_status(value: str | None) -> str:
     if comparable in {"nao recolhido", "nao-recolhido"}:
         return "Não Recolhido"
     return normalized
+
+
+def _recolha_partial_detail_missing(value: str | None) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    comparable = "".join(
+        char
+        for char in unicodedata.normalize("NFD", raw.lower())
+        if unicodedata.category(char) != "Mn"
+    )
+    if not comparable.startswith("recolha parcial"):
+        return False
+    detail = re.sub(r"^recolha\s+parcial\s*(?:[:|;\-]\s*)?", "", raw, flags=re.IGNORECASE).strip()
+    return not detail
 
 
 def _extract_recolha_comodato_number(value: str) -> str:

@@ -40,6 +40,16 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
             self.html,
         )
 
+    def test_payip_has_dedicated_panel_navigation(self) -> None:
+        self.assertEqual(self.html.count('id="payipTab"'), 1)
+        self.assertEqual(self.html.count('id="payipPane"'), 1)
+        self.assertIn('href="/admin/payip"', self.html)
+        self.assertIn('data-flow-target="payipTab"', self.html)
+        self.assertIn('"/admin/payip": "payipTab"', self.html)
+        self.assertIn('payipTab: "/admin/payip"', self.html)
+        self.assertIn("function setupPayipPane()", self.html)
+        self.assertIn('activeTabId === "payipTab"', self.html)
+
     def test_schedule_supports_daily_days_and_specific_intervals(self) -> None:
         self.assertIn('<option value="daily_specific">Diaria especifica</option>', self.html)
         self.assertIn("function promaxSelectedScheduleDays()", self.html)

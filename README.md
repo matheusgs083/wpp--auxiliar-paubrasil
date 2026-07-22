@@ -182,6 +182,7 @@ Variaveis principais:
 - `ACCESS_DATABASE_TIMEOUT_SECONDS`: timeout de conexao com o Postgres do RBAC.
 - `SECURITY_AUDIT_ENABLED`: habilita trilha de auditoria e throttle persistente no Postgres.
 - `ADMIN_API_TOKEN`: token obrigatorio para rotas administrativas.
+- `ADMIN_PANEL_SESSION_SECRET`: segredo exclusivo para assinar cookies do painel; se vazio, usa `ADMIN_API_TOKEN` por compatibilidade.
 - `REPORTS_DATABASE_URL`: conexao PostgreSQL para carga e manutencao dos relatorios.
 - `REPORTS_RUNTIME_DATABASE_URL`: conexao PostgreSQL de leitura usada pelo runtime do bot.
 - `REPORTS_DB_SCHEMA`: schema dos relatorios importados.

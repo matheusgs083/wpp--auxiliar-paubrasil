@@ -16,6 +16,7 @@ def create_admin_imports_router(
     *,
     access_call: Callable[..., Any],
     require_admin_panel_auth: Callable[..., dict[str, Any]],
+    require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     require_admin_panel_import_dataset: Callable[[dict[str, Any] | None, str], str],
     list_admin_import_status: Callable[[], dict[str, Any]],
     filter_admin_import_status_for_context: Callable[[dict[str, Any], dict[str, Any] | None], dict[str, Any]],
@@ -55,6 +56,7 @@ def create_admin_imports_router(
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
         )
+        require_admin_panel_feature(context, "import_status")
         payload = list_admin_import_status()
         payload = filter_admin_import_status_for_context(payload, context)
         record_security_event(request, channel="api", event_type="admin_import_status", decision="allowed", reason="success")
@@ -74,6 +76,7 @@ def create_admin_imports_router(
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
         )
+        require_admin_panel_feature(context, "import_status")
         payload = list_admin_import_history(limit=limit)
         payload = filter_admin_import_history_for_context(payload, context)
         record_security_event(request, channel="api", event_type="admin_import_history", decision="allowed", reason="success")

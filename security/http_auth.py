@@ -264,6 +264,15 @@ class HttpAuthDependencies:
 
         session_context = self.admin_panel_session_service.context_from_session_cookie(request)
         if session_context:
+            if bool(session_context.get("must_change_password")):
+                self.record_security_event(
+                    request,
+                    channel="api",
+                    event_type="admin_panel_auth",
+                    decision="denied",
+                    reason="password_change_required",
+                )
+                raise HTTPException(status_code=403, detail="Troque a senha antes de continuar.")
             self.record_security_event(
                 request,
                 channel="api",
@@ -295,6 +304,15 @@ class HttpAuthDependencies:
             return
         session_context = self.admin_panel_session_service.context_from_session_cookie(request)
         if session_context and session_context.get("is_admin"):
+            if bool(session_context.get("must_change_password")):
+                self.record_security_event(
+                    request,
+                    channel="api",
+                    event_type="admin_auth",
+                    decision="denied",
+                    reason="password_change_required",
+                )
+                raise HTTPException(status_code=403, detail="Troque a senha antes de continuar.")
             self.record_security_event(
                 request,
                 channel="api",

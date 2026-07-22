@@ -30,6 +30,20 @@ class FakeAccessControl:
         return decision
 
 
+class FakeAdminPanelUserService:
+    def list_users(self) -> list[dict[str, Any]]:
+        return [{"id": 1, "username": "admin", "features": ["operations"], "is_admin": True}]
+
+    def create_user(self, **_kwargs: Any) -> dict[str, Any]:
+        return {"user": {"id": 2, "username": "novo"}, "temporary_password": "TempSenha#1234"}
+
+    def update_user(self, *, user_id: int, **_kwargs: Any) -> dict[str, Any]:
+        return {"id": user_id, "username": "admin"}
+
+    def reset_password(self, *, user_id: int) -> dict[str, Any]:
+        return {"user": {"id": user_id, "username": "admin"}, "temporary_password": "TempSenha#5678"}
+
+
 class ExtractedAppRoutesTest(unittest.TestCase):
     def _admin_panel_test_app(self, session_context: dict[str, Any] | None) -> FastAPI:
         app = FastAPI()
@@ -37,14 +51,18 @@ class ExtractedAppRoutesTest(unittest.TestCase):
             create_admin_panel_router(
                 admin_panel_context_from_session_cookie=lambda _request: session_context,
                 load_admin_login_html=lambda: "<html>login</html>",
+                load_admin_change_password_html=lambda: "<html>change</html>",
                 load_admin_import_panel_html=lambda: "<html>panel</html>",
                 check_admin_panel_login_rate_limit=lambda _request: None,
                 admin_panel_context_from_token=lambda _token: {"mode": "admin", "is_admin": True, "filiais": []},
+                admin_panel_context_from_credentials=lambda _username, _password: {"mode": "admin", "is_admin": True, "filiais": []},
                 record_admin_panel_login_failure=lambda _request: None,
                 clear_admin_panel_login_failures=lambda _request: None,
                 set_admin_panel_session_cookie=lambda _response, _request, _context: None,
                 require_admin_panel_auth=lambda **_kwargs: {"mode": "financeiro", "is_admin": False, "filiais": ["3"]},
                 panel_context_mode=lambda context: str(context.get("mode") or "admin"),
+                panel_context_can_access_feature=lambda _context, _feature: True,
+                admin_panel_user_service=FakeAdminPanelUserService(),
                 record_security_event=lambda _request, **_kwargs: None,
                 session_cookie_name="bot_admin_session",
                 session_ttl_seconds=3600,
@@ -86,6 +104,7 @@ class ExtractedAppRoutesTest(unittest.TestCase):
             "/admin",
             "/admin/imports",
             "/admin/operations",
+            "/admin/payip",
             "/admin/tables",
             "/admin/critica",
             "/admin/recolhas",
@@ -102,6 +121,7 @@ class ExtractedAppRoutesTest(unittest.TestCase):
 
         for path in (
             "/admin/operations",
+            "/admin/payip",
             "/admin/tables",
             "/admin/critica",
             "/admin/recolhas",
@@ -121,6 +141,7 @@ class ExtractedAppRoutesTest(unittest.TestCase):
         self.assertTrue(payload["can_broadcast"])
         self.assertTrue(payload["can_import"])
         self.assertTrue(payload["can_manage_recolhas"])
+        self.assertTrue(payload["can_payip"])
         self.assertFalse(payload["can_manage_access"])
 
     def test_admin_recolhas_bulk_uses_feature_gate_and_update_service(self) -> None:
@@ -160,7 +181,8 @@ class ExtractedAppRoutesTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(
             create_admin_usage_router(
-                require_admin_api_auth=lambda **_kwargs: None,
+                require_admin_panel_auth=lambda **_kwargs: {"mode": "admin", "is_admin": True},
+                require_admin_panel_feature=lambda _context, _feature: None,
                 list_admin_evolution_usage=lambda **kwargs: {"window_days": kwargs["days"]},
                 build_evolution_usage_avg_report_csv=lambda payload: f"days\n{payload['window_days']}\n",
                 build_evolution_function_usage_report_csv=lambda _payload, **_kwargs: "feature\n",

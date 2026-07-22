@@ -136,6 +136,54 @@
     .table { --bs-table-color: var(--ink-900); --bs-table-bg: transparent; --bs-table-hover-bg: rgba(37, 99, 235, 0.07); margin-bottom: 0; }
     .table-scroll thead th, .table thead th { position: sticky; top: 0; z-index: 3; color: var(--ink-700); background: var(--surface-soft); border-bottom: 1px solid var(--line-strong); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
     .table td { color: var(--ink-900); font-size: 0.86rem; vertical-align: middle; border-color: var(--line); }
+    .panel-users-card { overflow: hidden; }
+    .panel-users-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.8rem 0.9rem; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+    .panel-users-title { display: flex; align-items: center; gap: 0.65rem; min-width: 240px; }
+    .panel-users-icon { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(37, 99, 235, 0.24); border-radius: 8px; color: var(--brand-700); background: #eff6ff; }
+    body[data-theme="dark"] .panel-users-icon { color: #bfdbfe; background: rgba(37, 99, 235, 0.14); }
+    .panel-users-stats { display: grid; grid-template-columns: repeat(4, minmax(118px, 1fr)); gap: 0.55rem; padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--line); background: var(--surface); }
+    .panel-user-stat { min-height: 58px; padding: 0.55rem 0.65rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .panel-user-stat .label { display: block; margin-bottom: 0.12rem; color: var(--ink-500); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+    .panel-user-stat .value { color: var(--ink-900); font-size: 1.05rem; font-weight: 800; line-height: 1.1; }
+    .panel-user-layout { display: grid; grid-template-columns: minmax(300px, 390px) minmax(0, 1fr); gap: 0.75rem; padding: 0.75rem; }
+    .panel-user-box { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .panel-user-box-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+    .panel-user-box-body { padding: 0.75rem; }
+    .panel-user-mode { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.22rem 0.48rem; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-700); background: var(--surface); font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
+    .panel-user-switch-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+    .panel-user-switch { display: flex; align-items: center; justify-content: space-between; gap: 0.55rem; min-height: 52px; padding: 0.55rem 0.65rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .panel-user-switch .form-check-input { flex: 0 0 auto; cursor: pointer; }
+    .panel-user-feature-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; margin-bottom: 0.5rem; }
+    .panel-user-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+    .panel-user-feature-card { min-height: 66px; display: flex; align-items: flex-start; gap: 0.5rem; margin: 0; padding: 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
+    .panel-user-feature-card:hover { border-color: var(--brand-600); background: rgba(37, 99, 235, 0.05); }
+    .panel-user-feature-card:has(.panel-user-feature:checked) { border-color: rgba(37, 99, 235, 0.45); background: #eff6ff; box-shadow: inset 3px 0 0 var(--brand-600); }
+    body[data-theme="dark"] .panel-user-feature-card:has(.panel-user-feature:checked) { background: rgba(37, 99, 235, 0.14); }
+    .panel-user-feature-card.is-disabled { cursor: not-allowed; opacity: 0.78; }
+    .panel-user-feature-card .form-check-input { flex: 0 0 auto; margin: 0.12rem 0 0; cursor: pointer; }
+    .panel-user-feature-card.is-disabled .form-check-input { cursor: not-allowed; }
+    .panel-user-feature-icon { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 7px; color: var(--brand-700); background: var(--surface-soft); font-size: 0.88rem; }
+    .panel-user-feature-card:has(.panel-user-feature:checked) .panel-user-feature-icon { color: #fff; border-color: var(--brand-700); background: var(--brand-700); }
+    .panel-user-feature-main { display: grid; gap: 0.1rem; min-width: 0; }
+    .panel-user-feature-title { color: var(--ink-900); font-size: 0.82rem; font-weight: 800; line-height: 1.15; }
+    .panel-user-feature-description { color: var(--ink-500); font-size: 0.72rem; font-weight: 600; line-height: 1.25; }
+    .panel-user-password-card { border-color: rgba(180, 83, 9, 0.28); color: var(--ink-900); background: #fffbeb; }
+    body[data-theme="dark"] .panel-user-password-card { background: rgba(180, 83, 9, 0.12); }
+    .panel-user-password-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.55rem; }
+    .panel-user-password-value { overflow-wrap: anywhere; color: var(--ink-900); font-size: 0.86rem; font-weight: 800; }
+    .panel-credential-box { padding: 0.65rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .panel-credential-box .label { display: block; margin-bottom: 0.18rem; color: var(--ink-500); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+    .panel-credential-box .value { overflow-wrap: anywhere; color: var(--ink-900); font-size: 1rem; font-weight: 800; }
+    .panel-users-toolbar { display: grid; grid-template-columns: minmax(220px, 360px) auto; align-items: end; gap: 0.65rem; margin-bottom: 0.65rem; }
+    .panel-users-scroll { max-height: 480px; border: 1px solid var(--line); border-radius: 8px; }
+    .panel-users-table td { padding-top: 0.62rem; padding-bottom: 0.62rem; }
+    .panel-user-name { display: grid; gap: 0.08rem; min-width: 0; }
+    .panel-user-name strong { color: var(--ink-900); font-size: 0.9rem; }
+    .panel-user-feature-pills { display: flex; flex-wrap: wrap; gap: 0.28rem; }
+    .panel-user-feature-pill { display: inline-flex; align-items: center; max-width: 100%; padding: 0.2rem 0.42rem; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-700); background: var(--surface-soft); font-size: 0.72rem; font-weight: 800; line-height: 1.1; }
+    .panel-user-feature-pill.all { color: var(--brand-700); border-color: rgba(37, 99, 235, 0.28); background: #eff6ff; }
+    body[data-theme="dark"] .panel-user-feature-pill.all { color: #bfdbfe; background: rgba(37, 99, 235, 0.14); }
+    .panel-user-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.35rem; }
     .allowed-users-card { display: flex; flex-direction: column; min-height: 0; }
     .allowed-users-container { flex: 1 1 auto; min-height: 0; margin: 0 0.55rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; }
     .broadcast-preview-scroll { max-height: 260px; border: 1px solid var(--line); border-radius: 8px; }
@@ -158,6 +206,9 @@
     .recolha-table { min-width: 1180px; }
     .recolha-table .form-control, .recolha-table .form-select { min-width: 105px; font-size: 0.82rem; }
     .recolha-table .recolha-motivo { min-width: 170px; }
+    .recolha-partial-detail { margin-top: 0.35rem; min-width: 210px; }
+    .recolha-partial-detail.d-none { display: none !important; }
+    .recolha-partial-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 0.15rem rgba(185, 28, 28, 0.14); }
     .recolha-insights { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem; }
     .recolha-insight-box, .critica-dashboard-block { padding: 0.75rem; }
     .recolha-insight-row, .critica-dashboard-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 0.38rem 0; border-bottom: 1px solid var(--line); }
@@ -282,7 +333,9 @@
     .promax-log { min-height: 180px; max-height: 360px; margin: 0; padding: 0.8rem; overflow: auto; color: var(--log-fg); background: var(--log-bg); border-radius: 8px; white-space: pre-wrap; font-size: 0.78rem; }
     @media (max-width: 1200px) { .metric-grid, .usage-metric-grid, .recolha-dashboard-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
     @media (max-width: 1200px) { .flow-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); } }
+    @media (max-width: 1200px) { .panel-user-layout { grid-template-columns: 1fr; } .panel-user-feature-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     @media (max-width: 900px) { .recolha-insights { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { .panel-users-stats, .panel-user-feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .panel-users-toolbar { grid-template-columns: 1fr; } .panel-users-toolbar .text-end { text-align: left !important; } }
     @media (max-width: 768px) {
       .layout { width: calc(100% - 0.75rem); padding-top: 0.55rem; }
       .hero { min-height: 116px; padding: 1rem; }
@@ -301,6 +354,20 @@
       .flow-path { min-height: 74px; }
       .promax-job-filters { width: 100%; justify-content: stretch; }
       .promax-job-filter-field, .promax-job-filter-field.status { min-width: min(100%, 150px); flex: 1 1 140px; }
+      .panel-users-head { align-items: flex-start; flex-direction: column; }
+      .panel-users-stats, .panel-user-switch-grid, .panel-user-feature-grid { grid-template-columns: 1fr; }
+      .panel-user-layout { padding: 0.55rem; }
+      .panel-users-scroll { max-height: none; overflow: visible; border: 0; }
+      .panel-users-table thead { display: none; }
+      .panel-users-table tbody, .panel-users-table tr, .panel-users-table td { display: block; width: 100%; }
+      .panel-users-table tr { margin-bottom: 0.55rem; padding: 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+      .panel-users-table tr:last-child { margin-bottom: 0; }
+      .panel-users-table td { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 0.45rem; padding: 0.22rem 0 !important; border: 0; }
+      .panel-users-table td::before { content: attr(data-label); color: var(--ink-500); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+      .panel-users-table td:first-child { display: block; padding-bottom: 0.45rem !important; }
+      .panel-users-table td:first-child::before, .panel-users-table td[colspan]::before { display: none; }
+      .panel-user-actions { justify-content: flex-start; }
+      .panel-user-password-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -367,7 +434,11 @@
       <div class="flow-grid">
         <a href="/admin/operations" class="flow-path is-active" data-flow-target="operationsTab" data-flow-label="Operação diária" aria-pressed="true">
           <span class="flow-icon"><i class="bi bi-sliders"></i></span>
-          <span><span class="flow-title">Operação</span><span class="flow-desc">Acessos, disparos por operação e cobranças PayIP.</span><span class="flow-meta">Rotina</span></span>
+          <span><span class="flow-title">Operação</span><span class="flow-desc">Acessos e disparos por operação.</span><span class="flow-meta">Rotina</span></span>
+        </a>
+        <a href="/admin/payip" class="flow-path" data-flow-target="payipTab" data-flow-label="PayIP" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-credit-card-2-front"></i></span>
+          <span><span class="flow-title">PayIP</span><span class="flow-desc">Cobrancas em lote, importacao ProMax e status.</span><span class="flow-meta">Financeiro</span></span>
         </a>
         <a href="/admin/reports" class="flow-path" data-flow-target="reportsTab" data-flow-label="Relatorios" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-file-earmark-spreadsheet"></i></span>
@@ -401,6 +472,11 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link active" id="operationsTab" href="/admin/operations" data-admin-page-link="true" data-bs-target="#operationsPane" role="tab" aria-controls="operationsPane" aria-selected="true">
             <i class="bi bi-sliders me-1"></i>Operação
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="payipTab" href="/admin/payip" data-admin-page-link="true" data-bs-target="#payipPane" role="tab" aria-controls="payipPane" aria-selected="false">
+            <i class="bi bi-credit-card-2-front me-1"></i>PayIP
           </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -511,6 +587,146 @@
                     <tr><td colspan="6" class="text-center py-4 text-secondary">Carregando usuários...</td></tr>
                   </tbody>
                 </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel-card panel-users-card mb-3" id="panelUsersPanel">
+          <div class="panel-users-head">
+            <div class="panel-users-title">
+              <span class="panel-users-icon"><i class="bi bi-shield-lock"></i></span>
+              <div>
+                <h2 class="h6 fw-bold mb-1">Usuarios do painel</h2>
+                <div class="form-text">Crie acessos com senha temporaria, filiais e blocos liberados.</div>
+              </div>
+            </div>
+            <span class="badge text-bg-primary rounded-pill" id="panelUsersCount">0 usuario(s)</span>
+          </div>
+          <div class="panel-users-stats" aria-label="Resumo dos usuarios do painel">
+            <div class="panel-user-stat">
+              <span class="label">Ativos</span>
+              <span class="value" id="panelUsersActiveCount">0</span>
+            </div>
+            <div class="panel-user-stat">
+              <span class="label">Administradores</span>
+              <span class="value" id="panelUsersAdminCount">0</span>
+            </div>
+            <div class="panel-user-stat">
+              <span class="label">Trocar senha</span>
+              <span class="value text-warning" id="panelUsersPendingCount">0</span>
+            </div>
+            <div class="panel-user-stat">
+              <span class="label">Bloqueados</span>
+              <span class="value text-danger" id="panelUsersBlockedCount">0</span>
+            </div>
+          </div>
+          <div class="panel-user-layout">
+            <article class="panel-user-box">
+              <div class="panel-user-box-head">
+                <div>
+                  <h3 class="h6 fw-bold mb-1">Cadastro</h3>
+                  <div class="form-text">Preencha o usuario e selecione o acesso necessario.</div>
+                </div>
+                <span class="panel-user-mode" id="panelUserMode">Novo usuario</span>
+              </div>
+              <div class="panel-user-box-body">
+                <input type="hidden" id="panelUserId">
+                <div class="row g-2">
+                  <div class="col-md-6 col-xl-12">
+                    <label class="form-label small fw-semibold mb-1" for="panelUsername">Usuario</label>
+                    <input id="panelUsername" class="form-control" autocomplete="off" placeholder="ex.: apr.patos">
+                  </div>
+                  <div class="col-md-6 col-xl-12">
+                    <label class="form-label small fw-semibold mb-1" for="panelDisplayName">Nome</label>
+                    <input id="panelDisplayName" class="form-control" autocomplete="off" placeholder="Nome do usuario">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small fw-semibold mb-1" for="panelUserFiliais">Filiais</label>
+                    <input id="panelUserFiliais" class="form-control mono" autocomplete="off" placeholder="3, 4 ou *">
+                    <div class="form-text">Use <span class="mono">*</span> para todas as filiais quando fizer sentido.</div>
+                  </div>
+                </div>
+                <div class="panel-user-switch-grid mt-3">
+                  <label class="panel-user-switch" for="panelUserActive">
+                    <span>
+                      <span class="d-block small fw-bold text-uppercase text-secondary">Status</span>
+                      <span class="d-block fw-bold">Usuario ativo</span>
+                    </span>
+                    <input class="form-check-input" type="checkbox" id="panelUserActive" checked>
+                  </label>
+                  <label class="panel-user-switch" for="panelUserAdmin">
+                    <span>
+                      <span class="d-block small fw-bold text-uppercase text-secondary">Perfil</span>
+                      <span class="d-block fw-bold">Administrador</span>
+                    </span>
+                    <input class="form-check-input" type="checkbox" id="panelUserAdmin">
+                  </label>
+                </div>
+                <div class="form-text mt-2" id="panelUserAdminHint">Administrador acessa todos os blocos.</div>
+                <div class="mt-3">
+                  <div class="panel-user-feature-toolbar">
+                    <div class="small fw-bold text-uppercase text-secondary">Blocos liberados</div>
+                    <span class="pill" id="panelUserFeatureCount">0 selecionados</span>
+                  </div>
+                  <div class="panel-user-feature-grid" id="panelUserFeatures"></div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <button class="btn btn-success btn-sm" id="panelUserSaveBtn"><i class="bi bi-check2-circle me-1"></i>Salvar usuario</button>
+                  <button class="btn btn-outline-secondary btn-sm" id="panelUserResetFormBtn"><i class="bi bi-plus-circle me-1"></i>Novo</button>
+                </div>
+                <div class="alert panel-user-password-card py-2 px-3 mt-3 d-none" id="panelUserPasswordBox">
+                  <div class="d-flex align-items-start justify-content-between gap-2">
+                    <div class="panel-user-password-grid flex-grow-1">
+                      <div>
+                        <div class="small fw-bold text-uppercase mb-1">Usuario para login</div>
+                        <div class="mono user-select-all panel-user-password-value" id="panelUserPasswordUsername"></div>
+                      </div>
+                      <div>
+                        <div class="small fw-bold text-uppercase mb-1">Senha temporaria</div>
+                        <div class="mono user-select-all panel-user-password-value" id="panelUserPasswordValue"></div>
+                      </div>
+                    </div>
+                    <button class="btn btn-outline-warning btn-sm" type="button" id="panelUserCopyPasswordBtn"><i class="bi bi-clipboard me-1"></i>Copiar acesso</button>
+                  </div>
+                  <div class="small mt-2">Envie o usuario e a senha por canal seguro. O sistema exigira troca no primeiro acesso.</div>
+                </div>
+              </div>
+            </article>
+            <article class="panel-user-box">
+              <div class="panel-user-box-head">
+                <div>
+                  <h3 class="h6 fw-bold mb-1">Usuarios cadastrados</h3>
+                  <div class="form-text">Edite blocos, bloqueie acessos ou gere nova senha temporaria.</div>
+                </div>
+              </div>
+              <div class="panel-user-box-body">
+                <div class="panel-users-toolbar">
+                  <div>
+                    <label class="form-label small fw-semibold mb-1" for="panelUserSearch">Pesquisar</label>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text"><i class="bi bi-search"></i></span>
+                      <input id="panelUserSearch" class="form-control" autocomplete="off" placeholder="Usuario, nome, bloco ou filial">
+                    </div>
+                  </div>
+                  <div class="text-end small text-secondary fw-semibold" id="panelUsersFilterInfo">Mostrando todos</div>
+                </div>
+                <div class="table-scroll panel-users-scroll">
+                  <table class="table table-sm table-hover align-middle mb-0 panel-users-table">
+                    <thead>
+                      <tr class="text-uppercase small text-secondary">
+                        <th class="ps-3" scope="col">Usuario</th>
+                        <th scope="col">Blocos</th>
+                        <th scope="col">Filiais</th>
+                        <th scope="col">Status</th>
+                        <th class="text-end pe-3" scope="col">Acoes</th>
+                      </tr>
+                    </thead>
+                    <tbody id="panelUsersBody">
+                      <tr><td colspan="5" class="text-center py-3 text-secondary">Carregando usuarios do painel...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </article>
           </div>
@@ -781,6 +997,8 @@
           </div>
         </section>
       </div>
+
+      <div class="tab-pane fade" id="payipPane" role="tabpanel" aria-labelledby="payipTab" tabindex="0"></div>
 
       <div class="tab-pane fade" id="reportsPane" role="tabpanel" aria-labelledby="reportsTab" tabindex="0">
         <section class="panel-card p-3 mb-3">
@@ -1631,6 +1849,39 @@
     </div>
   </div>
 
+  <div class="modal fade" id="panelCredentialsModal" tabindex="-1" aria-labelledby="panelCredentialsModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="panelCredentialsModalTitle">Senha temporaria gerada</h5>
+            <div class="form-text">Copie agora. Essa senha aleatoria nao pode ser recuperada depois.</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="d-grid gap-2">
+            <div class="panel-credential-box">
+              <span class="label">Usuario para login</span>
+              <span class="value mono user-select-all" id="panelCredentialsUsername"></span>
+            </div>
+            <div class="panel-credential-box">
+              <span class="label">Senha temporaria</span>
+              <span class="value mono user-select-all" id="panelCredentialsPassword"></span>
+            </div>
+          </div>
+          <div class="alert alert-warning py-2 px-3 mt-3 mb-0">
+            O usuario deve entrar com essa senha e trocar no primeiro acesso.
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-warning" id="panelCredentialsCopyBtn"><i class="bi bi-clipboard me-1"></i>Copiar acesso</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="promaxUnitsModal" tabindex="-1" aria-labelledby="promaxUnitsModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
       <div class="modal-content panel-card">
@@ -1670,7 +1921,8 @@
       endpoints: {
         panel: {
           session: "/api/admin/panel/session",
-          logout: "/api/admin/panel/logout"
+          logout: "/api/admin/panel/logout",
+          users: "/api/admin/panel/users"
         },
         access: {
           list: "/api/admin/access/users",
@@ -1748,6 +2000,17 @@
       datasets: []
     };
 
+    const PANEL_FEATURES = [
+      { id: "operations", label: "Operacao", icon: "bi-sliders", description: "Acessos, disparos e rotinas operacionais." },
+      { id: "reports", label: "Relatorios", icon: "bi-folder2-open", description: "Uploads e historico de relatorios." },
+      { id: "payip", label: "PayIP", icon: "bi-credit-card-2-front", description: "Cobrancas, validacoes e clientes." },
+      { id: "promax", label: "Promax", icon: "bi-cloud-arrow-down", description: "Execucoes, agendas e workers." },
+      { id: "critica", label: "Critica", icon: "bi-clipboard-data", description: "Importacao, dashboard e PDFs." },
+      { id: "recolhas", label: "Recolhas", icon: "bi-box-arrow-in-down", description: "Solicitacoes e acompanhamento." },
+      { id: "giro", label: "Giro", icon: "bi-arrow-repeat", description: "Giro e oportunidades da carteira." },
+      { id: "usage", label: "Uso Evolution", icon: "bi-activity", description: "Numero x funcao e auditoria." }
+    ];
+
     const PROMAX_RESELLERS = [
       { id: "0640001", name: "Sousa" },
       { id: "0640002", name: "Itaporanga" },
@@ -1810,12 +2073,15 @@
         canImport: true,
         canImportCritica: true,
         canManageRecolhas: true,
+        canPayip: true,
+        canOperations: true,
+        canReports: true,
         canViewGiro: true,
         canViewCritica: true,
         canViewUsage: true,
         canManagePromax: false
       },
-      accessUsers: [], accessEditing: null, lastSyncAt: null,
+      accessUsers: [], accessEditing: null, panelUsers: [], panelUserEditingId: "", panelUserFilter: "", panelUserTemporaryCredentials: null, lastSyncAt: null,
       evolutionUsage: null,
       broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
@@ -2117,7 +2383,33 @@
       accessEditorCard: document.getElementById("accessEditorCard"),
       allowedUsersCard: document.getElementById("allowedUsersCard"),
       allowedUsersContainer: document.getElementById("allowedUsersContainer"),
+      panelUsersPanel: document.getElementById("panelUsersPanel"),
+      panelUsersCount: document.getElementById("panelUsersCount"),
+      panelUsersActiveCount: document.getElementById("panelUsersActiveCount"),
+      panelUsersAdminCount: document.getElementById("panelUsersAdminCount"),
+      panelUsersPendingCount: document.getElementById("panelUsersPendingCount"),
+      panelUsersBlockedCount: document.getElementById("panelUsersBlockedCount"),
+      panelUserMode: document.getElementById("panelUserMode"),
+      panelUsersFilterInfo: document.getElementById("panelUsersFilterInfo"),
+      panelUserSearch: document.getElementById("panelUserSearch"),
+      panelUserId: document.getElementById("panelUserId"),
+      panelUsername: document.getElementById("panelUsername"),
+      panelDisplayName: document.getElementById("panelDisplayName"),
+      panelUserFiliais: document.getElementById("panelUserFiliais"),
+      panelUserActive: document.getElementById("panelUserActive"),
+      panelUserAdmin: document.getElementById("panelUserAdmin"),
+      panelUserAdminHint: document.getElementById("panelUserAdminHint"),
+      panelUserFeatures: document.getElementById("panelUserFeatures"),
+      panelUserFeatureCount: document.getElementById("panelUserFeatureCount"),
+      panelUserSaveBtn: document.getElementById("panelUserSaveBtn"),
+      panelUserResetFormBtn: document.getElementById("panelUserResetFormBtn"),
+      panelUserPasswordBox: document.getElementById("panelUserPasswordBox"),
+      panelUserPasswordUsername: document.getElementById("panelUserPasswordUsername"),
+      panelUserPasswordValue: document.getElementById("panelUserPasswordValue"),
+      panelUserCopyPasswordBtn: document.getElementById("panelUserCopyPasswordBtn"),
+      panelUsersBody: document.getElementById("panelUsersBody"),
       usageEvolutionTab: document.getElementById("usageEvolutionTab"),
+      payipTab: document.getElementById("payipTab"),
       broadcastPanel: document.getElementById("broadcastPanel"),
       broadcastFilial: document.getElementById("broadcastFilial"),
       broadcastAudience: document.getElementById("broadcastAudience"),
@@ -2233,7 +2525,10 @@
       criticaDashboardBody: document.getElementById("criticaDashboardBody"),
       confirmModalText: document.getElementById("confirmModalText"),
       confirmModalOk: document.getElementById("confirmModalOk"),
-      confirmModalCancel: document.getElementById("confirmModalCancel")
+      confirmModalCancel: document.getElementById("confirmModalCancel"),
+      panelCredentialsUsername: document.getElementById("panelCredentialsUsername"),
+      panelCredentialsPassword: document.getElementById("panelCredentialsPassword"),
+      panelCredentialsCopyBtn: document.getElementById("panelCredentialsCopyBtn")
     };
 
     const GIRO_RECOLHA_SLICERS = [
@@ -2383,6 +2678,9 @@
     const confirmModalInstance = document.getElementById("confirmModal")
       ? new bootstrap.Modal(document.getElementById("confirmModal"), { backdrop: "static", keyboard: true })
       : null;
+    const panelCredentialsModalInstance = document.getElementById("panelCredentialsModal")
+      ? new bootstrap.Modal(document.getElementById("panelCredentialsModal"), { backdrop: "static", keyboard: true })
+      : null;
     const promaxUnitsModalInstance = document.getElementById("promaxUnitsModal")
       ? new bootstrap.Modal(document.getElementById("promaxUnitsModal"), { keyboard: true })
       : null;
@@ -2392,6 +2690,7 @@
       "/admin": "operationsTab",
       "/admin/imports": "operationsTab",
       "/admin/operations": "operationsTab",
+      "/admin/payip": "payipTab",
       "/admin/reports": "reportsTab",
       "/admin/promax": "promaxTab",
       "/admin/tables": "reportsTab",
@@ -2403,6 +2702,7 @@
     };
     const PANEL_PATH_BY_TAB = {
       operationsTab: "/admin/operations",
+      payipTab: "/admin/payip",
       reportsTab: "/admin/reports",
       promaxTab: "/admin/promax",
       criticaTab: "/admin/critica",
@@ -2430,6 +2730,14 @@
       if (pane && panel && panel.parentElement !== pane) {
         pane.appendChild(panel);
       }
+    }
+
+    function setupPayipPane() {
+      const pane = document.getElementById("payipPane");
+      if (!pane) return;
+      [document.getElementById("payipImportPanel"), document.getElementById("payipBatchPanel")].forEach(panel => {
+        if (panel && panel.parentElement !== pane) pane.appendChild(panel);
+      });
     }
 
     function navigatePanelPage(tabId) {
@@ -3894,6 +4202,7 @@
     function init() {
       applyTheme(localStorage.getItem("bot_admin_theme") || "dark");
       setupRecolhasPane();
+      setupPayipPane();
       selectInitialPanelPage();
       setupFlowNavigation();
 
@@ -3912,6 +4221,7 @@
       renderCriticaDashboard();
       renderRecolhas();
       renderPayipBatch();
+      renderPanelUserFeatureChecks();
       setupAllowedUsersCardSizing();
       ensureUsageFunctionDateRange();
       const today = formatDateInputValue(new Date());
@@ -3966,6 +4276,21 @@
       document.getElementById("resetAccessBtn").addEventListener("click", resetAccessForm);
       document.getElementById("saveAccessBulkBtn").addEventListener("click", saveBulkAccess);
       document.getElementById("resetAccessBulkBtn").addEventListener("click", () => { E.accessBulk.value = ""; });
+      if (E.panelUserSaveBtn) E.panelUserSaveBtn.addEventListener("click", savePanelUser);
+      if (E.panelUserResetFormBtn) E.panelUserResetFormBtn.addEventListener("click", resetPanelUserForm);
+      if (E.panelUserCopyPasswordBtn) E.panelUserCopyPasswordBtn.addEventListener("click", copyPanelUserTemporaryPassword);
+      if (E.panelCredentialsCopyBtn) E.panelCredentialsCopyBtn.addEventListener("click", copyPanelUserTemporaryPassword);
+      if (E.panelUserSearch) E.panelUserSearch.addEventListener("input", () => {
+        state.panelUserFilter = E.panelUserSearch.value.trim().toLowerCase();
+        renderPanelUsers();
+      });
+      if (E.panelUserAdmin) E.panelUserAdmin.addEventListener("change", () => {
+        if (E.panelUserAdmin.checked) {
+          renderPanelUserFeatureChecks(PANEL_FEATURES.map(feature => feature.id));
+        } else {
+          renderPanelUserFeatureChecks(selectedPanelUserFeatures());
+        }
+      });
       document.getElementById("usageRefreshBtn").addEventListener("click", () => syncEvolutionUsage({ silent: false }));
       if (E.usageExportReportBtn) {
         E.usageExportReportBtn.addEventListener("click", exportEvolutionAverageReport);
@@ -4008,6 +4333,18 @@
       if (E.recolhasEndDate) E.recolhasEndDate.addEventListener("change", updateRecolhasPeriodFilter);
       if (E.recolhasPeriodClearBtn) E.recolhasPeriodClearBtn.addEventListener("click", clearRecolhasPeriodFilter);
       if (E.recolhasImportBtn) E.recolhasImportBtn.addEventListener("click", importRecolhasCsv);
+      document.addEventListener("change", event => {
+        const target = event.target;
+        if (target && target.matches && target.matches(".recolha-motivo, .recolha-bulk-motivo")) {
+          syncRecolhaPartialDetail(target.closest("td, .recolha-operation"));
+        }
+      });
+      document.addEventListener("input", event => {
+        const target = event.target;
+        if (target && target.matches && target.matches(".recolha-partial-detail") && target.value.trim()) {
+          target.classList.remove("recolha-partial-invalid");
+        }
+      });
       if (E.giroRecolhaRefreshBtn) E.giroRecolhaRefreshBtn.addEventListener("click", () => syncGiroRecolha({ silent: false }));
       if (E.giroRecolhaRoutesBtn) E.giroRecolhaRoutesBtn.addEventListener("click", () => syncGiroRecolhaRoutes({ silent: false }));
       setupGiroRecolhaSlicerEvents();
@@ -4206,6 +4543,7 @@
       const tasks = [];
       if (activeTabId === "operationsTab") {
         if (state.panel && state.panel.canBroadcast) tasks.push(syncBroadcastOptions({ silent }));
+      } else if (activeTabId === "payipTab") {
         tasks.push(syncPayipBatchStatus({ silent }));
       } else if (activeTabId === "usageEvolutionTab") {
         if (state.panel && state.panel.isAdmin) tasks.push(syncEvolutionUsage({ silent }));
@@ -4466,6 +4804,9 @@
       state.panel = {
         mode: payload && payload.mode ? String(payload.mode) : "admin",
         isAdmin: Boolean(payload && payload.is_admin),
+        username: payload && payload.username ? String(payload.username) : "",
+        displayName: payload && payload.display_name ? String(payload.display_name) : "",
+        features: Array.isArray(payload && payload.features) ? payload.features.map(String) : [],
         filiais: Array.isArray(payload && payload.filiais) ? payload.filiais.map(String) : [],
         canBroadcast: payload && Object.prototype.hasOwnProperty.call(payload, "can_broadcast")
           ? Boolean(payload.can_broadcast)
@@ -4478,6 +4819,15 @@
           : true,
         canManageRecolhas: payload && Object.prototype.hasOwnProperty.call(payload, "can_manage_recolhas")
           ? Boolean(payload.can_manage_recolhas)
+          : true,
+        canPayip: payload && Object.prototype.hasOwnProperty.call(payload, "can_payip")
+          ? Boolean(payload.can_payip)
+          : true,
+        canOperations: payload && Object.prototype.hasOwnProperty.call(payload, "can_operations")
+          ? Boolean(payload.can_operations)
+          : true,
+        canReports: payload && Object.prototype.hasOwnProperty.call(payload, "can_reports")
+          ? Boolean(payload.can_reports)
           : true,
         canViewGiro: payload && Object.prototype.hasOwnProperty.call(payload, "can_view_giro")
           ? Boolean(payload.can_view_giro)
@@ -4524,18 +4874,23 @@
       const isFinance = state.panel && state.panel.mode === "financeiro" && !state.panel.isAdmin;
       const isCritica = state.panel && state.panel.mode === "critica" && !state.panel.isAdmin;
       const adminOnlyDisplay = state.panel && state.panel.isAdmin ? "" : "none";
-      const broadcastDisplay = state.panel && state.panel.canBroadcast === false ? "none" : "";
+      const operationsVisible = Boolean(state.panel && state.panel.canOperations) && !isCritica;
+      const reportsVisible = Boolean(state.panel && state.panel.canReports) && !isCritica;
+      const broadcastDisplay = operationsVisible && !(state.panel && state.panel.canBroadcast === false) ? "" : "none";
       if (E.accessEditorCard) E.accessEditorCard.style.display = adminOnlyDisplay;
       if (E.allowedUsersCard) E.allowedUsersCard.style.display = adminOnlyDisplay;
+      if (E.panelUsersPanel) E.panelUsersPanel.style.display = adminOnlyDisplay;
       if (E.accessUsersFilter && E.accessUsersFilter.parentElement) E.accessUsersFilter.parentElement.style.display = adminOnlyDisplay;
       if (E.broadcastPanel) E.broadcastPanel.style.display = broadcastDisplay;
-      if (E.payipBatchPanel) E.payipBatchPanel.style.display = isCritica ? "none" : "";
-      if (E.payipImportPanel) E.payipImportPanel.style.display = isCritica ? "none" : "";
+      const payipVisible = Boolean(state.panel && state.panel.canPayip) && !isCritica;
+      if (E.payipBatchPanel) E.payipBatchPanel.style.display = payipVisible ? "" : "none";
+      if (E.payipImportPanel) E.payipImportPanel.style.display = payipVisible ? "" : "none";
       if (E.usageEvolutionTab && E.usageEvolutionTab.parentElement) {
         E.usageEvolutionTab.parentElement.style.display = state.panel && state.panel.canViewUsage ? "" : "none";
       }
-      setPanelTabVisible("operationsTab", !isCritica);
-      setPanelTabVisible("reportsTab", !isCritica);
+      setPanelTabVisible("operationsTab", operationsVisible);
+      setPanelTabVisible("payipTab", payipVisible);
+      setPanelTabVisible("reportsTab", reportsVisible);
       setPanelTabVisible("promaxTab", Boolean(state.panel && state.panel.canManagePromax));
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
@@ -4570,6 +4925,9 @@
         E.authState.className = "pill ok";
       } else if (state.panel && state.panel.isAdmin) {
         E.authState.textContent = "Admin: acesso total";
+        E.authState.className = "pill ok";
+      } else if (state.panel && state.panel.username) {
+        E.authState.textContent = `Usuario: ${state.panel.displayName || state.panel.username}`;
         E.authState.className = "pill ok";
       }
       syncAllowedUsersCardSizing();
@@ -7990,11 +8348,12 @@
     }
 
     const RECOLHA_STATUS_OPTIONS = ["Nao Recolhido", "Recolhido"];
+    const RECOLHA_PARTIAL_REASON = "Recolha parcial";
     const RECOLHA_MOTIVO_OPTIONS = [
       "",
       "Recolhido no prazo",
       "Baixa confirmada no sistema",
-      "Recolha parcial",
+      RECOLHA_PARTIAL_REASON,
       "Cliente fechado",
       "Cliente ausente",
       "Cliente recusou",
@@ -8023,6 +8382,53 @@
         rows.push(`<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`);
       }
       return rows.join("");
+    }
+
+    function splitRecolhaPartialReason(value) {
+      const text = cleanDisplayText(value || "").trim();
+      const partialKey = normalizeTextForSearch(RECOLHA_PARTIAL_REASON).replace(/\s+/g, " ");
+      const textKey = normalizeTextForSearch(text).replace(/\s+/g, " ");
+      if (!textKey.startsWith(partialKey)) {
+        return { isPartial: false, option: text, detail: "" };
+      }
+      const detail = text
+        .replace(/^recolha\s+parcial\s*/i, "")
+        .replace(/^[:|;\-]\s*/, "")
+        .trim();
+      return { isPartial: true, option: RECOLHA_PARTIAL_REASON, detail };
+    }
+
+    function syncRecolhaPartialDetail(container) {
+      if (!container) return;
+      const select = container.querySelector(".recolha-motivo, .recolha-bulk-motivo");
+      const detail = container.querySelector(".recolha-partial-detail");
+      if (!select || !detail) return;
+      const parsed = splitRecolhaPartialReason(select.value);
+      const visible = Boolean(parsed.isPartial);
+      detail.classList.toggle("d-none", !visible);
+      detail.required = visible;
+      if (!visible) {
+        detail.value = "";
+        detail.classList.remove("recolha-partial-invalid");
+      }
+    }
+
+    function buildRecolhaMotivoValue(container) {
+      const select = container ? container.querySelector(".recolha-motivo, .recolha-bulk-motivo") : null;
+      const detail = container ? container.querySelector(".recolha-partial-detail") : null;
+      const selected = cleanDisplayText(select ? select.value : "").trim();
+      const parsed = splitRecolhaPartialReason(selected);
+      if (!parsed.isPartial) return selected;
+      const detailValue = cleanDisplayText(detail ? detail.value : "").trim();
+      if (!detailValue) {
+        if (detail) {
+          detail.classList.add("recolha-partial-invalid");
+          detail.focus();
+        }
+        throw new Error("Informe o que foi recolhido na recolha parcial.");
+      }
+      if (detail) detail.classList.remove("recolha-partial-invalid");
+      return `${RECOLHA_PARTIAL_REASON}: ${detailValue}`;
     }
 
     function recolhaBaixaBadge(record) {
@@ -8207,6 +8613,7 @@
                 <select class="form-select form-select-sm recolha-bulk-motivo" style="width: 220px;">
                   ${renderOptions(RECOLHA_MOTIVO_OPTIONS, "", "Sem motivo")}
                 </select>
+                <input class="form-control form-control-sm recolha-partial-detail recolha-bulk-partial-detail d-none" style="width: 260px;" placeholder="O que foi recolhido?">
                 <button class="btn btn-outline-primary btn-sm" onclick="bulkUpdateRecolhas(this)">
                   <i class="bi bi-check2-square me-1"></i>Fechar selecionadas
                 </button>
@@ -8246,6 +8653,7 @@
       const status = normalizeRecolhaStatus(record.status_caixa_noturno || "Nao Recolhido");
       const statusValue = status === "Recolhido" ? "Recolhido" : "Nao Recolhido";
       const requesterName = cleanDisplayText(record.solicitante_nome || record.solicitante || "-");
+      const motivoInfo = splitRecolhaPartialReason(record.motivo_caixa_noturno || "");
       return `
         <tr data-recolha-id="${safeId}">
           <td class="ps-3"><input class="form-check-input recolha-select" type="checkbox" value="${safeId}"></td>
@@ -8279,8 +8687,9 @@
           </td>
           <td>
             <select class="form-select form-select-sm recolha-motivo">
-              ${renderOptions(RECOLHA_MOTIVO_OPTIONS, record.motivo_caixa_noturno || "", "Sem motivo")}
+              ${renderOptions(RECOLHA_MOTIVO_OPTIONS, motivoInfo.option || "", "Sem motivo")}
             </select>
+            <input class="form-control form-control-sm recolha-partial-detail ${motivoInfo.isPartial ? "" : "d-none"}" value="${escapeHtml(motivoInfo.detail || "")}" placeholder="O que foi recolhido?">
           </td>
           <td>${recolhaStatusBadge(statusValue === "Recolhido" ? "Recolhido" : lancado)}</td>
           <td>${recolhaBaixaBadge(record)}</td>
@@ -8316,10 +8725,17 @@
         addLog("Selecione pelo menos uma recolha para fechar em lote.", "warn");
         return;
       }
+      let motivoCaixa;
+      try {
+        motivoCaixa = buildRecolhaMotivoValue(article);
+      } catch (err) {
+        addLog(err.message || "Informe o detalhe da recolha parcial.", "warn");
+        return;
+      }
       const payload = {
         ids,
         status_caixa_noturno: article.querySelector(".recolha-bulk-status")?.value || "Recolhido",
-        motivo_caixa_noturno: article.querySelector(".recolha-bulk-motivo")?.value || ""
+        motivo_caixa_noturno: motivoCaixa
       };
       const previousLabel = source ? source.innerHTML : "";
       if (source) {
@@ -8481,13 +8897,20 @@
       if (!row) return;
       const btn = row.querySelector(".recolha-save-btn");
       const previousLabel = btn ? btn.innerHTML : "";
+      let motivoCaixa;
+      try {
+        motivoCaixa = buildRecolhaMotivoValue(row);
+      } catch (err) {
+        addLog(err.message || "Informe o detalhe da recolha parcial.", "warn");
+        return;
+      }
       const payload = {
         lancado_faturista: row.querySelector(".recolha-lancado")?.value || "Nok",
         motorista_faturista: row.querySelector(".recolha-motorista")?.value || "",
         placa_faturista: row.querySelector(".recolha-placa")?.value || "",
         mapa_faturista: row.querySelector(".recolha-mapa")?.value || "",
         status_caixa_noturno: row.querySelector(".recolha-status")?.value || "Não Recolhido",
-        motivo_caixa_noturno: row.querySelector(".recolha-motivo")?.value || ""
+        motivo_caixa_noturno: motivoCaixa
       };
       if (btn) {
         btn.disabled = true;
@@ -8563,6 +8986,7 @@
             ? state.status.jobs
             : ((historyPayload && Array.isArray(historyPayload.jobs)) ? historyPayload.jobs : []);
           state.accessUsers = [];
+          state.panelUsers = [];
           state.recolhas = { total: 0, operations: [] };
           state.giroRecolha = { total: 0, summary: {}, records: [] };
           state.giroRecolhaOptions = emptyGiroRecolhaOptions();
@@ -8575,6 +8999,7 @@
           renderJobs();
           renderGridPanels();
           renderAccess();
+          renderPanelUsers();
           await syncCriticaDashboard({ silent: true });
           updateGeneralState();
           updateMetrics();
@@ -8582,14 +9007,17 @@
           return;
         }
         const isAdmin = state.panel && state.panel.isAdmin;
+        const canLoadReports = Boolean(state.panel && (state.panel.canReports || state.panel.canViewCritica));
         const [
           statusResult,
           historyResult,
-          usersResult
+          usersResult,
+          panelUsersResult
         ] = await Promise.allSettled([
-          req(CONFIG.endpoints.import.status, { timeoutMs: 30000 }),
-          req(CONFIG.endpoints.import.history, { timeoutMs: 30000 }),
-          isAdmin ? req(CONFIG.endpoints.access.list, { timeoutMs: 30000 }) : Promise.resolve({ users: [] })
+          canLoadReports ? req(CONFIG.endpoints.import.status, { timeoutMs: 30000 }) : Promise.resolve({}),
+          canLoadReports ? req(CONFIG.endpoints.import.history, { timeoutMs: 30000 }) : Promise.resolve({ history: [], jobs: [] }),
+          isAdmin ? req(CONFIG.endpoints.access.list, { timeoutMs: 30000 }) : Promise.resolve({ users: [] }),
+          isAdmin ? req(CONFIG.endpoints.panel.users, { timeoutMs: 30000 }) : Promise.resolve({ users: [] })
         ]);
         const settledPayload = (result, fallback, label) => {
           if (result && result.status === "fulfilled") return result.value;
@@ -8599,12 +9027,14 @@
         const statusPayload = settledPayload(statusResult, {}, "status");
         const historyPayload = settledPayload(historyResult, { history: [], jobs: [] }, "historico");
         const usersPayload = settledPayload(usersResult, { users: [] }, "usuarios");
+        const panelUsersPayload = settledPayload(panelUsersResult, { users: [] }, "usuarios do painel");
         state.status = statusPayload || {};
         state.history = (historyPayload && historyPayload.history) ? historyPayload.history : [];
         state.jobs = Array.isArray(state.status.jobs)
           ? state.status.jobs
           : ((historyPayload && Array.isArray(historyPayload.jobs)) ? historyPayload.jobs : []);
         state.accessUsers = (usersPayload && usersPayload.users) ? usersPayload.users : [];
+        state.panelUsers = (panelUsersPayload && panelUsersPayload.users) ? panelUsersPayload.users : [];
         state.lastSyncAt = new Date();
         syncDatasetsFromImportStatus(state.status);
         buildGrid();
@@ -8612,6 +9042,7 @@
         renderJobs();
         renderGridPanels();
         renderAccess();
+        renderPanelUsers();
         updateGeneralState();
         updateMetrics();
         await syncVisibleTabData({ silent: true, force: true });
@@ -8622,6 +9053,7 @@
         renderJobs();
         renderGridPanels();
         renderAccess();
+        renderPanelUsers();
         renderGiroRecolha();
         renderGiroRecolhaRoutes();
         renderRecolhas();
@@ -9080,6 +9512,296 @@
       if (!parts.length) parts.push(fallbackMessage);
 
       return { kind, title, message: parts.join(" • ") };
+    }
+
+    function renderPanelUserFeatureChecks(selected = []) {
+      if (!E.panelUserFeatures) return;
+      const adminMode = Boolean(E.panelUserAdmin && E.panelUserAdmin.checked);
+      const selectedSet = new Set((selected || []).map(item => String(item || "").toLowerCase()));
+      E.panelUserFeatures.innerHTML = PANEL_FEATURES.map(feature => {
+        const checked = (adminMode || selectedSet.has(feature.id)) ? "checked" : "";
+        const disabled = adminMode ? "disabled" : "";
+        const disabledClass = adminMode ? " is-disabled" : "";
+        const icon = feature.icon || "bi-check2-square";
+        return `<label class="panel-user-feature-card${disabledClass}"><input class="form-check-input panel-user-feature" type="checkbox" value="${escapeHtml(feature.id)}" aria-label="${escapeHtml(feature.label)}" ${checked} ${disabled}><span class="panel-user-feature-icon"><i class="bi ${escapeHtml(icon)}"></i></span><span class="panel-user-feature-main"><span class="panel-user-feature-title">${escapeHtml(feature.label)}</span><span class="panel-user-feature-description">${escapeHtml(feature.description || "")}</span></span></label>`;
+      }).join("");
+      E.panelUserFeatures.querySelectorAll(".panel-user-feature").forEach(input => {
+        input.addEventListener("change", updatePanelUserFeatureCount);
+      });
+      updatePanelUserFeatureCount();
+    }
+
+    function selectedPanelUserFeatures() {
+      if (!E.panelUserFeatures) return [];
+      return Array.from(E.panelUserFeatures.querySelectorAll(".panel-user-feature:checked"))
+        .map(input => String(input.value || "").trim())
+        .filter(Boolean);
+    }
+
+    function updatePanelUserFeatureCount() {
+      const total = PANEL_FEATURES.length;
+      const adminMode = Boolean(E.panelUserAdmin && E.panelUserAdmin.checked);
+      const selectedCount = adminMode ? total : selectedPanelUserFeatures().length;
+      if (E.panelUserFeatureCount) {
+        E.panelUserFeatureCount.textContent = adminMode ? `Todos (${total})` : `${selectedCount} de ${total}`;
+      }
+      if (E.panelUserAdminHint) {
+        E.panelUserAdminHint.textContent = adminMode
+          ? "Administrador acessa todos os blocos. As permissoes ficam travadas neste perfil."
+          : "Marque apenas os blocos que o usuario realmente precisa acessar.";
+      }
+    }
+
+    function parsePanelFiliais(value) {
+      return String(value || "").split(/[,;\s]+/).map(item => item.trim()).filter(Boolean);
+    }
+
+    function panelUserPayload() {
+      const isAdmin = Boolean(E.panelUserAdmin && E.panelUserAdmin.checked);
+      return {
+        username: E.panelUsername ? E.panelUsername.value.trim() : "",
+        display_name: E.panelDisplayName ? E.panelDisplayName.value.trim() : "",
+        is_admin: isAdmin,
+        is_active: E.panelUserActive ? Boolean(E.panelUserActive.checked) : true,
+        filiais: E.panelUserFiliais ? parsePanelFiliais(E.panelUserFiliais.value) : [],
+        features: isAdmin ? PANEL_FEATURES.map(feature => feature.id) : selectedPanelUserFeatures()
+      };
+    }
+
+    function showPanelUserTemporaryCredentials(username, password, { openModal = true } = {}) {
+      const cleanUsername = String(username || "").trim();
+      const cleanPassword = String(password || "").trim();
+      state.panelUserTemporaryCredentials = cleanUsername && cleanPassword
+        ? { username: cleanUsername, password: cleanPassword }
+        : null;
+      if (!state.panelUserTemporaryCredentials) {
+        if (E.panelUserPasswordBox) E.panelUserPasswordBox.classList.add("d-none");
+        if (E.panelUserPasswordUsername) E.panelUserPasswordUsername.textContent = "";
+        if (E.panelUserPasswordValue) E.panelUserPasswordValue.textContent = "";
+        if (E.panelCredentialsUsername) E.panelCredentialsUsername.textContent = "";
+        if (E.panelCredentialsPassword) E.panelCredentialsPassword.textContent = "";
+        return;
+      }
+      if (E.panelUserPasswordUsername) E.panelUserPasswordUsername.textContent = cleanUsername;
+      if (E.panelUserPasswordValue) E.panelUserPasswordValue.textContent = cleanPassword;
+      if (E.panelUserPasswordBox) E.panelUserPasswordBox.classList.remove("d-none");
+      if (E.panelCredentialsUsername) E.panelCredentialsUsername.textContent = cleanUsername;
+      if (E.panelCredentialsPassword) E.panelCredentialsPassword.textContent = cleanPassword;
+      if (openModal && panelCredentialsModalInstance) panelCredentialsModalInstance.show();
+    }
+
+    function resetPanelUserForm() {
+      state.panelUserEditingId = "";
+      if (E.panelUserId) E.panelUserId.value = "";
+      if (E.panelUsername) {
+        E.panelUsername.value = "";
+        E.panelUsername.disabled = false;
+      }
+      if (E.panelDisplayName) E.panelDisplayName.value = "";
+      if (E.panelUserFiliais) E.panelUserFiliais.value = "";
+      if (E.panelUserActive) E.panelUserActive.checked = true;
+      if (E.panelUserAdmin) E.panelUserAdmin.checked = false;
+      showPanelUserTemporaryCredentials("", "");
+      if (E.panelUserMode) E.panelUserMode.textContent = "Novo usuario";
+      renderPanelUserFeatureChecks();
+    }
+
+    function fillPanelUserForm(userId) {
+      const user = state.panelUsers.find(item => String(item.id) === String(userId));
+      if (!user) return;
+      state.panelUserEditingId = String(user.id);
+      if (E.panelUserId) E.panelUserId.value = String(user.id);
+      if (E.panelUsername) {
+        E.panelUsername.value = user.username || "";
+        E.panelUsername.disabled = true;
+      }
+      if (E.panelDisplayName) E.panelDisplayName.value = user.display_name || "";
+      if (E.panelUserFiliais) E.panelUserFiliais.value = Array.isArray(user.filiais) ? user.filiais.join(", ") : "";
+      if (E.panelUserActive) E.panelUserActive.checked = user.is_active !== false;
+      if (E.panelUserAdmin) E.panelUserAdmin.checked = Boolean(user.is_admin);
+      renderPanelUserFeatureChecks(user.features || []);
+      showPanelUserTemporaryCredentials("", "");
+      if (E.panelUserMode) E.panelUserMode.textContent = `Editando #${user.id}`;
+    }
+
+    async function savePanelUser() {
+      const payload = panelUserPayload();
+      if (!payload.username && !state.panelUserEditingId) {
+        addLog("Informe o usuario do painel.", "warn");
+        return;
+      }
+      if (!payload.is_admin && !payload.features.length) {
+        addLog("Escolha ao menos um bloco para o usuario.", "warn");
+        return;
+      }
+      const editingId = state.panelUserEditingId || "";
+      const path = editingId ? `${CONFIG.endpoints.panel.users}/${encodeURIComponent(editingId)}` : CONFIG.endpoints.panel.users;
+      const method = editingId ? "PATCH" : "POST";
+      const body = editingId ? { ...payload } : payload;
+      if (editingId) delete body.username;
+      try {
+        const result = await req(path, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          timeoutMs: 30000
+        });
+        if (result.temporary_password) {
+          showPanelUserTemporaryCredentials(
+            result.user && result.user.username ? result.user.username : payload.username,
+            result.temporary_password
+          );
+        } else {
+          showPanelUserTemporaryCredentials("", "");
+        }
+        addLog(editingId ? "Usuario do painel atualizado." : "Usuario do painel criado.", "ok");
+        await syncPanelUsers();
+        if (editingId) resetPanelUserForm();
+      } catch (err) {
+        addLog(`Falha ao salvar usuario do painel: ${err.message}`, "err");
+      }
+    }
+
+    async function resetPanelUserPassword(userId) {
+      const user = state.panelUsers.find(item => String(item.id) === String(userId));
+      if (!user) return;
+      const confirmed = await askConfirmation(`Resetar a senha do usuario ${user.username}? A senha atual deixara de funcionar.`);
+      if (!confirmed) return;
+      try {
+        const result = await req(`${CONFIG.endpoints.panel.users}/${encodeURIComponent(userId)}/reset-password`, {
+          method: "POST",
+          timeoutMs: 30000
+        });
+        if (result.temporary_password) {
+          showPanelUserTemporaryCredentials(
+            result.user && result.user.username ? result.user.username : user.username,
+            result.temporary_password
+          );
+        }
+        addLog(`Senha temporaria gerada para ${user.username}.`, "ok");
+        await syncPanelUsers();
+      } catch (err) {
+        addLog(`Falha ao resetar senha: ${err.message}`, "err");
+      }
+    }
+
+    async function copyPanelUserTemporaryPassword() {
+      const credentials = state.panelUserTemporaryCredentials || {};
+      const username = String(credentials.username || (E.panelUserPasswordUsername ? E.panelUserPasswordUsername.textContent : "") || "").trim();
+      const password = String(credentials.password || (E.panelUserPasswordValue ? E.panelUserPasswordValue.textContent : "") || "").trim();
+      if (!username || !password) {
+        addLog("Nenhum acesso temporario para copiar.", "warn");
+        return;
+      }
+      const value = [
+        `Usuario: ${username}`,
+        `Senha temporaria: ${password}`,
+        "No primeiro acesso o painel vai pedir a troca da senha."
+      ].join("\n");
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = value;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+        addLog("Acesso temporario copiado.", "ok");
+      } catch (err) {
+        addLog(`Nao consegui copiar o acesso automaticamente: ${err.message}`, "warn");
+      }
+    }
+
+    async function syncPanelUsers() {
+      if (!(state.panel && state.panel.isAdmin)) return false;
+      const payload = await req(CONFIG.endpoints.panel.users, { timeoutMs: 30000 });
+      state.panelUsers = payload && Array.isArray(payload.users) ? payload.users : [];
+      renderPanelUsers();
+      return true;
+    }
+
+    function panelFeatureLabel(featureId) {
+      const found = PANEL_FEATURES.find(item => item.id === featureId);
+      return found ? found.label : featureId;
+    }
+
+    function renderPanelUserStats(users) {
+      const list = Array.isArray(users) ? users : [];
+      const active = list.filter(user => user.is_active !== false).length;
+      const admins = list.filter(user => user.is_admin).length;
+      const pending = list.filter(user => user.must_change_password && user.is_active !== false).length;
+      const blocked = list.filter(user => user.is_active === false).length;
+      if (E.panelUsersActiveCount) E.panelUsersActiveCount.textContent = String(active);
+      if (E.panelUsersAdminCount) E.panelUsersAdminCount.textContent = String(admins);
+      if (E.panelUsersPendingCount) E.panelUsersPendingCount.textContent = String(pending);
+      if (E.panelUsersBlockedCount) E.panelUsersBlockedCount.textContent = String(blocked);
+    }
+
+    function panelUserSearchText(user) {
+      const featureLabels = user.is_admin
+        ? ["todos", "administrador"]
+        : (user.features || []).map(panelFeatureLabel);
+      const filiais = Array.isArray(user.filiais) ? user.filiais : [];
+      const status = user.is_active === false
+        ? "bloqueado"
+        : user.must_change_password
+          ? "trocar senha"
+          : "ativo";
+      return [
+        user.username || "",
+        user.display_name || "",
+        user.is_admin ? "admin administrador" : "",
+        status,
+        ...featureLabels,
+        ...filiais
+      ].join(" ").toLowerCase();
+    }
+
+    function renderPanelUserFeaturePills(user) {
+      if (user.is_admin) {
+        return '<span class="panel-user-feature-pill all"><i class="bi bi-shield-check me-1"></i>Todos os blocos</span>';
+      }
+      const features = (user.features || []).map(panelFeatureLabel).filter(Boolean);
+      if (!features.length) return '<span class="text-secondary small">-</span>';
+      return features.map(label => `<span class="panel-user-feature-pill">${escapeHtml(label)}</span>`).join("");
+    }
+
+    function renderPanelUsers() {
+      if (!E.panelUsersBody) return;
+      const users = Array.isArray(state.panelUsers) ? state.panelUsers : [];
+      const query = String(state.panelUserFilter || (E.panelUserSearch ? E.panelUserSearch.value : "") || "").trim().toLowerCase();
+      const visibleUsers = query ? users.filter(user => panelUserSearchText(user).includes(query)) : users;
+      renderPanelUserStats(users);
+      if (E.panelUsersCount) {
+        E.panelUsersCount.textContent = query ? `${visibleUsers.length}/${users.length} usuario(s)` : `${users.length} usuario(s)`;
+      }
+      if (E.panelUsersFilterInfo) {
+        E.panelUsersFilterInfo.textContent = query ? `Filtro aplicado: ${visibleUsers.length} de ${users.length}` : "Mostrando todos";
+      }
+      if (!users.length) {
+        E.panelUsersBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Nenhum usuario do painel cadastrado.</td></tr>';
+        return;
+      }
+      if (!visibleUsers.length) {
+        E.panelUsersBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-secondary">Nenhum usuario encontrado com esse filtro.</td></tr>';
+        return;
+      }
+      E.panelUsersBody.innerHTML = visibleUsers.map(user => {
+        const filiais = Array.isArray(user.filiais) && user.filiais.length ? user.filiais.join(", ") : "-";
+        const status = user.is_active === false
+          ? '<span class="badge text-bg-danger">Bloqueado</span>'
+          : user.must_change_password
+            ? '<span class="badge text-bg-warning">Trocar senha</span>'
+            : '<span class="badge text-bg-success">Ativo</span>';
+        const role = user.is_admin ? '<span class="small fw-bold text-primary">Administrador</span>' : '<span class="small text-secondary">Usuario</span>';
+        return `<tr><td class="ps-3" data-label="Usuario"><span class="panel-user-name"><strong>${escapeHtml(user.username || "-")}</strong><span class="small text-secondary">${escapeHtml(user.display_name || "")}</span>${role}</span></td><td data-label="Blocos"><div class="panel-user-feature-pills">${renderPanelUserFeaturePills(user)}</div></td><td data-label="Filiais"><span class="mono small fw-bold">${escapeHtml(filiais)}</span></td><td data-label="Status">${status}</td><td class="text-end pe-3" data-label="Acoes"><div class="panel-user-actions"><button class="btn btn-outline-primary btn-sm" title="Editar usuario" onclick="fillPanelUserForm('${escapeHtml(String(user.id))}')"><i class="bi bi-pencil-square me-1"></i>Editar</button><button class="btn btn-outline-warning btn-sm" title="Gerar nova senha temporaria" onclick="resetPanelUserPassword('${escapeHtml(String(user.id))}')"><i class="bi bi-key me-1"></i>Resetar</button></div></td></tr>`;
+      }).join("");
     }
 
     function resetAccessForm() {

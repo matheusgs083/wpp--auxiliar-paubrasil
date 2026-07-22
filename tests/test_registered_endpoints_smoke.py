@@ -62,6 +62,23 @@ class FakeAccessControl:
         return {"ok": True}
 
 
+class FakeAdminPanelUserService:
+    def list_users(self) -> list[dict[str, Any]]:
+        return [{"id": 1, "username": "admin", "features": ["operations"], "is_admin": True}]
+
+    def create_user(self, **kwargs: Any) -> dict[str, Any]:
+        return {
+            "user": {"id": 2, "username": kwargs.get("username", "novo"), "features": kwargs.get("features", [])},
+            "temporary_password": "TempSenha#1234",
+        }
+
+    def update_user(self, *, user_id: int, **kwargs: Any) -> dict[str, Any]:
+        return {"id": user_id, "username": "admin", "features": kwargs.get("features", [])}
+
+    def reset_password(self, *, user_id: int) -> dict[str, Any]:
+        return {"user": {"id": user_id, "username": "admin"}, "temporary_password": "TempSenha#5678"}
+
+
 class FakeQueryService:
     def search_by_registration(self, **_kwargs: Any) -> list[FakeRecord]:
         return [FakeRecord()]
@@ -208,6 +225,9 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "decision_has_unrestricted_lookup_access": lambda _decision: True,
             "admin_panel_context_from_session_cookie": lambda _request: None,
             "admin_panel_context_from_token": lambda token: dict(context) if token == "valid-token" else None,
+            "admin_panel_context_from_credentials": lambda username, password: dict(context) if username == "admin" and password == "senha" else None,
+            "panel_context_can_access_feature": lambda _context, _feature: True,
+            "admin_panel_user_service": FakeAdminPanelUserService(),
             "check_admin_panel_login_rate_limit": lambda _request: None,
             "record_admin_panel_login_failure": lambda _request: None,
             "clear_admin_panel_login_failures": lambda _request: None,
@@ -216,6 +236,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "admin_panel_session_cookie": "bot_admin_session",
             "admin_panel_session_ttl_seconds": 3600,
             "load_admin_login_html": lambda: "<html>login</html>",
+            "load_admin_change_password_html": lambda: "<html>change</html>",
             "load_admin_import_panel_html": lambda: "<html>imports</html>",
             "list_admin_import_status": lambda: {"datasets": {}},
             "filter_admin_import_status_for_context": lambda payload, _context: payload,
@@ -290,6 +311,14 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
 
     def endpoint_cases(self) -> list[EndpointCase]:
         user_payload = {"phone_number": "5583999990001", "name": "Admin", "roles": ["admin"]}
+        panel_user_payload = {
+            "username": "apr.patos",
+            "display_name": "APR Patos",
+            "features": ["payip", "critica"],
+            "filiais": ["3"],
+            "is_active": True,
+            "is_admin": False,
+        }
         role_payload = {"name": "admin", "permissions": ["access.manage"]}
         import_payload = {"dataset": "dclientes"}
         recolha_payload = {"status_caixa_noturno": "lancado"}
@@ -378,11 +407,20 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/api/comodatos/search?number=5583999990001&filial=3&cod_pdv=123"),
             EndpointCase("GET", "/api/access/check?number=5583999990001&area=cliente"),
             EndpointCase("GET", "/admin/login"),
+            EndpointCase("GET", "/admin/change-password", expected_status=303),
             EndpointCase("POST", "/api/admin/panel/login", kwargs={"json": {"token": "valid-token"}}),
+            EndpointCase("POST", "/api/admin/panel/login", kwargs={"json": {"username": "admin", "password": "senha"}}),
+            EndpointCase(
+                "POST",
+                "/api/admin/panel/change-password",
+                expected_status=401,
+                kwargs={"json": {"current_password": "old", "new_password": "NovaSenha#123"}},
+            ),
             EndpointCase("POST", "/api/admin/panel/logout"),
             EndpointCase("GET", "/admin/imports", expected_status=303),
             EndpointCase("GET", "/admin", expected_status=303),
             EndpointCase("GET", "/admin/operations", expected_status=303),
+            EndpointCase("GET", "/admin/payip", expected_status=303),
             EndpointCase("GET", "/admin/reports", expected_status=303),
             EndpointCase("GET", "/admin/power-bi", expected_status=303),
             EndpointCase("GET", "/admin/tables", expected_status=303),
@@ -392,6 +430,10 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/admin/usage", expected_status=303),
             EndpointCase("GET", "/admin/promax", expected_status=303),
             EndpointCase("GET", "/api/admin/panel/session"),
+            EndpointCase("GET", "/api/admin/panel/users"),
+            EndpointCase("POST", "/api/admin/panel/users", kwargs={"json": panel_user_payload}),
+            EndpointCase("PATCH", "/api/admin/panel/users/1", kwargs={"json": panel_user_payload}),
+            EndpointCase("POST", "/api/admin/panel/users/1/reset-password"),
             EndpointCase("GET", "/api/admin/recolhas"),
             EndpointCase("PATCH", "/api/admin/recolhas/bulk", kwargs={"json": {"ids": ["rec-1"], **recolha_payload}}),
             EndpointCase("POST", "/api/admin/recolhas/import", kwargs={"files": csv_file}),
@@ -662,6 +704,8 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
         route_path = path.split("?", 1)[0]
         return {
             "/api/admin/access/users/5583999990001": "/api/admin/access/users/{phone_number}",
+            "/api/admin/panel/users/1": "/api/admin/panel/users/{user_id}",
+            "/api/admin/panel/users/1/reset-password": "/api/admin/panel/users/{user_id}/reset-password",
             "/api/admin/recolhas/rec-1": "/api/admin/recolhas/{recolha_id}",
             "/api/admin/payip/batch/pdf/item-1": "/api/admin/payip/batch/pdf/{item_id}",
             "/api/admin/promax/jobs/job-1": "/api/admin/promax/jobs/{job_id}",

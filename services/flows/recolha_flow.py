@@ -190,6 +190,19 @@ class RecolhaFlow:
                 self.sessions[sender] = session
                 return client_error
             if comodato:
+                partial_records = flow._resolve_recolha_partial_group_selection(session=session, text=comodato)
+                if partial_records is not None:
+                    if not partial_records:
+                        session.step = 'recolha_awaiting_comodato'
+                        session.updated_at = flow.datetime.now(flow.timezone.utc)
+                        self.sessions[sender] = session
+                        return self._build_recolha_comodato_prompt(session=session, invalid_selection=True)
+                    session.recolha_partial_comodato_options = tuple(partial_records)
+                    session.recolha_obs = obs
+                    session.step = 'recolha_awaiting_partial_items'
+                    session.updated_at = flow.datetime.now(flow.timezone.utc)
+                    self.sessions[sender] = session
+                    return self._build_recolha_partial_prompt(session=session)
                 session.recolha_comodato = flow._resolve_recolha_comodato_selection(session=session, text=comodato)
             if obs:
                 session.recolha_obs = obs
@@ -221,7 +234,7 @@ class RecolhaFlow:
         if not payload:
             return f'recolha {session.last_client_filial} {session.last_client_cod_pdv}'
         normalized_payload = flow._normalize_choice(payload)
-        if normalized_payload in {'todos', 'tudo', 'total', 'recolha total', 'todos os comodatos', 'recolher todos'} or normalized_payload.startswith(('todos ', 'tudo ', 'total ', 'recolha total ')) or flow._looks_like_recolha_numeric_selection(normalized_payload):
+        if normalized_payload in {'todos', 'tudo', 'total', 'recolha total', 'todos os comodatos', 'recolher todos'} or normalized_payload.startswith(('todos ', 'tudo ', 'total ', 'recolha total ')) or flow._looks_like_recolha_numeric_selection(normalized_payload) or flow._looks_like_recolha_custom_selection(normalized_payload) or flow._looks_like_recolha_partial_group_selection(normalized_payload):
             return f'recolha {session.last_client_filial} {session.last_client_cod_pdv} | {payload}'
         return text
 
@@ -276,6 +289,26 @@ class RecolhaFlow:
             self.sessions[sender] = session
             return self._build_recolha_comodato_prompt(session=session)
         if session.step == 'recolha_awaiting_comodato':
+            if flow._is_recolha_custom_selection_keyword(normalized):
+                self.sessions[sender] = session
+                return flow.OutgoingMessage(
+                    text=(
+                        "Solicitacao de Recolha\n\n"
+                        "*Recolha sem comodato:*\n"
+                        "- Digite exatamente o que deve ser recolhido.\n"
+                        "- Exemplo: AVULSO 2 mesas de plastico e 1 freezer sem contrato."
+                    )
+                )
+            partial_records = flow._resolve_recolha_partial_group_selection(session=session, text=text)
+            if partial_records is not None:
+                if not partial_records:
+                    self.sessions[sender] = session
+                    return self._build_recolha_comodato_prompt(session=session, invalid_selection=True)
+                session.recolha_partial_comodato_options = tuple(partial_records)
+                session.step = 'recolha_awaiting_partial_items'
+                session.updated_at = flow.datetime.now(flow.timezone.utc)
+                self.sessions[sender] = session
+                return self._build_recolha_partial_prompt(session=session)
             comodato = flow._resolve_recolha_comodato_selection(session=session, text=text)
             if not comodato:
                 self.sessions[sender] = session
@@ -284,6 +317,25 @@ class RecolhaFlow:
             session.step = 'recolha_awaiting_obs'
             session.updated_at = flow.datetime.now(flow.timezone.utc)
             self.sessions[sender] = session
+            return self._build_recolha_obs_prompt()
+        if session.step == 'recolha_awaiting_partial_items':
+            if normalized in {'voltar', 'volta', 'a', 'ant'}:
+                session.recolha_partial_comodato_options = ()
+                session.step = 'recolha_awaiting_comodato'
+                session.updated_at = flow.datetime.now(flow.timezone.utc)
+                self.sessions[sender] = session
+                return self._build_recolha_comodato_prompt(session=session)
+            comodato, error_text = flow._resolve_recolha_partial_item_selection(session=session, text=text)
+            if not comodato:
+                self.sessions[sender] = session
+                return self._build_recolha_partial_prompt(session=session, invalid_selection=True, error_text=error_text)
+            session.recolha_comodato = comodato
+            session.recolha_partial_comodato_options = ()
+            session.step = 'recolha_confirm' if session.recolha_obs else 'recolha_awaiting_obs'
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            if session.step == 'recolha_confirm':
+                return self._build_recolha_confirmation(session=session)
             return self._build_recolha_obs_prompt()
         if session.step == 'recolha_awaiting_obs':
             session.recolha_obs = '' if normalized in {'sem obs', 'sem observacao', 'nao', 'n'} else flow._clean_recolha_text(text)
@@ -313,6 +365,7 @@ class RecolhaFlow:
         session.recolha_rn = ''
         session.recolha_comodato = ''
         session.recolha_comodato_options = ()
+        session.recolha_partial_comodato_options = ()
         session.recolha_obs = ''
         session.recolha_pending_action = ''
         session.recolha_pending_identifier = ''
@@ -361,6 +414,7 @@ class RecolhaFlow:
         session.recolha_cidade = record.cidade
         session.recolha_rn = session.recolha_setor
         session.recolha_comodato_options = tuple(self._fetch_recolha_comodato_options(filial=record.filial, cod_pdv=record.cod_pdv, decision=decision))
+        session.recolha_partial_comodato_options = ()
 
     def _filter_recolha_client_records_by_scope(self, records: list[DClienteRecord], *, decision: AccessDecision) -> list[DClienteRecord]:
         flow = _customer_flow_module()
@@ -405,12 +459,29 @@ class RecolhaFlow:
         flow = _customer_flow_module()
         records = list(session.recolha_comodato_options or ())
         if not records:
-            return f'*Comodato:*\n- {first_line}\n- Nao encontrei comodatos pendentes listados para esse cliente.\n- Digite manualmente, por exemplo: RECOLHA TOTAL, 30 cx de litrinho, freezer, mesas, oasis.'
+            return f'*Comodato:*\n- {first_line}\n- Nao encontrei comodatos pendentes listados para esse cliente.\n\n*Como responder:*\n- Digite AVULSO + o que deve ser recolhido.\n- Exemplo: AVULSO 30 cx de litrinho, freezer e mesas.'
         lines = ['*Comodatos pendentes:*', f'- {first_line}']
-        for index, record in enumerate(records, start=1):
-            lines.append(f'{index}. {flow._format_recolha_comodato_option(record)}')
-        lines.extend(['', '*Como escolher:*', '- Envie TODOS para recolher todos os comodatos listados.', '- Envie 1 para selecionar um comodato.', '- Envie 1,3 para selecionar varios.', '- Ou digite manualmente o que deve recolher.'])
+        for index, group in enumerate(flow._group_recolha_comodato_records(records), start=1):
+            lines.append(f'{index}. {flow._format_recolha_comodato_group_option(group)}')
+            for record in group:
+                lines.append(f'   - {flow._format_recolha_comodato_product_option(record)}')
+        lines.extend(['', '*Como responder:*', '- Recolher todos os comodatos: TODOS.', '- Recolher um comodato inteiro: numero da opcao. Ex.: 1.', '- Recolher mais de um comodato inteiro: numeros separados por virgula. Ex.: 1,3.', '- Recolha parcial de um comodato: PARCIAL + numero. Ex.: PARCIAL 2.', '- Item fora da lista: AVULSO + descricao. Ex.: AVULSO 2 mesas e 1 freezer.'])
         return '\n'.join(lines)
+
+    def _build_recolha_partial_prompt(self, *, session: LookupSession, invalid_selection: bool=False, error_text: str='') -> OutgoingMessage:
+        flow = _customer_flow_module()
+        records = list(session.recolha_partial_comodato_options or ())
+        if not records:
+            return self._build_recolha_comodato_prompt(session=session, invalid_selection=True)
+        first_record = records[0]
+        lines = ['Solicitacao de Recolha', '', '*Recolha parcial:*', f"- Comodato: {first_record.nro_comodato or '-'}"]
+        if invalid_selection:
+            lines.extend(['', error_text or 'Nao entendi os produtos/quantidades da recolha parcial.'])
+        lines.extend(['', '*Produtos do comodato:*'])
+        for index, record in enumerate(records, start=1):
+            lines.append(f'{index}. {flow._format_recolha_comodato_product_option(record)}')
+        lines.extend(['', '*Como responder:*', '- Produto inteiro: numero da opcao. Ex.: 1.', '- Mais de um produto inteiro: numeros separados por virgula. Ex.: 1,2.', '- Quantidade parcial: opcao=quantidade. Ex.: 1=120.', '- Mais de uma quantidade parcial: 1=120,2=10.', '- Voltar para os comodatos: VOLTAR.'])
+        return flow.OutgoingMessage(text='\n'.join(lines))
 
     def _build_recolha_obs_prompt(self) -> OutgoingMessage:
         flow = _customer_flow_module()

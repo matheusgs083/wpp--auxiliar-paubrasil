@@ -365,6 +365,7 @@ class LookupSession:
     recolha_rn: str = ""
     recolha_comodato: str = ""
     recolha_comodato_options: tuple[ComodatoRecord, ...] = ()
+    recolha_partial_comodato_options: tuple[ComodatoRecord, ...] = ()
     recolha_obs: str = ""
     recolha_pending_action: str = ""
     recolha_pending_identifier: str = ""
@@ -4668,10 +4669,60 @@ def _select_recolha_client_option(text: str, *, options: tuple[DClienteRecord, .
     return options[index - 1]
 
 
+_RECOLHA_CUSTOM_PREFIXES = ("avulso", "sem comodato", "sem contrato", "outro", "personalizado")
+_RECOLHA_CUSTOM_KEYWORDS = set(_RECOLHA_CUSTOM_PREFIXES)
+_RECOLHA_CUSTOM_WITHOUT_CONTRACT_PREFIXES = {"avulso", "sem comodato", "sem contrato"}
+
+
+def _is_recolha_custom_selection_keyword(normalized_text: str) -> bool:
+    return str(normalized_text or "").strip() in _RECOLHA_CUSTOM_KEYWORDS
+
+
+def _looks_like_recolha_custom_selection(normalized_text: str) -> bool:
+    normalized = str(normalized_text or "").strip()
+    return any(re.match(rf"^{re.escape(prefix)}(?:$|[\s:;,-])", normalized) for prefix in _RECOLHA_CUSTOM_PREFIXES)
+
+
+def _resolve_recolha_custom_selection(text: str) -> str:
+    cleaned = _clean_recolha_text(text)
+    normalized = _normalize_choice(cleaned)
+    for prefix in sorted(_RECOLHA_CUSTOM_PREFIXES, key=len, reverse=True):
+        if normalized == prefix:
+            return ""
+        if re.match(rf"^{re.escape(prefix)}[\s:;,-]", normalized):
+            detail = _clean_recolha_text(cleaned[len(prefix) :].strip(" :;,-"))
+            if not detail:
+                return ""
+            label = "Recolha sem comodato" if prefix in _RECOLHA_CUSTOM_WITHOUT_CONTRACT_PREFIXES else "Recolha personalizada"
+            return f"{label}: {detail}"
+    return ""
+
+
+def _looks_like_recolha_partial_group_selection(normalized_text: str) -> bool:
+    return bool(re.fullmatch(r"parcial\s+\d+", str(normalized_text or "").strip()))
+
+
+def _resolve_recolha_partial_group_selection(*, session: LookupSession, text: str) -> list[ComodatoRecord] | None:
+    normalized = _normalize_choice(text)
+    if not normalized.startswith("parcial"):
+        return None
+    match = re.fullmatch(r"parcial\s+(\d+)", normalized)
+    if not match:
+        return []
+    groups = _group_recolha_comodato_records(list(session.recolha_comodato_options or ()))
+    index = int(match.group(1))
+    if index < 1 or index > len(groups):
+        return []
+    return list(groups[index - 1])
+
+
 def _resolve_recolha_comodato_selection(*, session: LookupSession, text: str) -> str:
     cleaned = _clean_recolha_text(text)
     if not cleaned:
         return ""
+    custom_selection = _resolve_recolha_custom_selection(cleaned)
+    if custom_selection:
+        return custom_selection
     records = list(session.recolha_comodato_options or ())
     if not records:
         return cleaned
@@ -4681,17 +4732,18 @@ def _resolve_recolha_comodato_selection(*, session: LookupSession, text: str) ->
         return _format_recolha_comodato_selection(records)
 
     if _looks_like_recolha_numeric_selection(normalized):
-        selected_records: list[ComodatoRecord] = []
+        groups = _group_recolha_comodato_records(records)
+        selected_groups: list[list[ComodatoRecord]] = []
         seen_indexes: set[int] = set()
         for raw_index in re.findall(r"\d+", normalized):
             index = int(raw_index)
-            if index < 1 or index > len(records):
+            if index < 1 or index > len(groups):
                 return ""
             if index in seen_indexes:
                 continue
             seen_indexes.add(index)
-            selected_records.append(records[index - 1])
-        return _format_recolha_comodato_selection(selected_records)
+            selected_groups.append(groups[index - 1])
+        return _format_recolha_comodato_group_selection(selected_groups)
 
     return cleaned
 
@@ -4700,9 +4752,103 @@ def _looks_like_recolha_numeric_selection(normalized_text: str) -> bool:
     return bool(re.fullmatch(r"\d+(?:\s*(?:,|/|;|\+| e |\s)\s*\d+)*", str(normalized_text or "").strip()))
 
 
+def _resolve_recolha_partial_item_selection(*, session: LookupSession, text: str) -> tuple[str, str]:
+    cleaned = _clean_recolha_text(text)
+    if not cleaned:
+        return "", ""
+    records = list(session.recolha_partial_comodato_options or ())
+    if not records:
+        return "", "Nao encontrei os produtos desse comodato. Volte e escolha o comodato novamente."
+
+    normalized = _normalize_choice(cleaned)
+    if normalized in {"todos", "tudo", "total"}:
+        return _format_recolha_partial_item_selection((record, _recolha_saldo_quantity(record.saldo)) for record in records), ""
+
+    if _looks_like_recolha_numeric_selection(normalized):
+        selected_records: list[tuple[ComodatoRecord, Decimal]] = []
+        seen_indexes: set[int] = set()
+        for raw_index in re.findall(r"\d+", normalized):
+            index = int(raw_index)
+            if index < 1 or index > len(records):
+                return "", f"Opcao {index} nao existe nesse comodato."
+            if index in seen_indexes:
+                continue
+            seen_indexes.add(index)
+            record = records[index - 1]
+            selected_records.append((record, _recolha_saldo_quantity(record.saldo)))
+        return _format_recolha_partial_item_selection(selected_records), ""
+
+    partial_items: list[tuple[ComodatoRecord, Decimal]] = []
+    seen_indexes: set[int] = set()
+    parts = [part.strip() for part in re.split(r"[,;/]+", normalized) if part.strip()]
+    if not parts:
+        return "", ""
+    for part in parts:
+        match = re.fullmatch(r"(\d+)\s*[=:]\s*(\d+)", part)
+        if not match:
+            return "", "Use o formato opcao=quantidade. Ex.: 1=120 ou 1=120,2=10."
+        index = int(match.group(1))
+        if index < 1 or index > len(records):
+            return "", f"Opcao {index} nao existe nesse comodato."
+        if index in seen_indexes:
+            continue
+        quantity = Decimal(match.group(2))
+        if quantity <= 0:
+            return "", "A quantidade precisa ser maior que zero."
+        record = records[index - 1]
+        saldo = _recolha_saldo_quantity(record.saldo)
+        if saldo > 0 and quantity > saldo:
+            return "", f"Quantidade maior que o saldo. O item {index} tem saldo {_format_recolha_quantity(saldo)}."
+        seen_indexes.add(index)
+        partial_items.append((record, quantity))
+    if not partial_items:
+        return "", ""
+    return _format_recolha_partial_item_selection(partial_items), ""
+
+
+def _group_recolha_comodato_records(records: list[ComodatoRecord]) -> list[list[ComodatoRecord]]:
+    groups: list[list[ComodatoRecord]] = []
+    group_indexes: dict[str, int] = {}
+    for row_index, record in enumerate(records):
+        comodato = str(record.nro_comodato or "").strip()
+        key = f"comodato:{_normalize_choice(comodato)}" if comodato else f"row:{row_index}"
+        if key not in group_indexes:
+            group_indexes[key] = len(groups)
+            groups.append([])
+        groups[group_indexes[key]].append(record)
+    return groups
+
+
 def _format_recolha_comodato_selection(records: list[ComodatoRecord]) -> str:
-    formatted = [_format_recolha_comodato_option(record) for record in records]
+    return _format_recolha_comodato_group_selection(_group_recolha_comodato_records(records))
+
+
+def _format_recolha_comodato_group_selection(groups: list[list[ComodatoRecord]]) -> str:
+    formatted = [_format_recolha_comodato_group_selection_item(group) for group in groups if group]
     return " | ".join(formatted)
+
+
+def _format_recolha_comodato_group_selection_item(group: list[ComodatoRecord]) -> str:
+    if len(group) == 1:
+        return _format_recolha_comodato_option(group[0])
+    first_record = group[0]
+    return (
+        f"Comodato {first_record.nro_comodato or '-'} | "
+        f"{len(group)} produtos | Saldo total {_format_recolha_quantity(_recolha_group_saldo_quantity(group))}"
+    )
+
+
+def _format_recolha_comodato_group_option(group: list[ComodatoRecord]) -> str:
+    if not group:
+        return "Comodato sem detalhe"
+    first_record = group[0]
+    product_count = len(group)
+    product_label = "produto" if product_count == 1 else "produtos"
+    return (
+        f"Comodato {first_record.nro_comodato or '-'} | "
+        f"{product_count} {product_label} | "
+        f"Saldo total {_format_recolha_quantity(_recolha_group_saldo_quantity(group))}"
+    )
 
 
 def _format_recolha_comodato_option(record: ComodatoRecord) -> str:
@@ -4717,10 +4863,71 @@ def _format_recolha_comodato_option(record: ComodatoRecord) -> str:
         parts.append(material)
     elif sub_tipo:
         parts.append(sub_tipo)
-    saldo = str(record.saldo or "").strip()
-    if saldo:
+    if str(record.saldo or "").strip():
+        saldo = _format_recolha_quantity(_recolha_saldo_quantity(record.saldo))
         parts.append(f"Saldo {saldo}")
     return " | ".join(parts) or "Comodato sem detalhe"
+
+
+def _format_recolha_comodato_product_option(record: ComodatoRecord) -> str:
+    parts = []
+    material = str(record.material or "").strip()
+    sub_tipo = str(record.sub_tipo_material or "").strip()
+    if material and sub_tipo and _normalize_choice(material) != _normalize_choice(sub_tipo):
+        parts.append(f"{material} - {sub_tipo}")
+    elif material:
+        parts.append(material)
+    elif sub_tipo:
+        parts.append(sub_tipo)
+    if str(record.saldo or "").strip():
+        saldo = _format_recolha_quantity(_recolha_saldo_quantity(record.saldo))
+        parts.append(f"Saldo {saldo}")
+    return " | ".join(parts) or "Produto sem detalhe"
+
+
+def _format_recolha_partial_item_selection(items: Any) -> str:
+    formatted = []
+    for record, quantity in items:
+        saldo = _recolha_saldo_quantity(record.saldo)
+        product_text = _format_recolha_comodato_product_option(record)
+        product_text = re.sub(r"\s*\|\s*Saldo\s+[^|]+$", "", product_text)
+        formatted.append(
+            f"Comodato {record.nro_comodato or '-'} | "
+            f"{product_text} | Recolher {_format_recolha_quantity(quantity)} de {_format_recolha_quantity(saldo)}"
+        )
+    return " | ".join(formatted)
+
+
+def _recolha_group_saldo_quantity(group: list[ComodatoRecord]) -> Decimal:
+    total = Decimal("0")
+    for record in group:
+        total += _recolha_saldo_quantity(record.saldo)
+    return total
+
+
+def _recolha_saldo_quantity(value: str) -> Decimal:
+    raw = str(value or "").strip()
+    if not raw:
+        return Decimal("0")
+    cleaned = re.sub(r"[^0-9,.-]", "", raw)
+    if not cleaned:
+        return Decimal("0")
+    if "," in cleaned:
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"-?\d{1,3}(?:\.\d{3})+", cleaned):
+        cleaned = cleaned.replace(".", "")
+    try:
+        return abs(Decimal(cleaned))
+    except InvalidOperation:
+        return Decimal("0")
+
+
+def _format_recolha_quantity(value: Decimal) -> str:
+    quantity = abs(value)
+    if quantity == quantity.to_integral_value():
+        return f"{int(quantity):,}".replace(",", ".")
+    formatted = f"{quantity.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f}"
+    return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def _resolve_recolha_registration_input(

@@ -1019,7 +1019,8 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             self.assertIn("*Comodatos pendentes:*", prompt.text)
             self.assertIn("1. Comodato 720268", prompt.text)
             self.assertIn("2. Comodato 102291", prompt.text)
-            self.assertIn("Envie TODOS", prompt.text)
+            self.assertIn("*Como responder:*", prompt.text)
+            self.assertIn("AVULSO + descricao", prompt.text)
 
             obs_prompt = flow.handle(IncomingMessage(sender=sender, text="1,2"), decision)
 
@@ -1040,6 +1041,154 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             comodatos_registrados = " | ".join(record.comodato for record in records)
             self.assertIn("Comodato 720268", comodatos_registrados)
             self.assertIn("Comodato 102291", comodatos_registrados)
+
+    def test_seller_recolha_allows_custom_without_comodato(self) -> None:
+        registration = DClienteRecord(
+            filial="3",
+            cod_pdv="9845",
+            razao_social="O COMILAO LTDA",
+            nome_fantasia="O COMILAO",
+            telefone="",
+            dia_visita="SEG/",
+            vendedor="400",
+            status="Ativo",
+            cidade="PATOS",
+            cond_pag_atual="",
+            limite_credito="",
+            total_pendente="0",
+            total_comodatos_pendentes=1,
+            ultima_atualizacao_tabela="",
+        )
+        comodatos = [
+            ComodatoRecord(
+                filial="3",
+                cod_pdv="9845",
+                nome="O COMILAO",
+                nro_comodato="720268",
+                material="Freezer",
+                sub_tipo_material="Visa Cooler",
+                saldo="1",
+                planilha_atualizada_em="19/05/2026",
+            )
+        ]
+        with TemporaryDirectory() as tmpdir:
+            recolha_service = RecolhaRequestService(Path(tmpdir) / "solicitacoes_recolha.csv")
+            flow = make_flow(
+                query_service=StubQueryService(ready=True, registration_records=[registration]),
+                comodatos_service=StubComodatosService(ready=True, search_records=comodatos),
+                recolha_request_service=recolha_service,
+            )
+            decision = make_decision(
+                allowed=True,
+                roles=("vendedor",),
+                sectors=("3_400",),
+                normalized_number="5583999999999",
+            )
+            sender = "5511-recolha-custom"
+
+            _ = flow.handle(IncomingMessage(sender=sender, text="recolha"), decision)
+            _ = flow.handle(IncomingMessage(sender=sender, text="9845"), decision)
+            obs_prompt = flow.handle(IncomingMessage(sender=sender, text="avulso: 2 mesas e 1 freezer sem contrato"), decision)
+
+            self.assertIn("*Observacao:*", obs_prompt.text)
+            self.assertEqual(flow.sessions[sender].recolha_comodato, "Recolha sem comodato: 2 mesas e 1 freezer sem contrato")
+
+            confirmation = flow.handle(IncomingMessage(sender=sender, text="sem obs"), decision)
+
+            self.assertIn("Recolha sem comodato: 2 mesas e 1 freezer sem contrato", confirmation.text)
+
+            result = flow.handle(IncomingMessage(sender=sender, text="confirmar"), decision)
+
+            self.assertIn("Solicitacao de Recolha registrada", result.text)
+            records = recolha_service.list_requests()
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].comodato, "Recolha sem comodato: 2 mesas e 1 freezer sem contrato")
+
+    def test_seller_recolha_opens_products_only_for_partial_comodato(self) -> None:
+        registration = DClienteRecord(
+            filial="3",
+            cod_pdv="9845",
+            razao_social="O COMILAO LTDA",
+            nome_fantasia="O COMILAO",
+            telefone="",
+            dia_visita="SEG/",
+            vendedor="400",
+            status="Ativo",
+            cidade="PATOS",
+            cond_pag_atual="",
+            limite_credito="",
+            total_pendente="0",
+            total_comodatos_pendentes=1,
+            ultima_atualizacao_tabela="",
+        )
+        comodatos = [
+            ComodatoRecord(
+                filial="3",
+                cod_pdv="9845",
+                nome="O COMILAO",
+                nro_comodato="125511",
+                material="GFA VIDRO 635ML",
+                sub_tipo_material="VASILHAME CERVEJA 1/1",
+                saldo="-984",
+                planilha_atualizada_em="19/05/2026",
+            ),
+            ComodatoRecord(
+                filial="3",
+                cod_pdv="9845",
+                nome="O COMILAO",
+                nro_comodato="125511",
+                material="GARRAFEIRA BRAHMA 600ML",
+                sub_tipo_material="GARRAFEIRA CERVEJA 1/1",
+                saldo="-41",
+                planilha_atualizada_em="19/05/2026",
+            ),
+        ]
+        with TemporaryDirectory() as tmpdir:
+            recolha_service = RecolhaRequestService(Path(tmpdir) / "solicitacoes_recolha.csv")
+            flow = make_flow(
+                query_service=StubQueryService(ready=True, registration_records=[registration]),
+                comodatos_service=StubComodatosService(ready=True, search_records=comodatos),
+                recolha_request_service=recolha_service,
+            )
+            decision = make_decision(
+                allowed=True,
+                roles=("vendedor",),
+                sectors=("3_400",),
+                normalized_number="5583999999999",
+            )
+            sender = "5511-recolha-partial-products"
+
+            _ = flow.handle(IncomingMessage(sender=sender, text="recolha"), decision)
+            prompt = flow.handle(IncomingMessage(sender=sender, text="9845"), decision)
+
+            self.assertIn("1. Comodato 125511 | 2 produtos | Saldo total 1.025", prompt.text)
+            self.assertIn("- GFA VIDRO 635ML", prompt.text)
+            self.assertIn("- GARRAFEIRA BRAHMA 600ML", prompt.text)
+            self.assertNotIn("2. Comodato 125511", prompt.text)
+
+            partial_prompt = flow.handle(IncomingMessage(sender=sender, text="parcial 1"), decision)
+
+            self.assertIn("*Recolha parcial:*", partial_prompt.text)
+            self.assertIn("1. GFA VIDRO 635ML", partial_prompt.text)
+            self.assertIn("2. GARRAFEIRA BRAHMA 600ML", partial_prompt.text)
+
+            obs_prompt = flow.handle(IncomingMessage(sender=sender, text="1=120,2=10"), decision)
+
+            self.assertIn("*Observacao:*", obs_prompt.text)
+            self.assertIn("Recolher 120 de 984", flow.sessions[sender].recolha_comodato)
+            self.assertIn("Recolher 10 de 41", flow.sessions[sender].recolha_comodato)
+
+            confirmation = flow.handle(IncomingMessage(sender=sender, text="sem obs"), decision)
+
+            self.assertIn("Recolher 120 de 984", confirmation.text)
+            result = flow.handle(IncomingMessage(sender=sender, text="confirmar"), decision)
+
+            self.assertIn("Solicitacao de Recolha registrada", result.text)
+            records = recolha_service.list_requests()
+            self.assertEqual(len(records), 2)
+            recorded_text = " | ".join(record.comodato for record in records)
+            self.assertIn("Recolher 120 de 984", recorded_text)
+            self.assertIn("Recolher 10 de 41", recorded_text)
 
     def test_seller_recolha_prompt_lists_all_comodatos(self) -> None:
         registration = DClienteRecord(

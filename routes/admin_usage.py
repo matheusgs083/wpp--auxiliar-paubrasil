@@ -11,7 +11,8 @@ from fastapi.responses import PlainTextResponse
 
 def create_admin_usage_router(
     *,
-    require_admin_api_auth: Callable[..., None],
+    require_admin_panel_auth: Callable[..., dict[str, Any]],
+    require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     list_admin_evolution_usage: Callable[..., dict[str, Any]],
     build_evolution_usage_avg_report_csv: Callable[[dict[str, Any]], str],
     build_evolution_function_usage_report_csv: Callable[..., str],
@@ -29,12 +30,13 @@ def create_admin_usage_router(
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
-        require_admin_api_auth(
+        context = require_admin_panel_auth(
             request=request,
             authorization=authorization,
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
         )
+        require_admin_panel_feature(context, "usage")
         payload = list_admin_evolution_usage(days=days, function_date_from=date_from, function_date_to=date_to)
         record_security_event(
             request,
@@ -54,12 +56,13 @@ def create_admin_usage_router(
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> PlainTextResponse:
-        require_admin_api_auth(
+        context = require_admin_panel_auth(
             request=request,
             authorization=authorization,
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
         )
+        require_admin_panel_feature(context, "usage")
         payload = list_admin_evolution_usage(days=days, top_limit=limit, recent_limit=5)
         csv_content = build_evolution_usage_avg_report_csv(payload)
         generated_at = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -89,12 +92,13 @@ def create_admin_usage_router(
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> PlainTextResponse:
-        require_admin_api_auth(
+        context = require_admin_panel_auth(
             request=request,
             authorization=authorization,
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
         )
+        require_admin_panel_feature(context, "usage")
         payload = list_admin_evolution_usage(
             days=days,
             top_limit=limit,

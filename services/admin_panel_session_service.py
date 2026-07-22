@@ -12,12 +12,15 @@ from typing import Any
 
 from fastapi import HTTPException, Request, Response
 
+from bot_api.services.admin_panel_user_service import PANEL_FEATURES
+
 
 class AdminPanelSessionService:
     def __init__(
         self,
         *,
         admin_api_token: str,
+        session_secret: str,
         verify_token: str,
         api_auth_tokens: Sequence[str],
         finance_panel_tokens: Sequence[tuple[str, Sequence[str]]],
@@ -26,8 +29,10 @@ class AdminPanelSessionService:
         session_ttl_seconds: int,
         login_window_seconds: int,
         login_max_failures: int,
+        panel_user_service: Any | None = None,
     ) -> None:
         self.admin_api_token = str(admin_api_token or "")
+        self.session_secret = str(session_secret or "")
         self.verify_token = str(verify_token or "")
         self.api_auth_tokens = tuple(str(token or "") for token in api_auth_tokens)
         self.finance_panel_tokens = tuple((str(token or ""), tuple(filiais)) for token, filiais in finance_panel_tokens)
@@ -36,6 +41,7 @@ class AdminPanelSessionService:
         self.session_ttl_seconds = session_ttl_seconds
         self.login_window_seconds = login_window_seconds
         self.login_max_failures = login_max_failures
+        self.panel_user_service = panel_user_service
         self._login_lock = Lock()
         self._login_failures: dict[str, list[float]] = {}
 
@@ -53,6 +59,11 @@ class AdminPanelSessionService:
             return {"mode": "critica", "is_admin": False, "filiais": critica_filiais}
         return None
 
+    def context_from_credentials(self, username: str | None, password: str | None) -> dict[str, Any] | None:
+        if self.panel_user_service is None:
+            return None
+        return self.panel_user_service.authenticate(username=str(username or ""), password=str(password or ""))
+
     def context_from_session_cookie(self, request: Request) -> dict[str, Any] | None:
         return self._deserialize_session(request.cookies.get(self.session_cookie_name))
 
@@ -63,7 +74,7 @@ class AdminPanelSessionService:
             max_age=self.session_ttl_seconds,
             httponly=True,
             secure=self._request_uses_https(request),
-            samesite="lax",
+            samesite="strict",
             path="/",
         )
 
@@ -116,8 +127,12 @@ class AdminPanelSessionService:
             return False
         if bool(context.get("is_admin")):
             return True
-        mode = self.panel_context_mode(context)
         clean_feature = str(feature or "").strip().lower()
+        features = self._panel_context_features(context)
+        if features:
+            allowed_names = self._feature_aliases(clean_feature)
+            return bool(features.intersection(allowed_names))
+        mode = self.panel_context_mode(context)
         if mode == "critica":
             return clean_feature in {"critica", "critica_import", "import_status"}
         if mode == "financeiro":
@@ -133,9 +148,12 @@ class AdminPanelSessionService:
         context: dict[str, Any] | None,
         dataset_names: Iterable[str],
     ) -> set[str] | None:
-        if not context or bool(context.get("is_admin")) or self.panel_context_mode(context) == "financeiro":
+        features = self._panel_context_features(context)
+        if features and "reports" not in features and "critica" not in features:
+            return set()
+        if not context or bool(context.get("is_admin")) or self.panel_context_mode(context) == "financeiro" or "reports" in features:
             return None
-        if self.panel_context_mode(context) == "critica":
+        if self.panel_context_mode(context) == "critica" or ("critica" in features and "reports" not in features):
             allowed_filiais = {
                 str(filial).strip()
                 for filial in context.get("filiais", ())
@@ -160,8 +178,7 @@ class AdminPanelSessionService:
         return ()
 
     def _session_secret(self) -> bytes:
-        seeds = [self.admin_api_token.strip(), self.verify_token.strip(), *self.api_auth_tokens]
-        secret_seed = next((seed for seed in seeds if seed), "")
+        secret_seed = self.session_secret.strip() or self.admin_api_token.strip()
         if not secret_seed:
             raise HTTPException(status_code=503, detail="Sessao do painel indisponivel.")
         return hashlib.sha256(f"bot-admin-panel-session-v1:{secret_seed}".encode("utf-8")).digest()
@@ -175,6 +192,18 @@ class AdminPanelSessionService:
             "iat": now,
             "exp": now + self.session_ttl_seconds,
         }
+        if str(context.get("auth_type") or "") == "user":
+            payload.update(
+                {
+                    "auth_type": "user",
+                    "user_id": int(context.get("user_id") or 0),
+                    "username": str(context.get("username") or ""),
+                    "display_name": str(context.get("display_name") or ""),
+                    "password_version": int(context.get("password_version") or 0),
+                    "must_change_password": bool(context.get("must_change_password")),
+                    "features": [str(item).strip() for item in context.get("features", ()) if str(item).strip()],
+                }
+            )
         payload_bytes = json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("utf-8")
         encoded_payload = self._base64url_encode(payload_bytes)
         signature = hmac.new(self._session_secret(), encoded_payload.encode("ascii"), hashlib.sha256).digest()
@@ -201,6 +230,20 @@ class AdminPanelSessionService:
             return None
         if not isinstance(payload, dict) or int(payload.get("exp") or 0) < int(time.time()):
             return None
+        if str(payload.get("auth_type") or "") == "user":
+            if self.panel_user_service is None:
+                return None
+            user_id = int(payload.get("user_id") or 0)
+            password_version = int(payload.get("password_version") or 0)
+            if user_id <= 0 or password_version <= 0:
+                return None
+            try:
+                return self.panel_user_service.context_for_session(
+                    user_id=user_id,
+                    password_version=password_version,
+                )
+            except Exception:
+                return None
         mode = str(payload.get("mode") or "").strip().lower()
         is_admin = bool(payload.get("is_admin"))
         filiais = tuple(str(filial).strip() for filial in payload.get("filiais", []) if str(filial).strip())
@@ -213,14 +256,37 @@ class AdminPanelSessionService:
         return None
 
     @staticmethod
+    def _panel_context_features(context: dict[str, Any] | None) -> set[str]:
+        values = (context or {}).get("features") or ()
+        return {str(item).strip().lower() for item in values if str(item).strip().lower()}
+
+    @staticmethod
+    def _feature_aliases(feature: str) -> set[str]:
+        clean = str(feature or "").strip().lower()
+        aliases = {
+            "operations": {"operations", "broadcast"},
+            "broadcast": {"operations", "broadcast"},
+            "reports": {"reports", "import", "import_status"},
+            "import": {"reports", "import", "import_status"},
+            "import_status": {"reports", "critica"},
+            "payip": {"payip"},
+            "promax": {"promax"},
+            "critica": {"critica"},
+            "critica_import": {"critica"},
+            "recolhas": {"recolhas"},
+            "giro": {"giro"},
+            "usage": {"usage"},
+        }
+        return aliases.get(clean, {clean}).intersection(set(PANEL_FEATURES) | {clean})
+
+    @staticmethod
     def _request_uses_https(request: Request) -> bool:
         forwarded_proto = str(request.headers.get("x-forwarded-proto") or "").split(",", 1)[0].strip().lower()
         return request.url.scheme == "https" or forwarded_proto == "https"
 
     @staticmethod
     def _login_key(request: Request) -> str:
-        forwarded_for = str(request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
-        return forwarded_for or (request.client.host if request.client else "unknown")
+        return request.client.host if request.client else "unknown"
 
     @staticmethod
     def _base64url_encode(raw: bytes) -> str:
