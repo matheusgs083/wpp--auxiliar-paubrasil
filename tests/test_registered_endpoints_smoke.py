@@ -78,6 +78,9 @@ class FakeAdminPanelUserService:
     def reset_password(self, *, user_id: int) -> dict[str, Any]:
         return {"user": {"id": user_id, "username": "admin"}, "temporary_password": "TempSenha#5678"}
 
+    def delete_user(self, *, user_id: int) -> dict[str, Any]:
+        return {"id": user_id, "username": "admin"}
+
 
 class FakeQueryService:
     def search_by_registration(self, **_kwargs: Any) -> list[FakeRecord]:
@@ -434,6 +437,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("POST", "/api/admin/panel/users", kwargs={"json": panel_user_payload}),
             EndpointCase("PATCH", "/api/admin/panel/users/1", kwargs={"json": panel_user_payload}),
             EndpointCase("POST", "/api/admin/panel/users/1/reset-password"),
+            EndpointCase("DELETE", "/api/admin/panel/users/1"),
             EndpointCase("GET", "/api/admin/recolhas"),
             EndpointCase("PATCH", "/api/admin/recolhas/bulk", kwargs={"json": {"ids": ["rec-1"], **recolha_payload}}),
             EndpointCase("POST", "/api/admin/recolhas/import", kwargs={"files": csv_file}),

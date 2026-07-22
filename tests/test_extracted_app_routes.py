@@ -43,6 +43,9 @@ class FakeAdminPanelUserService:
     def reset_password(self, *, user_id: int) -> dict[str, Any]:
         return {"user": {"id": user_id, "username": "admin"}, "temporary_password": "TempSenha#5678"}
 
+    def delete_user(self, *, user_id: int) -> dict[str, Any]:
+        return {"id": user_id, "username": "admin"}
+
 
 class ExtractedAppRoutesTest(unittest.TestCase):
     def _admin_panel_test_app(self, session_context: dict[str, Any] | None) -> FastAPI:

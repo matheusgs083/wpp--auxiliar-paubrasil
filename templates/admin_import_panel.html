@@ -4804,6 +4804,7 @@
       state.panel = {
         mode: payload && payload.mode ? String(payload.mode) : "admin",
         isAdmin: Boolean(payload && payload.is_admin),
+        userId: payload && payload.user_id ? String(payload.user_id) : "",
         username: payload && payload.username ? String(payload.username) : "",
         displayName: payload && payload.display_name ? String(payload.display_name) : "",
         features: Array.isArray(payload && payload.features) ? payload.features.map(String) : [],
@@ -9685,6 +9686,28 @@
       }
     }
 
+    async function deletePanelUser(userId) {
+      const user = state.panelUsers.find(item => String(item.id) === String(userId));
+      if (!user) return;
+      if (state.panel && String(state.panel.userId || "") === String(user.id)) {
+        addLog("Nao apague o proprio usuario logado.", "warn");
+        return;
+      }
+      const confirmed = await askConfirmation(`Apagar o usuario ${user.username}? Esta acao nao pode ser desfeita.`);
+      if (!confirmed) return;
+      try {
+        await req(`${CONFIG.endpoints.panel.users}/${encodeURIComponent(userId)}`, {
+          method: "DELETE",
+          timeoutMs: 30000
+        });
+        addLog(`Usuario ${user.username} apagado.`, "ok");
+        await syncPanelUsers();
+        if (String(state.panelUserEditingId || "") === String(userId)) resetPanelUserForm();
+      } catch (err) {
+        addLog(`Falha ao apagar usuario do painel: ${err.message}`, "err");
+      }
+    }
+
     async function copyPanelUserTemporaryPassword() {
       const credentials = state.panelUserTemporaryCredentials || {};
       const username = String(credentials.username || (E.panelUserPasswordUsername ? E.panelUserPasswordUsername.textContent : "") || "").trim();
@@ -9800,7 +9823,10 @@
             ? '<span class="badge text-bg-warning">Trocar senha</span>'
             : '<span class="badge text-bg-success">Ativo</span>';
         const role = user.is_admin ? '<span class="small fw-bold text-primary">Administrador</span>' : '<span class="small text-secondary">Usuario</span>';
-        return `<tr><td class="ps-3" data-label="Usuario"><span class="panel-user-name"><strong>${escapeHtml(user.username || "-")}</strong><span class="small text-secondary">${escapeHtml(user.display_name || "")}</span>${role}</span></td><td data-label="Blocos"><div class="panel-user-feature-pills">${renderPanelUserFeaturePills(user)}</div></td><td data-label="Filiais"><span class="mono small fw-bold">${escapeHtml(filiais)}</span></td><td data-label="Status">${status}</td><td class="text-end pe-3" data-label="Acoes"><div class="panel-user-actions"><button class="btn btn-outline-primary btn-sm" title="Editar usuario" onclick="fillPanelUserForm('${escapeHtml(String(user.id))}')"><i class="bi bi-pencil-square me-1"></i>Editar</button><button class="btn btn-outline-warning btn-sm" title="Gerar nova senha temporaria" onclick="resetPanelUserPassword('${escapeHtml(String(user.id))}')"><i class="bi bi-key me-1"></i>Resetar</button></div></td></tr>`;
+        const deleteButton = state.panel && String(state.panel.userId || "") === String(user.id)
+          ? ""
+          : `<button class="btn btn-outline-danger btn-sm" title="Apagar usuario" onclick="deletePanelUser('${escapeHtml(String(user.id))}')"><i class="bi bi-trash me-1"></i>Apagar</button>`;
+        return `<tr><td class="ps-3" data-label="Usuario"><span class="panel-user-name"><strong>${escapeHtml(user.username || "-")}</strong><span class="small text-secondary">${escapeHtml(user.display_name || "")}</span>${role}</span></td><td data-label="Blocos"><div class="panel-user-feature-pills">${renderPanelUserFeaturePills(user)}</div></td><td data-label="Filiais"><span class="mono small fw-bold">${escapeHtml(filiais)}</span></td><td data-label="Status">${status}</td><td class="text-end pe-3" data-label="Acoes"><div class="panel-user-actions"><button class="btn btn-outline-primary btn-sm" title="Editar usuario" onclick="fillPanelUserForm('${escapeHtml(String(user.id))}')"><i class="bi bi-pencil-square me-1"></i>Editar</button><button class="btn btn-outline-warning btn-sm" title="Gerar nova senha temporaria" onclick="resetPanelUserPassword('${escapeHtml(String(user.id))}')"><i class="bi bi-key me-1"></i>Resetar</button>${deleteButton}</div></td></tr>`;
       }).join("");
     }
 

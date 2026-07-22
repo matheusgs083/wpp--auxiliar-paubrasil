@@ -214,6 +214,19 @@ class AdminPanelSessionServiceTest(unittest.TestCase):
         self.assertFalse(any(char in password for char in "O0Il1o"))
         AdminPanelUserService.validate_new_password(password)
 
+    def test_panel_username_preserves_uppercase_and_rejects_invalid_values(self) -> None:
+        service = AdminPanelUserService(
+            database_url="postgresql://user:pass@localhost/db",
+            schema="bot_access",
+            connect_timeout_seconds=3,
+        )
+
+        self.assertEqual(service._normalize_username("APR.Patos"), "APR.Patos")
+        self.assertEqual(service._normalize_username("  GV-SUME  "), "GV-SUME")
+        self.assertEqual(service._normalize_username("APR.PATOS", for_login=True), "APR.PATOS")
+        with self.assertRaises(ValueError):
+            service._normalize_username("ab")
+
 
 if __name__ == "__main__":
     unittest.main()

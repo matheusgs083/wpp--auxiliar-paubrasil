@@ -244,6 +244,7 @@ def create_admin_panel_router(
             "ok": True,
             "mode": mode,
             "is_admin": is_admin,
+            "user_id": int(context.get("user_id") or 0),
             "username": str(context.get("username") or ""),
             "display_name": str(context.get("display_name") or ""),
             "features": features,
@@ -396,5 +397,34 @@ def create_admin_panel_router(
             reason=result["user"].get("username"),
         )
         return {"ok": True, **result}
+
+    @router.delete("/api/admin/panel/users/{user_id}")
+    def api_admin_panel_user_delete(
+        request: Request,
+        user_id: int,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_panel_admin(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        if int(context.get("user_id") or 0) == int(user_id):
+            raise HTTPException(status_code=400, detail="Nao apague o proprio usuario admin por esta tela.")
+        try:
+            user = admin_panel_user_service.delete_user(user_id=user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_panel_delete_user",
+            decision="allowed",
+            reason=user.get("username"),
+        )
+        return {"ok": True, "user": user}
 
     return router

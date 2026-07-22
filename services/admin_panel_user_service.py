@@ -30,7 +30,7 @@ PASSWORD_ITERATIONS = 390_000
 PASSWORD_MIN_LENGTH = 8
 FAILED_LOGIN_LIMIT = 8
 LOCKOUT_MINUTES = 15
-USERNAME_PATTERN = re.compile(r"^[a-z0-9._@-]{3,80}$")
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._@-]{3,80}$")
 
 
 class AdminPanelUserService:
@@ -83,6 +83,14 @@ class AdminPanelUserService:
                         """
                         CREATE INDEX IF NOT EXISTS panel_users_active_idx
                         ON {}.panel_users (is_active)
+                        """
+                    ).format(sql.Identifier(self.schema))
+                )
+                cur.execute(
+                    sql.SQL(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS panel_users_username_lower_uidx
+                        ON {}.panel_users (LOWER(username))
                         """
                     ).format(sql.Identifier(self.schema))
                 )
@@ -243,6 +251,27 @@ class AdminPanelUserService:
             raise ValueError("Usuario do painel nao encontrado.")
         return {"user": self._public_user(row), "temporary_password": temp_password}
 
+    def delete_user(self, *, user_id: int) -> dict[str, Any]:
+        with self._connect(row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        DELETE FROM {}.panel_users
+                        WHERE id = %s
+                        RETURNING id, username, display_name, is_active, is_admin, filiais,
+                                  feature_permissions, must_change_password, failed_login_count,
+                                  locked_until, last_login_at, created_at, updated_at
+                        """
+                    ).format(sql.Identifier(self.schema)),
+                    (int(user_id),),
+                )
+                row = cur.fetchone()
+            conn.commit()
+        if not row:
+            raise ValueError("Usuario do painel nao encontrado.")
+        return self._public_user(row)
+
     def authenticate(self, *, username: str, password: str) -> dict[str, Any] | None:
         normalized_username = self._normalize_username(username, for_login=True)
         plain_password = str(password or "")
@@ -256,7 +285,7 @@ class AdminPanelUserService:
                         SELECT id, username, display_name, password_hash, password_version, must_change_password,
                                is_active, is_admin, filiais, feature_permissions, failed_login_count, locked_until
                         FROM {}.panel_users
-                        WHERE username = %s
+                        WHERE LOWER(username) = LOWER(%s)
                         """
                     ).format(sql.Identifier(self.schema)),
                     (normalized_username,),
@@ -440,7 +469,7 @@ class AdminPanelUserService:
         }
 
     def _normalize_username(self, username: str, *, for_login: bool = False) -> str:
-        value = str(username or "").strip().lower()
+        value = str(username or "").strip()
         if not value:
             if for_login:
                 return ""
@@ -448,7 +477,7 @@ class AdminPanelUserService:
         if not USERNAME_PATTERN.fullmatch(value):
             if for_login:
                 return ""
-            raise ValueError("Login deve ter 3 a 80 caracteres e usar letras, numeros, ponto, traco, underline ou @.")
+            raise ValueError("Login deve ter 3 a 80 caracteres e usar letras maiusculas/minusculas, numeros, ponto, traco, underline ou @.")
         return value
 
     @staticmethod
