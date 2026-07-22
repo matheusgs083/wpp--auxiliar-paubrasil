@@ -896,6 +896,12 @@
                 <label class="form-check-label" for="payipBatchIncludeNf">Enviar NF se informada</label>
               </div>
             </div>
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchAutoCreate">
+                <label class="form-check-label" for="payipBatchAutoCreate">Criar clientes faltantes</label>
+              </div>
+            </div>
           </div>
           <div class="row g-2">
             <div class="col-xl-5">
@@ -2443,6 +2449,7 @@
       payipBatchDefaultInterest: document.getElementById("payipBatchDefaultInterest"),
       payipBatchIncludeNb: document.getElementById("payipBatchIncludeNb"),
       payipBatchIncludeNf: document.getElementById("payipBatchIncludeNf"),
+      payipBatchAutoCreate: document.getElementById("payipBatchAutoCreate"),
       payipBatchPreviewBtn: document.getElementById("payipBatchPreviewBtn"),
       payipBatchRunBtn: document.getElementById("payipBatchRunBtn"),
       payipBatchStatusBtn: document.getElementById("payipBatchStatusBtn"),
@@ -4323,7 +4330,7 @@
           if (element) element.addEventListener("change", resetPayipImportValidation);
         });
       if (E.payipBatchText) E.payipBatchText.addEventListener("input", resetPayipBatchPreview);
-      [E.payipBatchText, E.payipBatchDefaultRate, E.payipBatchDefaultInterest, E.payipBatchIncludeNb, E.payipBatchIncludeNf]
+      [E.payipBatchText, E.payipBatchDefaultRate, E.payipBatchDefaultInterest, E.payipBatchIncludeNb, E.payipBatchIncludeNf, E.payipBatchAutoCreate]
         .forEach(element => {
           if (element) element.addEventListener("change", resetPayipBatchPreview);
         });
@@ -6062,6 +6069,7 @@
         use_default_interest: Boolean(E.payipBatchDefaultInterest && E.payipBatchDefaultInterest.checked),
         include_nb: Boolean(E.payipBatchIncludeNb && E.payipBatchIncludeNb.checked),
         include_nf: Boolean(E.payipBatchIncludeNf && E.payipBatchIncludeNf.checked),
+        auto_create_clients: Boolean(E.payipBatchAutoCreate && E.payipBatchAutoCreate.checked),
         mfa_code: E.payipBatchMfaCode ? String(E.payipBatchMfaCode.value || "").trim() : ""
       };
     }
@@ -6072,7 +6080,8 @@
         use_default_rate: Boolean(payload && payload.use_default_rate),
         use_default_interest: Boolean(payload && payload.use_default_interest),
         include_nb: Boolean(payload && payload.include_nb),
-        include_nf: Boolean(payload && payload.include_nf)
+        include_nf: Boolean(payload && payload.include_nf),
+        auto_create_clients: Boolean(payload && payload.auto_create_clients)
       });
     }
 
@@ -6126,10 +6135,12 @@
         const canTryPdf = Boolean(item.pdf_available || item.payment_id);
         const statusText = item.status || (results.length ? "pendente" : "validado");
         const statusClass = statusText === "success" ? "text-bg-success" : statusText === "failed" ? "text-bg-danger" : "text-bg-light";
+        const creation = item.client_creation && typeof item.client_creation === "object" ? item.client_creation : null;
+        const creationText = creation && Array.isArray(creation.created) && creation.created.length ? '<div class="small text-success">Cliente criado pela dClientes</div>' : "";
         return `
           <tr>
             <td class="ps-2">${escapeHtml(String(item.line_number || ""))}</td>
-            <td><strong>${escapeHtml(item.filial || "-")}</strong> / NB ${escapeHtml(item.nb || "-")}<div class="small text-secondary">${escapeHtml(item.client_name || item.description || "")}</div></td>
+            <td><strong>${escapeHtml(item.filial || "-")}</strong> / NB ${escapeHtml(item.nb || "-")}<div class="small text-secondary">${escapeHtml(item.client_name || item.description || "")}</div>${creationText}</td>
             <td>${escapeHtml(formatMoneyText(item.amount || "0"))}<div class="small text-secondary">Venc. ${escapeHtml(formatDate(item.due_date || ""))}</div></td>
             <td><span class="badge ${statusClass}">${escapeHtml(statusText)}</span>${item.error ? `<div class="small text-danger mt-1">${escapeHtml(item.error)}</div>` : ""}</td>
             <td>${pix ? `<button class="btn btn-outline-primary btn-sm" onclick="copyPayipBatchPix('${escapeHtml(itemId)}')"><i class="bi bi-clipboard me-1"></i>Copiar</button>` : '<span class="text-secondary small">-</span>'}</td>

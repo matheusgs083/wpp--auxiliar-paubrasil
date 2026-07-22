@@ -13,6 +13,7 @@ class AdminPayipBatchRequest(BaseModel):
     use_default_interest: bool = True
     include_nb: bool = False
     include_nf: bool = False
+    auto_create_clients: bool = False
     mfa_code: str = ""
 
 

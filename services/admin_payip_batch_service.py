@@ -36,6 +36,7 @@ class PayipBatchOptions:
     use_default_interest: bool = True
     include_nb: bool = False
     include_nf: bool = False
+    auto_create_clients: bool = False
     mfa_code: str = ""
 
 
@@ -96,6 +97,7 @@ class AdminPayipBatchService:
         client_creation = {"created": [], "not_found": [], "failed": []}
         missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
         if missing_codes and options.auto_create_clients:
+            self._bootstrap_mfa_if_provided(options.mfa_code)
             client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
             validation = self._validate_promax_import(options)
         return _promax_import_payload(validation, client_creation=client_creation)
@@ -109,6 +111,7 @@ class AdminPayipBatchService:
         client_creation = {"created": [], "not_found": [], "failed": []}
         missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
         if missing_codes and options.auto_create_clients:
+            self._bootstrap_mfa_if_provided(options.mfa_code)
             client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
             validation = self._validate_promax_import(options)
             missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
@@ -308,6 +311,18 @@ class AdminPayipBatchService:
             self.logger.exception("Falha ao validar importacao automatizada PayIP: %s", exc)
             raise HTTPException(status_code=503, detail=f"Falha ao validar importacao PayIP: {_short_error(str(exc))}") from exc
 
+    def _bootstrap_mfa_if_provided(self, mfa_code: str) -> None:
+        clean_code = str(mfa_code or "").strip()
+        if not clean_code:
+            return
+        try:
+            self.payip_payments_service.bootstrap_session(mfa_code=clean_code)
+        except PayipMfaRequired as exc:
+            raise HTTPException(status_code=400, detail="Token MFA PayIP nao validou. Confira o codigo e tente novamente.") from exc
+        except Exception as exc:
+            self.logger.exception("Falha ao validar MFA PayIP antes de criar clientes: %s", exc)
+            raise HTTPException(status_code=503, detail=f"Falha ao validar MFA PayIP: {_short_error(str(exc))}") from exc
+
     def _create_missing_clients(self, *, filial: str, codes: tuple[str, ...]) -> dict[str, list[str]]:
         if self.dclientes_query_service is None:
             return {"created": [], "not_found": list(codes), "failed": ["dClientes indisponivel no painel."]}
@@ -326,6 +341,8 @@ class AdminPayipBatchService:
                     continue
                 self.payip_payments_service.create_client_from_profile(profile=profile)
                 created.append(normalized_code)
+            except PayipMfaRequired:
+                failed.append(f"{normalized_code}: PayIP pediu MFA para criar cliente; informe o token MFA e valide novamente")
             except Exception as exc:
                 self.logger.exception("Falha ao criar cliente PayIP NB %s: %s", normalized_code, exc)
                 failed.append(f"{normalized_code}: {_short_error(str(exc))}")
@@ -346,8 +363,10 @@ class AdminPayipBatchService:
             self._finish_job_with_error(job_id, rows, error=mfa_error)
             return
 
+        job_options = dict(job.get("options") or {})
+        auto_create_clients = bool(job_options.get("auto_create_clients"))
         for index, row in enumerate(rows, start=1):
-            result = self._process_row(row)
+            result = self._process_row(row, auto_create_clients=auto_create_clients)
             with self.lock:
                 current = self.jobs.get(job_id)
                 if not current:
@@ -409,7 +428,7 @@ class AdminPayipBatchService:
                 }
             )
 
-    def _process_row(self, row: dict[str, Any]) -> dict[str, Any]:
+    def _process_row(self, row: dict[str, Any], *, auto_create_clients: bool = False) -> dict[str, Any]:
         result = _failed_result(row, error="")
         try:
             if self.payip_payments_service is None:
@@ -418,8 +437,21 @@ class AdminPayipBatchService:
                 filial=row["filial"],
                 client_code=row["nb"],
             )
+            if client is None and auto_create_clients:
+                client_creation = self._create_missing_clients(filial=row["filial"], codes=(row["nb"],))
+                result["client_creation"] = client_creation
+                if client_creation.get("created"):
+                    client = self._find_client_after_creation(row)
+                elif client_creation.get("not_found"):
+                    raise RuntimeError(
+                        f"Cliente NB {row['nb']} nao encontrado na dClientes para criar na PayIP."
+                    )
+                elif client_creation.get("failed"):
+                    raise RuntimeError("Falha ao criar cliente PayIP: " + " | ".join(client_creation["failed"]))
             if client is None:
                 raise RuntimeError(f"Cliente ativo nao encontrado na PayIP para revenda {row['filial']} e NB {row['nb']}.")
+            if auto_create_clients and result.get("client_creation") and not getattr(client, "tax_payer_id", ""):
+                raise RuntimeError(f"Cliente NB {row['nb']} criado, mas retornou sem CPF/CNPJ na PayIP.")
             result["client_name"] = str(getattr(client, "fantasy_name", "") or getattr(client, "name", "") or "").strip()
             payment = self._emit_charge(row=row, client=client)
             payment_id = _payment_id(payment)
@@ -446,6 +478,20 @@ class AdminPayipBatchService:
             result["error"] = _short_error(str(exc))
             self.logger.exception("Falha ao gerar cobranca PayIP em lote linha %s: %s", row.get("line_number"), exc)
         return result
+
+    def _find_client_after_creation(self, row: dict[str, Any]) -> Any | None:
+        for attempt in range(1, 4):
+            if attempt > 1:
+                time.sleep(1.0)
+            client = self.payip_payments_service.find_client_by_code(
+                filial=row["filial"],
+                client_code=row["nb"],
+            )
+            if client is not None:
+                return client
+        raise RuntimeError(
+            f"Cliente NB {row['nb']} foi criado, mas ainda nao apareceu ativo na PayIP. Tente gerar novamente em alguns segundos."
+        )
 
     def _emit_charge(self, *, row: dict[str, Any], client: Any) -> dict[str, Any]:
         title = _payip_charge_title(row["filial"])
@@ -559,6 +605,7 @@ def _payload_options(payload: Any) -> PayipBatchOptions:
         use_default_interest=bool(getattr(payload, "use_default_interest", True)),
         include_nb=bool(getattr(payload, "include_nb", False)),
         include_nf=bool(getattr(payload, "include_nf", False)),
+        auto_create_clients=bool(getattr(payload, "auto_create_clients", False)),
         mfa_code=str(getattr(payload, "mfa_code", "") or "").strip(),
     )
 
@@ -569,6 +616,7 @@ def _options_payload(options: PayipBatchOptions) -> dict[str, Any]:
         "use_default_interest": options.use_default_interest,
         "include_nb": options.include_nb,
         "include_nf": options.include_nf,
+        "auto_create_clients": options.auto_create_clients,
         "mfa_code_provided": bool(options.mfa_code),
     }
 
@@ -886,6 +934,7 @@ def _failed_result(row: dict[str, Any], *, error: str) -> dict[str, Any]:
         "pix_code": "",
         "pdf_available": False,
         "pdf_base64": "",
+        "client_creation": {},
         "error": error,
     }
 

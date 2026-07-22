@@ -81,6 +81,65 @@ class AdminPayipBatchServiceTests(unittest.TestCase):
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))
         self.assertTrue(filename.endswith(".pdf"))
 
+    def test_queue_auto_creates_missing_payip_client_from_dclientes(self) -> None:
+        class MissingThenCreatedPayipService(StubPayipPaymentsService):
+            def find_client_by_code(self, *, filial: str, client_code: str) -> object | None:
+                self.client_lookup_calls.append({"filial": filial, "client_code": client_code})
+                if not self.create_client_calls:
+                    return None
+                return SimpleNamespace(
+                    raw={},
+                    client_company_id="client-company-1",
+                    client_id="client-1",
+                    code=client_code,
+                    tax_payer_id="12467128490",
+                    name="JHEFFERSON KAUA",
+                    fantasy_name="Kaua",
+                    phone="83990000000",
+                )
+
+        profile = SimpleNamespace(
+            filial="3",
+            cod_pdv="19167",
+            documento="12467128490",
+            razao_social="JHEFFERSON KAUA",
+            nome_fantasia="Kaua",
+            email="",
+            telefone="",
+            cep="58706560",
+            endereco="Rua Professora Cristina Lima",
+            numero="SN",
+            complemento="",
+            bairro="Salgadinho",
+            cidade="Patos",
+            uf="PB",
+        )
+        payip = MissingThenCreatedPayipService()
+        query = StubQueryService(payip_profile=profile)
+        service = self.make_service(payip, dclientes_query_service=query)
+        result = service.queue(
+            self.payload(
+                "filial;nb;valor;vencimento\n3;19167;99,90;2026-12-31",
+                auto_create_clients=True,
+            ),
+            {"is_admin": True},
+        )
+        job_id = result["job"]["job_id"]
+        for _ in range(20):
+            snapshot = service.snapshot(job_id=job_id)
+            if snapshot["job"].get("status") == "done":
+                break
+            time.sleep(0.05)
+
+        snapshot = service.snapshot(job_id=job_id)
+        job = snapshot["job"]
+        self.assertEqual(job["status"], "done")
+        self.assertEqual(job["success"], 1)
+        self.assertEqual(query.payip_profile_calls[-1], {"filial": "3", "cod_pdv": "19167"})
+        self.assertEqual(payip.create_client_calls[-1]["payload"]["client"]["code"], "19167")
+        self.assertEqual(len(payip.client_lookup_calls), 2)
+        self.assertEqual(job["results"][0]["client_creation"]["created"], ["19167"])
+
     def test_queue_bootstraps_payip_mfa_before_processing(self) -> None:
         payip = StubPayipPaymentsService(require_mfa_once=True)
         service = self.make_service(payip)
@@ -259,6 +318,61 @@ class AdminPayipBatchServiceTests(unittest.TestCase):
         self.assertEqual(result["client_creation"]["created"], ["19167"])
         self.assertEqual(query.payip_profile_calls[-1], {"filial": "3", "cod_pdv": "19167"})
         self.assertGreaterEqual(len(payip.import_batch_calls), 2)
+
+    def test_promax_import_auto_create_uses_mfa_code_before_creating_clients(self) -> None:
+        class MissingThenOkPayipService(StubPayipPaymentsService):
+            def validate_promax_import_batch(self, **kwargs: object) -> object:
+                self.import_batch_calls.append(dict(kwargs))
+                if not self.create_client_calls:
+                    return SimpleNamespace(
+                        raw={"details": {"codes_client": ["19167"]}},
+                        filial=str(kwargs.get("filial") or ""),
+                        company_id="company-3",
+                        date_start=str(kwargs.get("date_start") or ""),
+                        date_end=str(kwargs.get("date_end") or ""),
+                        items=(),
+                        missing_client_codes=("19167",),
+                        ok=False,
+                    )
+                return super().validate_promax_import_batch(**kwargs)
+
+            def create_client_from_profile(self, *, profile: object) -> object:
+                if not self.bootstrap_calls:
+                    raise payip_batch_module.PayipMfaRequired("MFA required")
+                return super().create_client_from_profile(profile=profile)
+
+        profile = SimpleNamespace(
+            filial="3",
+            cod_pdv="19167",
+            documento="12467128490",
+            razao_social="JHEFFERSON KAUA",
+            nome_fantasia="Kaua",
+            email="",
+            telefone="",
+            cep="58706560",
+            endereco="Rua Professora Cristina Lima",
+            numero="SN",
+            complemento="",
+            bairro="Salgadinho",
+            cidade="Patos",
+            uf="PB",
+        )
+        payip = MissingThenOkPayipService()
+        query = StubQueryService(payip_profile=profile)
+        service = self.make_service(payip, dclientes_query_service=query)
+        payload = SimpleNamespace(
+            filial="3",
+            start_date="2026-07-07",
+            end_date="2026-07-07",
+            mfa_code="123456",
+            auto_create_clients=True,
+        )
+
+        result = service.validate_promax_import(payload, {"is_admin": True})
+
+        self.assertEqual(result["missing_client_codes"], [])
+        self.assertEqual(result["client_creation"]["created"], ["19167"])
+        self.assertEqual(payip.bootstrap_calls, ["123456"])
 
 
 if __name__ == "__main__":
