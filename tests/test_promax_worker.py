@@ -252,6 +252,39 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(captured[0][2], 120)
         self.assertEqual(captured[0][1]["files"][0]["filename"], "0105070402 bot - dClientes.csv")
 
+    def test_client_uploads_critica_csvs_to_internal_import_route(self) -> None:
+        captured: list[tuple[str, dict[str, object], float]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data), timeout))
+            return _FakeResponse({"ok": True, "result": {"file_count": 1, "rows": 2}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            boleto_import_timeout_seconds=120,
+            opener=opener,
+        )
+
+        client.import_critica_csvs(
+            job_id="job-1",
+            lease_token="lease-token",
+            files={"030111 bot - Patos.csv": b"Filial Origem;Valor\n3;10\n"},
+            reference_date="2026-07-20",
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/critica/import")
+        self.assertEqual(captured[0][2], 120)
+        payload = captured[0][1]
+        self.assertEqual(payload["worker_id"], "worker")
+        self.assertEqual(payload["job_id"], "job-1")
+        self.assertEqual(payload["lease_token"], "lease-token")
+        self.assertEqual(payload["reference_date"], "2026-07-20")
+        self.assertEqual(payload["files"][0]["filename"], "030111 bot - Patos.csv")
+        self.assertEqual(base64.b64decode(payload["files"][0]["file_base64"]), b"Filial Origem;Valor\n3;10\n")
+
     def test_control_flag_accepts_stop_job_ids_contract(self) -> None:
         payload = {
             "control": {
@@ -528,6 +561,53 @@ class PromaxClientTests(unittest.TestCase):
 
         client.import_dclientes_csv.assert_called_once()
         self.assertEqual(client.import_dclientes_csv.call_args.kwargs["filename"], "0105070402 bot - novo.csv")
+        self.assertEqual(client.heartbeat_job.call_count, 2)
+
+    def test_030111_bot_imports_critica_csvs_in_one_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "030111 bot - Patos.csv").write_bytes(b"Filial Origem;Valor\n3;10\n")
+            (source_dir / "030111 bot - Sume.csv").write_bytes(b"Filial Origem;Valor\n4;20\n")
+            client = Mock()
+            client.import_critica_csvs.return_value = {
+                "ok": True,
+                "result": {"file_count": 2, "rows": 4, "batch_id": 45},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_030111_critica_if_needed(
+                {"payload": {"routines": ["030111_BOT"], "end_date": "2026-07-21"}},
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}
+                        }
+                    },
+                ),
+            )
+
+        client.import_critica_csvs.assert_called_once()
+        call_kwargs = client.import_critica_csvs.call_args.kwargs
+        self.assertEqual(call_kwargs["reference_date"], "2026-07-21")
+        self.assertEqual(sorted(call_kwargs["files"]), ["030111 bot - Patos.csv", "030111 bot - Sume.csv"])
         self.assertEqual(client.heartbeat_job.call_count, 2)
 
 

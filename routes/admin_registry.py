@@ -185,6 +185,8 @@ def _register_admin_promax_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             inadimplencia_import_service=deps["inadimplencia_import_service"],
             comodatos_import_service=deps["comodatos_import_service"],
             dclientes_import_service=deps["dclientes_import_service"],
+            critica_operacao_import_services=deps["critica_operacao_import_services"],
+            after_critica_operacao_import=deps["after_critica_operacao_import"],
             require_admin_panel_auth=deps["require_admin_panel_auth"],
             require_admin_panel_feature=deps["require_admin_panel_feature"],
             record_security_event=deps["record_security_event"],

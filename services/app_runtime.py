@@ -447,6 +447,15 @@ def configure_app_runtime(
     )
     _build_detailed_health_payload = health_payload_builder.build
 
+    def _after_critica_operacao_auto_import(reason: str) -> dict[str, Any]:
+        refresh_result = critica_operacao_admin_service.refresh_latest_view()
+        _clear_critica_runtime_cache()
+        prebuild_result = _queue_critica_pdf_prebuild(str(reason or "030111_BOT"))
+        return {
+            "refresh_critica_operacao_view": _serialize_admin_import_value(refresh_result),
+            "prebuild_critica_pdf_reports": _serialize_admin_import_value(prebuild_result),
+        }
+
 
     register_routes(app, deps=_build_route_dependencies(locals()))
 
@@ -526,6 +535,8 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "inadimplencia_import_service": runtime["services"].inadimplencia_import_service,
         "comodatos_import_service": runtime["services"].comodatos_import_service,
         "dclientes_import_service": runtime["services"].dclientes_import_service,
+        "critica_operacao_import_services": runtime["services"].critica_operacao_import_services,
+        "after_critica_operacao_import": runtime["_after_critica_operacao_auto_import"],
         "require_webhook_token": runtime["_require_webhook_token"],
         "require_meta_cloud_signature": runtime["_require_meta_cloud_signature"],
         "queue_incoming_webhook": runtime["_queue_incoming_webhook"],

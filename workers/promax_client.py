@@ -320,6 +320,22 @@ class PromaxClient:
             reference_date=reference_date,
         )
 
+    def import_critica_csvs(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        files: Mapping[str, bytes],
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        return self._import_csv_batch(
+            path="/api/internal/promax/critica/import",
+            job_id=job_id,
+            lease_token=lease_token,
+            files=files,
+            reference_date=reference_date,
+        )
+
     def _import_csv_batch(
         self,
         *,

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import binascii
+import csv
+import io
 import re
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -626,6 +628,46 @@ class PromaxInadimplenciaImportRequest(_StrictPayload):
         return self
 
 
+def _decode_csv_text(csv_bytes: bytes) -> str:
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return csv_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return csv_bytes.decode("latin-1", errors="replace")
+
+
+def _detect_csv_delimiter(text: str) -> str:
+    sample = text[:65536]
+    try:
+        return csv.Sniffer().sniff(sample, delimiters=";,\t|").delimiter
+    except csv.Error:
+        return ";" if sample.count(";") >= sample.count(",") else ","
+
+
+def _csv_header_key(value: Any) -> str:
+    normalized = unicode_normalize("NFKD", str(value or ""))
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    return "".join(char for char in ascii_text.casefold() if char.isalnum())
+
+
+def _detect_critica_filial(csv_bytes: bytes) -> str:
+    text = _decode_csv_text(csv_bytes)
+    delimiter = _detect_csv_delimiter(text)
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    headers = list(reader.fieldnames or [])
+    header_map = {_csv_header_key(header): header for header in headers}
+    filial_field = header_map.get("filialorigem") or header_map.get("filial")
+    if not filial_field:
+        return ""
+    for row in reader:
+        raw_filial = row.get(filial_field, "")
+        filial = "".join(char for char in str(raw_filial or "") if char.isdigit())
+        if filial:
+            return filial
+    return ""
+
+
 class PromaxWorkerClientClaimRequest(_StrictPayload):
     worker_id: str = Field(min_length=1, max_length=120)
 
@@ -688,6 +730,8 @@ def create_admin_promax_router(
     inadimplencia_import_service: Any | None = None,
     comodatos_import_service: Any | None = None,
     dclientes_import_service: Any | None = None,
+    critica_operacao_import_services: Mapping[str, Any] | None = None,
+    after_critica_operacao_import: Callable[[str], Mapping[str, Any] | None] | None = None,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     record_security_event: Callable[..., None],
@@ -695,6 +739,7 @@ def create_admin_promax_router(
     router = APIRouter()
     expected_worker_token = worker_token.strip() if isinstance(worker_token, str) else ""
     boleto_import_services = dict(boletos_pdf_import_services or {})
+    critica_import_services = dict(critica_operacao_import_services or {})
 
     def require_promax_context(
         request: Request,
@@ -1728,6 +1773,121 @@ def create_admin_promax_router(
             data={"event": "promax_0105070402_auto_import_success", "result": result},
         )
         return {"ok": True, "result": result}
+
+    @router.post("/api/internal/promax/critica/import")
+    def api_internal_promax_import_critica_csvs(
+        payload: PromaxInadimplenciaImportRequest,
+        _worker_auth: None = Depends(require_worker_auth),
+    ) -> dict[str, Any]:
+        if not critica_import_services:
+            raise HTTPException(
+                status_code=400,
+                detail="Importadores de critica por operacao nao configurados.",
+            )
+        lease_token = resolve_job_lease_token(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            provided_lease_token=payload.lease_token,
+        )
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=f"Importacao automatica 030111_BOT iniciada: {len(payload.files)} arquivo(s) CSV.",
+            data={
+                "event": "promax_030111_auto_import_start",
+                "file_count": len(payload.files),
+                "files": [item.filename for item in payload.files],
+            },
+        )
+
+        decoded_items: list[tuple[PromaxCsvImportFile, bytes, str, Any]] = []
+        for item in payload.files:
+            try:
+                csv_bytes = base64.b64decode(item.file_base64.encode("ascii"), validate=True)
+            except (UnicodeEncodeError, binascii.Error) as exc:
+                raise HTTPException(status_code=400, detail="Arquivo CSV em base64 invalido.") from exc
+            if not csv_bytes.strip():
+                raise HTTPException(status_code=400, detail=f"Arquivo CSV vazio: {item.filename}.")
+            filial = _detect_critica_filial(csv_bytes)
+            if not filial:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Nao consegui identificar a Filial Origem no CSV da critica: {item.filename}.",
+                )
+            import_service = critica_import_services.get(filial)
+            if import_service is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Importador de critica nao configurado para a filial {filial}.",
+                )
+            decoded_items.append((item, csv_bytes, filial, import_service))
+
+        imports: list[dict[str, Any]] = []
+        rows_total = 0
+        with tempfile.TemporaryDirectory(prefix="promax_030111_") as temp_dir:
+            temp_root = FilePath(temp_dir)
+            for item, csv_bytes, filial, import_service in decoded_items:
+                file_path = temp_root / item.filename
+                file_path.write_bytes(csv_bytes)
+                result = import_service.import_source(
+                    file_path,
+                    reference_date=payload.reference_date,
+                )
+                try:
+                    rows_total += int(result.get("rows") or 0)
+                except (TypeError, ValueError):
+                    pass
+                imports.append(
+                    {
+                        "filename": item.filename,
+                        "filial": filial,
+                        "dataset_name": result.get("dataset_name"),
+                        "rows": result.get("rows"),
+                        "batch_id": result.get("batch_id"),
+                        "result": result,
+                    }
+                )
+
+        post_actions: dict[str, Any] = {}
+        if after_critica_operacao_import is not None:
+            try:
+                callback_result = after_critica_operacao_import("030111_BOT")
+                if isinstance(callback_result, Mapping):
+                    post_actions.update(callback_result)
+            except Exception as exc:
+                post_actions["post_import_warning"] = str(exc)
+                service.append_job_log(
+                    job_id=payload.job_id,
+                    worker_id=payload.worker_id,
+                    lease_token=lease_token,
+                    level="warning",
+                    message=f"Critica 030111_BOT importada, mas o pos-processamento falhou: {exc}",
+                    data={"event": "promax_030111_auto_import_post_action_failed"},
+                )
+
+        result_payload: dict[str, Any] = {
+            "dataset_name": "critica_operacao",
+            "file_count": len(imports),
+            "rows": rows_total,
+            "imports": imports,
+        }
+        if post_actions:
+            result_payload["post_actions"] = post_actions
+
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                "Importacao automatica 030111_BOT concluida: "
+                f"{len(imports)} arquivo(s), {rows_total} linha(s)."
+            ),
+            data={"event": "promax_030111_auto_import_success", "result": result_payload},
+        )
+        return {"ok": True, "result": result_payload}
 
     @router.post("/api/internal/promax/worker/claim")
     def api_internal_promax_worker_client_claim(

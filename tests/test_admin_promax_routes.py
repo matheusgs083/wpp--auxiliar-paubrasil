@@ -290,6 +290,23 @@ class FakeDClientesImportService:
         }
 
 
+class FakeCriticaOperacaoImportService:
+    def __init__(self, filial: str) -> None:
+        self.filial = filial
+        self.calls: list[tuple[Path, Any]] = []
+        self.imported_files: list[str] = []
+
+    def import_source(self, source_path: Path, reference_date: Any = None) -> dict[str, Any]:
+        self.calls.append((source_path, reference_date))
+        self.imported_files.append(source_path.name)
+        return {
+            "dataset_name": f"critica_op_{self.filial}",
+            "filial": self.filial,
+            "rows": 2,
+            "batch_id": 45,
+        }
+
+
 class AdminPromaxRoutesTests(unittest.TestCase):
     context = {"mode": "admin", "is_admin": True, "filiais": ()}
     worker_headers = {"x-promax-worker-token": "worker-secret"}
@@ -367,10 +384,18 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         inadimplencia_import_service = FakeInadimplenciaImportService()
         comodatos_import_service = FakeComodatosImportService()
         dclientes_import_service = FakeDClientesImportService()
+        critica_import_service = FakeCriticaOperacaoImportService("3")
         app.state.boleto_import_service = boleto_import_service
         app.state.inadimplencia_import_service = inadimplencia_import_service
         app.state.comodatos_import_service = comodatos_import_service
         app.state.dclientes_import_service = dclientes_import_service
+        app.state.critica_import_service = critica_import_service
+        app.state.critica_post_actions = []
+
+        def after_critica_import(reason: str) -> dict[str, Any]:
+            app.state.critica_post_actions.append(reason)
+            return {"prebuild_critica_pdf_reports": {"queued": True, "reason": reason}}
+
         catalog_source = (
             catalog_value
             if catalog_value is not None
@@ -390,6 +415,8 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 inadimplencia_import_service=inadimplencia_import_service,
                 comodatos_import_service=comodatos_import_service,
                 dclientes_import_service=dclientes_import_service,
+                critica_operacao_import_services={"3": critica_import_service},
+                after_critica_operacao_import=after_critica_import,
                 require_admin_panel_auth=require_auth,
                 require_admin_panel_feature=require_feature,
                 record_security_event=lambda _request, **kwargs: events.append(kwargs),
@@ -1022,6 +1049,52 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         self.assertEqual(len(import_service.calls), 1)
         _source_path, reference_date = import_service.calls[0]
         self.assertEqual(str(reference_date), "2026-07-20")
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["append_job_log", "append_job_log"],
+        )
+
+    def test_internal_worker_imports_030111_critica_csvs_by_filial(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+        csv_bytes = (
+            "Filial Origem;Status Pedido;Tipo Movimento;Num Pedido;Cod. Vendedor;"
+            "Cod. Cliente;Nome Cliente;Valor Pedido;Cod. Setor;Cod. Pedido SIV;"
+            "Cod. Produto;Nome Produto;Qtde;Unidade;TTV s/ADF;Preco Unit.;"
+            "Preco Minimo;Ocorrencia 1;Ocorrencia 2;TE\n"
+            "3;Aberto;Venda;710338;500;10486;RESTAURA;52,95;401;1;"
+            "19668;ORIGINAL LATA 350 ML;1;cx12;43,97;43,97;40,00;Mapa 1;;0\n"
+        ).encode("cp1252")
+
+        response = client.post(
+            "/api/internal/promax/critica/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "files": [
+                    {
+                        "filename": "030111 bot - Patos.csv",
+                        "file_base64": base64.b64encode(csv_bytes).decode("ascii"),
+                    }
+                ],
+                "reference_date": "2026-07-20",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["result"]["dataset_name"], "critica_operacao")
+        self.assertEqual(payload["result"]["file_count"], 1)
+        self.assertEqual(payload["result"]["rows"], 2)
+        self.assertEqual(payload["result"]["imports"][0]["filial"], "3")
+        self.assertIn("prebuild_critica_pdf_reports", payload["result"]["post_actions"])
+        import_service = client.app.state.critica_import_service
+        self.assertEqual(import_service.imported_files, ["030111 bot - Patos.csv"])
+        _source_path, reference_date = import_service.calls[0]
+        self.assertEqual(str(reference_date), "2026-07-20")
+        self.assertEqual(client.app.state.critica_post_actions, ["030111_BOT"])
         self.assertEqual(
             [name for name, _args, _kwargs in service.calls],
             ["append_job_log", "append_job_log"],

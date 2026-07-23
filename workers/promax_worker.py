@@ -320,6 +320,7 @@ class PromaxWorker:
                     self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
                     self._import_020220_comodatos_if_needed(job, job_id, lease_token, result)
                     self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
+                    self._import_030111_critica_if_needed(job, job_id, lease_token, result)
                     post_import_attempted = True
                 self.client.finish(
                     job_id,
@@ -606,6 +607,30 @@ class PromaxWorker:
             event_prefix="promax_0105070402_auto_import",
             importer=import_dclientes,
             single_latest_file=True,
+        )
+
+    def _import_030111_critica_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        self._import_csv_folder_if_needed(
+            job,
+            job_id,
+            lease_token,
+            result,
+            routine_id="030111_BOT",
+            folder_name="030111 bot",
+            label="Critica 030111_BOT",
+            event_prefix="promax_030111_auto_import",
+            importer=lambda files, reference_date: self.client.import_critica_csvs(
+                job_id=job_id,
+                lease_token=lease_token,
+                files=files,
+                reference_date=reference_date,
+            ),
         )
 
     def _import_csv_folder_if_needed(

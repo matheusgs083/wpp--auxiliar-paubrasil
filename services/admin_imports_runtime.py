@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -20,6 +20,8 @@ from bot_api.services.admin_import_job_service import AdminImportLockBusy
 ADMIN_IMPORT_MAX_WORKERS = 3
 ADMIN_IMPORT_HISTORY_RETENTION_DAYS = 3
 ADMIN_UPLOAD_CHUNK_SIZE_BYTES = 1024 * 1024
+ADMIN_BOLETOS_DATASET_PREFIX = "boletos_bradesco_op_"
+ADMIN_IMPORT_LOCAL_TIMEZONE = timezone(timedelta(hours=-3), name="America/Fortaleza")
 admin_import_executor = ThreadPoolExecutor(max_workers=ADMIN_IMPORT_MAX_WORKERS, thread_name_prefix="admin-import")
 admin_import_lock = Lock()
 admin_import_maintenance_lock = Lock()
@@ -219,6 +221,48 @@ def _admin_import_actor(context: dict[str, Any] | None) -> str:
     return f"{mode}:{filiais}" if filiais else mode
 
 
+def _is_admin_boleto_dataset(dataset: str) -> bool:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    return normalized_dataset.startswith(ADMIN_BOLETOS_DATASET_PREFIX)
+
+
+def _parse_admin_upload_reference_date(value: Any) -> date | None:
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(ADMIN_IMPORT_LOCAL_TIMEZONE)
+        return parsed.date()
+    except ValueError:
+        pass
+    try:
+        return date.fromisoformat(raw_value[:10])
+    except ValueError:
+        return None
+
+
+def _admin_boleto_upload_reference_date(dataset: str) -> date | None:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    manifest = _read_admin_upload_manifest(normalized_dataset) or {}
+    manifest_date = _parse_admin_upload_reference_date(manifest.get("activated_at"))
+    if manifest_date:
+        return manifest_date
+    source_path = _dataset_runtime_upload_path(normalized_dataset)
+    if source_path.exists():
+        return datetime.fromtimestamp(source_path.stat().st_mtime, tz=ADMIN_IMPORT_LOCAL_TIMEZONE).date()
+    return None
+
+
+def _resolve_admin_import_reference_date(dataset: str, reference_date: str | None = None) -> str:
+    normalized_dataset = _normalize_admin_import_dataset(dataset)
+    if _is_admin_boleto_dataset(normalized_dataset):
+        upload_date = _admin_boleto_upload_reference_date(normalized_dataset)
+        return upload_date.isoformat() if upload_date else ""
+    return str(reference_date or "").strip()
+
+
 def _active_admin_import_job(lock_keys: list[str]) -> dict[str, Any] | None:
     try:
         return admin_import_job_service.find_active_job(lock_keys)
@@ -261,7 +305,8 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
     config = ADMIN_IMPORT_DATASETS[normalized_dataset]
     source_path = _resolve_admin_import_source_path(normalized_dataset)
     service = config["service"]
-    batch_date = date.fromisoformat(reference_date) if str(reference_date or "").strip() else None
+    clean_reference_date = _resolve_admin_import_reference_date(normalized_dataset, reference_date)
+    batch_date = date.fromisoformat(clean_reference_date) if clean_reference_date else None
 
     validation_payload = _run_admin_import_validation(normalized_dataset)
     validation_errors = int(validation_payload["validation"].get("error_count") or 0)
@@ -453,7 +498,7 @@ def _queue_admin_import(
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
-    clean_reference_date = str(reference_date or "").strip()
+    clean_reference_date = _resolve_admin_import_reference_date(normalized_dataset, reference_date)
     started_at = datetime.now(timezone.utc).isoformat()
     job_id = _new_admin_import_job_id(normalized_dataset, "import")
     lock_keys = _admin_import_lock_keys(normalized_dataset, "import")
@@ -1060,6 +1105,7 @@ def _list_admin_import_status() -> dict[str, Any]:
                 "requires_upload": bool(source_status["requires_upload"]),
                 "upload_mode": str(config.get("upload_mode") or "single"),
                 "accept_extensions": str(config.get("accept_extensions") or ""),
+                "active_upload_activated_at": source_status.get("active_upload_activated_at", ""),
                 "last_import": dataset_rows.get(dataset_name),
             }
         )

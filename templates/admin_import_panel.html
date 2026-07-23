@@ -4613,6 +4613,10 @@
       return DATASET_MAP[dsId] || String(dsId || "").toLowerCase();
     }
 
+    function isBoletoDataset(dsId) {
+      return String(toApiDataset(dsId) || "").toLowerCase().startsWith("boletos_bradesco_op_");
+    }
+
     function fromApiDataset(dsName) {
       const name = String(dsName || "").toLowerCase();
       const found = Object.entries(DATASET_MAP).find(([, apiName]) => apiName === name);
@@ -9184,6 +9188,19 @@
     }
 
     function datasetCardHtml(ds) {
+      const referenceDateBlock = isBoletoDataset(ds.id) ? `
+            <div id="datewrapper-${ds.id}">
+              <div class="form-label small fw-semibold mb-1">Referencia dos boletos</div>
+              <div class="form-text">Sempre sera gravada a data em que o PDF foi enviado pelo painel.</div>
+            </div>
+      ` : `
+            <div id="datewrapper-${ds.id}">
+              <label class="form-label small fw-semibold mb-1">Data de Referencia
+                <input type="date" class="form-control form-control-sm" id="date-${ds.id}">
+              </label>
+              <div class="form-text">Opcional. Se informar, essa data sera gravada no lote importado.</div>
+            </div>
+      `;
       const disabledBody = ds.disabled ? `
             <div class="small text-secondary d-grid gap-1" id="meta-${ds.id}">${escapeHtml(ds.description || "Tabela operacional sem importacao ativa.")}</div>
             <div id="val-${ds.id}">
@@ -9206,12 +9223,7 @@
             </label>
             <div class="form-text" id="filehint-${ds.id}">${(DATASET_UPLOAD_META[ds.id] || {}).emptyHint || "Selecione o arquivo do dataset."}</div>
             <div class="file-list" id="filelist-${ds.id}"></div>
-            <div id="datewrapper-${ds.id}">
-              <label class="form-label small fw-semibold mb-1">Data de Referencia
-                <input type="date" class="form-control form-control-sm" id="date-${ds.id}">
-              </label>
-              <div class="form-text">Opcional. Se informar, essa data sera gravada no lote importado.</div>
-            </div>
+            ${referenceDateBlock}
             <div id="val-${ds.id}"></div>
             <div class="d-grid gap-2" id="btns-${ds.id}"></div>
       `;
@@ -9277,6 +9289,7 @@
         fileInput.addEventListener("change", (e) => {
           const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
           if (!file) return;
+          if (isBoletoDataset(ds.id)) return;
           const m = file.name.match(/(\d{2})[-_](\d{2})[-_](\d{4})/);
           if (m) {
             const dateInput = document.getElementById(`date-${ds.id}`);
@@ -9397,7 +9410,7 @@
       const input = document.getElementById(`file-${dsId}`);
       const apiDataset = toApiDataset(dsId);
       const di = document.getElementById(`date-${dsId}`);
-      const refDate = di ? di.value : null;
+      const refDate = isBoletoDataset(dsId) ? null : (di ? di.value : null);
       const timeouts = datasetTimeouts(dsId);
 
       try {
@@ -9453,7 +9466,7 @@
       const confirmed = await askConfirmation(`Efetivar importação do dataset ${dsId}?`);
       if (!confirmed) return;
       const di = document.getElementById(`date-${dsId}`);
-      const refDate = di ? di.value : null;
+      const refDate = isBoletoDataset(dsId) ? null : (di ? di.value : null);
       try {
         state.datasetBusy[dsId] = true;
         renderGridPanels();
