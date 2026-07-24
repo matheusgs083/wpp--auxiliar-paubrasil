@@ -586,7 +586,7 @@ class PromaxBoletoImportRequest(_StrictPayload):
     @field_validator("filial")
     @classmethod
     def validate_filial(cls, value: str) -> str:
-        normalized = "".join(ch for ch in str(value or "").strip() if ch.isdigit())
+        normalized = _normalize_promax_filial_code(value)
         if not normalized:
             raise ValueError("filial deve conter ao menos um digito")
         return normalized
@@ -612,7 +612,7 @@ class PromaxEstoque020304ImportRequest(_StrictPayload):
     @field_validator("filial")
     @classmethod
     def validate_filial(cls, value: str) -> str:
-        normalized = "".join(ch for ch in str(value or "").strip() if ch.isdigit())
+        normalized = _normalize_promax_filial_code(value)
         if not normalized:
             raise ValueError("filial deve conter ao menos um digito")
         return normalized
@@ -677,6 +677,13 @@ def _csv_header_key(value: Any) -> str:
     return "".join(char for char in ascii_text.casefold() if char.isalnum())
 
 
+def _normalize_promax_filial_code(value: Any) -> str:
+    digits = "".join(ch for ch in str(value or "").strip() if ch.isdigit())
+    if not digits:
+        return ""
+    return digits.lstrip("0") or "0"
+
+
 def _detect_critica_filial(csv_bytes: bytes) -> str:
     text = _decode_csv_text(csv_bytes)
     delimiter = _detect_csv_delimiter(text)
@@ -688,7 +695,7 @@ def _detect_critica_filial(csv_bytes: bytes) -> str:
         return ""
     for row in reader:
         raw_filial = row.get(filial_field, "")
-        filial = "".join(char for char in str(raw_filial or "") if char.isdigit())
+        filial = _normalize_promax_filial_code(raw_filial)
         if filial:
             return filial
     return ""

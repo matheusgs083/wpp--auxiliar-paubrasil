@@ -1120,7 +1120,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             "Cod. Cliente;Nome Cliente;Valor Pedido;Cod. Setor;Cod. Pedido SIV;"
             "Cod. Produto;Nome Produto;Qtde;Unidade;TTV s/ADF;Preco Unit.;"
             "Preco Minimo;Ocorrencia 1;Ocorrencia 2;TE\n"
-            "3;Aberto;Venda;710338;500;10486;RESTAURA;52,95;401;1;"
+            "0003;Aberto;Venda;710338;500;10486;RESTAURA;52,95;401;1;"
             "19668;ORIGINAL LATA 350 ML;1;cx12;43,97;43,97;40,00;Mapa 1;;0\n"
         ).encode("cp1252")
 
