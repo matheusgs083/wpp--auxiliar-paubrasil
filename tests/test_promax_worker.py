@@ -733,15 +733,16 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(client.import_dclientes_csv.call_args.kwargs["filename"], "0105070402 bot - novo.csv")
         self.assertEqual(client.heartbeat_job.call_count, 2)
 
-    def test_030111_bot_imports_critica_csvs_in_one_batch(self) -> None:
+    def test_030111_bot_imports_critica_csvs_by_unit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source_dir = Path(temp_dir)
-            (source_dir / "030111 bot - Patos.csv").write_bytes(b"Filial Origem;Valor\n3;10\n")
-            (source_dir / "030111 bot - Sume.csv").write_bytes(b"Filial Origem;Valor\n4;20\n")
+            (source_dir / "030111 bot - nomeUnidade030111_2210003.csv").write_bytes(b"Filial Origem;Valor\n3;10\n")
+            (source_dir / "030111 bot - nomeUnidade030111_2210004.csv").write_bytes(b"Filial Origem;Valor\n4;20\n")
+            (source_dir / "030111 bot - nomeUnidade030111_0640001.csv").write_bytes(b"Filial Origem;Valor\n1;30\n")
             client = Mock()
             client.import_critica_csvs.return_value = {
                 "ok": True,
-                "result": {"file_count": 2, "rows": 4, "batch_id": 45},
+                "result": {"file_count": 1, "rows": 2, "batch_id": 45},
             }
             worker = PromaxWorker(
                 config=WorkerConfig(
@@ -759,7 +760,13 @@ class PromaxClientTests(unittest.TestCase):
             )
 
             worker._import_030111_critica_if_needed(
-                {"payload": {"routines": ["030111_BOT"], "end_date": "2026-07-21"}},
+                {
+                    "payload": {
+                        "routines": ["030111_BOT"],
+                        "units": ["2210003", "2210004"],
+                        "end_date": "2026-07-21",
+                    }
+                },
                 "job-1",
                 "lease-token",
                 PromaxRunResult(
@@ -774,11 +781,20 @@ class PromaxClientTests(unittest.TestCase):
                 ),
             )
 
-        client.import_critica_csvs.assert_called_once()
-        call_kwargs = client.import_critica_csvs.call_args.kwargs
-        self.assertEqual(call_kwargs["reference_date"], "2026-07-21")
-        self.assertEqual(sorted(call_kwargs["files"]), ["030111 bot - Patos.csv", "030111 bot - Sume.csv"])
-        self.assertEqual(client.heartbeat_job.call_count, 2)
+        self.assertEqual(client.import_critica_csvs.call_count, 2)
+        uploaded_files = [
+            next(iter(call.kwargs["files"]))
+            for call in client.import_critica_csvs.call_args_list
+        ]
+        self.assertEqual(
+            uploaded_files,
+            [
+                "030111 bot - nomeUnidade030111_2210003.csv",
+                "030111 bot - nomeUnidade030111_2210004.csv",
+            ],
+        )
+        self.assertEqual(client.import_critica_csvs.call_args_list[0].kwargs["reference_date"], "2026-07-21")
+        self.assertEqual(client.heartbeat_job.call_count, 4)
 
 
 class PromaxRunnerTests(unittest.TestCase):

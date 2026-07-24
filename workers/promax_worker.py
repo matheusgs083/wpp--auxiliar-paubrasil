@@ -857,21 +857,117 @@ class PromaxWorker:
         lease_token: str,
         result: PromaxRunResult,
     ) -> None:
-        self._import_csv_folder_if_needed(
-            job,
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        routines = _string_list(payload.get("routines"))
+        if "030111_BOT" not in routines:
+            return
+        if payload.get("publish", True) is False:
+            return
+
+        requested_units = _string_list(payload.get("units"))
+        unit_filial_map = _promax_020304_unit_filial_map()
+        source_dir = _promax_publication_dir(result.details, "030111 bot")
+        if source_dir is None:
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    "Importacao automatica 030111_BOT ignorada: o driver nao informou "
+                    "a pasta publicada em metadata.publication_mapping."
+                ),
+                "warning",
+                {"event": "promax_030111_auto_import_missing_publication_mapping"},
+            )
+            return
+        if not source_dir.is_dir():
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica 030111_BOT ignorada: pasta nao encontrada {source_dir}",
+                "warning",
+                {"event": "promax_030111_auto_import_missing_dir", "source_dir": str(source_dir)},
+            )
+            return
+
+        units = requested_units or _discover_promax_units_from_files(
+            source_dir,
+            unit_filial_map=unit_filial_map,
+            suffix=".csv",
+        )
+
+        imported = 0
+        missing: list[str] = []
+        failed: list[str] = []
+        for unit in units:
+            filial = unit_filial_map.get(unit)
+            if not filial:
+                continue
+            csv_path = _find_promax_csv_by_unit(
+                source_dir,
+                unit,
+                preferred_tokens=("030111", "30111", "critica"),
+            )
+            if csv_path is None:
+                missing.append(unit)
+                continue
+            try:
+                reference_date = str(payload.get("end_date") or payload.get("start_date") or "") or None
+                self._heartbeat_active_job(job_id, lease_token)
+                response = self.client.import_critica_csvs(
+                    job_id=job_id,
+                    lease_token=lease_token,
+                    files={csv_path.name: csv_path.read_bytes()},
+                    reference_date=reference_date,
+                )
+                self._heartbeat_active_job(job_id, lease_token)
+                result_payload = response.get("result") if isinstance(response, Mapping) else None
+                imported += 1
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Critica 030111_BOT importada automaticamente para filial {filial}: {csv_path.name}",
+                    "info",
+                    {
+                        "event": "promax_030111_auto_import_uploaded",
+                        "filial": filial,
+                        "unit": unit,
+                        "filename": csv_path.name,
+                        "result": result_payload if isinstance(result_payload, Mapping) else {},
+                    },
+                )
+            except (OSError, PromaxClientError, ValueError) as exc:
+                failed.append(unit)
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Falha na importacao automatica 030111_BOT da unidade {unit}: {exc}",
+                    "error",
+                    {"event": "promax_030111_auto_import_failed", "unit": unit, "filial": filial},
+                )
+
+        if missing:
+            self._send_log(
+                job_id,
+                lease_token,
+                "Importacao automatica 030111_BOT sem CSV para unidade(s): " + ", ".join(missing),
+                "warning",
+                {"event": "promax_030111_auto_import_missing_files", "units": missing},
+            )
+        self._send_log(
             job_id,
             lease_token,
-            result,
-            routine_id="030111_BOT",
-            folder_name="030111 bot",
-            label="Critica 030111_BOT",
-            event_prefix="promax_030111_auto_import",
-            importer=lambda files, reference_date: self.client.import_critica_csvs(
-                job_id=job_id,
-                lease_token=lease_token,
-                files=files,
-                reference_date=reference_date,
-            ),
+            f"Importacao automatica 030111_BOT finalizada: {imported} arquivo(s), {len(failed)} falha(s).",
+            "info" if not failed else "warning",
+            {
+                "event": "promax_030111_auto_import_summary",
+                "imported": imported,
+                "failed_units": failed,
+                "missing_units": missing,
+            },
         )
 
     def _import_csv_folder_if_needed(
@@ -1050,9 +1146,23 @@ def _discover_promax_units_from_files(source_dir: Path, *, unit_filial_map: Mapp
 
 
 def _find_promax_020304_csv(source_dir: Path, unit: str) -> Path | None:
+    return _find_promax_csv_by_unit(
+        source_dir,
+        unit,
+        preferred_tokens=("020304", "20304", "estoque"),
+    )
+
+
+def _find_promax_csv_by_unit(
+    source_dir: Path,
+    unit: str,
+    *,
+    preferred_tokens: Sequence[str] = (),
+) -> Path | None:
     unit_text = str(unit or "").strip()
     if not unit_text:
         return None
+    tokens = tuple(str(token or "").casefold() for token in preferred_tokens if str(token or "").strip())
     candidates = [
         path
         for path in source_dir.glob("*.csv")
@@ -1063,19 +1173,17 @@ def _find_promax_020304_csv(source_dir: Path, unit: str) -> Path | None:
     return sorted(
         candidates,
         key=lambda path: (
-            _promax_020304_filename_score(path.name),
+            _promax_filename_score(path.name, preferred_tokens=tokens),
             path.stat().st_mtime,
             path.name,
         ),
     )[-1]
 
 
-def _promax_020304_filename_score(name: str) -> int:
+def _promax_filename_score(name: str, *, preferred_tokens: Sequence[str] = ()) -> int:
     normalized = str(name or "").casefold().replace(".", "").replace(",", "").replace("_", "")
-    if "020304" in normalized or "20304" in normalized:
+    if any(token and token in normalized for token in preferred_tokens):
         return 3
-    if "estoque" in normalized:
-        return 2
     return 1
 
 
