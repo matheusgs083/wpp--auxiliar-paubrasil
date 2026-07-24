@@ -1479,24 +1479,29 @@ class PromaxJobsService:
         with self._connect() as conn:
             self._ensure_schema(conn)
             with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        SELECT *
-                        FROM {schema}.{schedules}
-                        WHERE enabled = TRUE
-                          AND trigger_after_schedule_id IS NULL
-                          AND next_run_at <= %s
-                        ORDER BY next_run_at, id
-                        FOR UPDATE SKIP LOCKED
-                        LIMIT %s
-                        """
-                    ).format(
-                        schema=sql.Identifier(self.schema),
-                        schedules=sql.Identifier(SCHEDULES_TABLE),
-                    ),
-                    (normalized_now, safe_limit),
+                timed_due_query = sql.SQL(
+                    """
+                    SELECT *
+                    FROM {schema}.{schedules} AS due
+                    WHERE due.enabled = TRUE
+                      AND due.trigger_after_schedule_id IS NULL
+                      AND due.next_run_at <= %s
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM {schema}.{jobs} AS open_job
+                          WHERE open_job.source_schedule_id = due.id
+                            AND open_job.status IN ('pending', 'running', 'cancel_requested')
+                      )
+                    ORDER BY due.next_run_at, due.id
+                    FOR UPDATE OF due SKIP LOCKED
+                    LIMIT %s
+                    """
+                ).format(
+                    schema=sql.Identifier(self.schema),
+                    schedules=sql.Identifier(SCHEDULES_TABLE),
+                    jobs=sql.Identifier(JOBS_TABLE),
                 )
+                cur.execute(timed_due_query, (normalized_now, safe_limit))
                 due_schedules = cur.fetchall()
                 for schedule in due_schedules:
                     scheduled_for = _aware_utc(schedule["next_run_at"], field_name="next_run_at")
@@ -1537,6 +1542,12 @@ class PromaxJobsService:
                             ) AS parent_job ON TRUE
                             WHERE child.enabled = TRUE
                               AND child.trigger_after_schedule_id IS NOT NULL
+                              AND NOT EXISTS (
+                                  SELECT 1
+                                  FROM {schema}.{jobs} AS open_child_job
+                                  WHERE open_child_job.source_schedule_id = child.id
+                                    AND open_child_job.status IN ('pending', 'running', 'cancel_requested')
+                              )
                             ORDER BY parent_job.finished_at, child.id
                             FOR UPDATE OF child SKIP LOCKED
                             LIMIT %s
@@ -2235,6 +2246,18 @@ class PromaxJobsService:
                         """
                     ).format(
                         index=sql.Identifier("promax_jobs_schedule_trigger_idx"),
+                        schema=schema,
+                        jobs=sql.Identifier(JOBS_TABLE),
+                    ),
+                    sql.SQL(
+                        """
+                        CREATE INDEX IF NOT EXISTS {index}
+                        ON {schema}.{jobs} (source_schedule_id, status)
+                        WHERE source_schedule_id IS NOT NULL
+                          AND status IN ('pending', 'running', 'cancel_requested')
+                        """
+                    ).format(
+                        index=sql.Identifier("promax_jobs_open_schedule_idx"),
                         schema=schema,
                         jobs=sql.Identifier(JOBS_TABLE),
                     ),

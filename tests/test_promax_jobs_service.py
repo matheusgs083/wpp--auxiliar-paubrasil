@@ -235,6 +235,7 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("trigger_after_schedule_id", ddl)
         self.assertIn("triggered_by_job_id", ddl)
         self.assertIn("promax_jobs_schedule_trigger_idx", ddl)
+        self.assertIn("promax_jobs_open_schedule_idx", ddl)
         self.assertIn("promax_jobs_created_at_idx", ddl)
         self.assertIn("promax_job_logs_append_only", ddl)
         self.assertIn("BEFORE UPDATE OR DELETE", ddl)
@@ -253,9 +254,13 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertEqual(jobs, [])
         statements = [query_text(query) for query, _params in cursor.executions]
         self.assertIn("trigger_after_schedule_id IS NULL", statements[0])
+        self.assertIn("open_job.source_schedule_id = due.id", statements[0])
+        self.assertIn("open_job.status IN ('pending', 'running', 'cancel_requested')", statements[0])
         self.assertIn("JOIN LATERAL", statements[1])
         self.assertIn("parent.status IN ('success', 'partial_success')", statements[1])
         self.assertIn("triggered.triggered_by_job_id = parent.id", statements[1])
+        self.assertIn("open_child_job.source_schedule_id = child.id", statements[1])
+        self.assertIn("open_child_job.status IN ('pending', 'running', 'cancel_requested')", statements[1])
 
     def test_enqueue_jobs_uses_one_transaction_and_preserves_batch_order(self) -> None:
         created_at = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)

@@ -845,6 +845,55 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(client.import_critica_csvs.call_args_list[0].kwargs["reference_date"], "2026-07-21")
         self.assertEqual(client.heartbeat_job.call_count, 4)
 
+    def test_030111_bot_import_accepts_grouped_base_routine_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "030111 bot - nomeUnidade030111_0640001.csv").write_bytes(b"Filial Origem;Valor\n1;30\n")
+            client = Mock()
+            client.import_critica_csvs.return_value = {
+                "ok": True,
+                "result": {"file_count": 1, "rows": 2, "batch_id": 45},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_030111_critica_if_needed(
+                {
+                    "payload": {
+                        "groups": [{"category": "bot_zap", "routines": ["030111"]}],
+                        "units": ["0640001"],
+                        "end_date": "2026-07-21",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}
+                        }
+                    },
+                ),
+            )
+
+        client.import_critica_csvs.assert_called_once()
+        self.assertEqual(next(iter(client.import_critica_csvs.call_args.kwargs["files"])), "030111 bot - nomeUnidade030111_0640001.csv")
+
 
 class PromaxRunnerTests(unittest.TestCase):
     def _config(self, root: Path) -> PromaxRunnerConfig:

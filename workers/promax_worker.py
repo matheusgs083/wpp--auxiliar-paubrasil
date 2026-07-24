@@ -1096,7 +1096,7 @@ def _string_list(value: Any) -> list[str]:
 
 
 def _routine_selected(payload: Mapping[str, Any], routine_id: str) -> bool:
-    routines = _string_list(payload.get("routines"))
+    routines = _payload_routines(payload)
     if not routines:
         return False
 
@@ -1108,6 +1108,25 @@ def _routine_selected(payload: Mapping[str, Any], routine_id: str) -> bool:
         accepted.add(f"{target_base}_BOT")
 
     return any(_normalize_routine_id(routine) in accepted for routine in routines)
+
+
+def _payload_routines(payload: Mapping[str, Any]) -> list[str]:
+    routines = _string_list_or_scalar(payload.get("routines"))
+    groups = payload.get("groups")
+    if isinstance(groups, Sequence) and not isinstance(groups, (str, bytes, bytearray)):
+        for group in groups:
+            if isinstance(group, Mapping):
+                for routine in _string_list_or_scalar(group.get("routines")):
+                    if routine not in routines:
+                        routines.append(routine)
+    return routines
+
+
+def _string_list_or_scalar(value: Any) -> list[str]:
+    if isinstance(value, (str, bytes, bytearray)):
+        text = str(value or "").strip()
+        return [text] if text else []
+    return _string_list(value)
 
 
 def _normalize_routine_id(value: Any) -> str:
