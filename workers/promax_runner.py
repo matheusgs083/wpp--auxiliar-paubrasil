@@ -150,7 +150,7 @@ class PromaxRunner:
                     date.fromisoformat(raw_value)
                     command.extend([option, raw_value])
 
-        routines = _identifier_list(payload.get("routines"), field_name="routines")
+        routines = _payload_routines_for_profile(payload, clean_profile)
         if routines:
             command.extend(["--rotinas", *routines])
 
@@ -371,3 +371,28 @@ def _identifier_list(value: object, *, field_name: str) -> list[str]:
         if item not in normalized:
             normalized.append(item)
     return normalized
+
+
+def _payload_routines_for_profile(payload: Mapping[str, Any], profile: str) -> list[str]:
+    routines = _identifier_list(payload.get("routines"), field_name="routines")
+    if routines:
+        return routines
+
+    groups = payload.get("groups")
+    if groups is None:
+        return []
+    if not isinstance(groups, Sequence) or isinstance(groups, (str, bytes, bytearray)):
+        raise ValueError("Promax groups must be a list.")
+
+    selected: list[str] = []
+    clean_profile = str(profile or "").strip()
+    for index, group in enumerate(groups, start=1):
+        if not isinstance(group, Mapping):
+            raise ValueError("Promax groups must contain objects.")
+        category = str(group.get("category") or "").strip()
+        if category and category != clean_profile:
+            continue
+        for routine in _identifier_list(group.get("routines"), field_name=f"groups[{index}].routines"):
+            if routine not in selected:
+                selected.append(routine)
+    return selected

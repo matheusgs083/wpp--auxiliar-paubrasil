@@ -694,6 +694,57 @@ class PromaxClientTests(unittest.TestCase):
         client.import_estoque_020304_csv.assert_called_once()
         self.assertEqual(client.import_estoque_020304_csv.call_args.kwargs["filial"], "3")
 
+    def test_020304_bot_imports_when_publication_mapping_identifies_stock_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "020304 bot - nomeUnidade020304_2210003.csv").write_bytes(
+                b"Grade;Cod;Descricao\n1;2;Produto\n"
+            )
+            client = Mock()
+            client.import_estoque_020304_csv.return_value = {
+                "ok": True,
+                "result": {"rows": 2, "batch_id": 46},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_020304_estoque_if_needed(
+                {
+                    "payload": {
+                        "category": "bot_zap",
+                        "units": ["2210003"],
+                        "end_date": "2026-07-23",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "020304 bot"): str(source_dir)}
+                        }
+                    },
+                ),
+            )
+
+        client.import_estoque_020304_csv.assert_called_once()
+        self.assertEqual(client.import_estoque_020304_csv.call_args.kwargs["filial"], "3")
+
     def test_020220_bot_imports_comodatos_csvs_in_one_batch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source_dir = Path(temp_dir)
@@ -894,6 +945,55 @@ class PromaxClientTests(unittest.TestCase):
         client.import_critica_csvs.assert_called_once()
         self.assertEqual(next(iter(client.import_critica_csvs.call_args.kwargs["files"])), "030111 bot - nomeUnidade030111_0640001.csv")
 
+    def test_030111_bot_imports_when_publication_mapping_identifies_critica_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "030111 bot - nomeUnidade030111_2210003.csv").write_bytes(b"Filial Origem;Valor\n3;10\n")
+            client = Mock()
+            client.import_critica_csvs.return_value = {
+                "ok": True,
+                "result": {"file_count": 1, "rows": 2, "batch_id": 45},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_030111_critica_if_needed(
+                {
+                    "payload": {
+                        "category": "bot_zap",
+                        "units": ["2210003"],
+                        "end_date": "2026-07-21",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}
+                        }
+                    },
+                ),
+            )
+
+        client.import_critica_csvs.assert_called_once()
+        self.assertEqual(next(iter(client.import_critica_csvs.call_args.kwargs["files"])), "030111 bot - nomeUnidade030111_2210003.csv")
+
 
 class PromaxRunnerTests(unittest.TestCase):
     def _config(self, root: Path) -> PromaxRunnerConfig:
@@ -1015,6 +1115,32 @@ class PromaxRunnerTests(unittest.TestCase):
         self.assertEqual(command[command.index("--perfil") + 1], "obz")
         routines_index = command.index("--rotinas")
         self.assertEqual(command[routines_index + 1 : routines_index + 3], ["0512", "150501"])
+
+    def test_runner_uses_group_routines_for_current_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-grouped",
+                    "job_type": "bot_zap",
+                    "payload": {
+                        "category": "bot_zap",
+                        "groups": [
+                            {"category": "bot_zap", "routines": ["020304_BOT", "030111_BOT"]},
+                            {"category": "adf", "routines": ["030237"]},
+                        ],
+                        "units": ["2210003"],
+                        "publish": True,
+                    },
+                }
+            )
+
+        self.assertIn("--rotinas", command)
+        routines_index = command.index("--rotinas")
+        self.assertEqual(command[routines_index + 1 : routines_index + 3], ["020304_BOT", "030111_BOT"])
+        self.assertNotIn("030237", command)
 
     def test_runner_builds_publication_reprocessing_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

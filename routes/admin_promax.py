@@ -1365,7 +1365,7 @@ def create_admin_promax_router(
     def api_admin_promax_list_schedules(
         request: Request,
         enabled: bool | None = Query(default=None),
-        limit: int = Query(default=100, ge=1, le=200),
+        limit: int = Query(default=200, ge=1, le=1000),
         context: dict[str, Any] = Depends(require_promax_context),
     ) -> dict[str, Any]:
         result = service.list_schedules(include_disabled=enabled is not True)

@@ -3037,6 +3037,126 @@
       return catalogRoutines;
     }
 
+    function promaxNormalizeScheduleScopeValues(values) {
+      return (Array.isArray(values) ? values : [])
+        .map(value => String(value || "").trim())
+        .filter((value, index, items) => value && items.indexOf(value) === index);
+    }
+
+    function promaxScheduleCatalogRoutineIds(categoryId) {
+      const catalogCategory = promaxCatalogCategory(categoryId);
+      return Array.isArray(catalogCategory && catalogCategory.routines)
+        ? catalogCategory.routines.map(item => String(item && item.id || item || "").trim()).filter(Boolean)
+        : [];
+    }
+
+    function promaxEmptyScheduleScope() {
+      return { units: [], categories: [], routines: {} };
+    }
+
+    function promaxAddScheduleScopeGroup(scope, categoryId, routines) {
+      const normalizedCategory = String(categoryId || "").trim();
+      if (!normalizedCategory) return;
+      if (!scope.categories.includes(normalizedCategory)) scope.categories.push(normalizedCategory);
+      const current = Array.isArray(scope.routines[normalizedCategory])
+        ? scope.routines[normalizedCategory]
+        : [];
+      scope.routines[normalizedCategory] = promaxNormalizeScheduleScopeValues([
+        ...current,
+        ...promaxNormalizeScheduleScopeValues(routines)
+      ]);
+    }
+
+    function promaxMergeScheduleScope(target, source) {
+      target.units = promaxNormalizeScheduleScopeValues([
+        ...target.units,
+        ...promaxNormalizeScheduleScopeValues(source && source.units)
+      ]);
+      promaxNormalizeScheduleScopeValues(source && source.categories).forEach(categoryId => {
+        promaxAddScheduleScopeGroup(
+          target,
+          categoryId,
+          source && source.routines ? source.routines[categoryId] : []
+        );
+      });
+      return target;
+    }
+
+    function promaxScheduleScopeFromSchedule(schedule) {
+      const payload = schedule && schedule.payload && typeof schedule.payload === "object"
+        ? schedule.payload
+        : {};
+      const scope = promaxEmptyScheduleScope();
+      scope.units = promaxNormalizeScheduleScopeValues(payload.units);
+      const groups = Array.isArray(payload.groups) ? payload.groups : [];
+      groups.forEach(group => {
+        promaxAddScheduleScopeGroup(
+          scope,
+          group && group.category,
+          Array.isArray(group && group.routines) ? group.routines : []
+        );
+      });
+      const categoryId = String(payload.category || schedule && schedule.job_type || "").trim();
+      if (categoryId) {
+        promaxAddScheduleScopeGroup(
+          scope,
+          categoryId,
+          promaxScheduleRoutinesForEdit(schedule, payload, categoryId)
+        );
+      }
+      return scope;
+    }
+
+    function promaxScheduleScopeForEdit(target) {
+      const schedules = Array.isArray(target && target.schedules)
+        ? target.schedules
+        : [target].filter(Boolean);
+      const scope = promaxEmptyScheduleScope();
+      schedules.forEach(schedule => promaxMergeScheduleScope(scope, promaxScheduleScopeFromSchedule(schedule)));
+      if (!scope.units.length) {
+        scope.units = PROMAX_RESELLERS.map(reseller => reseller.id);
+      }
+      scope.categories.forEach(categoryId => {
+        if (scope.routines[categoryId] && scope.routines[categoryId].length) return;
+        scope.routines[categoryId] = promaxScheduleCatalogRoutineIds(categoryId);
+      });
+      return scope;
+    }
+
+    function promaxResetScheduleSlicerSearches() {
+      Object.keys(PROMAX_SCHEDULE_SLICERS).forEach(kind => {
+        const els = promaxScheduleSlicerElements(kind, "schedule");
+        if (els.search) els.search.value = "";
+        if (els.panel) els.panel.classList.add("d-none");
+        if (els.button) els.button.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    function promaxApplyScheduleScopeForEdit(scope) {
+      const normalizedScope = scope && typeof scope === "object" ? scope : promaxEmptyScheduleScope();
+      state.promax.scheduleSelectedUnits = promaxNormalizeScheduleScopeValues(normalizedScope.units);
+      if (!state.promax.scheduleSelectedUnits.length) {
+        state.promax.scheduleSelectedUnits = PROMAX_RESELLERS.map(reseller => reseller.id);
+      }
+      state.promax.scheduleSelectedCategories = promaxNormalizeScheduleScopeValues(normalizedScope.categories);
+      state.promax.scheduleSelectedRoutines = {};
+      state.promax.scheduleSelectedCategories.forEach(categoryId => {
+        const selected = promaxNormalizeScheduleScopeValues(
+          normalizedScope.routines && normalizedScope.routines[categoryId]
+        );
+        state.promax.scheduleSelectedRoutines[categoryId] = selected.length
+          ? selected
+          : promaxScheduleCatalogRoutineIds(categoryId);
+      });
+      promaxResetScheduleSlicerSearches();
+      renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
+      renderPromaxScheduleCatalog({
+        categoryIds: state.promax.scheduleSelectedCategories,
+        routines: state.promax.scheduleSelectedRoutines
+      });
+      updatePromaxActionState();
+    }
+
     function updatePromaxActionState() {
       const runCategories = promaxRunSelectedCategories();
       const runRoutines = promaxRunSelectedRoutines();
@@ -3761,8 +3881,15 @@
       const units = Array.isArray(payload.units)
         ? payload.units.map(String).sort()
         : [];
+      const groups = Array.isArray(payload.groups)
+        ? payload.groups.map(group => ({
+          category: String(group && group.category || ""),
+          routines: Array.isArray(group && group.routines) ? group.routines.map(String).sort() : []
+        })).sort((left, right) => left.category.localeCompare(right.category))
+        : [];
       return JSON.stringify({
         category: String(payload.category || schedule && schedule.job_type || ""),
+        groups,
         routines,
         units,
         start_date: String(payload.start_date || ""),
@@ -4141,7 +4268,7 @@
         req(CONFIG.endpoints.promax.catalog, { timeoutMs: 20000 }),
         req(`${CONFIG.endpoints.promax.jobs}?${params.toString()}`, { timeoutMs: 30000 }),
         req(CONFIG.endpoints.promax.worker, { timeoutMs: 20000 }),
-        req(CONFIG.endpoints.promax.schedules, { timeoutMs: 20000 })
+        req(`${CONFIG.endpoints.promax.schedules}?limit=1000`, { timeoutMs: 20000 })
       ];
       const results = await Promise.allSettled(requests);
       state.promax.catalog = results[0].status === "fulfilled"
@@ -4394,18 +4521,7 @@
       E.promaxScheduleEndDate.value = String(payload.end_date || "");
       E.promaxScheduleSendDates.checked = Boolean(payload.send_dates);
       E.promaxSchedulePublish.checked = Boolean(payload.publish);
-      state.promax.scheduleSelectedUnits = Array.isArray(payload.units) && payload.units.length
-        ? payload.units.map(String)
-        : PROMAX_RESELLERS.map(reseller => reseller.id);
-      renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
-      const categoryId = String(payload.category || schedule.job_type || "");
-      const routines = promaxScheduleRoutinesForEdit(schedule, payload, categoryId);
-      state.promax.scheduleSelectedCategories = [categoryId];
-      state.promax.scheduleSelectedRoutines = { [categoryId]: routines };
-      renderPromaxScheduleCatalog({
-        categoryIds: state.promax.scheduleSelectedCategories,
-        routines: state.promax.scheduleSelectedRoutines
-      });
+      promaxApplyScheduleScopeForEdit(promaxScheduleScopeForEdit(schedule));
       const triggerScheduleId = String(schedule.trigger_after_schedule_id || "");
       E.promaxScheduleTriggerType.value = triggerScheduleId ? "after" : "time";
       renderPromaxScheduleTriggerOptions(triggerScheduleId);
@@ -4445,18 +4561,7 @@
       E.promaxScheduleEndDate.value = String(payload.end_date || "");
       E.promaxScheduleSendDates.checked = Boolean(payload.send_dates);
       E.promaxSchedulePublish.checked = Boolean(payload.publish);
-      state.promax.scheduleSelectedUnits = Array.isArray(payload.units) && payload.units.length
-        ? payload.units.map(String)
-        : PROMAX_RESELLERS.map(reseller => reseller.id);
-      renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
-      const categoryId = String(payload.category || primary.job_type || "");
-      const routines = promaxScheduleRoutinesForEdit(primary, payload, categoryId);
-      state.promax.scheduleSelectedCategories = [categoryId];
-      state.promax.scheduleSelectedRoutines = { [categoryId]: routines };
-      renderPromaxScheduleCatalog({
-        categoryIds: state.promax.scheduleSelectedCategories,
-        routines: state.promax.scheduleSelectedRoutines
-      });
+      promaxApplyScheduleScopeForEdit(promaxScheduleScopeForEdit(group));
       const triggerScheduleId = String(group.triggerScheduleId || primary.trigger_after_schedule_id || "");
       E.promaxScheduleTriggerType.value = triggerScheduleId ? "after" : "time";
       renderPromaxScheduleTriggerOptions(triggerScheduleId);

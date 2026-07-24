@@ -598,14 +598,14 @@ class PromaxWorker:
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = {}
-        if not _routine_selected(payload, "020304_BOT"):
-            return
         if payload.get("publish", True) is False:
             return
 
         requested_units = _string_list(payload.get("units"))
         unit_filial_map = _promax_020304_unit_filial_map()
         source_dir = _promax_publication_dir(result.details, "020304 bot")
+        if not _routine_selected(payload, "020304_BOT") and source_dir is None:
+            return
         if source_dir is None:
             self._send_log(
                 job_id,
@@ -859,14 +859,14 @@ class PromaxWorker:
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = {}
-        if not _routine_selected(payload, "030111_BOT"):
-            return
         if payload.get("publish", True) is False:
             return
 
         requested_units = _string_list(payload.get("units"))
         unit_filial_map = _promax_020304_unit_filial_map()
         source_dir = _promax_publication_dir(result.details, "030111 bot")
+        if not _routine_selected(payload, "030111_BOT") and source_dir is None:
+            return
         if source_dir is None:
             self._send_log(
                 job_id,

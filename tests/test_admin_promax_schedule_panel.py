@@ -208,6 +208,17 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
         self.assertIn('/run-now`, {', self.html)
         self.assertIn("promax-schedule-repeat", self.html)
 
+    def test_schedule_edit_rebuilds_scope_from_selected_schedule_group(self) -> None:
+        self.assertIn("function promaxScheduleScopeForEdit(target)", self.html)
+        self.assertIn("function promaxApplyScheduleScopeForEdit(scope)", self.html)
+        self.assertIn("function promaxResetScheduleSlicerSearches()", self.html)
+        self.assertIn("promaxApplyScheduleScopeForEdit(promaxScheduleScopeForEdit(schedule));", self.html)
+        self.assertIn("promaxApplyScheduleScopeForEdit(promaxScheduleScopeForEdit(group));", self.html)
+        self.assertIn("const groups = Array.isArray(payload.groups)", self.html)
+
+    def test_schedule_sync_fetches_enough_repetitions_for_grouped_view(self) -> None:
+        self.assertIn('`${CONFIG.endpoints.promax.schedules}?limit=1000`', self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
