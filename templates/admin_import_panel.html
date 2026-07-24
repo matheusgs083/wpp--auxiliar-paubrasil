@@ -1259,7 +1259,7 @@
                 </div>
                 <div class="col-xl-2 col-lg-2" id="promaxScheduleTypeWrap">
                   <label class="form-label small mb-1" for="promaxScheduleType">Frequencia</label>
-                  <select class="form-select form-select-sm" id="promaxScheduleType"><option value="daily">Diaria</option><option value="daily_specific">Diaria especifica</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
+                  <select class="form-select form-select-sm" id="promaxScheduleType"><option value="daily">Diaria</option><option value="daily_hourly">Diaria recorrente</option><option value="daily_specific">Diaria especifica</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
                 </div>
                 <div class="col-xl-2 col-lg-2" id="promaxScheduleTimeWrap">
                   <label class="form-label small mb-1" for="promaxScheduleTime">Horario</label>
@@ -1311,6 +1311,29 @@
                     </div>
                     <div class="col-xl-2 col-lg-3">
                       <div class="form-text" id="promaxScheduleSpecificPreview">Informe os horarios.</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12 d-none" id="promaxScheduleHourlyWrap">
+                  <div class="row g-2 align-items-end">
+                    <div class="col-xl-2 col-lg-3">
+                      <label class="form-label small mb-1" for="promaxScheduleHourlyStart">De</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleHourlyStart" type="time" value="06:00">
+                    </div>
+                    <div class="col-xl-2 col-lg-3">
+                      <label class="form-label small mb-1" for="promaxScheduleHourlyEnd">Ate</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleHourlyEnd" type="time" value="18:00">
+                    </div>
+                    <div class="col-xl-2 col-lg-3">
+                      <label class="form-label small mb-1" for="promaxScheduleHourlyStep">Intervalo</label>
+                      <select class="form-select form-select-sm" id="promaxScheduleHourlyStep">
+                        <option value="60">1 em 1 hora</option>
+                        <option value="30">30 em 30 min.</option>
+                        <option value="5">5 em 5 min.</option>
+                      </select>
+                    </div>
+                    <div class="col-xl-4 col-lg-6">
+                      <div class="form-text" id="promaxScheduleHourlyPreview">06:00, 07:00, 08:00...</div>
                     </div>
                   </div>
                 </div>
@@ -2379,6 +2402,11 @@
       promaxScheduleSpecificEnd: document.getElementById("promaxScheduleSpecificEnd"),
       promaxScheduleSpecificStep: document.getElementById("promaxScheduleSpecificStep"),
       promaxScheduleSpecificPreview: document.getElementById("promaxScheduleSpecificPreview"),
+      promaxScheduleHourlyWrap: document.getElementById("promaxScheduleHourlyWrap"),
+      promaxScheduleHourlyStart: document.getElementById("promaxScheduleHourlyStart"),
+      promaxScheduleHourlyEnd: document.getElementById("promaxScheduleHourlyEnd"),
+      promaxScheduleHourlyStep: document.getElementById("promaxScheduleHourlyStep"),
+      promaxScheduleHourlyPreview: document.getElementById("promaxScheduleHourlyPreview"),
       promaxScheduleCreateBtn: document.getElementById("promaxScheduleCreateBtn"),
       promaxScheduleCancelBtn: document.getElementById("promaxScheduleCancelBtn"),
       promaxSchedulesBody: document.getElementById("promaxSchedulesBody"),
@@ -3471,6 +3499,35 @@
       }
     }
 
+    function promaxHourlyScheduleTimes() {
+      const start = promaxTimeToMinutes(E.promaxScheduleHourlyStart && E.promaxScheduleHourlyStart.value);
+      const end = promaxTimeToMinutes(E.promaxScheduleHourlyEnd && E.promaxScheduleHourlyEnd.value);
+      const step = Number(E.promaxScheduleHourlyStep && E.promaxScheduleHourlyStep.value || 60);
+      if (start == null || end == null || start > end) {
+        throw new Error("Confira o intervalo de horarios da agenda recorrente.");
+      }
+      if (![5, 30, 60].includes(step)) {
+        throw new Error("Escolha um intervalo valido para a agenda recorrente.");
+      }
+      const times = [];
+      for (let current = start; current <= end; current += step) {
+        times.push(promaxMinutesToTime(current));
+      }
+      return times;
+    }
+
+    function updatePromaxHourlySchedulePreview() {
+      if (!E.promaxScheduleHourlyPreview) return;
+      try {
+        const times = promaxHourlyScheduleTimes();
+        E.promaxScheduleHourlyPreview.textContent = times.length
+          ? `${times.length} horario(s): ${times.slice(0, 10).join(", ")}${times.length > 10 ? "..." : ""}`
+          : "Informe os horarios.";
+      } catch (_err) {
+        E.promaxScheduleHourlyPreview.textContent = "Intervalo invalido.";
+      }
+    }
+
     function promaxScheduleTimingPayloads(name) {
       const triggerType = String(E.promaxScheduleTriggerType && E.promaxScheduleTriggerType.value || "time");
       const type = String(E.promaxScheduleType && E.promaxScheduleType.value || "daily");
@@ -3509,8 +3566,10 @@
       const allDays = selectedDays.length === 7;
       const times = type === "daily_specific"
         ? promaxSpecificScheduleTimes()
-        : [E.promaxScheduleTime.value || "06:00"];
-      if (!times.length) throw new Error("Informe pelo menos um horario para a agenda diaria especifica.");
+        : type === "daily_hourly"
+          ? promaxHourlyScheduleTimes()
+          : [E.promaxScheduleTime.value || "06:00"];
+      if (!times.length) throw new Error("Informe pelo menos um horario para a agenda diaria.");
       const payloads = [];
       times.forEach(timeValue => {
         if (allDays) {
@@ -4207,7 +4266,7 @@
       const type = String(E.promaxScheduleType && E.promaxScheduleType.value || "daily");
       const triggered = triggerType === "after";
       if (E.promaxScheduleTypeWrap) E.promaxScheduleTypeWrap.classList.toggle("d-none", triggered);
-      if (E.promaxScheduleTimeWrap) E.promaxScheduleTimeWrap.classList.toggle("d-none", triggered || type === "daily_specific");
+      if (E.promaxScheduleTimeWrap) E.promaxScheduleTimeWrap.classList.toggle("d-none", triggered || ["daily_hourly", "daily_specific"].includes(type));
       if (E.promaxScheduleTriggerScheduleWrap) E.promaxScheduleTriggerScheduleWrap.classList.toggle("d-none", !triggered);
       if (E.promaxScheduleWeekdayWrap) {
         E.promaxScheduleWeekdayWrap.classList.toggle("d-none", triggered || type !== "weekly");
@@ -4216,12 +4275,16 @@
         E.promaxScheduleMonthDayWrap.classList.toggle("d-none", triggered || type !== "monthly");
       }
       if (E.promaxScheduleDailyDaysWrap) {
-        E.promaxScheduleDailyDaysWrap.classList.toggle("d-none", triggered || !["daily", "daily_specific"].includes(type));
+        E.promaxScheduleDailyDaysWrap.classList.toggle("d-none", triggered || !["daily", "daily_hourly", "daily_specific"].includes(type));
       }
       if (E.promaxScheduleSpecificWrap) {
         E.promaxScheduleSpecificWrap.classList.toggle("d-none", triggered || type !== "daily_specific");
       }
+      if (E.promaxScheduleHourlyWrap) {
+        E.promaxScheduleHourlyWrap.classList.toggle("d-none", triggered || type !== "daily_hourly");
+      }
       updatePromaxSpecificSchedulePreview();
+      updatePromaxHourlySchedulePreview();
     }
 
     function resetPromaxScheduleForm() {
@@ -4237,6 +4300,9 @@
       if (E.promaxScheduleSpecificStart) E.promaxScheduleSpecificStart.value = "17:05";
       if (E.promaxScheduleSpecificEnd) E.promaxScheduleSpecificEnd.value = "18:00";
       if (E.promaxScheduleSpecificStep) E.promaxScheduleSpecificStep.value = "5";
+      if (E.promaxScheduleHourlyStart) E.promaxScheduleHourlyStart.value = "06:00";
+      if (E.promaxScheduleHourlyEnd) E.promaxScheduleHourlyEnd.value = "18:00";
+      if (E.promaxScheduleHourlyStep) E.promaxScheduleHourlyStep.value = "60";
       setPromaxSelectedScheduleDays([0, 1, 2, 3, 4]);
       if (E.promaxScheduleSendDates) E.promaxScheduleSendDates.checked = false;
       renderPromaxScheduleCatalog();
@@ -4600,6 +4666,16 @@
       ].forEach(input => {
         if (input) input.addEventListener("input", () => {
           updatePromaxSpecificSchedulePreview();
+          updatePromaxActionState();
+        });
+      });
+      [
+        E.promaxScheduleHourlyStart,
+        E.promaxScheduleHourlyEnd,
+        E.promaxScheduleHourlyStep
+      ].forEach(input => {
+        if (input) input.addEventListener("input", () => {
+          updatePromaxHourlySchedulePreview();
           updatePromaxActionState();
         });
       });

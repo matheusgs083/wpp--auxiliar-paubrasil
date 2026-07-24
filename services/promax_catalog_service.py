@@ -28,6 +28,7 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
                 {"id": "120601_BOT", "name": "Rotina 120601 Bot"},
                 {"id": "020220_BOT", "name": "Rotina 020220 Bot"},
                 {"id": "030206_BOT", "name": "Rotina 030206 Bot"},
+                {"id": "020304_BOT", "name": "Rotina 020304 Bot"},
             ],
             "units": [],
         },
@@ -37,7 +38,6 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
             "routines": [
                 {"id": "030237_ESTOQUE", "name": "Rotina 030237 Estoque"},
                 {"id": "020502", "name": "Rotina 020502"},
-                {"id": "020304_BOT", "name": "Rotina 020304 Bot"},
             ],
             "units": [],
         },
