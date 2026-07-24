@@ -3772,6 +3772,13 @@
       });
     }
 
+    function promaxScheduleCreatedGroupKey(schedule) {
+      const createdAt = Date.parse(schedule && schedule.created_at);
+      if (!Number.isFinite(createdAt)) return "";
+      const bucketMs = 5 * 60 * 1000;
+      return String(Math.floor(createdAt / bucketMs));
+    }
+
     function promaxScheduleSortValue(schedule) {
       const type = String(schedule && schedule.schedule_type || "");
       const weekday = schedule && schedule.weekday != null ? Number(schedule.weekday) : 99;
@@ -3793,6 +3800,7 @@
           jobType,
           String(schedule.schedule_type || ""),
           triggerScheduleId,
+          promaxScheduleCreatedGroupKey(schedule),
           promaxSchedulePayloadGroupKey(schedule)
         ].join("||");
         if (!buckets.has(groupKey)) {
@@ -4534,6 +4542,12 @@
           const oldSchedules = Array.isArray(editingScheduleGroup && editingScheduleGroup.schedules)
             ? [...editingScheduleGroup.schedules]
             : [];
+          for (const schedule of oldSchedules.reverse()) {
+            await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(schedule.id)}`, {
+              method: "DELETE",
+              timeoutMs: 20000
+            });
+          }
           for (const timingPayload of timingPayloads) {
             const response = await req(CONFIG.endpoints.promax.scheduleChains, {
               method: "POST",
@@ -4549,12 +4563,6 @@
             createdSchedules += Array.isArray(response && response.schedules)
               ? response.schedules.length
               : chainPayload.groups.length;
-          }
-          for (const schedule of oldSchedules.reverse()) {
-            await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(schedule.id)}`, {
-              method: "DELETE",
-              timeoutMs: 20000
-            });
           }
         } else {
           for (const timingPayload of timingPayloads) {
