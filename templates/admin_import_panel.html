@@ -2162,6 +2162,7 @@
         activeScheduleGroupKey: "",
         selectedJobId: "",
         editingScheduleId: "",
+        editingScheduleGroupKey: "",
         runSelectedCategories: null,
         runSelectedRoutines: {},
         runSelectedUnits: PROMAX_RESELLERS.map(reseller => reseller.id),
@@ -3546,6 +3547,39 @@
       }
     }
 
+    function promaxInferRecurringStep(times) {
+      const minutes = (Array.isArray(times) ? times : [])
+        .map(promaxTimeToMinutes)
+        .filter(value => value != null)
+        .sort((left, right) => left - right);
+      if (minutes.length < 2) return null;
+      const step = minutes[1] - minutes[0];
+      if (![5, 30, 60].includes(step)) return null;
+      for (let index = 2; index < minutes.length; index += 1) {
+        if (minutes[index] - minutes[index - 1] !== step) return null;
+      }
+      return step;
+    }
+
+    function promaxApplyScheduleGroupTimes(times) {
+      const cleanTimes = (Array.isArray(times) ? times : []).map(String).filter(Boolean).sort();
+      if (cleanTimes.length > 1) {
+        const step = promaxInferRecurringStep(cleanTimes);
+        if (step) {
+          E.promaxScheduleType.value = "daily_hourly";
+          E.promaxScheduleHourlyStart.value = cleanTimes[0];
+          E.promaxScheduleHourlyEnd.value = cleanTimes[cleanTimes.length - 1];
+          E.promaxScheduleHourlyStep.value = String(step);
+          return;
+        }
+        E.promaxScheduleType.value = "daily_specific";
+        E.promaxScheduleSpecificHours.value = cleanTimes.join(", ");
+        return;
+      }
+      E.promaxScheduleType.value = "daily";
+      E.promaxScheduleTime.value = String(cleanTimes[0] || "06:00").slice(0, 5);
+    }
+
     function promaxScheduleTimingPayloads(name) {
       const triggerType = String(E.promaxScheduleTriggerType && E.promaxScheduleTriggerType.value || "time");
       const type = String(E.promaxScheduleType && E.promaxScheduleType.value || "daily");
@@ -4068,7 +4102,6 @@
             return reseller ? reseller.name : String(unitId);
           });
           const status = promaxScheduleGroupStatus(scheduleGroup);
-          const primaryScheduleId = String((scheduleGroup.primary || {}).id || "");
           const allEnabled = Number(scheduleGroup.enabledCount || 0) === scheduleGroup.schedules.length;
           return `<tr>
             <td><strong>${escapeHtml(scheduleGroup.baseName || "-")}</strong><div class="small text-secondary">${escapeHtml(promaxScheduleGroupSubtitle(scheduleGroup))}</div></td>
@@ -4077,7 +4110,7 @@
             <td><button class="btn btn-outline-primary btn-sm promax-schedule-repeat" onclick="promaxOpenScheduleGroupModal('${escapeHtml(scheduleGroup.key)}')" title="Ver repeticoes da agenda"><i class="bi bi-calendar-week"></i><span class="promax-schedule-repeat-label">${escapeHtml(promaxScheduleGroupRepetitionLabel(scheduleGroup))}</span></button></td>
             <td>${scheduleGroup.triggerScheduleId ? '<span class="text-secondary">Aguardando conclusao</span>' : escapeHtml(formatDateTime(scheduleGroup.nextRunAt))}</td>
             <td><span class="badge ${status.badge}">${escapeHtml(status.label)}</span></td>
-            <td class="text-end"><div class="d-flex gap-1 justify-content-end"><button class="btn btn-outline-success btn-sm" title="Executar agora" onclick="promaxRunScheduleGroup('${escapeHtml(scheduleGroup.key)}')"><i class="bi bi-play-fill"></i></button><button class="btn btn-outline-primary btn-sm" title="Editar agenda base" onclick="promaxEditSchedule('${escapeHtml(primaryScheduleId)}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-outline-primary btn-sm" title="${allEnabled ? "Pausar repeticoes" : "Ativar repeticoes"}" onclick="promaxToggleScheduleGroup('${escapeHtml(scheduleGroup.key)}', ${allEnabled ? "false" : "true"})"><i class="bi ${allEnabled ? "bi-pause-circle" : "bi-play-circle"}"></i></button><button class="btn btn-outline-danger btn-sm" title="Excluir repeticoes" onclick="promaxDeleteScheduleGroup('${escapeHtml(scheduleGroup.key)}')"><i class="bi bi-trash3"></i></button></div></td>
+            <td class="text-end"><div class="d-flex gap-1 justify-content-end"><button class="btn btn-outline-success btn-sm" title="Executar agora" onclick="promaxRunScheduleGroup('${escapeHtml(scheduleGroup.key)}')"><i class="bi bi-play-fill"></i></button><button class="btn btn-outline-primary btn-sm" title="Editar agenda" onclick="promaxEditScheduleGroup('${escapeHtml(scheduleGroup.key)}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-outline-primary btn-sm" title="${allEnabled ? "Pausar repeticoes" : "Ativar repeticoes"}" onclick="promaxToggleScheduleGroup('${escapeHtml(scheduleGroup.key)}', ${allEnabled ? "false" : "true"})"><i class="bi ${allEnabled ? "bi-pause-circle" : "bi-play-circle"}"></i></button><button class="btn btn-outline-danger btn-sm" title="Excluir repeticoes" onclick="promaxDeleteScheduleGroup('${escapeHtml(scheduleGroup.key)}')"><i class="bi bi-trash3"></i></button></div></td>
           </tr>`;
         }).join("") : '<tr><td colspan="7" class="text-center py-3 text-secondary">Nenhuma agenda cadastrada.</td></tr>';
       }
@@ -4307,6 +4340,7 @@
 
     function resetPromaxScheduleForm() {
       state.promax.editingScheduleId = "";
+      state.promax.editingScheduleGroupKey = "";
       state.promax.scheduleSelectedCategories = null;
       state.promax.scheduleSelectedRoutines = {};
       state.promax.scheduleSelectedUnits = PROMAX_RESELLERS.map(reseller => reseller.id);
@@ -4341,6 +4375,7 @@
       }
       const payload = schedule.payload || {};
       state.promax.editingScheduleId = String(schedule.id);
+      state.promax.editingScheduleGroupKey = "";
       E.promaxScheduleName.value = String(schedule.name || "");
       E.promaxScheduleType.value = String(schedule.schedule_type || "daily");
       E.promaxScheduleTime.value = String(schedule.time_of_day || "06:00").slice(0, 5);
@@ -4373,6 +4408,57 @@
       E.promaxScheduleName.focus();
     }
 
+    function promaxEditScheduleGroup(groupKey) {
+      const group = promaxFindScheduleGroup(groupKey);
+      const schedules = Array.isArray(group && group.schedules) ? group.schedules : [];
+      const primary = group && group.primary ? group.primary : schedules[0];
+      if (!group || !primary) {
+        addLog("Grupo de agenda Promax nao encontrado para edicao.", "warn");
+        return;
+      }
+      const payload = primary.payload || {};
+      const times = Array.isArray(group.times) ? group.times : [];
+      const days = Array.isArray(group.days) && group.days.length
+        ? group.days
+        : (primary.weekday == null ? [0, 1, 2, 3, 4, 5, 6] : [Number(primary.weekday)]);
+      state.promax.editingScheduleId = "";
+      state.promax.editingScheduleGroupKey = String(group.key || "");
+      E.promaxScheduleName.value = String(group.baseName || primary.name || "");
+      E.promaxScheduleTime.value = String(times[0] || primary.time_of_day || "06:00").slice(0, 5);
+      if (String(primary.schedule_type || "") === "monthly") {
+        E.promaxScheduleType.value = "monthly";
+      } else {
+        promaxApplyScheduleGroupTimes(times);
+      }
+      E.promaxScheduleWeekday.value = String(days[0] == null ? 0 : days[0]);
+      setPromaxSelectedScheduleDays(days);
+      E.promaxScheduleMonthDay.value = String(primary.day_of_month == null ? 1 : primary.day_of_month);
+      E.promaxScheduleStartDate.value = String(payload.start_date || "");
+      E.promaxScheduleEndDate.value = String(payload.end_date || "");
+      E.promaxScheduleSendDates.checked = Boolean(payload.send_dates);
+      E.promaxSchedulePublish.checked = Boolean(payload.publish);
+      state.promax.scheduleSelectedUnits = Array.isArray(payload.units) && payload.units.length
+        ? payload.units.map(String)
+        : PROMAX_RESELLERS.map(reseller => reseller.id);
+      renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
+      const categoryId = String(payload.category || primary.job_type || "");
+      const routines = promaxScheduleRoutinesForEdit(primary, payload, categoryId);
+      state.promax.scheduleSelectedCategories = [categoryId];
+      state.promax.scheduleSelectedRoutines = { [categoryId]: routines };
+      renderPromaxScheduleCatalog({
+        categoryIds: state.promax.scheduleSelectedCategories,
+        routines: state.promax.scheduleSelectedRoutines
+      });
+      const triggerScheduleId = String(group.triggerScheduleId || primary.trigger_after_schedule_id || "");
+      E.promaxScheduleTriggerType.value = triggerScheduleId ? "after" : "time";
+      renderPromaxScheduleTriggerOptions(triggerScheduleId);
+      E.promaxScheduleCreateBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Salvar agenda';
+      E.promaxScheduleCancelBtn.classList.remove("d-none");
+      syncPromaxDateFields();
+      syncPromaxScheduleFields();
+      E.promaxScheduleName.focus();
+    }
+
     async function promaxCreateSchedule() {
       const name = String(E.promaxScheduleName && E.promaxScheduleName.value || "").trim();
       if (!name) {
@@ -4380,9 +4466,11 @@
         return;
       }
       const editingScheduleId = String(state.promax.editingScheduleId || "");
+      const editingScheduleGroupKey = String(state.promax.editingScheduleGroupKey || "");
       const editingSchedule = (state.promax.schedules || []).find(
         item => String(item.id) === editingScheduleId
       );
+      const editingScheduleGroup = editingScheduleGroupKey ? promaxFindScheduleGroup(editingScheduleGroupKey) : null;
       let chainPayload;
       try {
         chainPayload = promaxScheduleChainPayload();
@@ -4390,8 +4478,12 @@
         addLog(err.message, "warn");
         return;
       }
-      if (editingScheduleId && chainPayload.groups.length !== 1) {
+      if ((editingScheduleId || editingScheduleGroupKey) && chainPayload.groups.length !== 1) {
         addLog("Na edicao, mantenha somente o grupo desta agenda. Para varios grupos, crie uma nova cadeia.", "warn");
+        return;
+      }
+      if (editingScheduleGroupKey && (!editingScheduleGroup || !Array.isArray(editingScheduleGroup.schedules) || !editingScheduleGroup.schedules.length)) {
+        addLog("Grupo de agenda Promax nao encontrado para salvar.", "warn");
         return;
       }
       let timingPayloads;
@@ -4426,7 +4518,7 @@
           enabled: true
         };
       const totalCreations = editingScheduleId ? 1 : timingPayloads.length;
-      const actionLabel = editingScheduleId ? "Salvar as alteracoes da agenda" : `Criar ${totalCreations} agenda(s)`;
+      const actionLabel = editingScheduleId || editingScheduleGroupKey ? "Salvar as alteracoes da agenda" : `Criar ${totalCreations} agenda(s)`;
       if (!await askConfirmation(`${actionLabel} "${name}"?`)) return;
       E.promaxScheduleCreateBtn.disabled = true;
       try {
@@ -4438,6 +4530,32 @@
             body: JSON.stringify(payload),
             timeoutMs: 30000
           });
+        } else if (editingScheduleGroupKey) {
+          const oldSchedules = Array.isArray(editingScheduleGroup && editingScheduleGroup.schedules)
+            ? [...editingScheduleGroup.schedules]
+            : [];
+          for (const timingPayload of timingPayloads) {
+            const response = await req(CONFIG.endpoints.promax.scheduleChains, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...chainPayload,
+                name: timingPayload.name,
+                ...timingPayload,
+                enabled: true
+              }),
+              timeoutMs: 30000
+            });
+            createdSchedules += Array.isArray(response && response.schedules)
+              ? response.schedules.length
+              : chainPayload.groups.length;
+          }
+          for (const schedule of oldSchedules.reverse()) {
+            await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(schedule.id)}`, {
+              method: "DELETE",
+              timeoutMs: 20000
+            });
+          }
         } else {
           for (const timingPayload of timingPayloads) {
             const response = await req(CONFIG.endpoints.promax.scheduleChains, {
@@ -4457,8 +4575,8 @@
           }
         }
         addLog(
-          editingScheduleId
-            ? "Agenda Promax atualizada."
+          editingScheduleId || editingScheduleGroupKey
+            ? `Agenda Promax atualizada com ${createdSchedules || timingPayloads.length} repeticao(oes).`
             : `Agenda Promax criada com ${createdSchedules || (chainPayload.groups.length * totalCreations)} item(ns).`,
           "ok"
         );
