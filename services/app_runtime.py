@@ -277,6 +277,8 @@ def configure_app_runtime(
     _list_admin_import_history = admin_imports_runtime._list_admin_import_history
     _filter_admin_import_status_for_context = admin_imports_runtime._filter_admin_import_status_for_context
     _filter_admin_import_history_for_context = admin_imports_runtime._filter_admin_import_history_for_context
+    _clear_critica_runtime_cache = admin_imports_runtime._clear_critica_runtime_cache
+    _queue_critica_pdf_prebuild = admin_imports_runtime._queue_critica_pdf_prebuild
     _snapshot_critica_pdf_prebuild_state = admin_imports_runtime._snapshot_critica_pdf_prebuild_state
     _serialize_admin_import_value = admin_imports_runtime._serialize_admin_import_value
 

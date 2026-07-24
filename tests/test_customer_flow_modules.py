@@ -13,7 +13,13 @@ class FakeFlowContext:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, object]]] = []
         self.sessions: dict[str, object] = {}
-        critica_summary = SimpleNamespace(row_count=2, pedido_count=1, problem_row_count=2, problem_pedido_count=1)
+        critica_summary = SimpleNamespace(
+            row_count=2,
+            pedido_count=1,
+            problem_row_count=2,
+            problem_pedido_count=1,
+            planilha_atualizada_em="2026-06-03",
+        )
         self.critica_rn_service = SimpleNamespace(
             status=lambda: {"ready": True},
             get_pdf_report=lambda **kwargs: SimpleNamespace(
@@ -209,6 +215,7 @@ class CustomerFlowModulesTest(unittest.TestCase):
 
         self.assertEqual(result.kind, "media")
         self.assertIn("Critica RN | PDF", result.text)
+        self.assertIn("Atualizado em: 03/06/2026", result.text)
         self.assertIn("Pedidos com problema: 1", result.text)
         self.assertNotIn("Problemas: 2", result.text)
         self.assertEqual(context.calls[-1][0], "post_nav")

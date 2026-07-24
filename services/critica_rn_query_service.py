@@ -4054,15 +4054,17 @@ def _nullable_decimal(value: Any) -> Decimal | None:
 
 
 def _format_updated_at(reference_date: Any, batch_imported_at: Any) -> str:
+    try:
+        if batch_imported_at is not None:
+            return batch_imported_at.astimezone(CRITICA_IMPORT_LOCAL_TIMEZONE).strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        imported_text = str(batch_imported_at or "").strip()
+        if imported_text:
+            return imported_text
     reference_text = str(reference_date or "").strip()
     if reference_text:
         return reference_text
-    if batch_imported_at is None:
-        return "-"
-    try:
-        return batch_imported_at.astimezone().date().isoformat()
-    except Exception:
-        return str(batch_imported_at)
+    return "-"
 
 
 def _format_date(value: date | None) -> str:

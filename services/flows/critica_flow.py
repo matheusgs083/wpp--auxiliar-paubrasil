@@ -438,6 +438,7 @@ class CriticaFlow:
         text = (
             "Critica RN | PDF\n\n"
             f"Data: {flow._format_display_date(target_date.isoformat())}\n"
+            f"Atualizado em: {flow._format_display_date(getattr(summary, 'planilha_atualizada_em', '-'))}\n"
             f"Pedidos: {summary.pedido_count} | Itens: {summary.row_count} | Pedidos com problema: {summary.problem_pedido_count}\n"
             "Enviei o PDF consolidado e o resumo.\n\n"
             f"{flow._result_hint_text(allow_back=True)}"
