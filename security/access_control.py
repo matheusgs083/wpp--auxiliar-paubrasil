@@ -22,13 +22,15 @@ ROLE_FINANCEIRO = "financeiro"
 ROLE_GERENTE_VENDAS = "gerente_vendas"
 ROLE_DIRETOR_COMERCIAL = "diretor_comercial"
 ROLE_VENDEDOR = "vendedor"
+ROLE_ARMAZEM = "armazem"
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     ROLE_ADMIN: ("*",),
-    ROLE_FINANCEIRO: ("inadimplencia", "comodato", "cliente", "conhecimento", "payip"),
-    ROLE_GERENTE_VENDAS: ("inadimplencia", "comodato", "cliente", "conhecimento"),
-    ROLE_DIRETOR_COMERCIAL: ("inadimplencia", "comodato", "cliente", "conhecimento"),
-    ROLE_VENDEDOR: ("inadimplencia", "comodato", "cliente"),
+    ROLE_FINANCEIRO: ("inadimplencia", "comodato", "cliente", "conhecimento", "payip", "estoque"),
+    ROLE_GERENTE_VENDAS: ("inadimplencia", "comodato", "cliente", "conhecimento", "estoque"),
+    ROLE_DIRETOR_COMERCIAL: ("inadimplencia", "comodato", "cliente", "conhecimento", "estoque"),
+    ROLE_VENDEDOR: ("inadimplencia", "comodato", "cliente", "estoque"),
+    ROLE_ARMAZEM: ("cliente", "estoque"),
 }
 
 
@@ -433,7 +435,7 @@ class AccessControl:
         )
         normalized_sectors = (
             _normalize_finance_filial_scope_list(sectors)
-            if target_role == ROLE_FINANCEIRO
+            if target_role in {ROLE_FINANCEIRO, ROLE_ARMAZEM}
             else _normalize_sector_scope_list(sectors)
         )
         normalized_gv_vdes = _normalize_gv_scope_list(gv_vdes, role_name=target_role)
@@ -597,10 +599,11 @@ class AccessControl:
             if invalid:
                 raise ValueError("Para Diretor Comercial, use somente chaves filial-DC, por exemplo: 1-1.")
             return
-        if role_name == ROLE_FINANCEIRO:
+        if role_name in {ROLE_FINANCEIRO, ROLE_ARMAZEM}:
             invalid = [value for value in sector_values if not normalize_filial_scope_input(value)]
             if invalid:
-                raise ValueError("Para Financeiro, use somente filiais, por exemplo: 3 ou 3,4.")
+                label = "Financeiro" if role_name == ROLE_FINANCEIRO else "Armazem"
+                raise ValueError(f"Para {label}, use somente filiais, por exemplo: 3 ou 3,4.")
             return
 
     def _validate_user_scope_policy(
@@ -628,6 +631,14 @@ class AccessControl:
                 raise ValueError("Para Financeiro, informe ao menos uma filial.")
             if any(not normalize_filial_scope_input(value) for value in sectors):
                 raise ValueError("Financeiro aceita somente filiais.")
+            return
+        if role_name == ROLE_ARMAZEM:
+            if gv_vdes:
+                raise ValueError("Armazem nao deve ter GV vinculado.")
+            if not sectors:
+                raise ValueError("Para Armazem, informe ao menos uma filial.")
+            if any(not normalize_filial_scope_input(value) for value in sectors):
+                raise ValueError("Armazem aceita somente filiais.")
             return
         if role_name == ROLE_GERENTE_VENDAS:
             if sectors:
@@ -1163,6 +1174,9 @@ def _normalize_role_name(value: str, fallback: str = "") -> str:
         "gerente_de_vendas": ROLE_GERENTE_VENDAS,
         "diretor": ROLE_DIRETOR_COMERCIAL,
         "diretor_comercial": ROLE_DIRETOR_COMERCIAL,
+        "armazen": ROLE_ARMAZEM,
+        "almoxarifado": ROLE_ARMAZEM,
+        "estoque": ROLE_ARMAZEM,
     }.get(normalized, normalized)
 
 

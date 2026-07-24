@@ -30,7 +30,12 @@ class MainMenuFlow:
         can_use_cliente = self._has_area_access(decision, 'cliente')
         can_use_inadimplencia = self._has_area_access(decision, 'inadimplencia')
         can_use_comodato = self._has_area_access(decision, 'comodato')
+        can_use_estoque = self._has_area_access(decision, 'estoque')
         can_use_documentacao = can_use_cliente
+        if self._is_armazem(decision):
+            can_use_inadimplencia = False
+            can_use_comodato = False
+            can_use_documentacao = False
         can_use_visit_menu = self._can_use_visit_menu(decision) and can_use_cliente
         can_use_finance_menu = self._can_use_finance_menu(decision) and can_use_inadimplencia
         can_use_seller_summary_menu = self._can_use_seller_summary_menu(decision) and can_use_inadimplencia
@@ -41,7 +46,7 @@ class MainMenuFlow:
                 option_ids.append(flow.MENU_VISIT_DAY)
             if can_use_seller_risk_menu:
                 option_ids.append(flow.MENU_SELLER_RISK)
-            if can_use_cliente:
+            if can_use_cliente and not self._is_armazem(decision):
                 option_ids.append(flow.MENU_GIRO)
             if can_use_documentacao:
                 option_ids.append(flow.MENU_DOCUMENTACAO)
@@ -64,7 +69,7 @@ class MainMenuFlow:
                 option_ids.append(flow.MENU_VISIT_DAY)
             if can_use_inadimplencia:
                 option_ids.append(flow.MENU_INADIMPLENCIA)
-            if can_use_cliente:
+            if can_use_cliente and not self._is_armazem(decision):
                 option_ids.append(flow.MENU_GIRO)
             if can_use_documentacao:
                 option_ids.append(flow.MENU_DOCUMENTACAO)
@@ -91,9 +96,13 @@ class MainMenuFlow:
                 option_ids.append(flow.MENU_SEARCH)
             if can_use_comodato:
                 option_ids.append(flow.MENU_COMODATOS)
+            if can_use_estoque:
+                option_ids.append(flow.MENU_ARMAZEM)
         else:
             if can_use_cliente:
                 option_ids.append(flow.MENU_SEARCH)
+            if self._is_armazem(decision):
+                option_ids.append(flow.MENU_ARMAZEM)
             if can_use_inadimplencia:
                 option_ids.append(flow.MENU_INADIMPLENCIA)
             if can_use_cliente:
@@ -126,8 +135,12 @@ class MainMenuFlow:
         can_use_cliente = self._has_area_access(decision, 'cliente')
         can_use_inadimplencia = self._has_area_access(decision, 'inadimplencia')
         can_use_comodato = self._has_area_access(decision, 'comodato')
-        can_use_giro = can_use_cliente
-        can_use_documentacao = can_use_cliente
+        can_use_estoque = self._has_area_access(decision, 'estoque')
+        if self._is_armazem(decision):
+            can_use_inadimplencia = False
+            can_use_comodato = False
+        can_use_giro = can_use_cliente and not self._is_armazem(decision)
+        can_use_documentacao = can_use_cliente and not self._is_armazem(decision)
         can_use_visit_menu = self._can_use_visit_menu(decision) and can_use_cliente
         can_use_finance_menu = self._can_use_finance_menu(decision) and can_use_inadimplencia
         can_use_gv_summary_menu = self._can_use_gv_summary_menu(decision) and can_use_inadimplencia
@@ -204,6 +217,11 @@ class MainMenuFlow:
         if can_use_finance_menu:
             option_specs[flow.MENU_FINANCEIRO] = flow.InteractiveOption(option_id=flow.MENU_FINANCEIRO, title='Financeiro', description='Ver resumo e cobrancas', shortcut=shortcut_map.get(flow.MENU_FINANCEIRO, ''))
             footer = 'Responda com o numero ou com o nome da opcao.'
+        show_armazem_menu = self._is_armazem(decision) or (self._is_diretor_comercial(decision) and can_use_estoque)
+        if show_armazem_menu:
+            option_specs[flow.MENU_ARMAZEM] = flow.InteractiveOption(option_id=flow.MENU_ARMAZEM, title='Armazem', description='Consultar estoque por produto', shortcut=shortcut_map.get(flow.MENU_ARMAZEM, ''))
+        if self._is_armazem(decision):
+            footer = 'Responda com o numero ou com o nome da opcao. Atalhos: estoque 3 13203 ou armazem 3 13203.'
         if self._is_admin(decision):
             option_specs[flow.MENU_ADMIN_ACCESS] = flow.InteractiveOption(option_id=flow.MENU_ADMIN_ACCESS, title='Admin', description='Cadastrar ou ajustar acessos', shortcut=shortcut_map.get(flow.MENU_ADMIN_ACCESS, ''))
             if self._can_use_finance_menu(decision):

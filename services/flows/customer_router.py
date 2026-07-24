@@ -241,7 +241,7 @@ class CustomerRouter:
         conversational_response = self._maybe_handle_idle_conversation(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
         if conversational_response is not None:
             return conversational_response
-        if session.step == 'idle' and self._is_vendedor(decision):
+        if session.step == 'idle' and (self._is_vendedor(decision) or self._is_armazem(decision)):
             selected_main_option = flow._select_interactive_option(text=text, normalized=normalized, options=self._build_main_menu(decision).options)
             if selected_main_option is not None:
                 return self._run_intent_clarification_option(sender=incoming.sender, session=session, decision=decision, option_id=selected_main_option.option_id)
@@ -260,6 +260,7 @@ class CustomerRouter:
         seller_risk_shortcut = main_menu_shortcuts.get(flow.MENU_SELLER_RISK, '')
         critica_shortcut = main_menu_shortcuts.get(flow.MENU_CRITICA, '')
         financeiro_shortcut = main_menu_shortcuts.get(flow.MENU_FINANCEIRO, '')
+        armazem_shortcut = main_menu_shortcuts.get(flow.MENU_ARMAZEM, '')
         admin_shortcut = main_menu_shortcuts.get(flow.MENU_ADMIN_ACCESS, '')
         if normalized == flow.MENU_INADIMPLENCIA or (session.step == 'idle' and normalized in {value for value in {inadimplencia_shortcut, 'inadimplencia', 'inadimpl?ncia', 'inadimplente', 'devedor', 'cobranca', 'cobranca da carteira', 'cobranca da gerencia', 'cobran?a'} if value}):
             readiness_error = self._ensure_search_context_ready('inadimplencia', decision=decision)
@@ -824,6 +825,22 @@ class CustomerRouter:
             session.updated_at = flow.datetime.now(flow.timezone.utc)
             self.sessions[incoming.sender] = session
             return self._build_search_menu(search_context='cliente', decision=decision)
+        if normalized == flow.MENU_ARMAZEM or (
+            session.step == 'idle'
+            and (self._is_diretor_comercial(decision) or self._is_armazem(decision))
+            and normalized in {value for value in {armazem_shortcut, 'menu armazem'} if value}
+        ):
+            return self._with_post_result_navigation(
+                incoming.sender,
+                session,
+                self._run_estoque_020304_lookup(
+                    filial='',
+                    product_code='',
+                    wants_pdf=False,
+                    decision=decision,
+                ),
+                return_menu='main',
+            )
         return self._build_main_menu(decision, invalid_selection=bool(normalized))
 
     def _maybe_handle_estoque_command(
@@ -835,13 +852,15 @@ class CustomerRouter:
         decision: AccessDecision,
     ) -> OutgoingMessage | None:
         flow = _customer_flow_module()
-        if re.match(r"^estoque(?:\s|$)", str(normalized or "")) is None:
+        if re.match(r"^(?:estoque|armazem)(?:\s|$)", str(normalized or "")) is None:
             return None
         session = self.sessions.get(sender, flow.LookupSession())
         numbers = re.findall(r"\d+", str(text or normalized or ""))
         filial = flow.normalize_numeric_code(numbers[0]) if numbers else ""
         product_code = flow.normalize_numeric_code(numbers[1]) if len(numbers) >= 2 else ""
         wants_pdf = bool(re.search(r"\bpdf\b", str(normalized or text or ""), flags=re.IGNORECASE))
+        intent = "estoque_pdf" if wants_pdf else "estoque_product" if product_code else "estoque_menu"
+        self._remember_last_context(session, intent=intent, search_context="estoque")
         outgoing = self._run_estoque_020304_lookup(
             filial=filial,
             product_code=product_code,
@@ -869,13 +888,21 @@ class CustomerRouter:
                 text=(
                     "Estoque\n\n"
                     "Informe a filial e o codigo do produto.\n"
-                    "Exemplo: estoque 3 13203\n\n"
+                    "Exemplo: estoque 3 13203\n"
+                    "Tambem aceito: armazem 3 13203\n\n"
                     "Para receber o PDF completo, envie: estoque 3 pdf"
                 )
             )
-        if not (self._is_admin(decision) or self._is_vendedor(decision) or self._is_gerente_vendas(decision)):
+        if not (
+            self._is_admin(decision)
+            or self._is_vendedor(decision)
+            or self._is_gerente_vendas(decision)
+            or self._is_diretor_comercial(decision)
+            or self._is_financeiro(decision)
+            or self._is_armazem(decision)
+        ):
             return flow.OutgoingMessage(
-                text="Estoque\n\nEssa consulta esta liberada apenas para vendedores e gerentes de vendas."
+                text="Estoque\n\nEssa consulta esta liberada apenas para vendedores, gerentes de vendas, diretores comerciais, financeiro e armazem."
             )
         allowed_filiais = self._allowed_estoque_filiais(decision)
         if allowed_filiais is not None and filial not in allowed_filiais:
@@ -1015,6 +1042,12 @@ class CustomerRouter:
         flow = _customer_flow_module()
         if self._is_admin(decision):
             return None
+        if self._is_financeiro(decision):
+            allowed_filiais = flow._recolha_allowed_filiais_from_decision(decision)
+            return allowed_filiais or None
+        if self._is_armazem(decision):
+            allowed_filiais = flow._recolha_allowed_filiais_from_decision(decision)
+            return allowed_filiais or set()
 
         filial_codes: list[str] = []
         for code in flow.partition_filial_scopes(decision.sectors):

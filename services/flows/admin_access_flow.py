@@ -223,7 +223,7 @@ class AdminAccessFlow:
             if session.target_role == flow.ROLE_VENDEDOR:
                 session.target_sectors = tuple(scope_codes)
                 session.target_gv_vdes = ()
-            elif session.target_role == flow.ROLE_FINANCEIRO:
+            elif session.target_role in {flow.ROLE_FINANCEIRO, flow.ROLE_ARMAZEM}:
                 session.target_sectors = tuple(scope_codes)
                 session.target_gv_vdes = ()
             elif session.target_role in {flow.ROLE_GERENTE_VENDAS, flow.ROLE_DIRETOR_COMERCIAL}:
@@ -260,14 +260,14 @@ class AdminAccessFlow:
         text = 'O que voce deseja fazer?'
         if invalid_selection:
             text = flow._invalid_option_text('O que voce deseja fazer?')
-        return flow.OutgoingMessage(kind='menu', title='Acessos', text=text, footer='Cada usuario deve ter um unico cargo. Vendedor usa filial-setor. Gerente de Vendas usa filial-GV. Diretor Comercial usa filial-DC. Financeiro e admin nao usam escopo comercial.', button_text='Escolher', options=(flow.InteractiveOption(option_id=flow.ADMIN_ACTION_CREATE, title='Cadastrar usuario', description='Adicionar um novo numero', shortcut='1'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_UPDATE, title='Alterar acesso', description='Mudar o acesso de um numero', shortcut='2'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_LIST, title='Listar usuarios', description='Ver numeros e cargos', shortcut='3'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_RENAME, title='Alterar nome', description='Atualizar o nome de um numero', shortcut='4'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_SUMMARY, title='Resumo Operacional', description='Ver cargos e usuarios ativos', shortcut='5'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_HEALTH, title='Saude do Sistema', description='Ver o status das bases e acessos', shortcut='6'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_CHECK, title='Validar Acesso', description='Conferir o acesso de um numero', shortcut='7')))
+        return flow.OutgoingMessage(kind='menu', title='Acessos', text=text, footer='Cada usuario deve ter um unico cargo. Vendedor usa filial-setor. Gerente de Vendas usa filial-GV. Diretor Comercial usa filial-DC. Financeiro e Armazem usam filiais. Admin tem acesso total.', button_text='Escolher', options=(flow.InteractiveOption(option_id=flow.ADMIN_ACTION_CREATE, title='Cadastrar usuario', description='Adicionar um novo numero', shortcut='1'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_UPDATE, title='Alterar acesso', description='Mudar o acesso de um numero', shortcut='2'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_LIST, title='Listar usuarios', description='Ver numeros e cargos', shortcut='3'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_RENAME, title='Alterar nome', description='Atualizar o nome de um numero', shortcut='4'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_SUMMARY, title='Resumo Operacional', description='Ver cargos e usuarios ativos', shortcut='5'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_HEALTH, title='Saude do Sistema', description='Ver o status das bases e acessos', shortcut='6'), flow.InteractiveOption(option_id=flow.ADMIN_ACTION_CHECK, title='Validar Acesso', description='Conferir o acesso de um numero', shortcut='7')))
 
     def _build_admin_summary_response(self, users: list[dict[str, Any]]) -> OutgoingMessage:
         flow = _customer_flow_module()
         total_users = len(users)
         active_users = sum((1 for user in users if bool(user.get('is_active'))))
         inactive_users = total_users - active_users
-        role_totals = {flow.ROLE_ADMIN: 0, flow.ROLE_FINANCEIRO: 0, flow.ROLE_GERENTE_VENDAS: 0, flow.ROLE_DIRETOR_COMERCIAL: 0, flow.ROLE_VENDEDOR: 0}
+        role_totals = {flow.ROLE_ADMIN: 0, flow.ROLE_FINANCEIRO: 0, flow.ROLE_ARMAZEM: 0, flow.ROLE_GERENTE_VENDAS: 0, flow.ROLE_DIRETOR_COMERCIAL: 0, flow.ROLE_VENDEDOR: 0}
         out_of_policy = 0
         for user in users:
             roles = [str(item) for item in user.get('roles', []) if str(item).strip()]
@@ -288,13 +288,15 @@ class AdminAccessFlow:
                 out_of_policy += 1
             elif role_name == flow.ROLE_FINANCEIRO and (gv_vdes or not sectors or has_invalid_filial_scope):
                 out_of_policy += 1
+            elif role_name == flow.ROLE_ARMAZEM and (gv_vdes or not sectors or has_invalid_filial_scope):
+                out_of_policy += 1
             elif role_name == flow.ROLE_GERENTE_VENDAS and (sectors or not gv_vdes or has_invalid_gv_scope):
                 out_of_policy += 1
             elif role_name == flow.ROLE_DIRETOR_COMERCIAL and (sectors or not gv_vdes or has_invalid_dc_scope):
                 out_of_policy += 1
             elif role_name == flow.ROLE_VENDEDOR and (gv_vdes or not sectors or has_invalid_sector_scope):
                 out_of_policy += 1
-        lines = ['Resumo operacional', '', f'*Usuarios cadastrados:* {total_users}', f'*Usuarios ativos:* {active_users}', f'*Usuarios inativos:* {inactive_users}', '', f'*Admins:* {role_totals[flow.ROLE_ADMIN]}', f'*Financeiro:* {role_totals[flow.ROLE_FINANCEIRO]}', f'*Gerentes de Vendas:* {role_totals[flow.ROLE_GERENTE_VENDAS]}', f'*Diretores Comerciais:* {role_totals[flow.ROLE_DIRETOR_COMERCIAL]}', f'*Vendedores:* {role_totals[flow.ROLE_VENDEDOR]}', '', f'*Cadastros fora da politica atual:* {out_of_policy}', '', 'Se quiser continuar, envie MENU.']
+        lines = ['Resumo operacional', '', f'*Usuarios cadastrados:* {total_users}', f'*Usuarios ativos:* {active_users}', f'*Usuarios inativos:* {inactive_users}', '', f'*Admins:* {role_totals[flow.ROLE_ADMIN]}', f'*Financeiro:* {role_totals[flow.ROLE_FINANCEIRO]}', f'*Armazem:* {role_totals[flow.ROLE_ARMAZEM]}', f'*Gerentes de Vendas:* {role_totals[flow.ROLE_GERENTE_VENDAS]}', f'*Diretores Comerciais:* {role_totals[flow.ROLE_DIRETOR_COMERCIAL]}', f'*Vendedores:* {role_totals[flow.ROLE_VENDEDOR]}', '', f'*Cadastros fora da politica atual:* {out_of_policy}', '', 'Se quiser continuar, envie MENU.']
         return flow.OutgoingMessage(text='\n'.join(lines))
 
     def _build_admin_health_response(self) -> OutgoingMessage:
@@ -320,6 +322,7 @@ class AdminAccessFlow:
         client_decision = self.access_control.authorize(phone_number=phone_number, area='cliente')
         inad_decision = self.access_control.authorize(phone_number=phone_number, area='inadimplencia')
         comodato_decision = self.access_control.authorize(phone_number=phone_number, area='comodato')
+        estoque_decision = self.access_control.authorize(phone_number=phone_number, area='estoque')
         roles = tuple((str(item) for item in (user or {}).get('roles', [])))
         sectors = tuple((str(item) for item in (user or {}).get('sectors', [])))
         gv_vdes = tuple((str(item) for item in (user or {}).get('gv_vdes', [])))
@@ -335,6 +338,7 @@ class AdminAccessFlow:
         lines.append(f'Cliente: {flow._format_access_decision_label(client_decision)}')
         lines.append(f'Inadimplencia: {flow._format_access_decision_label(inad_decision)}')
         lines.append(f'Comodatos: {flow._format_access_decision_label(comodato_decision)}')
+        lines.append(f'Estoque: {flow._format_access_decision_label(estoque_decision)}')
         lines.append(f"Visitas do dia: {('liberado' if self._can_use_visit_menu(client_decision) else 'bloqueado')}")
         lines.append(f"Menu financeiro: {('liberado' if self._can_use_finance_menu(client_decision) else 'bloqueado')}")
         lines.append(f"Menu admin: {('liberado' if self._is_admin(client_decision) else 'bloqueado')}")
@@ -349,7 +353,7 @@ class AdminAccessFlow:
             lines.append(f'Encontrei este numero: {phone_number}')
             lines.append(f"Nome atual: {session.current_name or '-'}")
             lines.append(f'Cargo atual: {flow._format_roles(session.current_roles)}')
-            if flow.ROLE_FINANCEIRO in session.current_roles:
+            if flow.ROLE_FINANCEIRO in session.current_roles or flow.ROLE_ARMAZEM in session.current_roles:
                 lines.append(f'Filiais atuais: {flow._format_finance_filiais(session.current_sectors)}')
             else:
                 lines.append(f'Setor atual: {flow._format_sectors(session.current_sectors)}')
@@ -360,7 +364,7 @@ class AdminAccessFlow:
         if invalid_selection:
             lines.append('Nao entendi essa opcao.')
         lines.append('Escolha o cargo desse usuario.')
-        return flow.OutgoingMessage(kind='menu', title='Cargo do Usuario', text='\n'.join(lines), footer='Escolha um unico cargo. Vendedor usa filial-setor. GV usa filial-GV. DC usa filial-DC. Financeiro usa apenas filiais. Admin tem acesso total.', button_text='Escolher', options=(flow.InteractiveOption(option_id=flow.ADMIN_ROLE_VENDEDOR, title='Vendedor', description='Consulta clientes da propria chave filial-setor', shortcut='1'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_GERENTE_VENDAS, title='Gerente de Vendas', description='Consulta a base do proprio GV em todas as revendas', shortcut='2'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_ADMIN, title='Admin', description='Acesso completo', shortcut='3'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_FINANCEIRO, title='Financeiro', description='Consulta as filiais liberadas', shortcut='4'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_DIRETOR_COMERCIAL, title='Diretor Comercial', description='Acompanha todos os gerentes sob responsabilidade', shortcut='5')))
+        return flow.OutgoingMessage(kind='menu', title='Cargo do Usuario', text='\n'.join(lines), footer='Escolha um unico cargo. Vendedor usa filial-setor. GV usa filial-GV. DC usa filial-DC. Financeiro e Armazem usam apenas filiais. Admin tem acesso total.', button_text='Escolher', options=(flow.InteractiveOption(option_id=flow.ADMIN_ROLE_VENDEDOR, title='Vendedor', description='Consulta clientes da propria chave filial-setor', shortcut='1'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_GERENTE_VENDAS, title='Gerente de Vendas', description='Consulta a base do proprio GV em todas as revendas', shortcut='2'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_ADMIN, title='Admin', description='Acesso completo', shortcut='3'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_FINANCEIRO, title='Financeiro', description='Consulta as filiais liberadas', shortcut='4'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_DIRETOR_COMERCIAL, title='Diretor Comercial', description='Acompanha todos os gerentes sob responsabilidade', shortcut='5'), flow.InteractiveOption(option_id=flow.ADMIN_ROLE_ARMAZEM, title='Armazem', description='Busca clientes e consulta estoque das filiais liberadas', shortcut='6')))
 
     def _build_admin_confirmation(self, session: LookupSession) -> OutgoingMessage:
         flow = _customer_flow_module()
@@ -383,7 +387,7 @@ class AdminAccessFlow:
             lines.append(f"Nome: {session.target_name or '-'}")
         if session.admin_action != 'rename' and (session.current_roles or session.current_sectors or session.current_gv_vdes):
             lines.append(f'Cargo atual: {flow._format_roles(session.current_roles)}')
-            if flow.ROLE_FINANCEIRO in session.current_roles:
+            if flow.ROLE_FINANCEIRO in session.current_roles or flow.ROLE_ARMAZEM in session.current_roles:
                 lines.append(f'Filiais atuais: {flow._format_finance_filiais(session.current_sectors)}')
             else:
                 lines.append(f'Setor atual: {flow._format_sectors(session.current_sectors)}')
@@ -397,6 +401,8 @@ class AdminAccessFlow:
             elif session.target_role == flow.ROLE_DIRETOR_COMERCIAL:
                 lines.append(f'Novos DCs sob responsabilidade: {flow._format_gv_vdes(session.target_gv_vdes, role_name=flow.ROLE_DIRETOR_COMERCIAL)}')
             elif session.target_role == flow.ROLE_FINANCEIRO:
+                lines.append(f'Novas filiais: {flow._format_finance_filiais(session.target_sectors)}')
+            elif session.target_role == flow.ROLE_ARMAZEM:
                 lines.append(f'Novas filiais: {flow._format_finance_filiais(session.target_sectors)}')
             else:
                 lines.append('Novo acesso: acesso completo')
@@ -429,7 +435,7 @@ class AdminAccessFlow:
 
     def _display_role(self, role_name: str) -> str:
         flow = _customer_flow_module()
-        return {flow.ROLE_VENDEDOR: 'Vendedor', flow.ROLE_GERENTE_VENDAS: 'Gerente de Vendas', flow.ROLE_DIRETOR_COMERCIAL: 'Diretor Comercial', flow.ROLE_ADMIN: 'Admin', flow.ROLE_FINANCEIRO: 'Financeiro'}.get(role_name, role_name.title())
+        return {flow.ROLE_VENDEDOR: 'Vendedor', flow.ROLE_GERENTE_VENDAS: 'Gerente de Vendas', flow.ROLE_DIRETOR_COMERCIAL: 'Diretor Comercial', flow.ROLE_ADMIN: 'Admin', flow.ROLE_FINANCEIRO: 'Financeiro', flow.ROLE_ARMAZEM: 'Armazem'}.get(role_name, role_name.title())
 
     def _build_scope_prompt(self, role_name: str) -> str:
         flow = _customer_flow_module()
@@ -438,6 +444,8 @@ class AdminAccessFlow:
         if role_name == flow.ROLE_DIRETOR_COMERCIAL:
             return f'Cargo {self._display_role(role_name)} selecionado.\nAgora me envie a chave filial-DC ou varias chaves separadas por virgula.\nExemplo: 3-1 ou 3-1,4-1'
         if role_name == flow.ROLE_FINANCEIRO:
+            return f'Cargo {self._display_role(role_name)} selecionado.\nAgora me envie a filial ou varias filiais separadas por virgula.\nExemplo: 3 ou 3,4'
+        if role_name == flow.ROLE_ARMAZEM:
             return f'Cargo {self._display_role(role_name)} selecionado.\nAgora me envie a filial ou varias filiais separadas por virgula.\nExemplo: 3 ou 3,4'
         return f'Cargo {self._display_role(role_name)} selecionado.\nAgora me envie a chave filial-setor ou as chaves separadas por virgula.\nExemplo: 1-206 ou 1-206,3-107'
 
@@ -448,6 +456,8 @@ class AdminAccessFlow:
         if role_name == flow.ROLE_DIRETOR_COMERCIAL:
             return 'Para esse cargo, preciso de pelo menos uma chave filial-DC valida.\nEnvie nesse formato: 3-1 ou 3-1,4-1'
         if role_name == flow.ROLE_FINANCEIRO:
+            return 'Para esse cargo, preciso de pelo menos uma filial valida.\nEnvie nesse formato: 3 ou 3,4'
+        if role_name == flow.ROLE_ARMAZEM:
             return 'Para esse cargo, preciso de pelo menos uma filial valida.\nEnvie nesse formato: 3 ou 3,4'
         return 'Para esse cargo, preciso de pelo menos uma chave filial-setor valida.\nEnvie nesse formato: 1-206 ou 1-206,3-107'
 
@@ -461,6 +471,8 @@ class AdminAccessFlow:
             return f'Nao encontrei base para o(s) diretor(es): {joined_codes}.\nConfira as chaves e envie novamente.\nExemplo: 3-1 ou 3-1,4-1'
         if role_name == flow.ROLE_FINANCEIRO:
             return self._build_scope_retry_prompt(role_name)
+        if role_name == flow.ROLE_ARMAZEM:
+            return self._build_scope_retry_prompt(role_name)
         return self._build_scope_retry_prompt(role_name)
 
     def _resolve_admin_scope_codes(self, text: str, role_name: str) -> tuple[list[str], str | None]:
@@ -470,7 +482,7 @@ class AdminAccessFlow:
             if not scope_codes:
                 return ([], self._build_scope_retry_prompt(role_name))
             return (scope_codes, None)
-        if role_name == flow.ROLE_FINANCEIRO:
+        if role_name in {flow.ROLE_FINANCEIRO, flow.ROLE_ARMAZEM}:
             scope_codes = flow._parse_scope_code_list(text, role_name)
             if not scope_codes:
                 return ([], self._build_scope_retry_prompt(role_name))
@@ -505,6 +517,8 @@ class AdminAccessFlow:
         if flow.ROLE_ADMIN in roles:
             return 'acesso total'
         if flow.ROLE_FINANCEIRO in roles:
+            return f'Filiais liberadas: {flow._format_finance_filiais(sectors)}'
+        if flow.ROLE_ARMAZEM in roles:
             return f'Filiais liberadas: {flow._format_finance_filiais(sectors)}'
         if flow.ROLE_DIRETOR_COMERCIAL in roles:
             return f'DCs sob responsabilidade: {flow._format_gv_vdes(gv_vdes, role_name=flow.ROLE_DIRETOR_COMERCIAL)}'

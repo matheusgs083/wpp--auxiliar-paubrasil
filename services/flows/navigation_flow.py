@@ -677,6 +677,11 @@ class NavigationFlow:
                 self._reset_session(sender)
                 return readiness_error
             return self._open_search_context(sender=sender, session=session, search_context='cliente', decision=decision)
+        if option_id == flow.MENU_ARMAZEM:
+            self._remember_last_context(session, intent='estoque_menu', search_context='estoque')
+            session.updated_at = flow.datetime.now(flow.timezone.utc)
+            self.sessions[sender] = session
+            return self._run_estoque_020304_lookup(filial='', product_code='', wants_pdf=False, decision=decision)
         if option_id == flow.MENU_INADIMPLENCIA:
             readiness_error = self._ensure_search_context_ready('inadimplencia', decision=decision)
             if readiness_error is not None:

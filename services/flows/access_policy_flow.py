@@ -26,6 +26,12 @@ class AccessPolicyFlow:
             return False
         return flow.ROLE_FINANCEIRO in decision.roles
 
+    def _is_armazem(self, decision: AccessDecision) -> bool:
+        flow = _customer_flow_module()
+        if self._is_admin(decision):
+            return False
+        return flow.ROLE_ARMAZEM in decision.roles
+
     def _is_vendedor(self, decision: AccessDecision) -> bool:
         flow = _customer_flow_module()
         if self._is_admin(decision):

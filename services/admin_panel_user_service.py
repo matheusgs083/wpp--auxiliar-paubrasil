@@ -21,6 +21,7 @@ PANEL_FEATURES: tuple[str, ...] = (
     "promax",
     "critica",
     "recolhas",
+    "armazem",
     "giro",
     "usage",
 )

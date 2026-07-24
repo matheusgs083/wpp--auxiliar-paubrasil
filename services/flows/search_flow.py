@@ -789,6 +789,13 @@ class SearchFlow:
     def _ensure_search_context_ready(self, search_context: str, decision: AccessDecision | None=None) -> OutgoingMessage | None:
         flow = _customer_flow_module()
         if decision is not None:
+            if self._is_armazem(decision) and search_context != 'cliente':
+                return flow.OutgoingMessage(
+                    text=(
+                        "Esse acesso de armazem esta liberado apenas para buscar clientes e consultar estoque.\n"
+                        "Use cliente, estoque ou armazem."
+                    )
+                )
             area_map = {'comodato': 'comodato', 'inadimplencia': 'inadimplencia', 'giro': 'cliente', 'documentacao': 'cliente', 'prazo_limite': 'cliente'}
             area = area_map.get(search_context, search_context)
             area_decision = self._decision_for_area(decision, area)

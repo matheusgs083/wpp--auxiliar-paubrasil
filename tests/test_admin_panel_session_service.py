@@ -97,6 +97,11 @@ class AdminPanelSessionServiceTest(unittest.TestCase):
         self.assertTrue(service.panel_context_can_access_feature(critica, "critica"))
         self.assertFalse(service.panel_context_can_access_feature(critica, "recolhas"))
 
+        armazem = {"mode": "user", "is_admin": False, "features": ("armazem",), "filiais": ("3",)}
+        self.assertTrue(service.panel_context_can_access_feature(armazem, "armazem"))
+        self.assertTrue(service.panel_context_can_access_feature(armazem, "estoque"))
+        self.assertFalse(service.panel_context_can_access_feature(armazem, "payip"))
+
     def test_signed_cookie_roundtrip_preserves_context(self) -> None:
         service = self.make_service()
         app = FastAPI()

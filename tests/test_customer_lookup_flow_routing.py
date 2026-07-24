@@ -230,6 +230,76 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertNotIn("Data ref.", response.text)
         self.assertEqual(self.estoque_service.calls[-1]["filial"], "3")
 
+    def test_estoque_command_returns_product_quantity_for_financeiro(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque-fin", text="estoque 3 13203"),
+            make_decision(allowed=True, roles=("financeiro",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("*Produto:* 13203 - ANTARCTICA PILSEN GFA VD 600ML", response.text)
+        self.assertEqual(self.estoque_service.calls[-1], {"filial": "3", "product_code": "13203"})
+
+    def test_estoque_command_returns_product_quantity_for_diretor_comercial(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque-dc", text="estoque 3 13203"),
+            make_decision(allowed=True, roles=("diretor_comercial",), gv_vdes=("dc:3_1",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("*Produto:* 13203 - ANTARCTICA PILSEN GFA VD 600ML", response.text)
+        self.assertEqual(self.estoque_service.calls[-1], {"filial": "3", "product_code": "13203"})
+
+    def test_estoque_command_returns_product_quantity_for_armazem(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque-armazem", text="estoque 3 13203"),
+            make_decision(allowed=True, roles=("armazem",), sectors=("3",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("*Produto:* 13203 - ANTARCTICA PILSEN GFA VD 600ML", response.text)
+        self.assertEqual(self.estoque_service.calls[-1], {"filial": "3", "product_code": "13203"})
+
+    def test_armazem_alias_returns_product_quantity_for_armazem(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-armazem-alias", text="armazem 3 13203"),
+            make_decision(allowed=True, roles=("armazem",), sectors=("3",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("*Produto:* 13203 - ANTARCTICA PILSEN GFA VD 600ML", response.text)
+        self.assertEqual(self.estoque_service.calls[-1], {"filial": "3", "product_code": "13203"})
+
+    def test_estoque_command_blocks_financeiro_from_other_filial_scope(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque-fin-denied", text="estoque 4 13203"),
+            make_decision(allowed=True, roles=("financeiro",), sectors=("filial:3",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("nao tem acesso", response.text)
+        self.assertEqual(self.estoque_service.calls, [])
+
+    def test_estoque_command_blocks_diretor_comercial_from_other_filial_scope(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque-dc-denied", text="estoque 4 13203"),
+            make_decision(allowed=True, roles=("diretor_comercial",), gv_vdes=("dc:3_1",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("nao tem acesso", response.text)
+        self.assertEqual(self.estoque_service.calls, [])
+
+    def test_estoque_command_blocks_armazem_from_other_filial_scope(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque-armazem-denied", text="estoque 4 13203"),
+            make_decision(allowed=True, roles=("armazem",), sectors=("3",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("nao tem acesso", response.text)
+        self.assertEqual(self.estoque_service.calls, [])
+
     def test_estoque_command_blocks_seller_from_other_filial(self) -> None:
         response = self.flow.handle(
             IncomingMessage(sender="5511-estoque-denied", text="estoque 4"),
@@ -239,6 +309,77 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(response.kind, "text")
         self.assertIn("nao tem acesso", response.text)
         self.assertEqual(self.estoque_service.calls, [])
+
+    def test_armazem_menu_shows_basic_options_only(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-armazem-menu", text="menu"),
+            make_decision(allowed=True, roles=("armazem",), sectors=("3",)),
+        )
+
+        self.assertEqual(response.kind, "menu")
+        self.assertEqual(
+            [(option.shortcut, option.title) for option in response.options],
+            [("1", "Buscar Cliente"), ("2", "Armazem")],
+        )
+
+    def test_armazem_menu_shortcut_opens_stock_prompt(self) -> None:
+        sender = "5511-armazem-menu-shortcut"
+        decision = make_decision(allowed=True, roles=("armazem",), sectors=("3",))
+        _ = self.flow.handle(IncomingMessage(sender=sender, text="menu"), decision)
+
+        response = self.flow.handle(IncomingMessage(sender=sender, text="2"), decision)
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("Informe a filial e o codigo do produto", response.text)
+
+    def test_diretor_comercial_menu_includes_armazem(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-dc-armazem-menu", text="menu"),
+            make_decision(allowed=True, roles=("diretor_comercial",), gv_vdes=("dc:3_1",)),
+        )
+
+        self.assertEqual(response.kind, "menu")
+        self.assertIn("Armazem", [option.title for option in response.options])
+
+    def test_diretor_comercial_menu_armazem_shortcut_opens_stock_prompt(self) -> None:
+        sender = "5511-dc-armazem-menu-shortcut"
+        decision = make_decision(allowed=True, roles=("diretor_comercial",), gv_vdes=("dc:3_1",))
+        menu = self.flow.handle(IncomingMessage(sender=sender, text="menu"), decision)
+        shortcut = next(option.shortcut for option in menu.options if option.title == "Armazem")
+
+        response = self.flow.handle(IncomingMessage(sender=sender, text=shortcut), decision)
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("Informe a filial e o codigo do produto", response.text)
+
+    def test_armazem_can_search_cliente_by_filial_and_nb(self) -> None:
+        self.query_service.registration_records = [
+            DClienteRecord(
+                filial="3",
+                cod_pdv="6643",
+                razao_social="ESPETO DO PAULO LTDA",
+                nome_fantasia="ESPETO DO PAULO",
+                telefone="83999999999",
+                dia_visita="SEG/",
+                vendedor="400",
+                status="ATIVO",
+                cidade="Patos",
+                cond_pag_atual="A vista",
+                limite_credito="1000",
+                total_pendente="0,00",
+                total_comodatos_pendentes=0,
+                ultima_atualizacao_tabela="2026-04-20",
+            )
+        ]
+
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-armazem-cliente", text="3 6643"),
+            make_decision(allowed=True, roles=("armazem",), sectors=("3",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("*ESPETO DO PAULO*", response.text)
+        self.assertEqual(self.query_service.registration_calls[-1]["allowed_sectors"], ["3"])
 
     def test_handle_routes_natural_inadimplencia_alias_to_search_menu(self) -> None:
         response = self.flow.handle(
@@ -4119,6 +4260,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
                 ("5", "Documentacao Pendente"),
                 ("6", "Buscar Cliente"),
                 ("7", "Comodatos"),
+                ("8", "Armazem"),
             ],
         )
 

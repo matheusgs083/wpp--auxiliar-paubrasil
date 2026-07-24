@@ -115,6 +115,7 @@ EVOLUTION_USAGE_FEATURE_LABELS: dict[str, str] = {
     "recolha": "Recolhas",
     "payip": "PayIP",
     "boleto": "Boletos",
+    "estoque": "Armazem - estoque",
     "visitas": "Visitas",
     "admin_access": "Acessos",
 }
@@ -218,6 +219,8 @@ def _infer_usage_feature_from_intent(intent: str) -> str | None:
         return "prazo_limite_cliente"
     if normalized_intent.startswith("visit_"):
         return "rota_dia"
+    if normalized_intent.startswith("estoque_") or normalized_intent.startswith("armazem_"):
+        return "estoque"
     if normalized_intent.startswith("admin:"):
         return "admin_access"
     return None
@@ -272,6 +275,8 @@ def _infer_usage_feature_from_text(normalized_text: str) -> str | None:
         return critica_feature
     if normalized_text.startswith("boleto") or " boleto" in f" {normalized_text}":
         return "boleto"
+    if normalized_text.startswith("estoque") or normalized_text.startswith("armazem"):
+        return "estoque"
     if "recolh" in normalized_text:
         return "recolha"
     if "payip" in normalized_text or normalized_text.startswith("pix ") or "pix" in tokens:

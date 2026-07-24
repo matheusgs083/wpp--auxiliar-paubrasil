@@ -43,6 +43,8 @@ class AdminUsageServiceTests(unittest.TestCase):
             "giro zero": "giro_zero",
             "giro segunda": "giro_dia",
             "documentacao segunda": "documentacao_dia",
+            "estoque 3 13203": "estoque",
+            "armazem 3 13203": "estoque",
             "critica pdf setor 401": "critica_pdf_setor",
             "critica pdf gv": "critica_pdf_gv",
             "critica nb pdf 3 18008": "critica_nb_pdf",

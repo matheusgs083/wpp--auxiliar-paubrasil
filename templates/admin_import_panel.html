@@ -2036,6 +2036,7 @@
         GERENTE_VENDAS: "Gerente de Vendas (GV)",
         DIRETOR_COMERCIAL: "Diretor Comercial (DC)",
         FINANCEIRO: "Financeiro",
+        ARMAZEM: "Armazem",
         ADMIN: "Administrador / TI"
       },
       datasets: []
@@ -2048,6 +2049,7 @@
       { id: "promax", label: "Promax", icon: "bi-cloud-arrow-down", description: "Execucoes, agendas e workers." },
       { id: "critica", label: "Critica", icon: "bi-clipboard-data", description: "Importacao, dashboard e PDFs." },
       { id: "recolhas", label: "Recolhas", icon: "bi-box-arrow-in-down", description: "Solicitacoes e acompanhamento." },
+      { id: "armazem", label: "Armazem", icon: "bi-box-seam", description: "Consultas basicas de cliente e estoque." },
       { id: "giro", label: "Giro", icon: "bi-arrow-repeat", description: "Giro e oportunidades da carteira." },
       { id: "usage", label: "Uso Evolution", icon: "bi-activity", description: "Numero x funcao e auditoria." }
     ];
@@ -2114,6 +2116,7 @@
         canImport: true,
         canImportCritica: true,
         canManageRecolhas: true,
+        canArmazem: true,
         canPayip: true,
         canOperations: true,
         canReports: true,
@@ -4968,6 +4971,7 @@
       if (role === "gerente_vendas" || role === "gerente_de_vendas" || role === "gv") return "gerente_vendas";
       if (role === "diretor_comercial" || role === "dc") return "diretor_comercial";
       if (role === "financeiro" || role === "fin") return "financeiro";
+      if (role === "armazem" || role === "armazen" || role === "almoxarifado" || role === "estoque") return "armazem";
       return "admin";
     }
 
@@ -4979,6 +4983,7 @@
       if (primary === "gerente_vendas") return "GERENTE_VENDAS";
       if (primary === "diretor_comercial") return "DIRETOR_COMERCIAL";
       if (primary === "financeiro") return "FINANCEIRO";
+      if (primary === "armazem") return "ARMAZEM";
       return "ADMIN";
     }
 
@@ -5032,7 +5037,7 @@
       const role = roleFromApi(user);
       const sectors = Array.isArray(user.sectors) ? user.sectors : [];
       const gvVdes = Array.isArray(user.gv_vdes) ? user.gv_vdes : [];
-      const fallbackScope = (role === "VENDEDOR" || role === "FINANCEIRO") ? sectors : gvVdes;
+      const fallbackScope = (role === "VENDEDOR" || role === "FINANCEIRO" || role === "ARMAZEM") ? sectors : gvVdes;
       const rawPhone = user.whatsapp_phone_number || user.phone_number || "";
       return {
         phone: rawPhone,
@@ -5057,6 +5062,7 @@
       else if (role === "GERENTE_VENDAS") E.accessScopeHint.innerHTML = 'Gerente de Vendas aceita uma ou mais chaves filial-GV. Ex.: <span class="mono">3-4, 4-5</span>.';
       else if (role === "DIRETOR_COMERCIAL") E.accessScopeHint.innerHTML = 'Diretor Comercial aceita uma ou mais chaves filial-DC. Ex.: <span class="mono">3-1, 4-2</span>.';
       else if (role === "FINANCEIRO") E.accessScopeHint.innerHTML = 'Financeiro aceita uma ou mais filiais. Ex.: <span class="mono">3, 4</span>.';
+      else if (role === "ARMAZEM") E.accessScopeHint.innerHTML = 'Armazem aceita uma ou mais filiais. Ex.: <span class="mono">3, 4</span>.';
       else E.accessScopeHint.textContent = "Admin tem acesso total e nao usa escopo.";
     }
 
@@ -5156,6 +5162,9 @@
           : true,
         canManageRecolhas: payload && Object.prototype.hasOwnProperty.call(payload, "can_manage_recolhas")
           ? Boolean(payload.can_manage_recolhas)
+          : true,
+        canArmazem: payload && Object.prototype.hasOwnProperty.call(payload, "can_armazem")
+          ? Boolean(payload.can_armazem)
           : true,
         canPayip: payload && Object.prototype.hasOwnProperty.call(payload, "can_payip")
           ? Boolean(payload.can_payip)
@@ -10298,7 +10307,7 @@
         name: name || null,
         is_active: active,
         roles: [roleApi],
-        sectors: (roleApi === "vendedor" || roleApi === "financeiro") ? scopes : [],
+        sectors: (roleApi === "vendedor" || roleApi === "financeiro" || roleApi === "armazem") ? scopes : [],
         gv_vdes: (roleApi === "gerente_vendas" || roleApi === "diretor_comercial") ? scopes : []
       };
       try {
@@ -10331,7 +10340,7 @@
             name: name,
             is_active: isActive,
             roles: [roleApi],
-            sectors: (roleApi === "vendedor" || roleApi === "financeiro") ? scopes : [],
+            sectors: (roleApi === "vendedor" || roleApi === "financeiro" || roleApi === "armazem") ? scopes : [],
             gv_vdes: (roleApi === "gerente_vendas" || roleApi === "diretor_comercial") ? scopes : []
           };
         });

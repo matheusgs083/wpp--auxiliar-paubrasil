@@ -34,6 +34,7 @@ from bot_api.security.access_control import (
     AccessControl,
     AccessDecision,
     ROLE_ADMIN,
+    ROLE_ARMAZEM,
     ROLE_DIRETOR_COMERCIAL,
     ROLE_FINANCEIRO,
     ROLE_GERENTE_VENDAS,
@@ -110,6 +111,7 @@ MENU_SELLER_FINANCEIRO = "menu:seller_financeiro"
 MENU_CRITICA = "menu:critica"
 MENU_VISIT_DAY = "menu:visitas_do_dia"
 MENU_FINANCEIRO = "menu:financeiro"
+MENU_ARMAZEM = "menu:armazem"
 MENU_GV_SUMMARY = "menu:gv_summary"
 MENU_MANAGER = "menu:gerente_vendas"
 MENU_SELLER_SUMMARY = "menu:seller_summary"
@@ -138,6 +140,7 @@ ADMIN_ROLE_GESTOR = "admin:role:gestor"
 ADMIN_ROLE_ADMIN = "admin:role:admin"
 ADMIN_ROLE_FINANCEIRO = "admin:role:financeiro"
 ADMIN_ROLE_DIRETOR_COMERCIAL = "admin:role:diretor_comercial"
+ADMIN_ROLE_ARMAZEM = "admin:role:armazem"
 
 ADMIN_CONFIRM = "admin:confirm"
 ADMIN_CANCEL = "admin:cancel"
@@ -1345,6 +1348,11 @@ class CustomerLookupFlow:
             decision=decision,
         )
 
+    def _is_armazem(self, decision: AccessDecision) -> bool:
+        return self.access_policy_flow._is_armazem(
+            decision=decision,
+        )
+
     def _is_vendedor(self, decision: AccessDecision) -> bool:
         return self.access_policy_flow._is_vendedor(
             decision=decision,
@@ -1397,6 +1405,21 @@ class CustomerLookupFlow:
 
     def _can_use_payip_menu(self, decision: AccessDecision) -> bool:
         return self.access_policy_flow._can_use_payip_menu(
+            decision=decision,
+        )
+
+    def _run_estoque_020304_lookup(
+        self,
+        *,
+        filial: str,
+        product_code: str = "",
+        wants_pdf: bool = False,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        return self.customer_router._run_estoque_020304_lookup(
+            filial=filial,
+            product_code=product_code,
+            wants_pdf=wants_pdf,
             decision=decision,
         )
 
@@ -6006,6 +6029,15 @@ def _parse_admin_role(normalized_text: str) -> str:
         "diretor_comercial",
     }:
         return ROLE_DIRETOR_COMERCIAL
+    if normalized_text in {
+        ADMIN_ROLE_ARMAZEM,
+        "6",
+        "armazem",
+        "armazen",
+        "almoxarifado",
+        "estoque",
+    }:
+        return ROLE_ARMAZEM
     return ""
 
 
@@ -6015,7 +6047,7 @@ def _parse_scope_code_list(text: str, role_name: str) -> list[str]:
     for token in extract_scope_input_tokens(text):
         if role_name == ROLE_VENDEDOR:
             normalized = normalize_sector_scope_input(token)
-        elif role_name == ROLE_FINANCEIRO:
+        elif role_name in {ROLE_FINANCEIRO, ROLE_ARMAZEM}:
             normalized = normalize_filial_scope_input(token)
         elif role_name == ROLE_DIRETOR_COMERCIAL:
             normalized = normalize_stored_scope_value(f"dc:{token}")
@@ -7405,6 +7437,7 @@ def _format_roles(roles: tuple[str, ...]) -> str:
     role_labels = {
         ROLE_ADMIN: "Admin",
         ROLE_FINANCEIRO: "Financeiro",
+        ROLE_ARMAZEM: "Armazem",
         ROLE_GERENTE_VENDAS: "Gerente de Vendas",
         ROLE_DIRETOR_COMERCIAL: "Diretor Comercial",
         ROLE_VENDEDOR: "Vendedor",
