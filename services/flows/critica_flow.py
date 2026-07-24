@@ -202,7 +202,6 @@ class CriticaFlow:
             f"- Clientes: {summary.client_count}",
             f"- Itens: {summary.row_count}",
             f"- Pedidos com problema: {summary.problem_pedido_count}",
-            f"- Linhas com problema: {summary.problem_row_count}",
             f"- Valor dos pedidos: {flow._format_currency_brl(summary.total_pedido)}",
             f"- Peso total: {flow._format_quantity(summary.peso_total)}",
             f"- Total HL: {flow._format_quantity(summary.total_hectolitros)}",
@@ -294,22 +293,20 @@ class CriticaFlow:
             "Critica RN | Possiveis problemas",
             "",
             f"Data: {flow._format_display_date(target_date.isoformat())}",
-            (
-                f"Resumo: {summary.problem_row_count} linha(s) com problema "
-                f"em {summary.problem_pedido_count} pedido(s)."
-            ),
+            f"Resumo: {summary.problem_pedido_count} pedido(s) com problema.",
             "",
         ]
         for index, record in enumerate(records, start=1):
             lines.extend(flow._format_critica_problem_block(record, index=index))
             if index != len(records):
                 lines.append("")
-        remaining = summary.problem_row_count - len(records)
+        displayed_order_count = len({(record.filial, record.pedido) for record in records if record.filial and record.pedido})
+        remaining = summary.problem_pedido_count - displayed_order_count
         if remaining > 0:
             lines.extend(
                 [
                     "",
-                    f"Mostrei {len(records)} de {summary.problem_row_count} linha(s) com problema.",
+                    f"Mostrei {displayed_order_count} de {summary.problem_pedido_count} pedido(s) com problema.",
                     "Para ver tudo, envie critica pdf.",
                 ]
             )
@@ -361,7 +358,13 @@ class CriticaFlow:
                 existing_conditions = pedido_conditions.setdefault(pedido_key, [])
                 if condition_name not in existing_conditions:
                     existing_conditions.append(condition_name)
-        problem_count = sum(1 for record in records if record.possui_problema)
+        problem_count = len(
+            {
+                (record.filial, record.pedido)
+                for record in records
+                if record.possui_problema and record.filial and record.pedido
+            }
+        )
         total_pedidos = sum(pedido_totals.values(), flow.Decimal("0"))
         peso_total = sum((record.peso_item for record in records), flow.Decimal("0"))
         lines = [
@@ -382,7 +385,7 @@ class CriticaFlow:
                 "Resumo:",
                 f"- Pedidos: {len(pedido_totals)}",
                 f"- Itens: {len(records)}",
-                f"- Linhas com problema: {problem_count}",
+                f"- Pedidos com problema: {problem_count}",
                 f"- Valor dos pedidos: {flow._format_currency_brl(total_pedidos)}",
                 f"- Peso total: {flow._format_weight_quantity(peso_total)}",
             ]
@@ -435,7 +438,7 @@ class CriticaFlow:
         text = (
             "Critica RN | PDF\n\n"
             f"Data: {flow._format_display_date(target_date.isoformat())}\n"
-            f"Pedidos: {summary.pedido_count} | Itens: {summary.row_count} | Problemas: {summary.problem_row_count}\n"
+            f"Pedidos: {summary.pedido_count} | Itens: {summary.row_count} | Pedidos com problema: {summary.problem_pedido_count}\n"
             "Enviei o PDF consolidado e o resumo.\n\n"
             f"{flow._result_hint_text(allow_back=True)}"
         )
@@ -483,7 +486,7 @@ class CriticaFlow:
             "Critica RN | PDF Gerencial GV\n\n"
             f"Data: {report_date_label}\n"
             f"Pedidos: {report.summary.pedido_count} | Setores: {len({record.setor for record in report.records if record.setor})} | "
-            f"Problemas: {report.summary.problem_pedido_count}\n"
+            f"Pedidos com problema: {report.summary.problem_pedido_count}\n"
             "Enviei o resumo gerencial separado por setor.\n\n"
             f"{flow._result_hint_text(allow_back=True)}"
         )

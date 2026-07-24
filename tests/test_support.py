@@ -1145,6 +1145,25 @@ class StubPayipPaymentsService:
         raise PayipError("Formato invalido")
 
 
+class StubEstoque020304Service:
+    def __init__(self, record: Any | None = None, *, ready: bool = True, product_record: Any | None = None) -> None:
+        self.record = record
+        self.product_record = product_record
+        self.ready = ready
+        self.calls: list[dict[str, Any]] = []
+
+    def status(self) -> dict[str, Any]:
+        return {"ready": self.ready}
+
+    def get_pdf_report(self, *, filial: str) -> Any | None:
+        self.calls.append({"filial": filial})
+        return self.record
+
+    def get_product_stock(self, *, filial: str, product_code: str) -> Any | None:
+        self.calls.append({"filial": filial, "product_code": product_code})
+        return self.product_record
+
+
 def make_flow(
     *,
     query_service: StubQueryService | None = None,
@@ -1154,6 +1173,7 @@ def make_flow(
     critica_rn_service: StubCriticaRnService | None = None,
     documentacao_pendente_service: StubDocumentacaoPendenteService | None = None,
     prazo_limite_service: StubPrazoLimiteService | None = None,
+    estoque_020304_service: StubEstoque020304Service | None = None,
     payip_payments_service: StubPayipPaymentsService | None = None,
     recolha_request_service: RecolhaRequestService | None = None,
     access_control: AccessControl | None = None,
@@ -1167,6 +1187,7 @@ def make_flow(
         critica_rn_service=critica_rn_service or StubCriticaRnService(),
         documentacao_pendente_service=documentacao_pendente_service or StubDocumentacaoPendenteService(),
         prazo_limite_service=prazo_limite_service or StubPrazoLimiteService(),
+        estoque_020304_service=estoque_020304_service or StubEstoque020304Service(),
         payip_payments_service=payip_payments_service or StubPayipPaymentsService(),
         recolha_request_service=recolha_request_service,
         access_control=access_control

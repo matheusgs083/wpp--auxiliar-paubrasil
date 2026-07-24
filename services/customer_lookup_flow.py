@@ -26,6 +26,7 @@ from bot_api.commercial_scope import (
     normalize_gv_scope_input,
     normalize_sector_scope_input,
     normalize_stored_scope_value,
+    partition_filial_scopes,
     split_scope_pair,
 )
 from bot_api.models import IncomingMessage, InteractiveOption, MediaAttachment, OutgoingMessage
@@ -438,6 +439,7 @@ class CustomerLookupFlow:
         prazo_limite_service: PrazoLimiteQueryService,
         access_control: AccessControl,
         boletos_service: BoletosQueryService | None = None,
+        estoque_020304_service: Any | None = None,
         payip_payments_service: PayipPaymentsService | None = None,
         recolha_request_service: RecolhaRequestService | None = None,
         critica_rn_service: CriticaRnQueryService | None = None,
@@ -450,6 +452,7 @@ class CustomerLookupFlow:
         self.documentacao_pendente_service = documentacao_pendente_service
         self.prazo_limite_service = prazo_limite_service
         self.boletos_service = boletos_service
+        self.estoque_020304_service = estoque_020304_service
         self.payip_payments_service = payip_payments_service
         self.critica_rn_service = critica_rn_service
         self.recolha_request_service = recolha_request_service or RecolhaRequestService(

@@ -328,6 +328,53 @@ class CriticaRnQueryServiceRuleTests(unittest.TestCase):
         self.assertFalse(any("Condicao de pagamento diferente do cadastro" in label for label in record_52.problemas))
         self.assertFalse(any("ultrapassa o limite" in label for label in record_52.problemas))
 
+    def test_row_to_record_does_not_apply_limit_alert_for_cash_condition(self) -> None:
+        record = _row_to_record(
+            {
+                "filial": "3",
+                "pedido": "923108",
+                "data_pedido": None,
+                "operacao": "3",
+                "cod_pdv": "11923",
+                "nome_pdv": "JOAO JESSE BATIST",
+                "setor": "503",
+                "filial_setor_key": "3_503",
+                "filial_gv_key": "3_5",
+                "status_pedido": "BLOQUEADO",
+                "total_pedido": "1161.42",
+                "total_cliente": "1161.42",
+                "critica_text": "",
+                "produto_codigo": "348",
+                "produto_dprecos": "PRODUTO TESTE",
+                "produto_descricao_pdf": "PRODUTO TESTE",
+                "nome_produto_original": "PRODUTO TESTE",
+                "quantidade": "1",
+                "unid_venda": "cx",
+                "preco_unitario": "10",
+                "preco_sem_adf": "10",
+                "minimo_politica": "10",
+                "tipo_movimento": "051",
+                "codigo_gv": "503",
+                "codigo_pgv": "348",
+                "pedido_linhas": 1,
+                "pedido_produto_linhas": 1,
+                "pedido_produto_duplicado": False,
+                "produto_encontrado_dprecos": True,
+                "preco_status": "ok",
+                "cond_pag_pedido": "DINHEIRO",
+                "client_cond_pag_atual": "DINHEIRO",
+                "cond_pag_pedido_codigo": "002",
+                "client_cond_pag_atual_codigo": "002",
+                "client_limite_credito": "543.00",
+                "client_limite_usado": "0",
+                "valor_estouro_limite_text": "618.42",
+                "produto_peso_bruto": "19.42",
+            }
+        )
+
+        self.assertEqual(record.limit_exceeded_amount, Decimal("0"))
+        self.assertFalse(any("ultrapassa o limite" in label for label in record.problemas))
+
     def test_detail_report_text_groups_items_and_shows_setor(self) -> None:
         long_reason = (
             "Preco abaixo do minimo permitido. Minimo informado: R$ 57,30; "

@@ -312,6 +312,51 @@ class PromaxSqlContractTests(unittest.TestCase):
                 items=[{"job_type": f"group-{index}"} for index in range(51)]
             )
 
+    def test_enqueue_schedule_now_preserves_schedule_next_run(self) -> None:
+        now = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)
+        schedule_id = "8cc06d03-1b8f-4e8f-b1d0-2c49d77d37a2"
+        cursor = FakeCursor(
+            fetchone_values=[
+                {
+                    "id": schedule_id,
+                    "job_type": "bot_zap",
+                    "payload": {"category": "bot_zap", "routines": ["120601_BOT"]},
+                },
+                {
+                    "id": "job-1",
+                    "job_type": "bot_zap",
+                    "payload": {"category": "bot_zap", "routines": ["120601_BOT"]},
+                    "status": "pending",
+                    "priority": 20,
+                    "concurrency_key": "promax",
+                    "idempotency_key": f"manual-schedule:{schedule_id}:2026-07-18T12:00:00+00:00",
+                    "source_schedule_id": schedule_id,
+                    "scheduled_for": now,
+                    "available_at": now,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            ]
+        )
+        service, _connection = self.make_service(cursor)
+
+        job = service.enqueue_schedule_now(schedule_id, requested_by="admin", now=now)
+
+        self.assertIsNotNone(job)
+        self.assertEqual(job["source_schedule_id"], schedule_id)
+        select_statement = query_text(cursor.executions[0][0])
+        insert_statement = query_text(cursor.executions[1][0])
+        self.assertIn("FROM \"promax\".\"schedules\" WHERE id = %s", select_statement)
+        self.assertIn("INSERT INTO \"promax\".\"jobs\"", insert_statement)
+        self.assertNotIn("UPDATE \"promax\".\"schedules\"", insert_statement)
+        insert_params = cursor.executions[1][1]
+        self.assertEqual(insert_params[1], "bot_zap")
+        self.assertEqual(insert_params[3], 20)
+        self.assertTrue(str(insert_params[5]).startswith(f"manual-schedule:{schedule_id}:"))
+        self.assertEqual(insert_params[6], schedule_id)
+        self.assertEqual(insert_params[7], now)
+        self.assertEqual(insert_params[9], "admin")
+
     def test_list_jobs_filters_status_and_created_at_bounds(self) -> None:
         cursor = FakeCursor(fetchall_values=[[]])
         service, _connection = self.make_service(cursor)

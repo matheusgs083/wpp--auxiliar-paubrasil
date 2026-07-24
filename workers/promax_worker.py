@@ -10,8 +10,9 @@ import time
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Protocol
 
 from .promax_client import PromaxApiUnavailable, PromaxClient, PromaxClientError, normalize_status
 from .promax_catalog import discover_report_catalog
@@ -58,6 +59,8 @@ class WorkerConfig:
     backoff_initial_seconds: float = 2.0
     backoff_max_seconds: float = 60.0
     boleto_import_timeout_seconds: float = 120.0
+    visual_lock_enabled: bool = True
+    visual_lock_file: str = ""
 
     @classmethod
     def from_env(cls) -> WorkerConfig:
@@ -94,6 +97,8 @@ class WorkerConfig:
             backoff_initial_seconds=_env_float("PROMAX_WORKER_BACKOFF_INITIAL_SECONDS", 2.0),
             backoff_max_seconds=_env_float("PROMAX_WORKER_BACKOFF_MAX_SECONDS", 60.0),
             boleto_import_timeout_seconds=boleto_import_timeout_seconds,
+            visual_lock_enabled=_env_bool("PROMAX_VISUAL_LOCK_ENABLED", True),
+            visual_lock_file=os.environ.get("PROMAX_VISUAL_LOCK_FILE", ""),
         )
 
     def validate(self) -> None:
@@ -115,6 +120,60 @@ class WorkerConfig:
             )
 
 
+class VisualAutomationLock(Protocol):
+    def acquire(self, metadata: Mapping[str, Any] | None = None) -> bool:
+        ...
+
+    def release(self) -> None:
+        ...
+
+
+class PromaxVisualAutomationLock:
+    def __init__(self, *, path: str = "", enabled: bool = True) -> None:
+        self.enabled = bool(enabled)
+        self.path = _resolve_lock_path(path, filename="promax_visual.lock")
+        self._handle: BinaryIO | None = None
+
+    def acquire(self, metadata: Mapping[str, Any] | None = None) -> bool:
+        if not self.enabled:
+            return True
+        if self._handle is not None:
+            return True
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        handle = self.path.open("a+b")
+        if not _try_lock_first_byte(handle):
+            handle.close()
+            return False
+        self._handle = handle
+        self._write_metadata(metadata)
+        return True
+
+    def release(self) -> None:
+        handle = self._handle
+        if handle is None:
+            return
+        self._handle = None
+        try:
+            handle.seek(0)
+            _unlock_first_byte(handle)
+        finally:
+            handle.close()
+
+    def _write_metadata(self, metadata: Mapping[str, Any] | None) -> None:
+        if self._handle is None:
+            return
+        payload = {
+            "locked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            **dict(metadata or {}),
+        }
+        text = (str(payload) + "\n").encode("utf-8", errors="replace")
+        self._handle.seek(0)
+        self._handle.truncate()
+        self._handle.write(text or b"0")
+        self._handle.flush()
+        self._handle.seek(0)
+
+
 class PromaxWorker:
     def __init__(
         self,
@@ -123,6 +182,7 @@ class PromaxWorker:
         client: PromaxClient,
         runner: PromaxRunner,
         catalog_provider: Callable[[], Mapping[str, Any]] | None = None,
+        visual_lock: VisualAutomationLock | None = None,
         stop_event: threading.Event | None = None,
         logger: logging.Logger = LOGGER,
     ) -> None:
@@ -131,41 +191,105 @@ class PromaxWorker:
         self.client = client
         self.runner = runner
         self.catalog_provider = catalog_provider
+        self.visual_lock = visual_lock or PromaxVisualAutomationLock(
+            path=config.visual_lock_file,
+            enabled=config.visual_lock_enabled,
+        )
         self.stop_event = stop_event or threading.Event()
         self.logger = logger
         self._pending_logs: deque[tuple[str, str, str, str, dict[str, Any]]] = deque(maxlen=2000)
         self._next_log_retry_at = 0.0
         self._last_worker_heartbeat = 0.0
+        self._last_visual_lock_wait_log = 0.0
 
     def run_forever(self) -> None:
         backoff = self.config.backoff_initial_seconds
         while not self.stop_event.is_set():
+            if not self._acquire_visual_lock_for_claim():
+                self.stop_event.wait(self.config.poll_interval_seconds)
+                continue
             try:
                 self._heartbeat_worker(force=False)
                 job = self.client.claim()
                 backoff = self.config.backoff_initial_seconds
             except PromaxApiUnavailable as exc:
+                self._release_visual_lock()
                 self.logger.warning("Promax API indisponivel: %s", exc)
                 self.stop_event.wait(backoff)
                 backoff = min(backoff * 2, self.config.backoff_max_seconds)
                 continue
             except PromaxClientError as exc:
+                self._release_visual_lock()
                 self.logger.error("Falha permanente na API do worker: %s", exc)
                 self.stop_event.wait(self.config.backoff_max_seconds)
                 continue
+            except Exception:
+                self._release_visual_lock()
+                raise
 
             if job is None:
+                self._release_visual_lock()
                 self.stop_event.wait(self.config.poll_interval_seconds)
                 continue
-            self._run_claimed_job(job)
+            try:
+                self._run_claimed_job(job)
+            finally:
+                self._release_visual_lock()
 
     def run_once(self) -> bool:
-        self._heartbeat_worker(force=True)
-        job = self.client.claim()
-        if job is None:
+        if not self._acquire_visual_lock_for_claim():
             return False
-        self._run_claimed_job(job)
-        return True
+        self._heartbeat_worker(force=True)
+        try:
+            job = self.client.claim()
+            if job is None:
+                return False
+            self._run_claimed_job(job)
+            return True
+        finally:
+            self._release_visual_lock()
+
+    def _acquire_visual_lock_for_claim(self) -> bool:
+        metadata = {
+            "worker_id": self.config.worker_id,
+            "pid": os.getpid(),
+            "hostname": socket.gethostname(),
+            "phase": "claim",
+        }
+        try:
+            acquired = self.visual_lock.acquire(metadata)
+        except OSError as exc:
+            self.logger.warning("Nao consegui criar trava local Promax; worker aguardara: %s", exc)
+            return False
+        if acquired:
+            return True
+        now = time.monotonic()
+        if now - self._last_visual_lock_wait_log >= 60:
+            self.logger.info("Automacao Promax visual ja esta em uso nesta maquina; aguardando liberar.")
+            self._heartbeat_visual_lock_wait()
+            self._last_visual_lock_wait_log = now
+        return False
+
+    def _release_visual_lock(self) -> None:
+        try:
+            self.visual_lock.release()
+        except OSError as exc:
+            self.logger.warning("Falha ao liberar trava local Promax: %s", exc)
+
+    def _heartbeat_visual_lock_wait(self) -> None:
+        lock_path = getattr(self.visual_lock, "path", "")
+        try:
+            self._heartbeat_worker(
+                force=True,
+                extra_details={
+                    "visual_lock": {
+                        "state": "busy",
+                        "path": str(lock_path) if lock_path else "",
+                    }
+                },
+            )
+        except PromaxClientError as exc:
+            self.logger.debug("Heartbeat de espera da trava visual rejeitado: %s", exc)
 
     def _run_claimed_job(self, job: Mapping[str, Any]) -> None:
         job_id = _job_id(job)
@@ -225,11 +349,11 @@ class PromaxWorker:
         except PromaxClientError as exc:
             self.logger.error("Heartbeat rejeitado para job %s: %s", job_id, exc)
 
-    def _heartbeat_worker(self, *, force: bool) -> None:
+    def _heartbeat_worker(self, *, force: bool, extra_details: Mapping[str, Any] | None = None) -> None:
         now = time.monotonic()
         if not force and now - self._last_worker_heartbeat < self.config.heartbeat_interval_seconds:
             return
-        details: dict[str, Any] = {}
+        details: dict[str, Any] = dict(extra_details or {})
         if self.catalog_provider is not None:
             try:
                 details["catalog"] = dict(self.catalog_provider())
@@ -317,6 +441,7 @@ class PromaxWorker:
                 self._flush_logs()
                 if not post_import_attempted:
                     self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
+                    self._import_020304_estoque_if_needed(job, job_id, lease_token, result)
                     self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
                     self._import_020220_comodatos_if_needed(job, job_id, lease_token, result)
                     self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
@@ -456,6 +581,122 @@ class PromaxWorker:
             "info" if not failed else "warning",
             {
                 "event": "promax_030206_auto_import_summary",
+                "imported": imported,
+                "failed_units": failed,
+                "missing_units": missing,
+            },
+        )
+
+    def _import_020304_estoque_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        routines = _string_list(payload.get("routines"))
+        if "020304_BOT" not in routines:
+            return
+        if payload.get("publish", True) is False:
+            return
+
+        requested_units = _string_list(payload.get("units"))
+        unit_filial_map = _promax_020304_unit_filial_map()
+        source_dir = _promax_publication_dir(result.details, "020304 bot")
+        if source_dir is None:
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    "Importacao automatica 020304_BOT ignorada: o driver nao informou "
+                    "a pasta publicada em metadata.publication_mapping."
+                ),
+                "warning",
+                {"event": "promax_020304_auto_import_missing_publication_mapping"},
+            )
+            return
+        if not source_dir.is_dir():
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica 020304_BOT ignorada: pasta nao encontrada {source_dir}",
+                "warning",
+                {"event": "promax_020304_auto_import_missing_dir", "source_dir": str(source_dir)},
+            )
+            return
+
+        if requested_units:
+            units = requested_units
+        else:
+            units = _discover_promax_units_from_files(source_dir, unit_filial_map=unit_filial_map, suffix=".csv")
+
+        imported = 0
+        missing: list[str] = []
+        failed: list[str] = []
+        for unit in units:
+            filial = unit_filial_map.get(unit)
+            if not filial:
+                continue
+            csv_path = _find_promax_020304_csv(source_dir, unit)
+            if csv_path is None:
+                missing.append(unit)
+                continue
+            try:
+                self._heartbeat_active_job(job_id, lease_token)
+                response = self.client.import_estoque_020304_csv(
+                    job_id=job_id,
+                    lease_token=lease_token,
+                    filial=filial,
+                    filename=csv_path.name,
+                    csv_bytes=csv_path.read_bytes(),
+                    reference_date=str(payload.get("end_date") or payload.get("start_date") or "") or None,
+                )
+                self._heartbeat_active_job(job_id, lease_token)
+                result_payload = response.get("result") if isinstance(response, Mapping) else None
+                imported += 1
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Estoque 020304_BOT importado automaticamente para filial {filial}: {csv_path.name}",
+                    "info",
+                    {
+                        "event": "promax_020304_auto_import_uploaded",
+                        "filial": filial,
+                        "unit": unit,
+                        "filename": csv_path.name,
+                        "result": result_payload if isinstance(result_payload, Mapping) else {},
+                    },
+                )
+            except (OSError, PromaxClientError, ValueError) as exc:
+                failed.append(unit)
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Falha na importacao automatica 020304_BOT da unidade {unit}: {exc}",
+                    "error",
+                    {"event": "promax_020304_auto_import_failed", "unit": unit, "filial": filial},
+                )
+
+        if missing:
+            self._send_log(
+                job_id,
+                lease_token,
+                "Importacao automatica 020304_BOT sem CSV para unidade(s): " + ", ".join(missing),
+                "warning",
+                {"event": "promax_020304_auto_import_missing_files", "units": missing},
+            )
+        self._send_log(
+            job_id,
+            lease_token,
+            f"Importacao automatica 020304_BOT finalizada: {imported} arquivo(s), {len(failed)} falha(s).",
+            "info" if not failed else "warning",
+            {
+                "event": "promax_020304_auto_import_summary",
                 "imported": imported,
                 "failed_units": failed,
                 "missing_units": missing,
@@ -775,8 +1016,67 @@ def _promax_030206_unit_filial_map() -> dict[str, str]:
     return mapping
 
 
+def _promax_020304_unit_filial_map() -> dict[str, str]:
+    mapping = dict(_PROMAX_030206_UNIT_FILIAL_DEFAULTS)
+    for env_name in ("PROMAX_UNIT_FILIAL_MAP", "PROMAX_020304_UNIT_FILIAL_MAP"):
+        raw_value = os.environ.get(env_name, "")
+        for chunk in raw_value.split(","):
+            if ":" not in chunk:
+                continue
+            unit, filial = (part.strip() for part in chunk.split(":", 1))
+            if unit and filial:
+                mapping[unit] = filial
+    return mapping
+
+
 def _promax_030206_publication_dir(result_details: Mapping[str, Any] | None) -> Path | None:
     return _promax_publication_dir(result_details, "030206 bot")
+
+
+def _discover_promax_units_from_files(source_dir: Path, *, unit_filial_map: Mapping[str, str], suffix: str) -> list[str]:
+    units: list[str] = []
+    seen: set[str] = set()
+    suffix_text = str(suffix or "").casefold()
+    for path in sorted(source_dir.iterdir(), key=lambda item: item.name):
+        if not path.is_file() or path.name.startswith(".") or path.suffix.casefold() != suffix_text:
+            continue
+        name = path.name
+        for unit in unit_filial_map:
+            if unit in name and unit not in seen:
+                seen.add(unit)
+                units.append(unit)
+                break
+    return units
+
+
+def _find_promax_020304_csv(source_dir: Path, unit: str) -> Path | None:
+    unit_text = str(unit or "").strip()
+    if not unit_text:
+        return None
+    candidates = [
+        path
+        for path in source_dir.glob("*.csv")
+        if path.is_file() and not path.name.startswith(".") and unit_text in path.name
+    ]
+    if not candidates:
+        return None
+    return sorted(
+        candidates,
+        key=lambda path: (
+            _promax_020304_filename_score(path.name),
+            path.stat().st_mtime,
+            path.name,
+        ),
+    )[-1]
+
+
+def _promax_020304_filename_score(name: str) -> int:
+    normalized = str(name or "").casefold().replace(".", "").replace(",", "").replace("_", "")
+    if "020304" in normalized or "20304" in normalized:
+        return 3
+    if "estoque" in normalized:
+        return 2
+    return 1
 
 
 def _promax_publication_dir(result_details: Mapping[str, Any] | None, folder_name: str) -> Path | None:
@@ -841,28 +1141,64 @@ def main() -> int:
 
 
 def acquire_single_instance_lock() -> BinaryIO | None:
-    if os.name != "nt":
-        return open(os.devnull, "rb")
-    import msvcrt
-
     configured_path = os.environ.get("PROMAX_WORKER_LOCK_FILE", "").strip()
-    lock_path = (
-        Path(configured_path)
-        if configured_path
-        else Path(tempfile.gettempdir()) / "bot_api_promax_worker.lock"
-    )
+    lock_path = _resolve_lock_path(configured_path, filename="promax_worker.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     handle = lock_path.open("a+b")
+    if not _try_lock_first_byte(handle):
+        handle.close()
+        return None
+    return handle
+
+
+def _resolve_lock_path(configured_path: str, *, filename: str) -> Path:
+    if configured_path.strip():
+        return Path(configured_path).expanduser()
+    candidates: list[Path] = []
+    for env_name in ("PROGRAMDATA", "LOCALAPPDATA"):
+        base = os.environ.get(env_name, "").strip()
+        if base:
+            candidates.append(Path(base) / "bot_api" / "locks" / filename)
+    candidates.append(Path(tempfile.gettempdir()) / f"bot_api_{filename}")
+    for candidate in candidates:
+        try:
+            candidate.parent.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except OSError:
+            continue
+    return Path(tempfile.gettempdir()) / f"bot_api_{filename}"
+
+
+def _try_lock_first_byte(handle: BinaryIO) -> bool:
+    handle.seek(0, os.SEEK_END)
     if handle.tell() == 0:
         handle.write(b"0")
         handle.flush()
     handle.seek(0)
     try:
-        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-    except OSError:
-        handle.close()
-        return None
-    return handle
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        return False
+    return True
+
+
+def _unlock_first_byte(handle: BinaryIO) -> None:
+    handle.seek(0)
+    if os.name == "nt":
+        import msvcrt
+
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        return
+    import fcntl
+
+    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _job_id(job: Mapping[str, Any]) -> str:
@@ -955,6 +1291,18 @@ def _env_float(name: str, default: float) -> float:
         return float(raw_value)
     except ValueError as exc:
         raise ValueError(f"{name} must be numeric.") from exc
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw_value = os.environ.get(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "sim", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "nao", "não", "off"}:
+        return False
+    raise ValueError(f"{name} must be boolean.")
 
 
 def redact_log_message(message: str) -> str:

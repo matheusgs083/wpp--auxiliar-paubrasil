@@ -600,6 +600,32 @@ class PromaxBoletoImportRequest(_StrictPayload):
         return name
 
 
+class PromaxEstoque020304ImportRequest(_StrictPayload):
+    worker_id: str = Field(min_length=1, max_length=120)
+    job_id: str = Field(min_length=1, max_length=120)
+    lease_token: str | None = Field(default=None, min_length=1, max_length=120)
+    filial: str = Field(min_length=1, max_length=16)
+    filename: str = Field(min_length=1, max_length=255)
+    file_base64: str = Field(min_length=1)
+    reference_date: date | None = None
+
+    @field_validator("filial")
+    @classmethod
+    def validate_filial(cls, value: str) -> str:
+        normalized = "".join(ch for ch in str(value or "").strip() if ch.isdigit())
+        if not normalized:
+            raise ValueError("filial deve conter ao menos um digito")
+        return normalized
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        name = FilePath(str(value or "").strip()).name
+        if not name or name.lower().endswith(".csv") is False:
+            raise ValueError("filename deve ser um CSV")
+        return name
+
+
 class PromaxCsvImportFile(_StrictPayload):
     filename: str = Field(min_length=1, max_length=255)
     file_base64: str = Field(min_length=1)
@@ -727,6 +753,7 @@ def create_admin_promax_router(
     catalog: Callable[[], Any] | Mapping[str, Any],
     worker_token: str | None,
     boletos_pdf_import_services: Mapping[str, Any] | None = None,
+    estoque_020304_import_services: Mapping[str, Any] | None = None,
     inadimplencia_import_service: Any | None = None,
     comodatos_import_service: Any | None = None,
     dclientes_import_service: Any | None = None,
@@ -739,6 +766,7 @@ def create_admin_promax_router(
     router = APIRouter()
     expected_worker_token = worker_token.strip() if isinstance(worker_token, str) else ""
     boleto_import_services = dict(boletos_pdf_import_services or {})
+    estoque_import_services = dict(estoque_020304_import_services or {})
     critica_import_services = dict(critica_operacao_import_services or {})
 
     def require_promax_context(
@@ -1361,6 +1389,24 @@ def create_admin_promax_router(
         record_admin_event(request, "admin_promax_schedule_detail", reason=f"schedule_id={schedule_id}")
         return _item_response(schedule, key="schedule")
 
+    @router.post("/api/admin/promax/schedules/{schedule_id}/run-now", status_code=202)
+    def api_admin_promax_run_schedule_now(
+        request: Request,
+        schedule_id: str = Path(min_length=1, max_length=120, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$"),
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        try:
+            job = service.enqueue_schedule_now(
+                schedule_id,
+                requested_by=context_actor(context),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if job is None:
+            raise HTTPException(status_code=404, detail="Agenda Promax nao encontrada.")
+        record_admin_event(request, "admin_promax_schedule_run_now", reason=f"schedule_id={schedule_id}")
+        return _item_response(job, key="job")
+
     @router.patch("/api/admin/promax/schedules/{schedule_id}")
     def api_admin_promax_update_schedule(
         request: Request,
@@ -1588,6 +1634,61 @@ def create_admin_promax_router(
             ),
             data={
                 "event": "promax_030206_auto_import_success",
+                "filial": payload.filial,
+                "filename": payload.filename,
+                "result": result,
+            },
+        )
+        return {"ok": True, "result": result}
+
+    @router.post("/api/internal/promax/estoque/import")
+    def api_internal_promax_import_estoque_020304_csv(
+        payload: PromaxEstoque020304ImportRequest,
+        _worker_auth: None = Depends(require_worker_auth),
+    ) -> dict[str, Any]:
+        import_service = estoque_import_services.get(payload.filial)
+        if import_service is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Importador de estoque 020304 nao configurado para a filial {payload.filial}.",
+            )
+        lease_token = resolve_job_lease_token(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            provided_lease_token=payload.lease_token,
+        )
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=f"Importacao automatica 020304_BOT iniciada para filial {payload.filial}: {payload.filename}",
+            data={"event": "promax_020304_auto_import_start", "filial": payload.filial, "filename": payload.filename},
+        )
+        try:
+            csv_bytes = base64.b64decode(payload.file_base64.encode("ascii"), validate=True)
+        except (UnicodeEncodeError, binascii.Error) as exc:
+            raise HTTPException(status_code=400, detail="Arquivo CSV em base64 invalido.") from exc
+        if not csv_bytes.strip():
+            raise HTTPException(status_code=400, detail=f"Arquivo CSV vazio: {payload.filename}.")
+
+        with tempfile.TemporaryDirectory(prefix="promax_020304_") as temp_dir:
+            file_path = FilePath(temp_dir) / payload.filename
+            file_path.write_bytes(csv_bytes)
+            result = import_service.import_source(file_path, reference_date=payload.reference_date)
+
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                "Importacao automatica 020304_BOT concluida para filial "
+                f"{payload.filial}: {result.get('rows', 0)} produto(s), "
+                f"PDF gerado com {result.get('pdf_bytes', 0)} bytes."
+            ),
+            data={
+                "event": "promax_020304_auto_import_success",
                 "filial": payload.filial,
                 "filename": payload.filename,
                 "result": result,

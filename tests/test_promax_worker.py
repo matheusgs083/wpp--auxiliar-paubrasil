@@ -17,8 +17,28 @@ from workers.promax_runner import (
     PromaxRunnerConfig,
     terminate_process_tree,
 )
-from workers.promax_worker import PromaxWorker, WorkerConfig, _control_flag, redact_log_message
+from workers.promax_worker import (
+    PromaxVisualAutomationLock,
+    PromaxWorker,
+    WorkerConfig,
+    _control_flag,
+    redact_log_message,
+)
 from workers.promax_worker import _promax_030206_publication_dir
+
+
+class _FakeVisualLock:
+    def __init__(self, acquire_result: bool = True) -> None:
+        self.acquire_result = acquire_result
+        self.acquire_calls: list[dict[str, object]] = []
+        self.release_calls = 0
+
+    def acquire(self, metadata: object = None) -> bool:
+        self.acquire_calls.append(dict(metadata or {}))
+        return self.acquire_result
+
+    def release(self) -> None:
+        self.release_calls += 1
 
 
 class _FakeResponse:
@@ -285,6 +305,39 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(payload["files"][0]["filename"], "030111 bot - Patos.csv")
         self.assertEqual(base64.b64decode(payload["files"][0]["file_base64"]), b"Filial Origem;Valor\n3;10\n")
 
+    def test_client_uploads_020304_csv_to_internal_import_route(self) -> None:
+        captured: list[tuple[str, dict[str, object], float]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data), timeout))
+            return _FakeResponse({"ok": True, "result": {"rows": 2, "pdf_bytes": 100}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            boleto_import_timeout_seconds=120,
+            opener=opener,
+        )
+
+        client.import_estoque_020304_csv(
+            job_id="job-1",
+            lease_token="lease-token",
+            filial="3",
+            filename="02,03,04_2210003.csv",
+            csv_bytes=b"Grade;Cod;Descricao\n1;2;Produto\n",
+            reference_date="2026-07-23",
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/estoque/import")
+        self.assertEqual(captured[0][2], 120)
+        payload = captured[0][1]
+        self.assertEqual(payload["filial"], "3")
+        self.assertEqual(payload["filename"], "02,03,04_2210003.csv")
+        self.assertEqual(payload["reference_date"], "2026-07-23")
+        self.assertEqual(base64.b64decode(payload["file_base64"]), b"Grade;Cod;Descricao\n1;2;Produto\n")
+
     def test_control_flag_accepts_stop_job_ids_contract(self) -> None:
         payload = {
             "control": {
@@ -329,6 +382,70 @@ class PromaxClientTests(unittest.TestCase):
         )
 
         self.assertIn("obz", captured[0]["details"]["catalog"]["categories"])
+
+    def test_worker_does_not_claim_job_when_visual_lock_is_busy(self) -> None:
+        lock = _FakeVisualLock(acquire_result=False)
+        client = Mock()
+        worker = PromaxWorker(
+            config=WorkerConfig(
+                api_url="http://localhost:8080",
+                token="token",
+                worker_id="worker",
+                driver_dir="C:/driver",
+                python_executable="C:/driver/venv/Scripts/python.exe",
+            ),
+            client=client,
+            runner=Mock(),
+            visual_lock=lock,
+        )
+
+        self.assertFalse(worker.run_once())
+        client.claim.assert_not_called()
+        client.heartbeat.assert_called_once()
+        heartbeat_details = client.heartbeat.call_args.kwargs["details"]
+        self.assertEqual(heartbeat_details["visual_lock"]["state"], "busy")
+        self.assertEqual(lock.release_calls, 0)
+
+    def test_worker_releases_visual_lock_after_claimed_job(self) -> None:
+        lock = _FakeVisualLock(acquire_result=True)
+        client = Mock()
+        client.claim.return_value = {
+            "id": "job-1",
+            "lease_token": "lease-token",
+            "job_type": "fluxo_caixa",
+            "payload": {"category": "fluxo_caixa", "routines": ["140506"]},
+        }
+        runner = Mock()
+        runner.run.return_value = PromaxRunResult(status="success", return_code=0, child_pid=123)
+        worker = PromaxWorker(
+            config=WorkerConfig(
+                api_url="http://localhost:8080",
+                token="token",
+                worker_id="worker",
+                driver_dir="C:/driver",
+                python_executable="C:/driver/venv/Scripts/python.exe",
+            ),
+            client=client,
+            runner=runner,
+            visual_lock=lock,
+        )
+
+        self.assertTrue(worker.run_once())
+        self.assertEqual(lock.release_calls, 1)
+        runner.run.assert_called_once()
+        client.finish.assert_called_once()
+
+    def test_visual_automation_lock_blocks_second_holder_until_release(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            lock_path = str(Path(temp_dir) / "promax_visual.lock")
+            first = PromaxVisualAutomationLock(path=lock_path)
+            second = PromaxVisualAutomationLock(path=lock_path)
+
+            self.assertTrue(first.acquire({"worker_id": "worker-1"}))
+            self.assertFalse(second.acquire({"worker_id": "worker-2"}))
+            first.release()
+            self.assertTrue(second.acquire({"worker_id": "worker-2"}))
+            second.release()
 
     def test_030206_import_gate_handles_completed_status(self) -> None:
         worker = object.__new__(PromaxWorker)
@@ -474,6 +591,59 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(call_kwargs["reference_date"], "2026-07-21")
         self.assertEqual(sorted(call_kwargs["files"]), ["2026-07 Patos.csv", "2026-07 Sousa.csv"])
         self.assertEqual(client.heartbeat_job.call_count, 2)
+
+    def test_020304_bot_imports_stock_csvs_by_unit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "02,03,04_2210003.csv").write_bytes(b"Grade;Cod;Descricao\n1;2;Produto\n")
+            (source_dir / "02,03,04_2210004.csv").write_bytes(b"Grade;Cod;Descricao\n1;3;Produto\n")
+            client = Mock()
+            client.import_estoque_020304_csv.return_value = {
+                "ok": True,
+                "result": {"rows": 2, "pdf_bytes": 100, "batch_id": 46},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_020304_estoque_if_needed(
+                {
+                    "payload": {
+                        "routines": ["020304_BOT"],
+                        "units": ["2210003", "2210004"],
+                        "end_date": "2026-07-23",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "020304 bot"): str(source_dir)}
+                        }
+                    },
+                ),
+            )
+
+        self.assertEqual(client.import_estoque_020304_csv.call_count, 2)
+        call_kwargs = client.import_estoque_020304_csv.call_args_list[0].kwargs
+        self.assertEqual(call_kwargs["filial"], "3")
+        self.assertEqual(call_kwargs["reference_date"], "2026-07-23")
+        self.assertEqual(client.heartbeat_job.call_count, 4)
 
     def test_020220_bot_imports_comodatos_csvs_in_one_batch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -168,6 +168,14 @@ class FakePromaxService:
     def get_schedule(self, schedule_id: str) -> dict[str, Any]:
         return self._call("get_schedule", schedule_id, return_value={"id": schedule_id})
 
+    def enqueue_schedule_now(self, schedule_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self._call(
+            "enqueue_schedule_now",
+            schedule_id,
+            return_value={"id": "job-1", "source_schedule_id": schedule_id, **kwargs},
+            **kwargs,
+        )
+
     def update_schedule(self, schedule_id: str, **kwargs: Any) -> dict[str, Any]:
         return self._call(
             "update_schedule",
@@ -246,6 +254,22 @@ class FakeBoletoImportService:
             "filial": "3",
             "imported": 2,
             "matched": 2,
+        }
+
+
+class FakeEstoque020304ImportService:
+    def __init__(self, filial: str) -> None:
+        self.filial = filial
+        self.calls: list[tuple[Path, Any]] = []
+
+    def import_source(self, source_path: Path, reference_date: Any = None) -> dict[str, Any]:
+        self.calls.append((source_path, reference_date))
+        return {
+            "dataset_name": f"estoque_020304_op_{self.filial}",
+            "filial": self.filial,
+            "rows": 10,
+            "pdf_bytes": 1234,
+            "batch_id": 46,
         }
 
 
@@ -381,11 +405,13 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         app = FastAPI()
         app.state.promax_feature_calls = feature_calls
         boleto_import_service = FakeBoletoImportService()
+        estoque_import_service = FakeEstoque020304ImportService("3")
         inadimplencia_import_service = FakeInadimplenciaImportService()
         comodatos_import_service = FakeComodatosImportService()
         dclientes_import_service = FakeDClientesImportService()
         critica_import_service = FakeCriticaOperacaoImportService("3")
         app.state.boleto_import_service = boleto_import_service
+        app.state.estoque_import_service = estoque_import_service
         app.state.inadimplencia_import_service = inadimplencia_import_service
         app.state.comodatos_import_service = comodatos_import_service
         app.state.dclientes_import_service = dclientes_import_service
@@ -412,6 +438,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 catalog=lambda: catalog_source,
                 worker_token=worker_token,
                 boletos_pdf_import_services={"3": boleto_import_service},
+                estoque_020304_import_services={"3": estoque_import_service},
                 inadimplencia_import_service=inadimplencia_import_service,
                 comodatos_import_service=comodatos_import_service,
                 dclientes_import_service=dclientes_import_service,
@@ -453,6 +480,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             ("post", "/api/admin/promax/schedules", self.schedule_payload(), 201),
             ("get", "/api/admin/promax/schedules?limit=20", None, 200),
             ("get", "/api/admin/promax/schedules/schedule-1", None, 200),
+            ("post", "/api/admin/promax/schedules/schedule-1/run-now", None, 202),
             ("patch", "/api/admin/promax/schedules/schedule-1", {"enabled": False}, 200),
             ("delete", "/api/admin/promax/schedules/schedule-1", None, 200),
         ]
@@ -483,6 +511,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 "create_schedule",
                 "list_schedules",
                 "get_schedule",
+                "enqueue_schedule_now",
                 "update_schedule",
                 "delete_schedule",
             ],
@@ -948,6 +977,36 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         source_path, reference_date = boleto_import_service.calls[0]
         self.assertEqual(source_path.suffix, ".pdf")
         self.assertEqual(str(reference_date), "2026-07-20")
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["append_job_log", "append_job_log"],
+        )
+
+    def test_internal_worker_imports_020304_estoque_csv_for_filial(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/estoque/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "filial": "3",
+                "filename": "02,03,04_2210003.csv",
+                "file_base64": base64.b64encode(b"Grade;Cod;Descricao\n1;2;Produto\n").decode("ascii"),
+                "reference_date": "2026-07-23",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(response.json()["result"]["dataset_name"], "estoque_020304_op_3")
+        estoque_import_service = client.app.state.estoque_import_service
+        self.assertEqual(len(estoque_import_service.calls), 1)
+        source_path, reference_date = estoque_import_service.calls[0]
+        self.assertEqual(source_path.suffix, ".csv")
+        self.assertEqual(str(reference_date), "2026-07-23")
         self.assertEqual(
             [name for name, _args, _kwargs in service.calls],
             ["append_job_log", "append_job_log"],

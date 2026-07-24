@@ -26,6 +26,7 @@ from bot_api.services.admin_recolhas_service import AdminRecolhasService
 from bot_api.services.boletos_pdf_import_service import BoletosPdfImportService
 from bot_api.services.critica_operacao_import_service import CriticaOperacaoImportService
 from bot_api.services.critica_rn_query_service import CriticaPdfCurrentImportRequiredError
+from bot_api.services.estoque_020304_service import Estoque020304ImportService
 from bot_api.services.filial_labels import set_filial_labels
 from bot_api.services.health_service import HealthPayloadBuilder
 from bot_api.services.promax_catalog_service import DEFAULT_PROMAX_CATALOG, PromaxCatalogService
@@ -143,6 +144,15 @@ def configure_app_runtime(
                         schema=settings.reports_db_schema,
                         dataset_name=f"boletos_bradesco_op_{filial_code}",
                         expected_filial=filial_code,
+                        connect_timeout_seconds=settings.access_database_timeout_seconds,
+                    )
+                if filial_code not in services.estoque_020304_import_services:
+                    services.estoque_020304_import_services[filial_code] = Estoque020304ImportService(
+                        database_url=settings.reports_database_url,
+                        schema=settings.reports_db_schema,
+                        dataset_name=f"estoque_020304_op_{filial_code}",
+                        expected_filial=filial_code,
+                        filial_nome=latest_labels[filial_code],
                         connect_timeout_seconds=settings.access_database_timeout_seconds,
                     )
                 if filial_code not in services.critica_operacao_import_services:
@@ -532,6 +542,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "promax_jobs_service": runtime["promax_jobs_service"],
         "promax_catalog": runtime["PROMAX_CATALOG"],
         "boletos_pdf_import_services": runtime["services"].boletos_pdf_import_services,
+        "estoque_020304_import_services": runtime["services"].estoque_020304_import_services,
         "inadimplencia_import_service": runtime["services"].inadimplencia_import_service,
         "comodatos_import_service": runtime["services"].comodatos_import_service,
         "dclientes_import_service": runtime["services"].dclientes_import_service,

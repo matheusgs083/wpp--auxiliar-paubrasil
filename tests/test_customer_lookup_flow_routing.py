@@ -36,6 +36,7 @@ from tests.test_support import (
     StubComodatosService,
     StubCriticaRnService,
     StubDocumentacaoPendenteService,
+    StubEstoque020304Service,
     StubGiroService,
     StubInadimplenciaService,
     StubPayipPaymentsService,
@@ -68,6 +69,36 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.documentacao_service = StubDocumentacaoPendenteService(ready=True)
         self.prazo_limite_service = StubPrazoLimiteService(ready=True)
         self.payip_service = StubPayipPaymentsService()
+        self.estoque_service = StubEstoque020304Service(
+            SimpleNamespace(
+                filial="3",
+                filial_nome="Patos",
+                reference_date=date(2026, 7, 23),
+                updated_at=datetime(2026, 7, 23, 12, 30, tzinfo=timezone.utc),
+                total_rows=12,
+                source_name="02,03,04_2210003.csv",
+                pdf_bytes=self._make_boleto_pdf_bytes(),
+            ),
+            product_record=SimpleNamespace(
+                filial="3",
+                filial_nome="Patos",
+                reference_date=date(2026, 7, 23),
+                updated_at=datetime(2026, 7, 23, 12, 30, tzinfo=timezone.utc),
+                total_rows=12,
+                source_name="02,03,04_2210003.csv",
+                codigo="13203",
+                descricao="ANTARCTICA PILSEN GFA VD 600ML",
+                unidade="cx23",
+                inicial=100,
+                entrada=0,
+                reserva=2,
+                transito=0,
+                saidas=5,
+                disponivel=93,
+                reserva_magali=0,
+                linhas_encontradas=1,
+            ),
+        )
         self.flow = make_flow(
             query_service=self.query_service,
             inadimplencia_service=self.inadimplencia_service,
@@ -75,6 +106,7 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
             critica_rn_service=self.critica_service,
             documentacao_pendente_service=self.documentacao_service,
             prazo_limite_service=self.prazo_limite_service,
+            estoque_020304_service=self.estoque_service,
             payip_payments_service=self.payip_service,
         )
 
@@ -168,6 +200,45 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(response.extra_media[0].media_filename, "boleto-3-11305-nf-168228.pdf")
         self.assertIn("separadamente", response.text)
         self.assertTrue(boletos_service.calls[-1].get("include_pdf"))
+
+    def test_estoque_command_returns_product_quantity_for_seller_filial(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque", text="estoque 3 13203"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_401",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("*Produto:* 13203 - ANTARCTICA PILSEN GFA VD 600ML", response.text)
+        self.assertIn("*Atualizado em:* 23/07/2026 09:30", response.text)
+        self.assertIn("- Disponivel: 93", response.text)
+        self.assertIn("- Saidas: 5", response.text)
+        self.assertNotIn("Data ref.", response.text)
+        self.assertNotIn("Reserva:", response.text)
+        self.assertNotIn("Transito:", response.text)
+        self.assertEqual(self.estoque_service.calls[-1], {"filial": "3", "product_code": "13203"})
+
+    def test_estoque_pdf_command_sends_pdf_for_seller_filial(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque-pdf", text="estoque 3 pdf"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_401",)),
+        )
+
+        self.assertEqual(response.kind, "media")
+        self.assertEqual(response.media_filename, "estoque-020304-filial-3.pdf")
+        self.assertIn("*Filial:* 3 - Patos", response.text)
+        self.assertIn("*Atualizado em:* 23/07/2026 09:30", response.text)
+        self.assertNotIn("Data ref.", response.text)
+        self.assertEqual(self.estoque_service.calls[-1]["filial"], "3")
+
+    def test_estoque_command_blocks_seller_from_other_filial(self) -> None:
+        response = self.flow.handle(
+            IncomingMessage(sender="5511-estoque-denied", text="estoque 4"),
+            make_decision(allowed=True, roles=("vendedor",), sectors=("3_401",)),
+        )
+
+        self.assertEqual(response.kind, "text")
+        self.assertIn("nao tem acesso", response.text)
+        self.assertEqual(self.estoque_service.calls, [])
 
     def test_handle_routes_natural_inadimplencia_alias_to_search_menu(self) -> None:
         response = self.flow.handle(

@@ -102,6 +102,20 @@ def build_admin_import_datasets(
             }
             for filial_code in sorted(filial_labels, key=int)
         },
+        **{
+            f"estoque_020304_op_{filial_code}": {
+                "label": f"Estoque 020304 Operacao {filial_code} - {filial_labels[filial_code]}",
+                "default_path": project_root / "data" / "Estoque" / f"020304_operacao_{filial_code}.csv",
+                "allow_default_source": False,
+                "service": services.estoque_020304_import_services[filial_code],
+                "upload_mode": "single",
+                "accept_extensions": ".csv",
+                "validate_method": "validate_source",
+                "summarize_method": "summarize_source",
+                "import_method": "import_source",
+            }
+            for filial_code in sorted(filial_labels, key=int)
+        },
         "dclientes": {
             "label": "dClientes",
             "default_path": project_root / "data" / "dClientes" / "dClientes.csv",

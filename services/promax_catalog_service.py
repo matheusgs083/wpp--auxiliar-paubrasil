@@ -37,6 +37,7 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
             "routines": [
                 {"id": "030237_ESTOQUE", "name": "Rotina 030237 Estoque"},
                 {"id": "020502", "name": "Rotina 020502"},
+                {"id": "020304_BOT", "name": "Rotina 020304 Bot"},
             ],
             "units": [],
         },

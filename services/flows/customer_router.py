@@ -95,6 +95,9 @@ class CustomerRouter:
                 return flow._build_payip_pix_code_response(session.payip_pix_payloads, selection=payip_pix_selection, payip_payments_service=self.payip_payments_service)
             if flow._looks_like_critica_command(normalized):
                 return self.critica_flow.handle_command(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
+            estoque_response = self._maybe_handle_estoque_command(sender=incoming.sender, text=text, normalized=normalized, decision=decision)
+            if estoque_response is not None:
+                return estoque_response
             payip_response = self.finance_flow.payip_flow.handle_post_result_request(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
             if payip_response is not None:
                 return payip_response
@@ -222,6 +225,9 @@ class CustomerRouter:
             return recolha_response
         if flow._looks_like_critica_command(normalized):
             return self.critica_flow.handle_command(sender=incoming.sender, session=session, text=text, normalized=normalized, decision=decision)
+        estoque_response = self._maybe_handle_estoque_command(sender=incoming.sender, text=text, normalized=normalized, decision=decision)
+        if estoque_response is not None:
+            return estoque_response
         boleto_response = self._maybe_handle_boleto_command(sender=incoming.sender, text=text, normalized=normalized, decision=decision)
         if boleto_response is not None:
             return boleto_response
@@ -819,6 +825,208 @@ class CustomerRouter:
             self.sessions[incoming.sender] = session
             return self._build_search_menu(search_context='cliente', decision=decision)
         return self._build_main_menu(decision, invalid_selection=bool(normalized))
+
+    def _maybe_handle_estoque_command(
+        self,
+        *,
+        sender: str,
+        text: str,
+        normalized: str,
+        decision: AccessDecision,
+    ) -> OutgoingMessage | None:
+        flow = _customer_flow_module()
+        if re.match(r"^estoque(?:\s|$)", str(normalized or "")) is None:
+            return None
+        session = self.sessions.get(sender, flow.LookupSession())
+        numbers = re.findall(r"\d+", str(text or normalized or ""))
+        filial = flow.normalize_numeric_code(numbers[0]) if numbers else ""
+        product_code = flow.normalize_numeric_code(numbers[1]) if len(numbers) >= 2 else ""
+        wants_pdf = bool(re.search(r"\bpdf\b", str(normalized or text or ""), flags=re.IGNORECASE))
+        outgoing = self._run_estoque_020304_lookup(
+            filial=filial,
+            product_code=product_code,
+            wants_pdf=wants_pdf,
+            decision=decision,
+        )
+        return self._with_post_result_navigation(
+            sender,
+            session,
+            outgoing,
+            return_menu="main",
+        )
+
+    def _run_estoque_020304_lookup(
+        self,
+        *,
+        filial: str,
+        product_code: str = "",
+        wants_pdf: bool = False,
+        decision: AccessDecision,
+    ) -> OutgoingMessage:
+        flow = _customer_flow_module()
+        if not filial:
+            return flow.OutgoingMessage(
+                text=(
+                    "Estoque\n\n"
+                    "Informe a filial e o codigo do produto.\n"
+                    "Exemplo: estoque 3 13203\n\n"
+                    "Para receber o PDF completo, envie: estoque 3 pdf"
+                )
+            )
+        if not (self._is_admin(decision) or self._is_vendedor(decision) or self._is_gerente_vendas(decision)):
+            return flow.OutgoingMessage(
+                text="Estoque\n\nEssa consulta esta liberada apenas para vendedores e gerentes de vendas."
+            )
+        allowed_filiais = self._allowed_estoque_filiais(decision)
+        if allowed_filiais is not None and filial not in allowed_filiais:
+            return flow.OutgoingMessage(
+                text=(
+                    "Estoque\n\n"
+                    f"Voce nao tem acesso ao estoque da filial {filial}.\n"
+                    "Confira a filial ou solicite ajuste de acesso ao responsavel."
+                )
+            )
+
+        estoque_service = getattr(self, "estoque_020304_service", None)
+        if estoque_service is None:
+            return flow.OutgoingMessage(text="A consulta de estoque ainda nao esta configurada.")
+        status = estoque_service.status()
+        if not status.get("ready"):
+            return flow.OutgoingMessage(
+                text=(
+                    "Estoque\n\n"
+                    "A base de estoque 020304 ainda nao foi importada.\n"
+                    "Execute ou importe a rotina 020304_BOT no painel."
+                )
+            )
+        if not wants_pdf and not product_code:
+            return flow.OutgoingMessage(
+                text=(
+                    "Estoque\n\n"
+                    "Informe o codigo do produto para consultar a quantidade.\n"
+                    f"Exemplo: estoque {filial} 13203\n\n"
+                    f"Para receber o PDF completo, envie: estoque {filial} pdf"
+                )
+            )
+        if not wants_pdf:
+            if status.get("items_available") is False:
+                return flow.OutgoingMessage(
+                    text=(
+                        "Estoque\n\n"
+                        "A base atual de estoque ainda nao tem consulta por produto.\n"
+                        "Reimporte a rotina 020304_BOT para liberar essa busca."
+                    )
+                )
+            try:
+                record = estoque_service.get_product_stock(filial=filial, product_code=product_code)
+            except Exception:
+                flow.logger.exception(
+                    "Falha ao consultar produto no estoque 020304",
+                    extra={"filial": filial, "product_code": product_code},
+                )
+                return flow.OutgoingMessage(
+                    text="Nao consegui consultar o estoque agora.\nTente novamente em instantes."
+                )
+            if record is None:
+                return flow.OutgoingMessage(
+                    text=(
+                        "Estoque\n\n"
+                        f"Nao encontrei o produto {product_code} na filial {filial}.\n"
+                        f"Confira o codigo ou envie estoque {filial} pdf para ver o relatorio completo."
+                    )
+                )
+            updated_label = self._format_estoque_datetime(getattr(record, "updated_at", None))
+            filial_label = f"{record.filial} - {record.filial_nome}".strip(" -")
+            text_lines = [
+                "Estoque 020304",
+                "",
+                f"*Filial:* {filial_label or filial}",
+                f"*Atualizado em:* {updated_label}",
+                f"*Produto:* {record.codigo} - {record.descricao or '-'}",
+                f"*Unidade:* {record.unidade or '-'}",
+                "",
+                "*Quantidade:*",
+                f"- Disponivel: {self._format_estoque_quantity(record.disponivel)}",
+                f"- Saidas: {self._format_estoque_quantity(record.saidas)}",
+            ]
+            if getattr(record, "linhas_encontradas", 1) > 1:
+                text_lines.append(f"- Linhas encontradas: {record.linhas_encontradas}")
+            return flow.OutgoingMessage(text="\n".join(text_lines))
+
+        try:
+            record = estoque_service.get_pdf_report(filial=filial)
+        except Exception:
+            flow.logger.exception("Falha ao consultar PDF de estoque 020304", extra={"filial": filial})
+            return flow.OutgoingMessage(text="Nao consegui consultar o estoque agora.\nTente novamente em instantes.")
+        if record is None or not getattr(record, "pdf_bytes", b""):
+            return flow.OutgoingMessage(
+                text=(
+                    "Estoque\n\n"
+                    f"Nao encontrei PDF de estoque importado para a filial {filial}.\n"
+                    "Confira se a rotina 020304_BOT dessa filial ja foi importada."
+                )
+            )
+
+        updated_label = self._format_estoque_datetime(getattr(record, "updated_at", None))
+        filial_label = f"{record.filial} - {record.filial_nome}".strip(" -")
+        text_lines = [
+            "Estoque 020304",
+            "",
+            f"*Filial:* {filial_label or filial}",
+            f"*Atualizado em:* {updated_label}",
+            f"*Produtos:* {record.total_rows}",
+            "",
+            "Enviei o PDF em anexo.",
+        ]
+        filename = f"estoque-020304-filial-{record.filial or filial}.pdf"
+        return flow.OutgoingMessage(
+            kind="media",
+            text="\n".join(text_lines),
+            media_url=flow._build_pdf_data_url(record.pdf_bytes),
+            media_type="document",
+            media_caption=f"Estoque 020304 | Filial {record.filial or filial}",
+            media_filename=filename,
+        )
+
+    def _format_estoque_quantity(self, value: Any) -> str:
+        try:
+            amount = int(value or 0)
+        except (TypeError, ValueError):
+            amount = 0
+        return f"{amount:,}".replace(",", ".")
+
+    def _format_estoque_datetime(self, value: Any) -> str:
+        flow = _customer_flow_module()
+        if value is None:
+            return "-"
+        parsed = value
+        if isinstance(value, str):
+            try:
+                parsed = flow.datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return value
+        if not hasattr(parsed, "strftime"):
+            return "-"
+        if getattr(parsed, "tzinfo", None) is None:
+            parsed = parsed.replace(tzinfo=flow.timezone.utc)
+        return parsed.astimezone(flow.LOCAL_TIMEZONE).strftime("%d/%m/%Y %H:%M")
+
+    def _allowed_estoque_filiais(self, decision: AccessDecision) -> set[str] | None:
+        flow = _customer_flow_module()
+        if self._is_admin(decision):
+            return None
+
+        filial_codes: list[str] = []
+        for code in flow.partition_filial_scopes(decision.sectors):
+            filial_codes.append(code)
+        for code in flow.partition_filial_scopes(decision.gv_vdes):
+            filial_codes.append(code)
+        for scope in tuple(decision.sectors or ()) + tuple(decision.gv_vdes or ()):
+            pair = flow.split_scope_pair(scope)
+            if pair:
+                filial_codes.append(pair[0])
+
+        return {flow.normalize_numeric_code(code) for code in filial_codes if flow.normalize_numeric_code(code)}
 
     def _open_boleto_registration_prompt(self, *, sender: str, session: LookupSession) -> OutgoingMessage:
         flow = _customer_flow_module()

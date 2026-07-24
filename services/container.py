@@ -29,6 +29,7 @@ from bot_api.services.dprecos_import_service import DPrecosImportService
 from bot_api.services.dprodutos_import_service import DProdutosImportService
 from bot_api.services.drevendas_import_service import DRevendasImportService
 from bot_api.services.dsetores_import_service import DSetoresImportService
+from bot_api.services.estoque_020304_service import Estoque020304ImportService, Estoque020304QueryService
 from bot_api.services.giro_import_service import GiroImportService
 from bot_api.services.giro_query_service import GiroQueryService
 from bot_api.services.inadimplencia_import_service import InadimplenciaImportService
@@ -54,6 +55,7 @@ class AppServices:
     documentacao_pendente_query_service: DocumentacaoPendenteQueryService
     prazo_limite_query_service: PrazoLimiteQueryService
     boletos_query_service: BoletosQueryService
+    estoque_020304_query_service: Estoque020304QueryService
     dsetores_import_service: DSetoresImportService
     dprecos_import_service: DPrecosImportService
     doperacoes_import_service: DOperacoesImportService
@@ -63,6 +65,7 @@ class AppServices:
     produto_cestas_import_service: ProdutoCestasImportService
     boletos_pdf_import_service: BoletosPdfImportService
     boletos_pdf_import_services: dict[str, BoletosPdfImportService]
+    estoque_020304_import_services: dict[str, Estoque020304ImportService]
     dclientes_import_service: DClientesImportService
     inadimplencia_import_service: InadimplenciaImportService
     comodatos_import_service: ComodatosImportService
@@ -138,6 +141,11 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
+    estoque_020304_query_service = Estoque020304QueryService(
+        database_url=settings.reports_runtime_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
     dsetores_import_service = DSetoresImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
@@ -186,6 +194,17 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
             schema=settings.reports_db_schema,
             dataset_name=f"boletos_bradesco_op_{filial_code}",
             expected_filial=filial_code,
+            connect_timeout_seconds=settings.access_database_timeout_seconds,
+        )
+        for filial_code in sorted(filial_labels, key=int)
+    }
+    estoque_020304_import_services = {
+        filial_code: Estoque020304ImportService(
+            database_url=settings.reports_database_url,
+            schema=settings.reports_db_schema,
+            dataset_name=f"estoque_020304_op_{filial_code}",
+            expected_filial=filial_code,
+            filial_nome=filial_labels[filial_code],
             connect_timeout_seconds=settings.access_database_timeout_seconds,
         )
         for filial_code in sorted(filial_labels, key=int)
@@ -285,6 +304,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         documentacao_pendente_service=documentacao_pendente_query_service,
         prazo_limite_service=prazo_limite_query_service,
         boletos_service=boletos_query_service,
+        estoque_020304_service=estoque_020304_query_service,
         payip_payments_service=payip_payments_service,
         recolha_request_service=recolha_request_service,
         access_control=access_control,
@@ -301,6 +321,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         documentacao_pendente_query_service=documentacao_pendente_query_service,
         prazo_limite_query_service=prazo_limite_query_service,
         boletos_query_service=boletos_query_service,
+        estoque_020304_query_service=estoque_020304_query_service,
         dsetores_import_service=dsetores_import_service,
         dprecos_import_service=dprecos_import_service,
         doperacoes_import_service=doperacoes_import_service,
@@ -310,6 +331,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         produto_cestas_import_service=produto_cestas_import_service,
         boletos_pdf_import_service=boletos_pdf_import_service,
         boletos_pdf_import_services=boletos_pdf_import_services,
+        estoque_020304_import_services=estoque_020304_import_services,
         dclientes_import_service=dclientes_import_service,
         inadimplencia_import_service=inadimplencia_import_service,
         comodatos_import_service=comodatos_import_service,

@@ -182,6 +182,7 @@ def _register_admin_promax_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             catalog=deps["promax_catalog"],
             worker_token=deps["settings"].promax_worker_token,
             boletos_pdf_import_services=deps["boletos_pdf_import_services"],
+            estoque_020304_import_services=deps["estoque_020304_import_services"],
             inadimplencia_import_service=deps["inadimplencia_import_service"],
             comodatos_import_service=deps["comodatos_import_service"],
             dclientes_import_service=deps["dclientes_import_service"],

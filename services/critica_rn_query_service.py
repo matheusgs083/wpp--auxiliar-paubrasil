@@ -40,7 +40,7 @@ CRITICA_PDF_CACHE_TABLE = "critica_pdf_cache"
 PDF_SCOPE_SECTOR = "setor"
 PDF_SCOPE_GV = "gv"
 REPORT_SESSION_WORK_MEM = "64MB"
-CRITICA_PDF_CACHE_VERSION = "v26-portrait-critica-product-name"
+CRITICA_PDF_CACHE_VERSION = "v27-cash-condition-limit-rule"
 CRITICA_PDF_CURRENT_IMPORT_MESSAGE = (
     "PDF da critica bloqueado: importe os relatorios de critica de hoje antes de gerar."
 )
@@ -2830,6 +2830,10 @@ def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
     cond_pag_pedido = str(row.get("cond_pag_pedido") or row.get("cond_pag_pedido_codigo") or "").strip()
     client_cond_pag_atual = str(row.get("client_cond_pag_atual") or row.get("client_cond_pag_atual_codigo") or "").strip()
     allow_credit_and_condition_checks = _supports_credit_and_condition_checks(tipo_movimento)
+    allow_limit_checks = allow_credit_and_condition_checks and not _is_cash_payment_condition(
+        cond_pag_pedido_codigo,
+        cond_pag_pedido,
+    )
     cond_divergente = bool(
         allow_credit_and_condition_checks
         and cond_pag_pedido_codigo
@@ -2855,9 +2859,9 @@ def _row_to_record(row: dict[str, Any]) -> CriticaRnRecord:
     )
     order_above_average = False
     computed_limit_exceeded = Decimal("0")
-    if allow_credit_and_condition_checks and client_limite_credito > 0:
+    if allow_limit_checks and client_limite_credito > 0:
         computed_limit_exceeded = max((client_limite_usado + total_pedido) - client_limite_credito, Decimal("0"))
-    if allow_credit_and_condition_checks:
+    if allow_limit_checks:
         limit_exceeded_amount = valor_estouro_limite if valor_estouro_limite > 0 else computed_limit_exceeded
     else:
         limit_exceeded_amount = Decimal("0")
@@ -3448,6 +3452,13 @@ def _map_status(*, mapa_codigo: str, vendedor_codigo: str) -> str:
 
 def _supports_credit_and_condition_checks(tipo_movimento: str) -> bool:
     return normalize_stored_scope_value(str(tipo_movimento or "")) == "51"
+
+
+def _is_cash_payment_condition(code: str, label: str) -> bool:
+    normalized_code = normalize_stored_scope_value(str(code or ""))
+    if normalized_code == "2":
+        return True
+    return "dinheiro" in _normalize_token(label)
 
 
 def _resolve_price_reference(

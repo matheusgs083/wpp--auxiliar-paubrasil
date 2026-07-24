@@ -294,6 +294,10 @@
     .promax-unit-status.ok { color: var(--success); border-color: rgba(4, 120, 87, 0.28); }
     .promax-unit-status.warn { color: var(--warning); border-color: rgba(180, 83, 9, 0.3); }
     .promax-unit-status.err { color: var(--danger); border-color: rgba(185, 28, 28, 0.34); background: rgba(185, 28, 28, 0.06); }
+    .promax-schedule-repeat { display: inline-flex; align-items: center; gap: 0.35rem; max-width: 100%; }
+    .promax-schedule-repeat-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .promax-schedule-modal-days { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .promax-schedule-day-pill { display: inline-flex; align-items: center; padding: 0.22rem 0.45rem; border: 1px solid var(--promax-neutral-border); border-radius: 5px; color: var(--ink-700); background: var(--promax-neutral-bg); font-size: 0.72rem; font-weight: 800; }
     #promaxPane .badge.text-bg-success,
     #promaxPane .badge.text-bg-secondary { color: var(--ink-700) !important; background: var(--promax-neutral-bg) !important; border: 1px solid var(--promax-neutral-border); }
     .route-table-scroll { height: 260px; min-height: 180px; max-height: 1400px; }
@@ -1914,6 +1918,42 @@
     </div>
   </div>
 
+  <div class="modal fade" id="promaxScheduleGroupModal" tabindex="-1" aria-labelledby="promaxScheduleGroupModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="promaxScheduleGroupModalTitle">Repeticoes da agenda</h5>
+            <div class="form-text" id="promaxScheduleGroupModalSubtitle">Dias e horarios configurados</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="promax-schedule-modal-days mb-3" id="promaxScheduleGroupModalDays"></div>
+          <div class="table-scroll" style="max-height: 420px;">
+            <table class="table table-sm table-hover align-middle mb-0 promax-unit-modal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Repeticao</th>
+                  <th scope="col">Proxima execucao</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="text-end">Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="promaxScheduleGroupModalBody">
+                <tr><td colspan="4" class="text-center py-3 text-secondary">Selecione uma agenda.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-success" id="promaxScheduleGroupRunBtn"><i class="bi bi-play-fill me-1"></i>Executar agora</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const CONFIG = {
@@ -2092,6 +2132,8 @@
         jobs: [],
         worker: null,
         schedules: [],
+        scheduleGroups: [],
+        activeScheduleGroupKey: "",
         selectedJobId: "",
         editingScheduleId: "",
         runSelectedCategories: null,
@@ -2150,6 +2192,8 @@
       const name = String(apiName || "").toLowerCase();
       const boletoMatch = name.match(/^boletos_bradesco_op_(\d+)$/);
       if (boletoMatch) return `BoletosOp${boletoMatch[1]}`;
+      const estoqueMatch = name.match(/^estoque_020304_op_(\d+)$/);
+      if (estoqueMatch) return `Estoque020304Op${estoqueMatch[1]}`;
       const criticaMatch = name.match(/^critica_op_(\d+)$/);
       if (criticaMatch) return `CriticaOp${criticaMatch[1]}`;
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].id) return DATASET_UI_OVERRIDES[name].id;
@@ -2161,6 +2205,7 @@
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].area) return DATASET_UI_OVERRIDES[name].area;
       if (name.startsWith("critica_op_")) return "critica";
       if (name.startsWith("boletos_bradesco_op_")) return "promax";
+      if (name.startsWith("estoque_020304_op_")) return "promax";
       if (["prazo_limite", "giro"].includes(name)) return "powerbi";
       if (["dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "produto_cestas"].includes(name)) return "operational";
       return "promax";
@@ -2171,6 +2216,7 @@
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].icon) return DATASET_UI_OVERRIDES[name].icon;
       if (name.startsWith("critica_op_")) return "bi-clipboard-data";
       if (name.startsWith("boletos_bradesco_op_")) return "bi-upc-scan";
+      if (name.startsWith("estoque_020304_op_")) return "bi-boxes";
       return "bi-table";
     }
 
@@ -2178,6 +2224,7 @@
       const name = String(apiName || "").toLowerCase();
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].group) return DATASET_UI_OVERRIDES[name].group;
       if (name.startsWith("critica_op_")) return "Promax 030111 - Critica por operacao";
+      if (name.startsWith("estoque_020304_op_")) return "Promax 020304 - Estoque por operacao";
       if (datasetArea(name) === "operational") return "Operacional";
       if (datasetArea(name) === "powerbi") return "Power BI";
       return "Promax";
@@ -2187,6 +2234,7 @@
       const name = String(apiName || "").toLowerCase();
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].groupNote) return DATASET_UI_OVERRIDES[name].groupNote;
       if (name.startsWith("critica_op_")) return "Upload separado por filial. A consolidacao final do bot passa a sair desta aba.";
+      if (name.startsWith("estoque_020304_op_")) return "Upload separado por filial. O bot envia o PDF ativo pelo comando estoque filial.";
       return "";
     }
 
@@ -2196,6 +2244,9 @@
       const mode = String(item.upload_mode || "single");
       if (apiName.startsWith("boletos_bradesco_op_")) {
         return { accept, mode, label: "PDF da Operacao", emptyHint: `Selecione o PDF de boletos da operacao ${apiName.replace("boletos_bradesco_op_", "")}.` };
+      }
+      if (apiName.startsWith("estoque_020304_op_")) {
+        return { accept, mode, label: "CSV da Operacao", emptyHint: `Selecione o CSV 020304 da operacao ${apiName.replace("estoque_020304_op_", "")}.` };
       }
       if (apiName.startsWith("critica_op_")) {
         return { accept, mode, label: "CSV da Operacao", emptyHint: `Selecione o CSV da operacao ${apiName.replace("critica_op_", "")}.` };
@@ -2345,6 +2396,11 @@
       promaxUnitsModalTitle: document.getElementById("promaxUnitsModalTitle"),
       promaxUnitsModalSubtitle: document.getElementById("promaxUnitsModalSubtitle"),
       promaxUnitsModalBody: document.getElementById("promaxUnitsModalBody"),
+      promaxScheduleGroupModalTitle: document.getElementById("promaxScheduleGroupModalTitle"),
+      promaxScheduleGroupModalSubtitle: document.getElementById("promaxScheduleGroupModalSubtitle"),
+      promaxScheduleGroupModalDays: document.getElementById("promaxScheduleGroupModalDays"),
+      promaxScheduleGroupModalBody: document.getElementById("promaxScheduleGroupModalBody"),
+      promaxScheduleGroupRunBtn: document.getElementById("promaxScheduleGroupRunBtn"),
       accessRole: document.getElementById("accessRole"),
       accessScopeHint: document.getElementById("accessScopeHint"),
       accessModeHint: document.getElementById("accessModeHint"),
@@ -2684,6 +2740,9 @@
       : null;
     const promaxUnitsModalInstance = document.getElementById("promaxUnitsModal")
       ? new bootstrap.Modal(document.getElementById("promaxUnitsModal"), { keyboard: true })
+      : null;
+    const promaxScheduleGroupModalInstance = document.getElementById("promaxScheduleGroupModal")
+      ? new bootstrap.Modal(document.getElementById("promaxScheduleGroupModal"), { keyboard: true })
       : null;
     let allowedUsersCardResizeObserver = null;
     let giroRouteResizeObserver = null;
@@ -3570,6 +3629,160 @@
       return `${type || "-"} ${timeValue}`;
     }
 
+    function promaxScheduleBaseName(schedule) {
+      const rawName = String(schedule && schedule.name || "").trim();
+      let name = rawName || "Agenda";
+      name = name.replace(/\s+(Seg|Ter|Qua|Qui|Sex|Sab|Dom)\s+\d{1,2}:\d{2}$/i, "");
+      name = name.replace(/\s+\d{1,2}:\d{2}$/i, "");
+      return name.trim() || rawName || "Agenda";
+    }
+
+    function promaxSchedulePayloadGroupKey(schedule) {
+      const payload = schedule && schedule.payload && typeof schedule.payload === "object"
+        ? schedule.payload
+        : {};
+      const routines = Array.isArray(payload.routines)
+        ? payload.routines.map(String).sort()
+        : [];
+      const units = Array.isArray(payload.units)
+        ? payload.units.map(String).sort()
+        : [];
+      return JSON.stringify({
+        category: String(payload.category || schedule && schedule.job_type || ""),
+        routines,
+        units,
+        start_date: String(payload.start_date || ""),
+        end_date: String(payload.end_date || ""),
+        send_dates: Boolean(payload.send_dates),
+        publish: Boolean(payload.publish),
+      });
+    }
+
+    function promaxScheduleSortValue(schedule) {
+      const type = String(schedule && schedule.schedule_type || "");
+      const weekday = schedule && schedule.weekday != null ? Number(schedule.weekday) : 99;
+      const dayOfMonth = schedule && schedule.day_of_month != null ? Number(schedule.day_of_month) : 99;
+      const timeValue = String(schedule && schedule.time_of_day || "").slice(0, 5);
+      return `${type}|${String(weekday).padStart(2, "0")}|${String(dayOfMonth).padStart(2, "0")}|${timeValue}|${String(schedule && schedule.id || "")}`;
+    }
+
+    function promaxBuildScheduleGroups(schedules) {
+      const buckets = new Map();
+      (Array.isArray(schedules) ? schedules : []).forEach(schedule => {
+        if (!schedule || typeof schedule !== "object") return;
+        const payload = schedule.payload && typeof schedule.payload === "object" ? schedule.payload : {};
+        const baseName = promaxScheduleBaseName(schedule);
+        const jobType = String(schedule.job_type || payload.category || "-");
+        const triggerScheduleId = String(schedule.trigger_after_schedule_id || "");
+        const groupKey = [
+          baseName,
+          jobType,
+          String(schedule.schedule_type || ""),
+          triggerScheduleId,
+          promaxSchedulePayloadGroupKey(schedule)
+        ].join("||");
+        if (!buckets.has(groupKey)) {
+          buckets.set(groupKey, {
+            key: "",
+            baseName,
+            jobType,
+            triggerScheduleId,
+            payload,
+            schedules: []
+          });
+        }
+        buckets.get(groupKey).schedules.push(schedule);
+      });
+
+      return Array.from(buckets.values()).map((group, index) => {
+        group.key = `schedule-group-${index}`;
+        group.schedules.sort((left, right) => promaxScheduleSortValue(left).localeCompare(promaxScheduleSortValue(right)));
+        group.primary = group.schedules.find(schedule => Boolean(schedule.enabled)) || group.schedules[0] || {};
+        group.enabledCount = group.schedules.filter(schedule => Boolean(schedule.enabled)).length;
+        group.days = Array.from(new Set(
+          group.schedules
+            .map(schedule => schedule.weekday)
+            .filter(value => value != null)
+            .map(Number)
+            .filter(value => Number.isInteger(value) && value >= 0 && value <= 6)
+        )).sort((left, right) => left - right);
+        group.monthDays = Array.from(new Set(
+          group.schedules
+            .map(schedule => schedule.day_of_month)
+            .filter(value => value != null)
+            .map(Number)
+            .filter(value => Number.isInteger(value) && value >= 1 && value <= 31)
+        )).sort((left, right) => left - right);
+        group.times = Array.from(new Set(
+          group.schedules
+            .map(schedule => String(schedule.time_of_day || "").slice(0, 5))
+            .filter(Boolean)
+        )).sort();
+        const nextRuns = group.schedules
+          .map(schedule => ({ raw: schedule.next_run_at, time: Date.parse(schedule.next_run_at) }))
+          .filter(item => Number.isFinite(item.time))
+          .sort((left, right) => left.time - right.time);
+        group.nextRunAt = nextRuns.length ? nextRuns[0].raw : "";
+        return group;
+      }).sort((left, right) => {
+        const nextLeft = Date.parse(left.nextRunAt);
+        const nextRight = Date.parse(right.nextRunAt);
+        if (Number.isFinite(nextLeft) && Number.isFinite(nextRight) && nextLeft !== nextRight) return nextLeft - nextRight;
+        return String(left.baseName || "").localeCompare(String(right.baseName || ""));
+      });
+    }
+
+    function promaxFindScheduleGroup(groupKey) {
+      return (state.promax.scheduleGroups || []).find(group => String(group.key) === String(groupKey));
+    }
+
+    function promaxScheduleGroupTimeLabel(group) {
+      const times = Array.isArray(group && group.times) ? group.times : [];
+      if (times.length === 1) return times[0];
+      return times.length ? `${times.length} horarios` : "-";
+    }
+
+    function promaxScheduleGroupRepetitionLabel(group) {
+      if (!group) return "-";
+      if (group.triggerScheduleId) {
+        const schedules = Array.isArray(state.promax.schedules) ? state.promax.schedules : [];
+        const triggerSchedule = schedules.find(item => String(item.id || "") === String(group.triggerScheduleId));
+        return `Apos ${triggerSchedule ? triggerSchedule.name : String(group.triggerScheduleId).slice(0, 8)}`;
+      }
+      const primary = group.primary || {};
+      const type = String(primary.schedule_type || "");
+      const timeLabel = promaxScheduleGroupTimeLabel(group);
+      if (type === "weekly") {
+        const days = Array.isArray(group.days) && group.days.length
+          ? group.days.map(promaxFormatWeekday).join(", ")
+          : "Sem dia";
+        return `${days} | ${timeLabel}`;
+      }
+      if (type === "monthly") {
+        const days = Array.isArray(group.monthDays) && group.monthDays.length
+          ? group.monthDays.join(", ")
+          : "-";
+        return `Dia ${days} | ${timeLabel}`;
+      }
+      if (type === "daily") return `Diaria | ${timeLabel}`;
+      return promaxScheduleTimingLabel(primary);
+    }
+
+    function promaxScheduleGroupStatus(group) {
+      const total = Array.isArray(group && group.schedules) ? group.schedules.length : 0;
+      const enabled = Number(group && group.enabledCount || 0);
+      if (!total || !enabled) return { label: "Pausada", badge: "text-bg-secondary" };
+      if (enabled === total) return { label: "Ativa", badge: "text-bg-success" };
+      return { label: "Parcial", badge: "text-bg-warning" };
+    }
+
+    function promaxScheduleGroupSubtitle(group) {
+      const total = Array.isArray(group && group.schedules) ? group.schedules.length : 0;
+      const enabled = Number(group && group.enabledCount || 0);
+      const suffix = total === 1 ? "repeticao" : "repeticoes";
+      return `${total} ${suffix} | ${enabled} ativa(s)`;
+    }
+
     function promaxUnitLabel(unitId) {
       const id = String(unitId || "").trim();
       const reseller = PROMAX_RESELLERS.find(item => item.id === id);
@@ -3763,29 +3976,28 @@
 
       const schedules = Array.isArray(state.promax.schedules) ? state.promax.schedules : [];
       if (E.promaxSchedulesBody) {
-        E.promaxSchedulesBody.innerHTML = schedules.length ? schedules.map(schedule => {
-          const enabled = Boolean(schedule.enabled);
-          const schedulePayload = schedule.payload || {};
-          const groupId = String(schedule.job_type || schedulePayload.category || "-");
-          const group = promaxCatalogCategory(groupId);
+        state.promax.scheduleGroups = promaxBuildScheduleGroups(schedules);
+        const scheduleGroups = state.promax.scheduleGroups;
+        E.promaxSchedulesBody.innerHTML = scheduleGroups.length ? scheduleGroups.map(scheduleGroup => {
+          const schedulePayload = scheduleGroup.payload || {};
+          const groupId = String(scheduleGroup.jobType || schedulePayload.category || "-");
+          const catalogGroup = promaxCatalogCategory(groupId);
           const units = Array.isArray(schedulePayload.units) ? schedulePayload.units : [];
           const unitNames = units.map(unitId => {
             const reseller = PROMAX_RESELLERS.find(item => item.id === String(unitId));
             return reseller ? reseller.name : String(unitId);
           });
-          const triggerScheduleId = String(schedule.trigger_after_schedule_id || "");
-          const triggerSchedule = schedules.find(item => String(item.id || "") === triggerScheduleId);
-          const triggerLabel = triggerScheduleId
-            ? `Apos ${triggerSchedule ? triggerSchedule.name : triggerScheduleId.slice(0, 8)}`
-            : promaxScheduleTimingLabel(schedule);
+          const status = promaxScheduleGroupStatus(scheduleGroup);
+          const primaryScheduleId = String((scheduleGroup.primary || {}).id || "");
+          const allEnabled = Number(scheduleGroup.enabledCount || 0) === scheduleGroup.schedules.length;
           return `<tr>
-            <td><strong>${escapeHtml(schedule.name || "-")}</strong></td>
-            <td><span class="mono">${escapeHtml(group ? group.name : groupId)}</span></td>
+            <td><strong>${escapeHtml(scheduleGroup.baseName || "-")}</strong><div class="small text-secondary">${escapeHtml(promaxScheduleGroupSubtitle(scheduleGroup))}</div></td>
+            <td><span class="mono">${escapeHtml(catalogGroup ? catalogGroup.name : groupId)}</span></td>
             <td>${escapeHtml(unitNames.length ? unitNames.join(", ") : "Todas")}</td>
-            <td>${escapeHtml(triggerLabel)}</td>
-            <td>${triggerScheduleId ? '<span class="text-secondary">Aguardando conclusao</span>' : escapeHtml(formatDateTime(schedule.next_run_at))}</td>
-            <td><span class="badge ${enabled ? "text-bg-success" : "text-bg-secondary"}">${enabled ? "Ativa" : "Pausada"}</span></td>
-            <td class="text-end"><div class="d-flex gap-1 justify-content-end"><button class="btn btn-outline-primary btn-sm" title="Editar agenda" onclick="promaxEditSchedule('${escapeHtml(schedule.id)}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-outline-primary btn-sm" title="${enabled ? "Pausar agenda" : "Ativar agenda"}" onclick="promaxToggleSchedule('${escapeHtml(schedule.id)}', ${enabled ? "false" : "true"})"><i class="bi ${enabled ? "bi-pause-circle" : "bi-play-circle"}"></i></button><button class="btn btn-outline-danger btn-sm" title="Excluir agenda" onclick="promaxDeleteSchedule('${escapeHtml(schedule.id)}')"><i class="bi bi-trash3"></i></button></div></td>
+            <td><button class="btn btn-outline-primary btn-sm promax-schedule-repeat" onclick="promaxOpenScheduleGroupModal('${escapeHtml(scheduleGroup.key)}')" title="Ver repeticoes da agenda"><i class="bi bi-calendar-week"></i><span class="promax-schedule-repeat-label">${escapeHtml(promaxScheduleGroupRepetitionLabel(scheduleGroup))}</span></button></td>
+            <td>${scheduleGroup.triggerScheduleId ? '<span class="text-secondary">Aguardando conclusao</span>' : escapeHtml(formatDateTime(scheduleGroup.nextRunAt))}</td>
+            <td><span class="badge ${status.badge}">${escapeHtml(status.label)}</span></td>
+            <td class="text-end"><div class="d-flex gap-1 justify-content-end"><button class="btn btn-outline-success btn-sm" title="Executar agora" onclick="promaxRunScheduleGroup('${escapeHtml(scheduleGroup.key)}')"><i class="bi bi-play-fill"></i></button><button class="btn btn-outline-primary btn-sm" title="Editar agenda base" onclick="promaxEditSchedule('${escapeHtml(primaryScheduleId)}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-outline-primary btn-sm" title="${allEnabled ? "Pausar repeticoes" : "Ativar repeticoes"}" onclick="promaxToggleScheduleGroup('${escapeHtml(scheduleGroup.key)}', ${allEnabled ? "false" : "true"})"><i class="bi ${allEnabled ? "bi-pause-circle" : "bi-play-circle"}"></i></button><button class="btn btn-outline-danger btn-sm" title="Excluir repeticoes" onclick="promaxDeleteScheduleGroup('${escapeHtml(scheduleGroup.key)}')"><i class="bi bi-trash3"></i></button></div></td>
           </tr>`;
         }).join("") : '<tr><td colspan="7" class="text-center py-3 text-secondary">Nenhuma agenda cadastrada.</td></tr>';
       }
@@ -4172,6 +4384,124 @@
       }
     }
 
+    function promaxOpenScheduleGroupModal(groupKey) {
+      const group = promaxFindScheduleGroup(groupKey);
+      if (!group) {
+        addLog("Grupo de agenda Promax nao encontrado.", "warn");
+        return;
+      }
+      state.promax.activeScheduleGroupKey = String(group.key || "");
+      const schedulePayload = group.payload || {};
+      const catalogGroup = promaxCatalogCategory(group.jobType || schedulePayload.category || "");
+      const groupName = catalogGroup ? catalogGroup.name : String(group.jobType || "-");
+      if (E.promaxScheduleGroupModalTitle) E.promaxScheduleGroupModalTitle.textContent = group.baseName || "Repeticoes da agenda";
+      if (E.promaxScheduleGroupModalSubtitle) {
+        E.promaxScheduleGroupModalSubtitle.textContent = `${groupName} | ${promaxScheduleGroupSubtitle(group)}`;
+      }
+      if (E.promaxScheduleGroupModalDays) {
+        const dayPills = group.triggerScheduleId
+          ? [`<span class="promax-schedule-day-pill">${escapeHtml(promaxScheduleGroupRepetitionLabel(group))}</span>`]
+          : [
+            ...((group.days || []).map(day => `<span class="promax-schedule-day-pill">${escapeHtml(promaxFormatWeekday(day))}</span>`)),
+            ...((group.monthDays || []).map(day => `<span class="promax-schedule-day-pill">Dia ${escapeHtml(day)}</span>`)),
+            ...((group.times || []).map(timeValue => `<span class="promax-schedule-day-pill">${escapeHtml(timeValue)}</span>`))
+          ];
+        E.promaxScheduleGroupModalDays.innerHTML = dayPills.length
+          ? dayPills.join("")
+          : '<span class="text-secondary small">Sem repeticoes detalhadas.</span>';
+      }
+      if (E.promaxScheduleGroupModalBody) {
+        E.promaxScheduleGroupModalBody.innerHTML = group.schedules.length ? group.schedules.map(schedule => {
+          const enabled = Boolean(schedule.enabled);
+          const scheduleId = String(schedule.id || "");
+          const nextRun = schedule.trigger_after_schedule_id
+            ? '<span class="text-secondary">Aguardando conclusao</span>'
+            : escapeHtml(formatDateTime(schedule.next_run_at));
+          return `<tr>
+            <td><strong>${escapeHtml(promaxScheduleTimingLabel(schedule))}</strong><div class="small text-secondary">${escapeHtml(schedule.name || "-")}</div></td>
+            <td>${nextRun}</td>
+            <td><span class="badge ${enabled ? "text-bg-success" : "text-bg-secondary"}">${enabled ? "Ativa" : "Pausada"}</span></td>
+            <td class="text-end"><div class="d-flex gap-1 justify-content-end"><button class="btn btn-outline-success btn-sm" title="Executar esta repeticao agora" onclick="promaxRunScheduleNow('${escapeHtml(scheduleId)}')"><i class="bi bi-play-fill"></i></button><button class="btn btn-outline-primary btn-sm" title="Editar repeticao" onclick="promaxEditSchedule('${escapeHtml(scheduleId)}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-outline-primary btn-sm" title="${enabled ? "Pausar repeticao" : "Ativar repeticao"}" onclick="promaxToggleSchedule('${escapeHtml(scheduleId)}', ${enabled ? "false" : "true"})"><i class="bi ${enabled ? "bi-pause-circle" : "bi-play-circle"}"></i></button><button class="btn btn-outline-danger btn-sm" title="Excluir repeticao" onclick="promaxDeleteSchedule('${escapeHtml(scheduleId)}')"><i class="bi bi-trash3"></i></button></div></td>
+          </tr>`;
+        }).join("") : '<tr><td colspan="4" class="text-center py-3 text-secondary">Nenhuma repeticao cadastrada.</td></tr>';
+      }
+      if (promaxScheduleGroupModalInstance) promaxScheduleGroupModalInstance.show();
+    }
+
+    async function promaxRunScheduleNow(scheduleId) {
+      const schedule = (state.promax.schedules || []).find(item => String(item.id || "") === String(scheduleId));
+      const label = schedule ? String(schedule.name || "agenda") : String(scheduleId || "").slice(0, 8);
+      if (!await askConfirmation(`Executar agora a agenda Promax "${label}"?`)) return;
+      try {
+        const response = await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(scheduleId)}/run-now`, {
+          method: "POST",
+          timeoutMs: 30000
+        });
+        const job = response && response.job ? response.job : {};
+        addLog(`Agenda Promax enviada para fila: ${String(job.id || "").slice(0, 8) || "novo job"}.`, "ok");
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao executar agenda Promax: ${err.message}`, "err");
+      }
+    }
+
+    function promaxRunScheduleGroup(groupKey) {
+      const group = promaxFindScheduleGroup(groupKey);
+      const scheduleId = String(group && group.primary && group.primary.id || "");
+      if (!scheduleId) {
+        addLog("Grupo de agenda Promax sem repeticao executavel.", "warn");
+        return;
+      }
+      return promaxRunScheduleNow(scheduleId);
+    }
+
+    async function promaxToggleScheduleGroup(groupKey, enabled) {
+      const group = promaxFindScheduleGroup(groupKey);
+      if (!group || !group.schedules.length) {
+        addLog("Grupo de agenda Promax nao encontrado.", "warn");
+        return;
+      }
+      const action = enabled ? "Ativar" : "Pausar";
+      if (!await askConfirmation(`${action} ${group.schedules.length} repeticao(oes) da agenda "${group.baseName}"?`)) return;
+      try {
+        for (const schedule of group.schedules) {
+          await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(schedule.id)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled }),
+            timeoutMs: 20000
+          });
+        }
+        addLog(`Agenda Promax atualizada: ${group.schedules.length} repeticao(oes).`, "ok");
+        if (promaxScheduleGroupModalInstance) promaxScheduleGroupModalInstance.hide();
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao atualizar repeticoes da agenda: ${err.message}`, "err");
+      }
+    }
+
+    async function promaxDeleteScheduleGroup(groupKey) {
+      const group = promaxFindScheduleGroup(groupKey);
+      if (!group || !group.schedules.length) {
+        addLog("Grupo de agenda Promax nao encontrado.", "warn");
+        return;
+      }
+      if (!await askConfirmation(`Excluir ${group.schedules.length} repeticao(oes) da agenda "${group.baseName}"?`)) return;
+      try {
+        for (const schedule of [...group.schedules].reverse()) {
+          await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(schedule.id)}`, {
+            method: "DELETE",
+            timeoutMs: 20000
+          });
+        }
+        addLog("Repeticoes da agenda Promax excluidas.", "ok");
+        if (promaxScheduleGroupModalInstance) promaxScheduleGroupModalInstance.hide();
+        await syncPromax({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao excluir repeticoes da agenda: ${err.message}`, "err");
+      }
+    }
+
     async function promaxToggleSchedule(scheduleId, enabled) {
       try {
         await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(scheduleId)}`, {
@@ -4272,6 +4602,7 @@
       });
       if (E.promaxScheduleCreateBtn) E.promaxScheduleCreateBtn.addEventListener("click", promaxCreateSchedule);
       if (E.promaxScheduleCancelBtn) E.promaxScheduleCancelBtn.addEventListener("click", resetPromaxScheduleForm);
+      if (E.promaxScheduleGroupRunBtn) E.promaxScheduleGroupRunBtn.addEventListener("click", () => promaxRunScheduleGroup(state.promax.activeScheduleGroupKey));
       document.getElementById("clearLogBtn").addEventListener("click", () => { state.logs = []; renderLogs(); });
       document.getElementById("saveAccessBtn").addEventListener("click", saveAccess);
       document.getElementById("resetAccessBtn").addEventListener("click", resetAccessForm);

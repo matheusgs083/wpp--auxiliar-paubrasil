@@ -1414,6 +1414,43 @@ class PromaxJobsService:
                 row = cur.fetchone()
         return _schedule_record(row) if row else None
 
+    def enqueue_schedule_now(
+        self,
+        schedule_id: str | UUID,
+        *,
+        requested_by: str = "",
+        now: datetime | None = None,
+    ) -> JobRecord | None:
+        normalized_schedule_id = _uuid_text(schedule_id, field_name="schedule_id")
+        normalized_now = _aware_utc(now or datetime.now(UTC), field_name="now")
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL("SELECT * FROM {schema}.{schedules} WHERE id = %s").format(
+                        schema=sql.Identifier(self.schema),
+                        schedules=sql.Identifier(SCHEDULES_TABLE),
+                    ),
+                    (normalized_schedule_id,),
+                )
+                schedule = cur.fetchone()
+        if schedule is None:
+            return None
+
+        return self.enqueue_job(
+            job_type=str(schedule["job_type"]),
+            payload=dict(schedule["payload"] or {}),
+            priority=20,
+            idempotency_key=(
+                "manual-schedule:"
+                f"{normalized_schedule_id}:"
+                f"{normalized_now.isoformat(timespec='seconds')}"
+            ),
+            source_schedule_id=normalized_schedule_id,
+            scheduled_for=normalized_now,
+            created_by=str(requested_by or "").strip(),
+        )
+
     def list_schedules(self, *, include_disabled: bool = True) -> list[ScheduleRecord]:
         with self._connect() as conn:
             self._ensure_schema(conn)

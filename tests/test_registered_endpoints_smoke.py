@@ -164,6 +164,9 @@ class FakePromaxJobsService:
     def get_schedule(self, _schedule_id: str) -> dict[str, Any]:
         return dict(self.schedule)
 
+    def enqueue_schedule_now(self, _schedule_id: str, **_kwargs: Any) -> dict[str, Any]:
+        return dict(self.job)
+
     def update_schedule(self, _schedule_id: str, **_kwargs: Any) -> dict[str, Any]:
         return dict(self.schedule)
 
@@ -287,6 +290,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             },
             "promax_jobs_service": FakePromaxJobsService(),
             "boletos_pdf_import_services": {},
+            "estoque_020304_import_services": {},
             "inadimplencia_import_service": None,
             "comodatos_import_service": None,
             "dclientes_import_service": None,
@@ -506,6 +510,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             ),
             EndpointCase("GET", "/api/admin/promax/schedules"),
             EndpointCase("GET", "/api/admin/promax/schedules/schedule-1"),
+            EndpointCase("POST", "/api/admin/promax/schedules/schedule-1/run-now", expected_status=202),
             EndpointCase(
                 "PATCH",
                 "/api/admin/promax/schedules/schedule-1",
@@ -578,6 +583,22 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                         "filial": "3",
                         "filename": "03,02,06_2210003.pdf",
                         "file_base64": "JVBERi0xLjQK",
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/estoque/import",
+                expected_status=400,
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "lease_token": "lease-1",
+                        "filial": "3",
+                        "filename": "02,03,04_2210003.csv",
+                        "file_base64": "R3JhZGU7Q29kO0Rlc2NyaWNhbwoxOzI7UHJvZHV0bwo=",
                     },
                 },
             ),
@@ -753,6 +774,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "/api/admin/promax/jobs/job-1/cancel": "/api/admin/promax/jobs/{job_id}/cancel",
             "/api/admin/promax/jobs/job-1/stop": "/api/admin/promax/jobs/{job_id}/stop",
             "/api/admin/promax/schedules/schedule-1": "/api/admin/promax/schedules/{schedule_id}",
+            "/api/admin/promax/schedules/schedule-1/run-now": "/api/admin/promax/schedules/{schedule_id}/run-now",
             "/api/internal/promax/jobs/job-1/heartbeat": "/api/internal/promax/jobs/{job_id}/heartbeat",
             "/api/internal/promax/jobs/job-1/log": "/api/internal/promax/jobs/{job_id}/log",
             "/api/internal/promax/jobs/job-1/finish": "/api/internal/promax/jobs/{job_id}/finish",

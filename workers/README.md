@@ -29,6 +29,8 @@ PROMAX_WORKER_POLL_SECONDS=5
 PROMAX_WORKER_BACKOFF_INITIAL_SECONDS=2
 PROMAX_WORKER_BACKOFF_MAX_SECONDS=60
 PROMAX_WORKER_LOG_LEVEL=INFO
+PROMAX_VISUAL_LOCK_ENABLED=1
+PROMAX_VISUAL_LOCK_FILE=
 ```
 
 `PROMAX_DRIVER_DIR` deve conter `cli.py`, e `PROMAX_PYTHON` deve apontar para o
@@ -57,6 +59,24 @@ taskkill /PID <pid> /T /F
 Jobs de manutencao usam o mesmo controle. O reprocessamento de publicacoes
 executa `cli.py reprocessar-publicacao` e tenta reenviar somente os arquivos
 guardados em `logs/publicacao_pendente`.
+
+## Concorrencia visual
+
+O Promax depende de janela, sessao, foco e downloads locais. Por isso o worker
+usa uma trava local antes de reivindicar qualquer job. Se outro worker, outra
+sessao ou outro processo do mesmo host ja estiver executando automacao Promax,
+o worker fica aguardando e nao pega novo job da fila.
+
+Por padrao a trava fica em `ProgramData\bot_api\locks\promax_visual.lock`.
+Se o usuario do Windows nao tiver permissao para criar essa pasta, o worker
+usa `LocalAppData` ou a pasta temporaria. Para fixar o caminho manualmente:
+
+```dotenv
+PROMAX_VISUAL_LOCK_FILE=C:\ProgramData\bot_api\locks\promax_visual.lock
+```
+
+Mantenha `PROMAX_VISUAL_LOCK_ENABLED=1` em producao. Desativar essa trava so
+faz sentido em teste local sem Promax visual.
 
 ## Execucao
 

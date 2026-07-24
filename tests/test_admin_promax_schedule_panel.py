@@ -185,7 +185,28 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
         self.assertIn("<th>Grupo</th>", self.html)
         self.assertIn("<th>Revendas</th>", self.html)
         self.assertIn("<th>Gatilho</th>", self.html)
-        self.assertIn("schedule.job_type || schedulePayload.category", self.html)
+        self.assertIn("scheduleGroup.jobType || schedulePayload.category", self.html)
+
+    def test_schedule_list_groups_repetitions_and_can_run_now(self) -> None:
+        for field_id in (
+            "promaxScheduleGroupModal",
+            "promaxScheduleGroupModalTitle",
+            "promaxScheduleGroupModalSubtitle",
+            "promaxScheduleGroupModalDays",
+            "promaxScheduleGroupModalBody",
+            "promaxScheduleGroupRunBtn",
+        ):
+            with self.subTest(field_id=field_id):
+                self.assertEqual(self.html.count(f'id="{field_id}"'), 1)
+
+        self.assertIn("function promaxBuildScheduleGroups(schedules)", self.html)
+        self.assertIn("function promaxOpenScheduleGroupModal(groupKey)", self.html)
+        self.assertIn("function promaxRunScheduleNow(scheduleId)", self.html)
+        self.assertIn("function promaxRunScheduleGroup(groupKey)", self.html)
+        self.assertIn("function promaxToggleScheduleGroup(groupKey, enabled)", self.html)
+        self.assertIn("function promaxDeleteScheduleGroup(groupKey)", self.html)
+        self.assertIn('/run-now`, {', self.html)
+        self.assertIn("promax-schedule-repeat", self.html)
 
 
 if __name__ == "__main__":
