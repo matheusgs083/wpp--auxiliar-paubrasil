@@ -645,6 +645,55 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(call_kwargs["reference_date"], "2026-07-23")
         self.assertEqual(client.heartbeat_job.call_count, 4)
 
+    def test_020304_bot_import_accepts_base_routine_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "02,03,04_2210003.csv").write_bytes(b"Grade;Cod;Descricao\n1;2;Produto\n")
+            client = Mock()
+            client.import_estoque_020304_csv.return_value = {
+                "ok": True,
+                "result": {"rows": 2, "batch_id": 46},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_020304_estoque_if_needed(
+                {
+                    "payload": {
+                        "routines": ["020304"],
+                        "units": ["2210003"],
+                        "end_date": "2026-07-23",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "020304 bot"): str(source_dir)}
+                        }
+                    },
+                ),
+            )
+
+        client.import_estoque_020304_csv.assert_called_once()
+        self.assertEqual(client.import_estoque_020304_csv.call_args.kwargs["filial"], "3")
+
     def test_020220_bot_imports_comodatos_csvs_in_one_batch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source_dir = Path(temp_dir)

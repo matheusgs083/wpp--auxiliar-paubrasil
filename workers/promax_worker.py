@@ -480,8 +480,7 @@ class PromaxWorker:
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = {}
-        routines = _string_list(payload.get("routines"))
-        if "030206_BOT" not in routines:
+        if not _routine_selected(payload, "030206_BOT"):
             return
         if payload.get("publish", True) is False:
             return
@@ -599,8 +598,7 @@ class PromaxWorker:
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = {}
-        routines = _string_list(payload.get("routines"))
-        if "020304_BOT" not in routines:
+        if not _routine_selected(payload, "020304_BOT"):
             return
         if payload.get("publish", True) is False:
             return
@@ -715,8 +713,7 @@ class PromaxWorker:
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = {}
-        routines = _string_list(payload.get("routines"))
-        if "120601_BOT" not in routines:
+        if not _routine_selected(payload, "120601_BOT"):
             return
         if payload.get("publish", True) is False:
             return
@@ -862,8 +859,7 @@ class PromaxWorker:
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = {}
-        routines = _string_list(payload.get("routines"))
-        if "030111_BOT" not in routines:
+        if not _routine_selected(payload, "030111_BOT"):
             return
         if payload.get("publish", True) is False:
             return
@@ -989,8 +985,7 @@ class PromaxWorker:
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = {}
-        routines = _string_list(payload.get("routines"))
-        if routine_id not in routines:
+        if not _routine_selected(payload, routine_id):
             return
         if payload.get("publish", True) is False:
             return
@@ -1098,6 +1093,25 @@ def _string_list(value: Any) -> list[str]:
         if text and text not in normalized:
             normalized.append(text)
     return normalized
+
+
+def _routine_selected(payload: Mapping[str, Any], routine_id: str) -> bool:
+    routines = _string_list(payload.get("routines"))
+    if not routines:
+        return False
+
+    target = _normalize_routine_id(routine_id)
+    target_base = target.removesuffix("_BOT")
+    accepted = {target}
+    if target_base:
+        accepted.add(target_base)
+        accepted.add(f"{target_base}_BOT")
+
+    return any(_normalize_routine_id(routine) in accepted for routine in routines)
+
+
+def _normalize_routine_id(value: Any) -> str:
+    return str(value or "").strip().upper().replace("-", "_").replace(" ", "_")
 
 
 def _promax_030206_unit_filial_map() -> dict[str, str]:
