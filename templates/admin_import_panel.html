@@ -3018,6 +3018,24 @@
       return promaxSelectionSelectedRoutines("schedule");
     }
 
+    function promaxScheduleRoutinesForEdit(schedule, payload, categoryId) {
+      const payloadRoutines = Array.isArray(payload && payload.routines)
+        ? payload.routines.map(String).filter(Boolean)
+        : [];
+      if (payloadRoutines.length) return payloadRoutines;
+      const groups = Array.isArray(payload && payload.groups) ? payload.groups : [];
+      const group = groups.find(item => String(item && item.category || "") === String(categoryId));
+      const groupRoutines = Array.isArray(group && group.routines)
+        ? group.routines.map(String).filter(Boolean)
+        : [];
+      if (groupRoutines.length) return groupRoutines;
+      const catalogCategory = promaxCatalogCategory(categoryId || (schedule && schedule.job_type));
+      const catalogRoutines = Array.isArray(catalogCategory && catalogCategory.routines)
+        ? catalogCategory.routines.map(item => String(item && item.id || item || "")).filter(Boolean)
+        : [];
+      return catalogRoutines;
+    }
+
     function updatePromaxActionState() {
       const runCategories = promaxRunSelectedCategories();
       const runRoutines = promaxRunSelectedRoutines();
@@ -4337,8 +4355,8 @@
         ? payload.units.map(String)
         : PROMAX_RESELLERS.map(reseller => reseller.id);
       renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
-      const routines = Array.isArray(payload.routines) ? payload.routines.map(String) : [];
       const categoryId = String(payload.category || schedule.job_type || "");
+      const routines = promaxScheduleRoutinesForEdit(schedule, payload, categoryId);
       state.promax.scheduleSelectedCategories = [categoryId];
       state.promax.scheduleSelectedRoutines = { [categoryId]: routines };
       renderPromaxScheduleCatalog({
