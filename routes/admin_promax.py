@@ -5,6 +5,7 @@ import binascii
 import csv
 import io
 import re
+import threading
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, time, timedelta
@@ -24,6 +25,17 @@ _UUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-
 _MAX_DATE_RANGE_DAYS = 366
 _PROMAX_LOCAL_TIMEZONE = ZoneInfo("America/Fortaleza")
 _PROMAX_NON_RETRYABLE_UNIT_STATUSES = {"SEM CONTEUDO", "SEM CONTEÚDO", "SEM DADOS"}
+_PROMAX_030206_UNIT_FILIAL_DEFAULTS = {
+    "0640001": "1",
+    "0640002": "2",
+    "2210003": "3",
+    "2210004": "4",
+    "3480005": "5",
+    "3610006": "6",
+    "3610007": "7",
+    "3610008": "8",
+}
+_PROMAX_BOLETO_IMPORT_LOCK = threading.Lock()
 _PROMAX_RETRYABLE_ERROR_TERMS = (
     "download(s) http falharam",
     "falha na fila de downloads http",
@@ -598,6 +610,22 @@ class PromaxBoletoImportRequest(_StrictPayload):
         if not name or name.lower().endswith(".pdf") is False:
             raise ValueError("filename deve ser um PDF")
         return name
+
+
+def _validate_030206_filename_filial(filename: str, filial: str) -> None:
+    match = re.fullmatch(r"03,02,06_([A-Za-z0-9_.-]+)\.pdf", filename)
+    if not match:
+        return
+    unit = match.group(1)
+    expected_filial = _PROMAX_030206_UNIT_FILIAL_DEFAULTS.get(unit)
+    if expected_filial and expected_filial != filial:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Arquivo de boleto nao corresponde a filial informada: "
+                f"{filename} pertence a filial {expected_filial}, mas foi enviado como filial {filial}."
+            ),
+        )
 
 
 class PromaxEstoque020304ImportRequest(_StrictPayload):
@@ -1592,6 +1620,7 @@ def create_admin_promax_router(
         payload: PromaxBoletoImportRequest,
         _worker_auth: None = Depends(require_worker_auth),
     ) -> dict[str, Any]:
+        _validate_030206_filename_filial(payload.filename, payload.filial)
         import_service = boleto_import_services.get(payload.filial)
         if import_service is None:
             raise HTTPException(
@@ -1619,17 +1648,18 @@ def create_admin_promax_router(
             raise HTTPException(status_code=400, detail="Arquivo enviado nao parece ser um PDF valido.")
 
         temp_path = ""
-        try:
-            with tempfile.NamedTemporaryFile(prefix="promax_030206_", suffix=".pdf", delete=False) as tmp:
-                tmp.write(pdf_bytes)
-                temp_path = tmp.name
-            result = import_service.import_source(FilePath(temp_path), reference_date=payload.reference_date)
-        finally:
-            if temp_path:
-                try:
-                    FilePath(temp_path).unlink(missing_ok=True)
-                except OSError:
-                    pass
+        with _PROMAX_BOLETO_IMPORT_LOCK:
+            try:
+                with tempfile.NamedTemporaryFile(prefix="promax_030206_", suffix=".pdf", delete=False) as tmp:
+                    tmp.write(pdf_bytes)
+                    temp_path = tmp.name
+                result = import_service.import_source(FilePath(temp_path), reference_date=payload.reference_date)
+            finally:
+                if temp_path:
+                    try:
+                        FilePath(temp_path).unlink(missing_ok=True)
+                    except OSError:
+                        pass
         service.append_job_log(
             job_id=payload.job_id,
             worker_id=payload.worker_id,

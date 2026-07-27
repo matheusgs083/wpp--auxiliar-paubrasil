@@ -516,8 +516,8 @@ class PromaxClientTests(unittest.TestCase):
         ):
             config = WorkerConfig.from_env()
 
-        self.assertEqual(config.boleto_import_timeout_seconds, 300)
-        self.assertEqual(config.lease_seconds, 360)
+        self.assertEqual(config.boleto_import_timeout_seconds, 900)
+        self.assertEqual(config.lease_seconds, 960)
 
     def test_030206_import_renews_job_lease_around_each_pdf(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -568,6 +568,10 @@ class PromaxClientTests(unittest.TestCase):
 
         self.assertEqual(client.import_boleto_pdf.call_count, 2)
         self.assertEqual(client.heartbeat_job.call_count, 4)
+        self.assertEqual(
+            [call.kwargs["filial"] for call in client.import_boleto_pdf.call_args_list],
+            ["1", "2"],
+        )
         self.assertEqual(client.import_boleto_pdf.call_args_list[0].kwargs["reference_date"], "2026-07-27")
 
     def test_120601_bot_imports_all_csvs_in_one_batch(self) -> None:

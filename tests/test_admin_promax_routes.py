@@ -997,6 +997,28 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             ["append_job_log", "append_job_log"],
         )
 
+    def test_internal_worker_rejects_030206_boleto_filename_from_another_filial(self) -> None:
+        client, _service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/boletos/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "filial": "3",
+                "filename": "03,02,06_0640002.pdf",
+                "file_base64": base64.b64encode(b"%PDF-1.4\nboleto").decode("ascii"),
+                "reference_date": "2026-07-20",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("pertence a filial 2", response.json()["detail"])
+        boleto_import_service = client.app.state.boleto_import_service
+        self.assertEqual(boleto_import_service.calls, [])
+
     def test_internal_worker_imports_020304_estoque_csv_for_filial(self) -> None:
         client, service, _events, _auth_calls = self.make_client()
 

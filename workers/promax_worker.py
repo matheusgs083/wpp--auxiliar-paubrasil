@@ -82,6 +82,7 @@ class WorkerConfig:
             "PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS",
             900.0,
         )
+        boleto_import_timeout_seconds = max(boleto_import_timeout_seconds, 900.0)
         lease_seconds = _env_int("PROMAX_WORKER_LEASE_SECONDS", 120)
         lease_seconds = max(lease_seconds, min(int(boleto_import_timeout_seconds) + 60, 3600))
         return cls(
