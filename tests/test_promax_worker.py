@@ -975,6 +975,8 @@ class PromaxClientTests(unittest.TestCase):
             (source_dir / "030111 bot - nomeUnidade030111_2210003.csv").write_bytes(b"Filial Origem;Valor\n3;10\n")
             (source_dir / "030111 bot - nomeUnidade030111_2210004.csv").write_bytes(b"Filial Origem;Valor\n4;20\n")
             (source_dir / "030111 bot - nomeUnidade030111_0640001.csv").write_bytes(b"Filial Origem;Valor\n1;30\n")
+            for csv_path in source_dir.glob("*.csv"):
+                os.utime(csv_path, (1785157200, 1785157200))
             client = Mock()
             client.import_critica_csvs.return_value = {
                 "ok": True,
@@ -1029,7 +1031,7 @@ class PromaxClientTests(unittest.TestCase):
                 "030111 bot - nomeUnidade030111_2210004.csv",
             ],
         )
-        self.assertEqual(client.import_critica_csvs.call_args_list[0].kwargs["reference_date"], "2026-07-21")
+        self.assertEqual(client.import_critica_csvs.call_args_list[0].kwargs["reference_date"], "2026-07-27")
         self.assertEqual(client.heartbeat_job.call_count, 4)
 
     def test_030111_bot_import_accepts_grouped_base_routine_id(self) -> None:

@@ -963,7 +963,7 @@ class PromaxWorker:
                 missing.append(unit)
                 continue
             try:
-                reference_date = str(payload.get("end_date") or payload.get("start_date") or "") or None
+                reference_date = _file_reference_date(csv_path)
                 self._heartbeat_active_job(job_id, lease_token)
                 response = self.client.import_critica_csvs(
                     job_id=job_id,
