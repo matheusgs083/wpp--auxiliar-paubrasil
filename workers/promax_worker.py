@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
@@ -521,6 +522,7 @@ class PromaxWorker:
         imported = 0
         missing: list[str] = []
         failed: list[str] = []
+        seen_pdf_hashes: dict[str, str] = {}
         for unit in units:
             filial = unit_filial_map.get(unit)
             if not filial:
@@ -530,13 +532,36 @@ class PromaxWorker:
                 missing.append(unit)
                 continue
             try:
+                pdf_bytes = pdf_path.read_bytes()
+                pdf_hash = hashlib.sha256(pdf_bytes).hexdigest()
+                previous_unit = seen_pdf_hashes.get(pdf_hash)
+                if previous_unit and previous_unit != unit:
+                    failed.append(unit)
+                    self._send_log(
+                        job_id,
+                        lease_token,
+                        (
+                            "Importacao automatica 030206 bloqueada: "
+                            f"{pdf_path.name} e igual ao PDF da unidade {previous_unit}."
+                        ),
+                        "error",
+                        {
+                            "event": "promax_030206_auto_import_duplicate_pdf",
+                            "unit": unit,
+                            "filial": filial,
+                            "previous_unit": previous_unit,
+                            "sha256": pdf_hash,
+                        },
+                    )
+                    continue
+                seen_pdf_hashes[pdf_hash] = unit
                 self._heartbeat_active_job(job_id, lease_token)
                 response = self.client.import_boleto_pdf(
                     job_id=job_id,
                     lease_token=lease_token,
                     filial=filial,
                     filename=pdf_path.name,
-                    pdf_bytes=pdf_path.read_bytes(),
+                    pdf_bytes=pdf_bytes,
                     reference_date=_file_reference_date(pdf_path),
                 )
                 self._heartbeat_active_job(job_id, lease_token)

@@ -523,7 +523,7 @@ class PromaxClientTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             source_dir = Path(temp_dir)
             for unit in ("0640001", "0640002"):
-                (source_dir / f"03,02,06_{unit}.pdf").write_bytes(b"%PDF-1.4\nconteudo")
+                (source_dir / f"03,02,06_{unit}.pdf").write_bytes(f"%PDF-1.4\nconteudo {unit}".encode("ascii"))
                 os.utime(source_dir / f"03,02,06_{unit}.pdf", (1785157200, 1785157200))
             client = Mock()
             client.import_boleto_pdf.return_value = {"ok": True, "result": {"imported": 1}}
@@ -573,6 +573,61 @@ class PromaxClientTests(unittest.TestCase):
             ["1", "2"],
         )
         self.assertEqual(client.import_boleto_pdf.call_args_list[0].kwargs["reference_date"], "2026-07-27")
+
+    def test_030206_import_blocks_duplicate_pdf_for_different_units(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            duplicate_pdf = b"%PDF-1.4\nmesmo boleto"
+            for unit in ("2210004", "3480005"):
+                (source_dir / f"03,02,06_{unit}.pdf").write_bytes(duplicate_pdf)
+            client = Mock()
+            client.import_boleto_pdf.return_value = {"ok": True, "result": {"imported": 1}}
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_030206_boletos_if_needed(
+                {
+                    "payload": {
+                        "routines": ["030206_BOT"],
+                        "units": ["2210004", "3480005"],
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {
+                                str(source_dir.parent / "030206 bot"): str(source_dir),
+                            }
+                        }
+                    },
+                ),
+            )
+
+        client.import_boleto_pdf.assert_called_once()
+        self.assertEqual(client.import_boleto_pdf.call_args.kwargs["filial"], "4")
+        duplicate_log = [
+            call for call in client.log.call_args_list
+            if call.kwargs.get("data", {}).get("event") == "promax_030206_auto_import_duplicate_pdf"
+        ]
+        self.assertEqual(len(duplicate_log), 1)
+        self.assertEqual(duplicate_log[0].kwargs["data"]["unit"], "3480005")
 
     def test_120601_bot_imports_all_csvs_in_one_batch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
