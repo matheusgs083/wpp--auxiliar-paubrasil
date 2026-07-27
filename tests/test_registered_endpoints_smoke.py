@@ -294,6 +294,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "inadimplencia_import_service": None,
             "comodatos_import_service": None,
             "dclientes_import_service": None,
+            "documentacao_pendente_import_service": None,
             "critica_operacao_import_services": {},
             "after_critica_operacao_import": None,
             "promax_catalog": {
@@ -653,6 +654,25 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                         "files": [
                             {
                                 "filename": "0105070402 bot - dClientes.csv",
+                                "file_base64": "Q2xpZW50ZTtWYWxvcgoxOzEwCg==",
+                            }
+                        ],
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/documentacao/import",
+                expected_status=400,
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "lease_token": "lease-1",
+                        "files": [
+                            {
+                                "filename": "031702 bot - Patos.csv",
                                 "file_base64": "Q2xpZW50ZTtWYWxvcgoxOzEwCg==",
                             }
                         ],

@@ -301,6 +301,18 @@ class FakeComodatosImportService(FakeInadimplenciaImportService):
         }
 
 
+class FakeDocumentacaoImportService(FakeInadimplenciaImportService):
+    def import_source(self, source_path: Path, reference_date: Any = None) -> dict[str, Any]:
+        self.calls.append((source_path, reference_date))
+        self.imported_files = sorted(path.name for path in source_path.glob("*.csv"))
+        return {
+            "dataset_name": "documentacao_pendente",
+            "file_count": len(self.imported_files),
+            "rows": 6,
+            "batch_id": 47,
+        }
+
+
 class FakeDClientesImportService:
     def __init__(self) -> None:
         self.calls: list[tuple[Path, Any]] = []
@@ -409,12 +421,14 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         inadimplencia_import_service = FakeInadimplenciaImportService()
         comodatos_import_service = FakeComodatosImportService()
         dclientes_import_service = FakeDClientesImportService()
+        documentacao_import_service = FakeDocumentacaoImportService()
         critica_import_service = FakeCriticaOperacaoImportService("3")
         app.state.boleto_import_service = boleto_import_service
         app.state.estoque_import_service = estoque_import_service
         app.state.inadimplencia_import_service = inadimplencia_import_service
         app.state.comodatos_import_service = comodatos_import_service
         app.state.dclientes_import_service = dclientes_import_service
+        app.state.documentacao_import_service = documentacao_import_service
         app.state.critica_import_service = critica_import_service
         app.state.critica_post_actions = []
 
@@ -442,6 +456,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 inadimplencia_import_service=inadimplencia_import_service,
                 comodatos_import_service=comodatos_import_service,
                 dclientes_import_service=dclientes_import_service,
+                documentacao_pendente_import_service=documentacao_import_service,
                 critica_operacao_import_services={"3": critica_import_service},
                 after_critica_operacao_import=after_critica_import,
                 require_admin_panel_auth=require_auth,
@@ -1108,6 +1123,39 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         self.assertEqual(len(import_service.calls), 1)
         _source_path, reference_date = import_service.calls[0]
         self.assertEqual(str(reference_date), "2026-07-20")
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["append_job_log", "append_job_log"],
+        )
+
+    def test_internal_worker_imports_031702_documentacao_csvs_as_batch(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/documentacao/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "files": [
+                    {
+                        "filename": "031702 bot - nomeUnidade031702_0640001.csv",
+                        "file_base64": base64.b64encode(b"Cliente;Valor\n1;10\n").decode("ascii"),
+                    }
+                ],
+                "reference_date": "2026-07-27",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(response.json()["result"]["dataset_name"], "documentacao_pendente")
+        import_service = client.app.state.documentacao_import_service
+        self.assertEqual(len(import_service.calls), 1)
+        self.assertEqual(import_service.imported_files, ["031702 bot - nomeUnidade031702_0640001.csv"])
+        _source_path, reference_date = import_service.calls[0]
+        self.assertEqual(str(reference_date), "2026-07-27")
         self.assertEqual(
             [name for name, _args, _kwargs in service.calls],
             ["append_job_log", "append_job_log"],

@@ -548,6 +548,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "inadimplencia_import_service": runtime["services"].inadimplencia_import_service,
         "comodatos_import_service": runtime["services"].comodatos_import_service,
         "dclientes_import_service": runtime["services"].dclientes_import_service,
+        "documentacao_pendente_import_service": runtime["services"].documentacao_pendente_import_service,
         "critica_operacao_import_services": runtime["services"].critica_operacao_import_services,
         "after_critica_operacao_import": runtime["_after_critica_operacao_auto_import"],
         "require_webhook_token": runtime["_require_webhook_token"],

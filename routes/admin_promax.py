@@ -764,6 +764,7 @@ def create_admin_promax_router(
     inadimplencia_import_service: Any | None = None,
     comodatos_import_service: Any | None = None,
     dclientes_import_service: Any | None = None,
+    documentacao_pendente_import_service: Any | None = None,
     critica_operacao_import_services: Mapping[str, Any] | None = None,
     after_critica_operacao_import: Callable[[str], Mapping[str, Any] | None] | None = None,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
@@ -1879,6 +1880,63 @@ def create_admin_promax_router(
                 f"{result.get('rows', 0)} linha(s)."
             ),
             data={"event": "promax_0105070402_auto_import_success", "result": result},
+        )
+        return {"ok": True, "result": result}
+
+    @router.post("/api/internal/promax/documentacao/import")
+    def api_internal_promax_import_documentacao_csvs(
+        payload: PromaxInadimplenciaImportRequest,
+        _worker_auth: None = Depends(require_worker_auth),
+    ) -> dict[str, Any]:
+        if documentacao_pendente_import_service is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Importador de documentacao pendente nao configurado.",
+            )
+        lease_token = resolve_job_lease_token(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            provided_lease_token=payload.lease_token,
+        )
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=f"Importacao automatica 031702_BOT iniciada: {len(payload.files)} arquivo(s) CSV.",
+            data={
+                "event": "promax_031702_auto_import_start",
+                "file_count": len(payload.files),
+                "files": [item.filename for item in payload.files],
+            },
+        )
+        with tempfile.TemporaryDirectory(prefix="promax_031702_") as temp_dir:
+            temp_root = FilePath(temp_dir)
+            for item in payload.files:
+                try:
+                    csv_bytes = base64.b64decode(item.file_base64.encode("ascii"), validate=True)
+                except (UnicodeEncodeError, binascii.Error) as exc:
+                    raise HTTPException(status_code=400, detail="Arquivo CSV em base64 invalido.") from exc
+                if not csv_bytes.strip():
+                    raise HTTPException(status_code=400, detail=f"Arquivo CSV vazio: {item.filename}.")
+                (temp_root / item.filename).write_bytes(csv_bytes)
+
+            result = documentacao_pendente_import_service.import_source(
+                temp_root,
+                reference_date=payload.reference_date,
+            )
+
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                "Importacao automatica 031702_BOT concluida: "
+                f"{result.get('file_count', len(payload.files))} arquivo(s), "
+                f"{result.get('rows', 0)} linha(s)."
+            ),
+            data={"event": "promax_031702_auto_import_success", "result": result},
         )
         return {"ok": True, "result": result}
 

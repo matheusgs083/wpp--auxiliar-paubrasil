@@ -215,6 +215,8 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
         self.assertIn("promaxApplyScheduleScopeForEdit(promaxScheduleScopeForEdit(schedule));", self.html)
         self.assertIn("promaxApplyScheduleScopeForEdit(promaxScheduleScopeForEdit(group));", self.html)
         self.assertIn("const groups = Array.isArray(payload.groups)", self.html)
+        self.assertIn("sortedOldSchedules.length === timingPayloads.length", self.html)
+        self.assertIn('method: "PATCH"', self.html)
 
     def test_schedule_sync_fetches_enough_repetitions_for_grouped_view(self) -> None:
         self.assertIn('`${CONFIG.endpoints.promax.schedules}?limit=1000`', self.html)

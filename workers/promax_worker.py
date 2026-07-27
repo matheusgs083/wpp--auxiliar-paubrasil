@@ -10,7 +10,7 @@ import time
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
@@ -26,6 +26,7 @@ from .promax_runner import (
 
 LOGGER = logging.getLogger("promax-worker")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROMAX_LOCAL_TIMEZONE = timezone(timedelta(hours=-3), name="America/Fortaleza")
 _ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SENSITIVE_LOG_PATTERN = re.compile(
     r"(?i)\b(password|senha|token|authorization|api[_-]?key|secret)"
@@ -58,7 +59,7 @@ class WorkerConfig:
     poll_interval_seconds: float = 5.0
     backoff_initial_seconds: float = 2.0
     backoff_max_seconds: float = 60.0
-    boleto_import_timeout_seconds: float = 120.0
+    boleto_import_timeout_seconds: float = 900.0
     visual_lock_enabled: bool = True
     visual_lock_file: str = ""
 
@@ -79,7 +80,7 @@ class WorkerConfig:
         )
         boleto_import_timeout_seconds = _env_float(
             "PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS",
-            300.0,
+            900.0,
         )
         lease_seconds = _env_int("PROMAX_WORKER_LEASE_SECONDS", 120)
         lease_seconds = max(lease_seconds, min(int(boleto_import_timeout_seconds) + 60, 3600))
@@ -445,6 +446,7 @@ class PromaxWorker:
                     self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
                     self._import_020220_comodatos_if_needed(job, job_id, lease_token, result)
                     self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
+                    self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
                     self._import_030111_critica_if_needed(job, job_id, lease_token, result)
                     post_import_attempted = True
                 self.client.finish(
@@ -534,7 +536,7 @@ class PromaxWorker:
                     filial=filial,
                     filename=pdf_path.name,
                     pdf_bytes=pdf_path.read_bytes(),
-                    reference_date=str(payload.get("end_date") or payload.get("start_date") or "") or None,
+                    reference_date=_file_reference_date(pdf_path),
                 )
                 self._heartbeat_active_job(job_id, lease_token)
                 result_payload = response.get("result") if isinstance(response, Mapping) else None
@@ -847,6 +849,30 @@ class PromaxWorker:
             single_latest_file=True,
         )
 
+    def _import_031702_documentacao_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        self._import_csv_folder_if_needed(
+            job,
+            job_id,
+            lease_token,
+            result,
+            routine_id="031702_BOT",
+            folder_name="031702 bot",
+            label="Documentacao 031702_BOT",
+            event_prefix="promax_031702_auto_import",
+            importer=lambda files, reference_date: self.client.import_documentacao_csvs(
+                job_id=job_id,
+                lease_token=lease_token,
+                files=files,
+                reference_date=reference_date,
+            ),
+        )
+
     def _import_030111_critica_if_needed(
         self,
         job: Mapping[str, Any],
@@ -1093,6 +1119,14 @@ def _string_list(value: Any) -> list[str]:
         if text and text not in normalized:
             normalized.append(text)
     return normalized
+
+
+def _file_reference_date(path: Path) -> str:
+    try:
+        timestamp = path.stat().st_mtime
+    except OSError:
+        return datetime.now(PROMAX_LOCAL_TIMEZONE).date().isoformat()
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).astimezone(PROMAX_LOCAL_TIMEZONE).date().isoformat()
 
 
 def _routine_selected(payload: Mapping[str, Any], routine_id: str) -> bool:

@@ -272,6 +272,35 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(captured[0][2], 120)
         self.assertEqual(captured[0][1]["files"][0]["filename"], "0105070402 bot - dClientes.csv")
 
+    def test_client_uploads_documentacao_csvs_to_internal_import_route(self) -> None:
+        captured: list[tuple[str, dict[str, object], float]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data), timeout))
+            return _FakeResponse({"ok": True, "result": {"file_count": 1}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            boleto_import_timeout_seconds=120,
+            opener=opener,
+        )
+
+        client.import_documentacao_csvs(
+            job_id="job-1",
+            lease_token="lease-token",
+            files={"031702 bot - nomeUnidade031702_0640001.csv": b"Cliente;Valor\n1;10\n"},
+            reference_date="2026-07-27",
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/documentacao/import")
+        self.assertEqual(captured[0][2], 120)
+        payload = captured[0][1]
+        self.assertEqual(payload["reference_date"], "2026-07-27")
+        self.assertEqual(payload["files"][0]["filename"], "031702 bot - nomeUnidade031702_0640001.csv")
+
     def test_client_uploads_critica_csvs_to_internal_import_route(self) -> None:
         captured: list[tuple[str, dict[str, object], float]] = []
 
@@ -393,6 +422,7 @@ class PromaxClientTests(unittest.TestCase):
                 worker_id="worker",
                 driver_dir="C:/driver",
                 python_executable="C:/driver/venv/Scripts/python.exe",
+                lease_seconds=960,
             ),
             client=client,
             runner=Mock(),
@@ -424,6 +454,7 @@ class PromaxClientTests(unittest.TestCase):
                 worker_id="worker",
                 driver_dir="C:/driver",
                 python_executable="C:/driver/venv/Scripts/python.exe",
+                lease_seconds=960,
             ),
             client=client,
             runner=runner,
@@ -493,6 +524,7 @@ class PromaxClientTests(unittest.TestCase):
             source_dir = Path(temp_dir)
             for unit in ("0640001", "0640002"):
                 (source_dir / f"03,02,06_{unit}.pdf").write_bytes(b"%PDF-1.4\nconteudo")
+                os.utime(source_dir / f"03,02,06_{unit}.pdf", (1785157200, 1785157200))
             client = Mock()
             client.import_boleto_pdf.return_value = {"ok": True, "result": {"imported": 1}}
             worker = PromaxWorker(
@@ -536,6 +568,7 @@ class PromaxClientTests(unittest.TestCase):
 
         self.assertEqual(client.import_boleto_pdf.call_count, 2)
         self.assertEqual(client.heartbeat_job.call_count, 4)
+        self.assertEqual(client.import_boleto_pdf.call_args_list[0].kwargs["reference_date"], "2026-07-27")
 
     def test_120601_bot_imports_all_csvs_in_one_batch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -831,6 +864,50 @@ class PromaxClientTests(unittest.TestCase):
 
         client.import_dclientes_csv.assert_called_once()
         self.assertEqual(client.import_dclientes_csv.call_args.kwargs["filename"], "0105070402 bot - novo.csv")
+        self.assertEqual(client.heartbeat_job.call_count, 2)
+
+    def test_031702_bot_imports_documentacao_csvs_in_one_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "031702 bot - nomeUnidade031702_0640001.csv").write_bytes(b"Cliente;Valor\n1;10\n")
+            client = Mock()
+            client.import_documentacao_csvs.return_value = {
+                "ok": True,
+                "result": {"file_count": 1, "rows": 6, "batch_id": 47},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_031702_documentacao_if_needed(
+                {"payload": {"routines": ["031702_BOT"], "end_date": "2026-07-27"}},
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={"metadata": {"publication_mapping": {str(source_dir.parent / "031702 bot"): str(source_dir)}}},
+                ),
+            )
+
+        client.import_documentacao_csvs.assert_called_once()
+        self.assertEqual(
+            sorted(client.import_documentacao_csvs.call_args.kwargs["files"]),
+            ["031702 bot - nomeUnidade031702_0640001.csv"],
+        )
+        self.assertEqual(client.import_documentacao_csvs.call_args.kwargs["reference_date"], "2026-07-27")
         self.assertEqual(client.heartbeat_job.call_count, 2)
 
     def test_030111_bot_imports_critica_csvs_by_unit(self) -> None:

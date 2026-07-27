@@ -73,7 +73,7 @@ class PromaxClient:
         pid: int | None = None,
         lease_seconds: int = 120,
         timeout_seconds: float = 10.0,
-        boleto_import_timeout_seconds: float = 120.0,
+        boleto_import_timeout_seconds: float = 900.0,
         opener: Callable[..., Any] = urlopen,
     ) -> None:
         self.base_url = str(base_url or "").strip().rstrip("/")
@@ -346,6 +346,22 @@ class PromaxClient:
             job_id=job_id,
             lease_token=lease_token,
             files={filename: csv_bytes},
+            reference_date=reference_date,
+        )
+
+    def import_documentacao_csvs(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        files: Mapping[str, bytes],
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        return self._import_csv_batch(
+            path="/api/internal/promax/documentacao/import",
+            job_id=job_id,
+            lease_token=lease_token,
+            files=files,
             reference_date=reference_date,
         )
 

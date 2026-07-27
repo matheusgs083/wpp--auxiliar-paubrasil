@@ -4647,27 +4647,54 @@
           const oldSchedules = Array.isArray(editingScheduleGroup && editingScheduleGroup.schedules)
             ? [...editingScheduleGroup.schedules]
             : [];
-          for (const schedule of oldSchedules.reverse()) {
-            await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(schedule.id)}`, {
-              method: "DELETE",
-              timeoutMs: 20000
-            });
-          }
-          for (const timingPayload of timingPayloads) {
-            const response = await req(CONFIG.endpoints.promax.scheduleChains, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                ...chainPayload,
-                name: timingPayload.name,
-                ...timingPayload,
-                enabled: true
-              }),
-              timeoutMs: 30000
-            });
-            createdSchedules += Array.isArray(response && response.schedules)
-              ? response.schedules.length
-              : chainPayload.groups.length;
+          const sortedOldSchedules = oldSchedules.sort((left, right) => promaxScheduleSortValue(left).localeCompare(promaxScheduleSortValue(right)));
+          if (sortedOldSchedules.length === timingPayloads.length) {
+            for (let index = 0; index < sortedOldSchedules.length; index += 1) {
+              const schedule = sortedOldSchedules[index];
+              const timingPayload = timingPayloads[index];
+              await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(schedule.id)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: timingPayload.name,
+                  category: chainPayload.groups[0].category,
+                  routines: chainPayload.groups[0].routines,
+                  units: chainPayload.units,
+                  start_date: chainPayload.start_date,
+                  end_date: chainPayload.end_date,
+                  send_dates: chainPayload.send_dates,
+                  publish: chainPayload.publish,
+                  trigger_after_schedule_id: chainPayload.trigger_after_schedule_id,
+                  ...timingPayload,
+                  enabled: Boolean(schedule.enabled)
+                }),
+                timeoutMs: 30000
+              });
+              createdSchedules += 1;
+            }
+          } else {
+            for (const schedule of sortedOldSchedules.reverse()) {
+              await req(`${CONFIG.endpoints.promax.schedules}/${encodeURIComponent(schedule.id)}`, {
+                method: "DELETE",
+                timeoutMs: 20000
+              });
+            }
+            for (const timingPayload of timingPayloads) {
+              const response = await req(CONFIG.endpoints.promax.scheduleChains, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  ...chainPayload,
+                  name: timingPayload.name,
+                  ...timingPayload,
+                  enabled: true
+                }),
+                timeoutMs: 30000
+              });
+              createdSchedules += Array.isArray(response && response.schedules)
+                ? response.schedules.length
+                : chainPayload.groups.length;
+            }
           }
         } else {
           for (const timingPayload of timingPayloads) {
