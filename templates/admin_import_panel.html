@@ -1002,7 +1002,48 @@
         </section>
       </div>
 
-      <div class="tab-pane fade" id="payipPane" role="tabpanel" aria-labelledby="payipTab" tabindex="0"></div>
+      <div class="tab-pane fade" id="payipPane" role="tabpanel" aria-labelledby="payipTab" tabindex="0">
+        <section class="panel-card p-3 mb-3" id="payipGeneratedBatchesPanel">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-clock-history me-2 text-primary"></i>Lotes gerados PayIP</h2>
+              <div class="form-text">Log recente de lotes CREATE-PAYMENT da PayIP. Atualiza automaticamente para acompanhar a geracao noturna.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="payipGeneratedStatus">Aguardando consulta</span>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="payipGeneratedRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="payipGeneratedFilial">Revenda</label>
+              <input id="payipGeneratedFilial" class="form-control form-control-sm mono" inputmode="numeric" placeholder="4">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="payipGeneratedMfaCode">Token MFA PayIP</label>
+              <input id="payipGeneratedMfaCode" class="form-control form-control-sm mono" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Opcional">
+            </div>
+            <div class="col-md-7">
+              <div class="form-text" id="payipGeneratedHint">Informe a revenda e acompanhe os ultimos 50 lotes da PayIP. Use o MFA apenas quando a PayIP pedir nova sessao.</div>
+            </div>
+          </div>
+          <div class="table-scroll" style="max-height: 280px;">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th scope="col">Gerado em</th>
+                  <th scope="col">Cobrancas</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Arquivo</th>
+                </tr>
+              </thead>
+              <tbody id="payipGeneratedBody">
+                <tr><td colspan="4" class="text-center py-3 text-secondary">Consulte uma revenda para acompanhar os lotes gerados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
 
       <div class="tab-pane fade" id="reportsPane" role="tabpanel" aria-labelledby="reportsTab" tabindex="0">
         <section class="panel-card p-3 mb-3">
@@ -2022,7 +2063,10 @@
         payipImport: {
           validate: "/api/admin/payip/import/validate",
           createClients: "/api/admin/payip/import/create-clients",
-          run: "/api/admin/payip/import/run"
+          run: "/api/admin/payip/import/run",
+          generatedBatches: "/api/admin/payip/generated-batches",
+          generatedBatchProcess: "/api/admin/payip/generated-batches",
+          generatedBatchFile: "/api/admin/payip/generated-batches"
         },
         recolhas: {
           list: "/api/admin/recolhas",
@@ -2153,6 +2197,7 @@
       broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
       payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
+      payipGenerated: { payload: null, loading: false, error: "", polling: false, lastFilial: "", generating: "" },
       promax: {
         catalog: null,
         jobs: [],
@@ -2514,6 +2559,13 @@
       broadcastSummary: document.getElementById("broadcastSummary"),
       broadcastRecipientsBody: document.getElementById("broadcastRecipientsBody"),
       broadcastSelectAll: document.getElementById("broadcastSelectAll"),
+      payipGeneratedBatchesPanel: document.getElementById("payipGeneratedBatchesPanel"),
+      payipGeneratedStatus: document.getElementById("payipGeneratedStatus"),
+      payipGeneratedFilial: document.getElementById("payipGeneratedFilial"),
+      payipGeneratedMfaCode: document.getElementById("payipGeneratedMfaCode"),
+      payipGeneratedRefreshBtn: document.getElementById("payipGeneratedRefreshBtn"),
+      payipGeneratedHint: document.getElementById("payipGeneratedHint"),
+      payipGeneratedBody: document.getElementById("payipGeneratedBody"),
       payipImportPanel: document.getElementById("payipImportPanel"),
       payipImportStatus: document.getElementById("payipImportStatus"),
       payipImportFilial: document.getElementById("payipImportFilial"),
@@ -2827,7 +2879,10 @@
     function setupPayipPane() {
       const pane = document.getElementById("payipPane");
       if (!pane) return;
-      [document.getElementById("payipImportPanel"), document.getElementById("payipBatchPanel")].forEach(panel => {
+      [
+        document.getElementById("payipImportPanel"),
+        document.getElementById("payipBatchPanel")
+      ].forEach(panel => {
         if (panel && panel.parentElement !== pane) pane.appendChild(panel);
       });
     }
@@ -5005,6 +5060,15 @@
       if (E.payipBatchRunBtn) E.payipBatchRunBtn.addEventListener("click", runPayipBatch);
       if (E.payipBatchStatusBtn) E.payipBatchStatusBtn.addEventListener("click", () => syncPayipBatchStatus({ silent: false }));
       if (E.payipBatchExportBtn) E.payipBatchExportBtn.addEventListener("click", exportPayipBatchCsv);
+      if (E.payipGeneratedRefreshBtn) E.payipGeneratedRefreshBtn.addEventListener("click", () => syncPayipGeneratedBatches({ silent: false }));
+      if (E.payipGeneratedFilial) {
+        E.payipGeneratedFilial.addEventListener("change", () => {
+          state.payipGenerated.payload = null;
+          state.payipGenerated.error = "";
+          renderPayipGeneratedBatches();
+          syncPayipGeneratedBatches({ silent: true });
+        });
+      }
       [E.payipImportFilial, E.payipImportStartDate, E.payipImportEndDate]
         .forEach(element => {
           if (element) element.addEventListener("change", resetPayipImportValidation);
@@ -5225,13 +5289,17 @@
     async function syncVisibleTabData({ silent = true, force = false } = {}) {
       if (!hasPanelAuth()) return false;
       const activeTabId = currentActiveTabId();
-      if (!force && state.lazyTabs && state.lazyTabs[activeTabId]) return true;
+      if (!force && state.lazyTabs && state.lazyTabs[activeTabId]) {
+        if (activeTabId === "payipTab") startPayipGeneratedPolling();
+        return true;
+      }
 
       const tasks = [];
       if (activeTabId === "operationsTab") {
         if (state.panel && state.panel.canBroadcast) tasks.push(syncBroadcastOptions({ silent }));
       } else if (activeTabId === "payipTab") {
         tasks.push(syncPayipBatchStatus({ silent }));
+        tasks.push(syncPayipGeneratedBatches({ silent }));
       } else if (activeTabId === "usageEvolutionTab") {
         if (state.panel && state.panel.isAdmin) tasks.push(syncEvolutionUsage({ silent }));
         else renderEvolutionUsage();
@@ -5581,6 +5649,7 @@
       if (E.accessUsersFilter && E.accessUsersFilter.parentElement) E.accessUsersFilter.parentElement.style.display = adminOnlyDisplay;
       if (E.broadcastPanel) E.broadcastPanel.style.display = broadcastDisplay;
       const payipVisible = Boolean(state.panel && state.panel.canPayip) && !isCritica;
+      if (E.payipGeneratedBatchesPanel) E.payipGeneratedBatchesPanel.style.display = payipVisible ? "" : "none";
       if (E.payipBatchPanel) E.payipBatchPanel.style.display = payipVisible ? "" : "none";
       if (E.payipImportPanel) E.payipImportPanel.style.display = payipVisible ? "" : "none";
       if (E.usageEvolutionTab && E.usageEvolutionTab.parentElement) {
@@ -6560,6 +6629,154 @@
       }
     }
 
+    function payipGeneratedFilialValue() {
+      const explicitValue = E.payipGeneratedFilial ? String(E.payipGeneratedFilial.value || "").trim() : "";
+      if (explicitValue) return explicitValue;
+      const importValue = E.payipImportFilial ? String(E.payipImportFilial.value || "").trim() : "";
+      if (importValue) return importValue;
+      const filiais = state.panel && Array.isArray(state.panel.filiais) ? state.panel.filiais : [];
+      return filiais.length === 1 ? String(filiais[0] || "").trim() : "";
+    }
+
+    function payipGeneratedStatusText(statusCounts) {
+      if (!statusCounts || typeof statusCounts !== "object") return "-";
+      return Object.entries(statusCounts)
+        .filter(([, value]) => Number(value || 0) > 0)
+        .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+        .slice(0, 4)
+        .map(([key, value]) => `${escapeHtml(key || "-")}: ${formatNumber(value)}`)
+        .join(" | ") || "-";
+    }
+
+    function payipGeneratedActions(batch) {
+      const batchId = batch && batch.batch_id ? String(batch.batch_id) : "";
+      if (!batchId) return '<span class="text-secondary small">Sem batchId</span>';
+      const encodedBatch = escapeHtml(batchId);
+      const actionButton = (kind, label, variant) => {
+        const isGenerating = state.payipGenerated.generating === `${batchId}:${kind}`;
+        const disabled = state.payipGenerated.generating ? "disabled" : "";
+        const icon = isGenerating ? '<span class="spinner-border spinner-border-sm me-1"></span>' : "";
+        return `<button type="button" class="btn ${variant} btn-sm" ${disabled} onclick="downloadPayipGeneratedBatchFile('${encodedBatch}', '${kind}')">${icon}${label}</button>`;
+      };
+      const progress = state.payipGenerated.generating && String(state.payipGenerated.generating).startsWith(`${batchId}:`)
+        ? '<div class="small text-warning mt-1"><span class="spinner-border spinner-border-sm me-1"></span>Gerando arquivo...</div>'
+        : "";
+      return `
+        <div class="d-flex flex-wrap gap-1">
+          ${actionButton("pix", "PIX", "btn-outline-primary")}
+          ${actionButton("pix_a_prazo", "PIX a prazo", "btn-outline-primary")}
+          ${actionButton("boleto", "Boleto", "btn-outline-secondary")}
+        </div>
+        ${progress}
+      `;
+    }
+
+    function renderPayipGeneratedBatches() {
+      const payload = state.payipGenerated && state.payipGenerated.payload ? state.payipGenerated.payload : null;
+      const loading = Boolean(state.payipGenerated && state.payipGenerated.loading);
+      const error = state.payipGenerated && state.payipGenerated.error ? String(state.payipGenerated.error) : "";
+      const batches = payload && Array.isArray(payload.batches) ? payload.batches : [];
+      if (E.payipGeneratedStatus) {
+        if (loading) {
+          E.payipGeneratedStatus.textContent = "Atualizando...";
+          E.payipGeneratedStatus.className = "pill warn";
+        } else if (error) {
+          E.payipGeneratedStatus.textContent = "Falha na consulta";
+          E.payipGeneratedStatus.className = "pill warn";
+        } else if (payload) {
+          E.payipGeneratedStatus.textContent = `${formatNumber(payload.items_count || 0)} lote(s) recentes`;
+          E.payipGeneratedStatus.className = batches.length ? "pill ok" : "pill";
+        } else {
+          E.payipGeneratedStatus.textContent = "Aguardando consulta";
+          E.payipGeneratedStatus.className = "pill";
+        }
+      }
+      if (E.payipGeneratedRefreshBtn) E.payipGeneratedRefreshBtn.disabled = loading;
+      if (E.payipGeneratedHint) {
+        const checkedAt = payload && payload.last_checked_at ? `Ultima consulta: ${formatDateTime(payload.last_checked_at)}.` : "Atualiza automaticamente a cada 60 segundos enquanto a aba PayIP estiver aberta.";
+        E.payipGeneratedHint.textContent = checkedAt;
+      }
+      if (!E.payipGeneratedBody) return;
+      if (loading && !payload) {
+        E.payipGeneratedBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary"><span class="spinner-border spinner-border-sm me-1"></span>Consultando historico PayIP...</td></tr>';
+        return;
+      }
+      if (error) {
+        E.payipGeneratedBody.innerHTML = `<tr><td colspan="4" class="text-danger"><strong>Falha na consulta:</strong> ${escapeHtml(error)}</td></tr>`;
+        return;
+      }
+      if (!payload) {
+        E.payipGeneratedBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Consulte uma revenda para acompanhar os lotes gerados.</td></tr>';
+        return;
+      }
+      if (!batches.length) {
+        E.payipGeneratedBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-secondary">Nenhuma cobranca recente encontrada para essa revenda.</td></tr>';
+        return;
+      }
+      E.payipGeneratedBody.innerHTML = batches.slice(0, 12).map(batch => `
+        <tr>
+          <td class="ps-2"><strong>${escapeHtml(batch.created_label || batch.key || "-")}</strong></td>
+          <td>${formatNumber(batch.count || 0)}</td>
+          <td><span class="small">${payipGeneratedStatusText(batch.status_counts)}</span></td>
+          <td>${payipGeneratedActions(batch)}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function syncPayipGeneratedBatches({ silent = true } = {}) {
+      if (!hasPanelAuth()) return false;
+      const filial = payipGeneratedFilialValue();
+      if (!filial) {
+        renderPayipGeneratedBatches();
+        if (!silent) addLog("Informe a revenda para consultar os lotes gerados PayIP.", "warn");
+        return false;
+      }
+      if (E.payipGeneratedFilial && !E.payipGeneratedFilial.value) E.payipGeneratedFilial.value = filial;
+      const mfaCode = E.payipGeneratedMfaCode ? String(E.payipGeneratedMfaCode.value || "").trim() : "";
+      state.payipGenerated.loading = true;
+      state.payipGenerated.error = "";
+      renderPayipGeneratedBatches();
+      try {
+        const queryParams = new URLSearchParams();
+        queryParams.set("filial", filial);
+        queryParams.set("page_size", "50");
+        const query = `?${queryParams.toString()}`;
+        const extraHeaders = {};
+        if (mfaCode) extraHeaders["x-payip-mfa-code"] = mfaCode;
+        const payload = await req(`${CONFIG.endpoints.payipImport.generatedBatches}${query}`, { headers: extraHeaders, timeoutMs: 45000 });
+        state.payipGenerated.payload = payload;
+        state.payipGenerated.lastFilial = filial;
+        state.payipGenerated.error = "";
+        if (mfaCode && E.payipGeneratedMfaCode) E.payipGeneratedMfaCode.value = "";
+        renderPayipGeneratedBatches();
+        if (!silent) addLog(`Log de lotes PayIP atualizado: ${formatNumber(payload.items_count || 0)} lote(s).`, "ok");
+        startPayipGeneratedPolling();
+        return true;
+      } catch (err) {
+        state.payipGenerated.error = err.message || "Falha ao consultar historico PayIP.";
+        renderPayipGeneratedBatches();
+        if (!silent) addLog(`Falha ao consultar lotes PayIP: ${err.message}`, "warn");
+        return false;
+      } finally {
+        state.payipGenerated.loading = false;
+        renderPayipGeneratedBatches();
+      }
+    }
+
+    async function startPayipGeneratedPolling() {
+      if (state.payipGenerated.polling) return;
+      state.payipGenerated.polling = true;
+      try {
+        while (currentActiveTabId() === "payipTab") {
+          await new Promise(resolve => setTimeout(resolve, 60000));
+          if (currentActiveTabId() !== "payipTab") break;
+          await syncPayipGeneratedBatches({ silent: true });
+        }
+      } finally {
+        state.payipGenerated.polling = false;
+      }
+    }
+
     function currentPayipImportPayload() {
       return {
         filial: E.payipImportFilial ? String(E.payipImportFilial.value || "").trim() : "",
@@ -7068,6 +7285,67 @@
         await syncPayipBatchStatus({ silent: true });
       } catch (err) {
         addLog(`Falha ao baixar PDF PayIP: ${err.message}`, "err");
+      }
+    }
+
+    async function downloadPayipGeneratedBatchFile(batchId, kind) {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const filial = payipGeneratedFilialValue();
+      if (!filial) { addLog("Informe a revenda para gerar o arquivo do lote PayIP.", "warn"); return; }
+      const mfaCode = E.payipGeneratedMfaCode ? String(E.payipGeneratedMfaCode.value || "").trim() : "";
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+      if (mfaCode) headers["x-payip-mfa-code"] = mfaCode;
+      const queryParams = new URLSearchParams();
+      queryParams.set("filial", filial);
+      queryParams.set("kind", kind || "");
+      const query = `?${queryParams.toString()}`;
+      try {
+        state.payipGenerated.generating = `${batchId}:${kind || ""}`;
+        renderPayipGeneratedBatches();
+        addLog("Solicitando geracao do arquivo na PayIP...", "info");
+        const processResponse = await fetch(`${CONFIG.api}${CONFIG.endpoints.payipImport.generatedBatchProcess}/${encodeURIComponent(batchId)}/process${query}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers
+        });
+        if (!processResponse.ok) {
+          const errPayload = await processResponse.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${processResponse.status}`);
+        }
+        if (E.payipGeneratedMfaCode) E.payipGeneratedMfaCode.value = "";
+        delete headers["x-payip-mfa-code"];
+        await new Promise(resolve => setTimeout(resolve, 9000));
+        addLog("Baixando arquivo gerado pela PayIP...", "info");
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.payipImport.generatedBatchFile}/${encodeURIComponent(batchId)}/pdf${query}`, {
+          method: "GET",
+          credentials: "same-origin",
+          headers
+        });
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = matchedName && matchedName[1] ? matchedName[1] : `payip-lote-${batchId}.zip`;
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog("Arquivo do lote PayIP baixado.", "ok");
+      } catch (err) {
+        addLog(`Falha ao baixar arquivo do lote PayIP: ${err.message}`, "err");
+      } finally {
+        state.payipGenerated.generating = "";
+        renderPayipGeneratedBatches();
       }
     }
 

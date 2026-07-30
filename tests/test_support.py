@@ -576,6 +576,8 @@ class StubPayipPaymentsService:
         self.create_charge_calls: list[dict[str, Any]] = []
         self.get_payment_calls: list[str] = []
         self.invoice_report_calls: list[dict[str, Any]] = []
+        self.invoice_batch_process_calls: list[dict[str, Any]] = []
+        self.invoice_batch_download_calls: list[dict[str, Any]] = []
         self.statement_resume_calls: list[dict[str, Any]] = []
         self.statement_export_calls: list[dict[str, Any]] = []
         self.amount_day_calls: list[dict[str, Any]] = []
@@ -649,6 +651,7 @@ class StubPayipPaymentsService:
         items = [
             {
                 "id": "pay-1",
+                "batchId": "50cb5371-8218-41b3-aab7-1d2f32332ed0",
                 "invoice": invoice or "147478",
                 "title": "Fatura revenda Pau Brasil - Patos",
                 "description": "Fatura revenda Pau Brasil - Patos",
@@ -668,6 +671,7 @@ class StubPayipPaymentsService:
             },
             {
                 "id": "pay-2",
+                "batchId": "50cb5371-8218-41b3-aab7-1d2f32332ed0",
                 "invoice": "147479",
                 "title": "Fatura revenda Pau Brasil - Patos",
                 "description": "Fatura revenda Pau Brasil - Patos",
@@ -699,6 +703,74 @@ class StubPayipPaymentsService:
                 "4": "aa11f5fe-38dd-4bf5-86e3-71d874cdc24c",
             }.get(filial or "3", ""),
         )
+
+    def list_payments_history(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        filial: str = "",
+    ) -> Any:
+        return self.list_payments(page=page, page_size=page_size, filial=filial)
+
+    def list_payment_batches(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        batch_type: str = "CREATE-PAYMENT",
+        filial: str = "",
+    ) -> Any:
+        if self.require_mfa_once:
+            self.require_mfa_once = False
+            raise PayipMfaRequired("MFA required")
+        items = [
+            {
+                "id": "50cb5371-8218-41b3-aab7-1d2f32332ed0",
+                "type": batch_type,
+                "status": "DONE",
+                "paymentsCount": 2,
+                "amount": 2.98,
+                "createdAt": "2026-04-13T22:08:00.000Z",
+                "payments": [
+                    {
+                        "invoice": "147478",
+                        "amount": 0.99,
+                        "client": {"code": "12447", "fantasyName": "THIAGO COD"},
+                    },
+                    {
+                        "invoice": "147479",
+                        "amount": 1.99,
+                        "client": {"code": "12447", "fantasyName": "THIAGO COD"},
+                    },
+                ],
+            }
+        ]
+        return SimpleNamespace(
+            raw={"data": items},
+            items=tuple(items),
+            items_count=len(items),
+            total_items=len(items),
+            page=page,
+            page_size=page_size,
+            filial=filial,
+            company_id={
+                "3": "bdfee22b-ac11-4355-909a-54bd348c87cc",
+                "4": "aa11f5fe-38dd-4bf5-86e3-71d874cdc24c",
+            }.get(filial or "3", ""),
+        )
+
+    def invoice_batch_process_file(self, **kwargs: Any) -> tuple[bytes, str]:
+        self.invoice_batch_process_calls.append(dict(kwargs))
+        return b"PK\x03\x04stub-payip-batch\n", "application/zip"
+
+    def invoice_batch_process(self, **kwargs: Any) -> dict[str, Any]:
+        self.invoice_batch_process_calls.append(dict(kwargs))
+        return {"status": "Sucesso", "message": "Criacao do arquivo pdf em progresso"}
+
+    def invoice_batch_download_file(self, **kwargs: Any) -> tuple[bytes, str]:
+        self.invoice_batch_download_calls.append(dict(kwargs))
+        return b"PK\x03\x04stub-payip-batch\n", "application/zip"
 
     def find_payments_by_amount_and_paid_date(
         self,

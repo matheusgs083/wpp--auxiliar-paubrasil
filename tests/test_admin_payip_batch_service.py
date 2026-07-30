@@ -52,6 +52,92 @@ class AdminPayipBatchServiceTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 400)
         self.assertIn("fora do escopo", str(raised.exception.detail))
 
+    def test_generated_batches_lists_payip_batch_logs(self) -> None:
+        payip = StubPayipPaymentsService()
+        service = self.make_service(payip)
+
+        result = service.generated_batches(filial="3", context={"is_admin": True}, page_size=50)
+
+        self.assertEqual(result["filial"], "3")
+        self.assertEqual(result["items_count"], 1)
+        self.assertEqual(result["source"], "batch_logs")
+        self.assertEqual(len(result["batches"]), 1)
+        batch = result["batches"][0]
+        self.assertEqual(batch["count"], 2)
+        self.assertEqual(batch["total_amount"], "2.98")
+        self.assertEqual(batch["status_counts"], {"DONE": 1})
+        self.assertEqual(batch["batch_id"], "50cb5371-8218-41b3-aab7-1d2f32332ed0")
+        self.assertEqual(batch["samples"][0]["invoice"], "147478")
+
+    def test_generated_batches_bootstraps_mfa_when_provided(self) -> None:
+        payip = StubPayipPaymentsService(require_mfa_once=True, access_token_valid=False, refresh_token_valid=False)
+        service = self.make_service(payip)
+
+        result = service.generated_batches(filial="3", context={"is_admin": True}, page_size=50, mfa_code="123456")
+
+        self.assertEqual(result["items_count"], 1)
+        self.assertEqual(payip.bootstrap_calls, ["123456"])
+
+    def test_generated_batch_process_uses_batch_process_payload(self) -> None:
+        payip = StubPayipPaymentsService()
+        service = self.make_service(payip)
+
+        result = service.generated_batch_process(
+            filial="4",
+            batch_id="50cb5371-8218-41b3-aab7-1d2f32332ed0",
+            kind="pix",
+            context={"is_admin": True},
+        )
+
+        self.assertEqual(result["status"], "Sucesso")
+        self.assertEqual(
+            payip.invoice_batch_process_calls[-1],
+            {
+                "filial": "4",
+                "batch_id": "50cb5371-8218-41b3-aab7-1d2f32332ed0",
+                "payment_shape": "6f0d7915-96c6-42ed-8441-ab6fecce85a8",
+                "payment_method": "f2a3d1c0-5eb9-4939-a5a9-c4853ca79549",
+                "sort_invoice": "desc",
+            },
+        )
+
+    def test_generated_batch_process_omits_payment_method_for_all_methods(self) -> None:
+        payip = StubPayipPaymentsService()
+        service = self.make_service(payip)
+
+        service.generated_batch_process(
+            filial="4",
+            batch_id="50cb5371-8218-41b3-aab7-1d2f32332ed0",
+            kind="boleto",
+            context={"is_admin": True},
+        )
+
+        self.assertEqual(payip.invoice_batch_process_calls[-1]["payment_shape"], "af49ce07-13db-4732-8602-42730f65eaf3")
+        self.assertEqual(payip.invoice_batch_process_calls[-1]["payment_method"], "")
+
+    def test_generated_batch_file_downloads_batch_file(self) -> None:
+        payip = StubPayipPaymentsService()
+        service = self.make_service(payip)
+
+        file_bytes, filename, media_type = service.generated_batch_file(
+            filial="4",
+            batch_id="50cb5371-8218-41b3-aab7-1d2f32332ed0",
+            kind="pix1",
+            context={"is_admin": True},
+        )
+
+        self.assertTrue(file_bytes.startswith(b"PK"))
+        self.assertEqual(media_type, "application/zip")
+        self.assertTrue(filename.startswith("pix_payip_revenda_4_50cb5371"))
+        self.assertTrue(filename.endswith(".zip"))
+        self.assertEqual(
+            payip.invoice_batch_download_calls[-1],
+            {
+                "filial": "4",
+                "batch_id": "50cb5371-8218-41b3-aab7-1d2f32332ed0",
+            },
+        )
+
     def test_queue_creates_payip_charge_without_nb_or_nf_by_default(self) -> None:
         payip = StubPayipPaymentsService()
         service = self.make_service(payip)

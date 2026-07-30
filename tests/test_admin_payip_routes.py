@@ -40,6 +40,9 @@ class AdminPayipRoutesTests(unittest.TestCase):
                     "client_creation": {"created": list(payload.missing_client_codes), "not_found": [], "failed": []},
                 },
                 run_payip_promax_import=lambda payload, context: {"items_count": 1, "items": [{"clientCode": "19167"}], "missing_client_codes": [], "imported": True},
+                list_payip_generated_batches=lambda **kwargs: {"items_count": 1, "batches": [{"batch_id": "batch-1", "count": 1}], "mfa_code": kwargs.get("mfa_code", "")},
+                payip_generated_batch_process=lambda **kwargs: {"batch_id": kwargs.get("batch_id", ""), "kind": kwargs.get("kind", ""), "status": "Sucesso"},
+                payip_generated_batch_file_bytes=lambda **kwargs: (b"PK-route", "payip.zip", "application/zip"),
                 record_security_event=lambda *_args, **_kwargs: None,
             )
         )
@@ -102,6 +105,31 @@ class AdminPayipRoutesTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["imported"])
+
+    def test_generated_batches_route_accepts_mfa_header(self) -> None:
+        client = self.make_client()
+        response = client.get("/api/admin/payip/generated-batches?filial=3", headers={"x-payip-mfa-code": "123456"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["mfa_code"], "123456")
+
+    def test_generated_batch_file_route_returns_zip(self) -> None:
+        client = self.make_client()
+        response = client.get(
+            "/api/admin/payip/generated-batches/batch-1/pdf?filial=3&kind=pix1",
+            headers={"x-payip-mfa-code": "123456"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/zip")
+        self.assertTrue(response.content.startswith(b"PK"))
+
+    def test_generated_batch_process_route_returns_payload(self) -> None:
+        client = self.make_client()
+        response = client.post(
+            "/api/admin/payip/generated-batches/batch-1/process?filial=3&kind=pix1",
+            headers={"x-payip-mfa-code": "123456"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "Sucesso")
 
 
 if __name__ == "__main__":

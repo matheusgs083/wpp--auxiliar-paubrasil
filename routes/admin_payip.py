@@ -45,6 +45,9 @@ def create_admin_payip_router(
     validate_payip_promax_import: Callable[[AdminPayipPromaxImportRequest, dict[str, Any] | None], dict[str, Any]],
     create_payip_promax_import_clients: Callable[[AdminPayipPromaxCreateClientsRequest, dict[str, Any] | None], dict[str, Any]],
     run_payip_promax_import: Callable[[AdminPayipPromaxImportRequest, dict[str, Any] | None], dict[str, Any]],
+    list_payip_generated_batches: Callable[..., dict[str, Any]],
+    payip_generated_batch_process: Callable[..., dict[str, Any]],
+    payip_generated_batch_file_bytes: Callable[..., tuple[bytes, str, str]],
     record_security_event: Callable[..., None],
 ) -> APIRouter:
     router = APIRouter()
@@ -82,6 +85,110 @@ def create_admin_payip_router(
         payload = snapshot_payip_batch(job_id=job_id)
         record_security_event(request, channel="api", event_type="admin_payip_batch_status", decision="allowed")
         return {"ok": True, **payload}
+
+    @router.get("/api/admin/payip/generated-batches")
+    def api_admin_payip_generated_batches(
+        request: Request,
+        filial: str = Query(default=""),
+        page_size: int = Query(default=50, ge=1, le=200),
+        mfa_code: str = Query(default=""),
+        x_payip_mfa_code: str | None = Header(default=None),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_payip_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        payload = list_payip_generated_batches(
+            filial=filial,
+            context=context,
+            page_size=page_size,
+            mfa_code=x_payip_mfa_code or mfa_code,
+        )
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_payip_generated_batches",
+            decision="allowed",
+            reason=f"filial={filial};items={payload.get('items_count')}",
+        )
+        return {"ok": True, **payload}
+
+    @router.post("/api/admin/payip/generated-batches/{batch_id}/process")
+    def api_admin_payip_generated_batch_process(
+        request: Request,
+        batch_id: str,
+        filial: str = Query(default=""),
+        kind: str = Query(default=""),
+        mfa_code: str = Query(default=""),
+        x_payip_mfa_code: str | None = Header(default=None),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_payip_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        payload = payip_generated_batch_process(
+            filial=filial,
+            batch_id=batch_id,
+            kind=kind,
+            context=context,
+            mfa_code=x_payip_mfa_code or mfa_code,
+        )
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_payip_generated_batch_process",
+            decision="allowed",
+            reason=f"filial={filial};batch={batch_id};kind={kind}",
+        )
+        return {"ok": True, **payload}
+
+    @router.get("/api/admin/payip/generated-batches/{batch_id}/pdf")
+    def api_admin_payip_generated_batch_file(
+        request: Request,
+        batch_id: str,
+        filial: str = Query(default=""),
+        kind: str = Query(default=""),
+        mfa_code: str = Query(default=""),
+        x_payip_mfa_code: str | None = Header(default=None),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> Response:
+        context = require_payip_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        file_bytes, filename, media_type = payip_generated_batch_file_bytes(
+            filial=filial,
+            batch_id=batch_id,
+            kind=kind,
+            context=context,
+            mfa_code=x_payip_mfa_code or mfa_code,
+        )
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_payip_generated_batch_file",
+            decision="allowed",
+            reason=f"filial={filial};batch={batch_id};kind={kind}",
+        )
+        return Response(
+            content=file_bytes,
+            media_type=media_type or "application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @router.post("/api/admin/payip/batch/preview")
     def api_admin_payip_batch_preview(

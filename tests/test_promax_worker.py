@@ -22,6 +22,7 @@ from workers.promax_worker import (
     PromaxWorker,
     WorkerConfig,
     _control_flag,
+    _current_reference_date,
     redact_log_message,
 )
 from workers.promax_worker import _promax_030206_publication_dir
@@ -572,7 +573,7 @@ class PromaxClientTests(unittest.TestCase):
             [call.kwargs["filial"] for call in client.import_boleto_pdf.call_args_list],
             ["1", "2"],
         )
-        self.assertEqual(client.import_boleto_pdf.call_args_list[0].kwargs["reference_date"], "2026-07-27")
+        self.assertEqual(client.import_boleto_pdf.call_args_list[0].kwargs["reference_date"], _current_reference_date())
 
     def test_030206_import_blocks_duplicate_pdf_for_different_units(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -680,7 +681,7 @@ class PromaxClientTests(unittest.TestCase):
 
         client.import_inadimplencia_csvs.assert_called_once()
         call_kwargs = client.import_inadimplencia_csvs.call_args.kwargs
-        self.assertEqual(call_kwargs["reference_date"], "2026-07-21")
+        self.assertEqual(call_kwargs["reference_date"], _current_reference_date())
         self.assertEqual(sorted(call_kwargs["files"]), ["2026-07 Patos.csv", "2026-07 Sousa.csv"])
         self.assertEqual(client.heartbeat_job.call_count, 2)
 
@@ -734,7 +735,7 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(client.import_estoque_020304_csv.call_count, 2)
         call_kwargs = client.import_estoque_020304_csv.call_args_list[0].kwargs
         self.assertEqual(call_kwargs["filial"], "3")
-        self.assertEqual(call_kwargs["reference_date"], "2026-07-23")
+        self.assertEqual(call_kwargs["reference_date"], _current_reference_date())
         self.assertEqual(client.heartbeat_job.call_count, 4)
 
     def test_020304_bot_import_accepts_base_routine_id(self) -> None:
@@ -966,7 +967,7 @@ class PromaxClientTests(unittest.TestCase):
             sorted(client.import_documentacao_csvs.call_args.kwargs["files"]),
             ["031702 bot - nomeUnidade031702_0640001.csv"],
         )
-        self.assertEqual(client.import_documentacao_csvs.call_args.kwargs["reference_date"], "2026-07-27")
+        self.assertEqual(client.import_documentacao_csvs.call_args.kwargs["reference_date"], _current_reference_date())
         self.assertEqual(client.heartbeat_job.call_count, 2)
 
     def test_030111_bot_imports_critica_csvs_by_unit(self) -> None:
@@ -1031,7 +1032,7 @@ class PromaxClientTests(unittest.TestCase):
                 "030111 bot - nomeUnidade030111_2210004.csv",
             ],
         )
-        self.assertEqual(client.import_critica_csvs.call_args_list[0].kwargs["reference_date"], "2026-07-27")
+        self.assertEqual(client.import_critica_csvs.call_args_list[0].kwargs["reference_date"], _current_reference_date())
         self.assertEqual(client.heartbeat_job.call_count, 4)
 
     def test_030111_bot_import_accepts_grouped_base_routine_id(self) -> None:

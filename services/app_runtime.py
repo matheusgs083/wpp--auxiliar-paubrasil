@@ -393,6 +393,9 @@ def configure_app_runtime(
     _validate_payip_promax_import = admin_payip_batch_service.validate_promax_import
     _create_payip_promax_import_clients = admin_payip_batch_service.create_promax_import_clients
     _run_payip_promax_import = admin_payip_batch_service.run_promax_import
+    _list_payip_generated_batches = admin_payip_batch_service.generated_batches
+    _payip_generated_batch_process = admin_payip_batch_service.generated_batch_process
+    _payip_generated_batch_file_bytes = admin_payip_batch_service.generated_batch_file
 
 
     admin_template_loader = AdminTemplateLoader(
@@ -534,6 +537,9 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "validate_payip_promax_import": runtime["_validate_payip_promax_import"],
         "create_payip_promax_import_clients": runtime["_create_payip_promax_import_clients"],
         "run_payip_promax_import": runtime["_run_payip_promax_import"],
+        "list_payip_generated_batches": runtime["_list_payip_generated_batches"],
+        "payip_generated_batch_process": runtime["_payip_generated_batch_process"],
+        "payip_generated_batch_file_bytes": runtime["_payip_generated_batch_file_bytes"],
         "list_admin_evolution_usage": runtime["_list_admin_evolution_usage"],
         "build_evolution_usage_avg_report_csv": runtime["_build_evolution_usage_avg_report_csv"],
         "build_evolution_function_usage_report_csv": runtime["_build_evolution_function_usage_report_csv"],

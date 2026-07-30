@@ -13,9 +13,13 @@ import httpx
 
 AUTH_PATH = "/auth/realms/portal/protocol/openid-connect/token"
 PAYMENTS_PATH = "/v1/payments"
+PAYMENTS_V2_PATH = "/v2/payments"
+BATCHS_PATH = "/v1/batchs/{company_id}"
 CLIENTS_PATH = "/v1/clients"
 ROUTES_PATH = "/v1/routes/{company_id}"
 PAYMENT_INVOICE_REPORT_PATH = "/v1/payments/report/invoice"
+PAYMENT_INVOICE_BATCH_PROCESS_PATH = "/v1/payments/invoices/batch/process"
+PAYMENT_INVOICE_BATCH_DOWNLOAD_PATH = "/v1/batchs/{batch_id}/pdf/{company_id}"
 PAYMENTS_IMPORT_BATCH_PATH = "/v1/payments-import/{company_id}/promax/api"
 PAYMENTS_IMPORT_VALIDATE_BATCH_PATH = "/v1/payments-import/{company_id}/promax/api/validate-batch"
 STATEMENT_MOVEMENTS_RESUME_PATH = "/v1/statments/movements/resume"
@@ -23,6 +27,8 @@ STATEMENT_MOVEMENTS_EXPORT_PDF_PATH = "/v1/statments/movements/export/pdf"
 STATEMENT_MOVEMENTS_EXPORT_XLSX_PATH = "/v1/statments/movements/export/xlsx"
 PORTAL_ORIGIN = "https://portal.payip.com.br"
 TOKEN_EXPIRY_LEEWAY_SECONDS = 120
+PAYIP_BATCH_DOWNLOAD_ATTEMPTS = 8
+PAYIP_BATCH_DOWNLOAD_RETRY_SECONDS = 1.5
 
 logger = logging.getLogger(__name__)
 
@@ -530,6 +536,101 @@ class PayipClient:
         logger.info("PayIP payments summary %s", summarize_collection_response(data))
         return data
 
+    def list_payments_history(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        filial: str = "",
+        company_id: str = "",
+    ) -> dict[str, Any]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        resolved_company_id = self._resolve_company_id(filial=filial, company_id=company_id)
+        response = self._get_payments_history(
+            token_pair=token_pair,
+            page=page,
+            page_size=page_size,
+            company_id=resolved_company_id,
+        )
+        logger.info(
+            "PayIP payments history response status=%s page=%s page_size=%s company_id=%s",
+            response.status_code,
+            page,
+            page_size,
+            resolved_company_id,
+        )
+
+        if response.status_code == 401:
+            logger.warning("PayIP access token rejected on payments history; refreshing and retrying once")
+            token_pair = self.tokens.refresh(self._client)
+            response = self._get_payments_history(
+                token_pair=token_pair,
+                page=page,
+                page_size=page_size,
+                company_id=resolved_company_id,
+            )
+            logger.info("PayIP payments history retry response status=%s", response.status_code)
+
+        if not 200 <= response.status_code < 300:
+            raise PayipError(
+                f"PayIP payments history request failed: HTTP {response.status_code}. "
+                f"Response: {_safe_response_body(response)}"
+            )
+
+        data = response.json()
+        logger.info("PayIP payments history summary %s", summarize_collection_response(data))
+        return data
+
+    def list_payment_batches(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        batch_type: str = "CREATE-PAYMENT",
+        filial: str = "",
+        company_id: str = "",
+    ) -> dict[str, Any]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        resolved_company_id = self._resolve_company_id(filial=filial, company_id=company_id)
+        normalized_type = str(batch_type or "CREATE-PAYMENT").strip() or "CREATE-PAYMENT"
+        response = self._get_payment_batches(
+            token_pair=token_pair,
+            page=page,
+            page_size=page_size,
+            batch_type=normalized_type,
+            company_id=resolved_company_id,
+        )
+        logger.info(
+            "PayIP batch logs response status=%s page=%s page_size=%s company_id=%s type=%s",
+            response.status_code,
+            page,
+            page_size,
+            resolved_company_id,
+            normalized_type,
+        )
+
+        if response.status_code == 401:
+            logger.warning("PayIP access token rejected on batch logs; refreshing and retrying once")
+            token_pair = self.tokens.refresh(self._client)
+            response = self._get_payment_batches(
+                token_pair=token_pair,
+                page=page,
+                page_size=page_size,
+                batch_type=normalized_type,
+                company_id=resolved_company_id,
+            )
+            logger.info("PayIP batch logs retry response status=%s", response.status_code)
+
+        if not 200 <= response.status_code < 300:
+            raise PayipError(
+                f"PayIP batch logs request failed: HTTP {response.status_code}. "
+                f"Response: {_safe_response_body(response)}"
+            )
+
+        data = response.json()
+        logger.info("PayIP batch logs summary %s", summarize_collection_response(data))
+        return data
+
     def list_clients(
         self,
         *,
@@ -824,6 +925,177 @@ class PayipClient:
             raise PayipError("PayIP invoice report retornou PDF vazio")
         return response.content
 
+    def invoice_batch_process_file(
+        self,
+        *,
+        company_id: str,
+        batch_id: str,
+        payment_shape: str,
+        payment_method: str,
+        sort_invoice: str = "asc",
+        filial: str = "",
+    ) -> tuple[bytes, str]:
+        resolved_company_id = self._resolve_company_id(filial=filial, company_id=company_id)
+        self.invoice_batch_process(
+            company_id=resolved_company_id,
+            batch_id=batch_id,
+            payment_shape=payment_shape,
+            payment_method=payment_method,
+            sort_invoice=sort_invoice,
+        )
+        return self.invoice_batch_download_file(
+            company_id=resolved_company_id,
+            batch_id=batch_id,
+        )
+
+    def invoice_batch_process(
+        self,
+        *,
+        company_id: str,
+        batch_id: str,
+        payment_shape: str,
+        payment_method: str,
+        sort_invoice: str = "asc",
+        filial: str = "",
+    ) -> dict[str, Any]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        resolved_company_id = self._resolve_company_id(filial=filial, company_id=company_id)
+        normalized_batch_id = str(batch_id or "").strip()
+        normalized_payment_shape = str(payment_shape or "").strip()
+        normalized_payment_method = str(payment_method or "").strip()
+        normalized_sort = str(sort_invoice or "asc").strip().lower() or "asc"
+        if not normalized_batch_id:
+            raise PayipError("PayIP batchId vazio para gerar arquivo")
+        if not normalized_payment_shape:
+            raise PayipError("PayIP paymentShape vazio para gerar arquivo")
+
+        payload = {
+            "sortInvoice": normalized_sort,
+            "paymentShape": normalized_payment_shape,
+            "batchId": normalized_batch_id,
+            "companyId": resolved_company_id,
+        }
+        if normalized_payment_method:
+            payload["paymentMethod"] = normalized_payment_method
+        response = self._client.post(
+            PAYMENT_INVOICE_BATCH_PROCESS_PATH,
+            params={"sortInvoice": normalized_sort},
+            json=payload,
+            headers={
+                "Authorization": token_pair.authorization_header(),
+                "Accept": "application/zip, application/octet-stream, application/pdf, */*",
+            },
+        )
+        logger.info(
+            "PayIP invoice batch process response status=%s company_id=%s batch_id=%s payment_shape=%s",
+            response.status_code,
+            resolved_company_id,
+            normalized_batch_id,
+            normalized_payment_shape,
+        )
+        if response.status_code == 401:
+            logger.warning("PayIP access token rejected on invoice batch process; refreshing and retrying once")
+            token_pair = self.tokens.refresh(self._client)
+            response = self._client.post(
+                PAYMENT_INVOICE_BATCH_PROCESS_PATH,
+                params={"sortInvoice": normalized_sort},
+                json=payload,
+                headers={
+                    "Authorization": token_pair.authorization_header(),
+                    "Accept": "application/zip, application/octet-stream, application/pdf, */*",
+                },
+            )
+            logger.info("PayIP invoice batch process retry response status=%s", response.status_code)
+
+        if not 200 <= response.status_code < 300:
+            raise PayipError(
+                f"PayIP invoice batch process failed: HTTP {response.status_code}. "
+                f"Response: {_safe_response_body(response)}"
+            )
+        if _payip_response_looks_like_file(response):
+            return {
+                "status": "ready",
+                "message": "PayIP retornou arquivo diretamente no processamento.",
+                "media_type": _response_media_type(response),
+            }
+
+        download_url = _extract_payip_download_url(response)
+        try:
+            data = response.json()
+        except ValueError:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        if download_url:
+            data.setdefault("downloadUrl", download_url)
+        return data
+
+    def invoice_batch_download_file(
+        self,
+        *,
+        company_id: str,
+        batch_id: str,
+        filial: str = "",
+    ) -> tuple[bytes, str]:
+        token_pair = self.tokens.ensure_access_token(self._client)
+        resolved_company_id = self._resolve_company_id(filial=filial, company_id=company_id)
+        normalized_batch_id = str(batch_id or "").strip()
+        if not normalized_batch_id:
+            raise PayipError("PayIP batchId vazio para baixar arquivo")
+        download_url = PAYMENT_INVOICE_BATCH_DOWNLOAD_PATH.format(
+            batch_id=normalized_batch_id,
+            company_id=resolved_company_id,
+        )
+        return self._download_invoice_batch_file(token_pair=token_pair, download_url=download_url)
+
+    def _download_invoice_batch_file(self, *, token_pair: TokenPair, download_url: str) -> tuple[bytes, str]:
+        normalized_url = str(download_url or "").strip()
+        if not normalized_url:
+            raise PayipError("PayIP URL de download vazia")
+        response: httpx.Response | None = None
+        active_token_pair = token_pair
+        for attempt in range(1, PAYIP_BATCH_DOWNLOAD_ATTEMPTS + 1):
+            headers = {
+                "Accept": "application/zip, application/octet-stream, application/pdf, */*",
+            }
+            send_payip_auth = _should_send_payip_download_auth(normalized_url, self._client.base_url)
+            if send_payip_auth:
+                headers["Authorization"] = active_token_pair.authorization_header()
+            response = self._client.get(
+                normalized_url,
+                headers=headers,
+            )
+            logger.info(
+                "PayIP invoice batch download response status=%s attempt=%s url=%s",
+                response.status_code,
+                attempt,
+                normalized_url,
+            )
+            if response.status_code == 401 and send_payip_auth and attempt == 1:
+                logger.warning("PayIP access token rejected on invoice batch download; refreshing and retrying once")
+                active_token_pair = self.tokens.refresh(self._client)
+                continue
+            if 200 <= response.status_code < 300:
+                if _payip_response_looks_like_file(response):
+                    if not response.content:
+                        raise PayipError("PayIP invoice batch download retornou arquivo vazio")
+                    return response.content, _response_media_type(response)
+                next_download_url = _extract_payip_download_url(response)
+                if next_download_url and next_download_url != normalized_url:
+                    normalized_url = next_download_url
+                    continue
+                if attempt < PAYIP_BATCH_DOWNLOAD_ATTEMPTS:
+                    time.sleep(PAYIP_BATCH_DOWNLOAD_RETRY_SECONDS)
+                    continue
+            if response.status_code not in {202, 404, 409, 425, 429, 500, 502, 503, 504}:
+                break
+            if attempt < PAYIP_BATCH_DOWNLOAD_ATTEMPTS:
+                time.sleep(PAYIP_BATCH_DOWNLOAD_RETRY_SECONDS)
+
+        status = response.status_code if response is not None else "-"
+        body = _safe_response_body(response) if response is not None else ""
+        raise PayipError(f"PayIP invoice batch download failed: HTTP {status}. Response: {body}")
+
     def statement_movements_resume(
         self,
         *,
@@ -1082,6 +1354,51 @@ class PayipClient:
             headers={"Authorization": token_pair.authorization_header()},
         )
 
+    def _get_payments_history(
+        self,
+        *,
+        token_pair: TokenPair,
+        page: int,
+        page_size: int,
+        company_id: str,
+    ) -> httpx.Response:
+        return self._client.get(
+            PAYMENTS_V2_PATH,
+            params={
+                "companyId": company_id,
+                "page": page,
+                "pageSize": page_size,
+            },
+            headers={
+                "Authorization": token_pair.authorization_header(),
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            },
+        )
+
+    def _get_payment_batches(
+        self,
+        *,
+        token_pair: TokenPair,
+        page: int,
+        page_size: int,
+        batch_type: str,
+        company_id: str,
+    ) -> httpx.Response:
+        return self._client.get(
+            BATCHS_PATH.format(company_id=company_id),
+            params={
+                "type": batch_type,
+                "page": page,
+                "pageSize": page_size,
+            },
+            headers={
+                "Authorization": token_pair.authorization_header(),
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            },
+        )
+
     def _get_clients(
         self,
         *,
@@ -1270,6 +1587,83 @@ def summarize_collection_response(data: Any) -> dict[str, int | None]:
         "page": page,
         "page_size": page_size,
     }
+
+
+def _response_media_type(response: httpx.Response) -> str:
+    return str(response.headers.get("content-type") or "application/zip").split(";", 1)[0].strip() or "application/zip"
+
+
+def _payip_response_looks_like_file(response: httpx.Response) -> bool:
+    media_type = _response_media_type(response).lower()
+    if "json" in media_type or media_type.startswith("text/"):
+        return False
+    content = response.content or b""
+    if content.startswith(b"PK\x03\x04") or content.startswith(b"%PDF"):
+        return True
+    return any(term in media_type for term in ("zip", "pdf", "octet-stream"))
+
+
+def _extract_payip_download_url(response: httpx.Response) -> str:
+    location = str(response.headers.get("location") or "").strip()
+    if location:
+        return location
+    media_type = _response_media_type(response).lower()
+    raw_text = (response.text or "").strip()
+    if media_type.startswith("text/") and raw_text:
+        if raw_text.startswith(("http://", "https://", "/")):
+            return raw_text
+    try:
+        payload = response.json()
+    except ValueError:
+        return ""
+    return _find_download_url(payload)
+
+
+def _find_download_url(value: Any) -> str:
+    if isinstance(value, str):
+        text = value.strip()
+        return text if text.startswith(("http://", "https://", "/")) else ""
+    if isinstance(value, list):
+        for item in value:
+            found = _find_download_url(item)
+            if found:
+                return found
+        return ""
+    if not isinstance(value, dict):
+        return ""
+    preferred_keys = (
+        "downloadUrl",
+        "downloadURL",
+        "download_url",
+        "fileUrl",
+        "fileURL",
+        "file_url",
+        "url",
+        "href",
+        "link",
+        "path",
+    )
+    for key in preferred_keys:
+        found = _find_download_url(value.get(key))
+        if found:
+            return found
+    for item in value.values():
+        found = _find_download_url(item)
+        if found:
+            return found
+    return ""
+
+
+def _should_send_payip_download_auth(download_url: str, base_url: httpx.URL) -> bool:
+    try:
+        parsed_url = httpx.URL(download_url)
+    except Exception:
+        return True
+    if parsed_url.params.get("X-Amz-Algorithm") or parsed_url.params.get("X-Amz-Signature"):
+        return False
+    if parsed_url.is_relative_url:
+        return True
+    return parsed_url.host == base_url.host
 
 
 def _extract_items(data: Any) -> list[Any] | None:

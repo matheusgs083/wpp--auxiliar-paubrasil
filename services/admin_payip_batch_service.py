@@ -9,7 +9,7 @@ import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from threading import Lock
 from typing import Any
@@ -29,6 +29,43 @@ PAYIP_CHARGE_ATTEMPTS = 3
 PAYIP_CHARGE_RETRY_DELAY_SECONDS = 1.5
 PAYIP_CLIENT_CREATION_REVALIDATE_ATTEMPTS = 3
 PAYIP_CLIENT_CREATION_REVALIDATE_DELAY_SECONDS = 1.0
+PAYIP_LOCAL_TIMEZONE = timezone(timedelta(hours=-3))
+PAYIP_BATCH_PAYMENT_METHOD_AVISTA_ID = "f2a3d1c0-5eb9-4939-a5a9-c4853ca79549"
+PAYIP_BATCH_PAYMENT_METHOD_PRAZO_ID = "0cafc679-85e0-40e1-a006-1e36d1953adb"
+PAYIP_BATCH_PAYMENT_SHAPE_PIX_ID = "6f0d7915-96c6-42ed-8441-ab6fecce85a8"
+PAYIP_BATCH_PAYMENT_SHAPE_BOLETO_ID = "af49ce07-13db-4732-8602-42730f65eaf3"
+PAYIP_BATCH_PDF_ACTIONS = {
+    "pix": {
+        "label": "PIX",
+        "payment_method": PAYIP_BATCH_PAYMENT_METHOD_AVISTA_ID,
+        "payment_shape": PAYIP_BATCH_PAYMENT_SHAPE_PIX_ID,
+        "filename_prefix": "pix",
+    },
+    "pix_a_prazo": {
+        "label": "PIX a prazo",
+        "payment_method": PAYIP_BATCH_PAYMENT_METHOD_PRAZO_ID,
+        "payment_shape": PAYIP_BATCH_PAYMENT_SHAPE_PIX_ID,
+        "filename_prefix": "pix_a_prazo",
+    },
+    "boleto": {
+        "label": "Boleto",
+        "payment_method": "",
+        "payment_shape": PAYIP_BATCH_PAYMENT_SHAPE_BOLETO_ID,
+        "filename_prefix": "boleto",
+    },
+    "pix1": {
+        "label": "PIX",
+        "payment_method": PAYIP_BATCH_PAYMENT_METHOD_AVISTA_ID,
+        "payment_shape": PAYIP_BATCH_PAYMENT_SHAPE_PIX_ID,
+        "filename_prefix": "pix",
+    },
+    "pix2": {
+        "label": "Boleto",
+        "payment_method": "",
+        "payment_shape": PAYIP_BATCH_PAYMENT_SHAPE_BOLETO_ID,
+        "filename_prefix": "boleto",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -99,7 +136,7 @@ class AdminPayipBatchService:
         client_creation = {"created": [], "not_found": [], "failed": []}
         missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
         if missing_codes and options.auto_create_clients:
-            self._bootstrap_mfa_if_provided(options.mfa_code)
+            self._bootstrap_mfa_if_provided(options.mfa_code, force=True)
             client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
             validation = self._validate_promax_import_after_client_creation(options, client_creation=client_creation)
         return _promax_import_payload(validation, client_creation=client_creation)
@@ -118,7 +155,7 @@ class AdminPayipBatchService:
         if not missing_codes:
             raise HTTPException(status_code=400, detail="Nenhum cliente faltante informado para criar na PayIP.")
 
-        self._bootstrap_mfa_if_provided(options.mfa_code)
+        self._bootstrap_mfa_if_provided(options.mfa_code, force=True)
         client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
         if options.start_date and options.end_date:
             validation = self._validate_promax_import_after_client_creation(options, client_creation=client_creation)
@@ -138,6 +175,135 @@ class AdminPayipBatchService:
             "ok": not bool(client_creation.get("not_found") or client_creation.get("failed")),
         }
 
+    def generated_batches(
+        self,
+        *,
+        filial: str,
+        context: dict[str, Any] | None,
+        page_size: int = 50,
+        mfa_code: str = "",
+    ) -> dict[str, Any]:
+        normalized_filial = normalize_numeric_code(filial)
+        self._ensure_filial_allowed(normalized_filial, context)
+        if self.payip_payments_service is None:
+            raise HTTPException(status_code=503, detail="PayIP nao configurada.")
+        clean_page_size = max(1, min(200, int(page_size or 50)))
+        try:
+            self._bootstrap_mfa_if_provided(mfa_code)
+            page = self.payip_payments_service.list_payment_batches(
+                filial=normalized_filial,
+                page=1,
+                page_size=clean_page_size,
+                batch_type="CREATE-PAYMENT",
+            )
+        except PayipMfaRequired as exc:
+            raise HTTPException(status_code=400, detail="PayIP pediu MFA. Atualize a sessao PayIP e tente novamente.") from exc
+        except Exception as exc:
+            self.logger.exception("Falha ao consultar historico PayIP da filial %s: %s", normalized_filial, exc)
+            raise HTTPException(status_code=503, detail=f"Falha ao consultar historico PayIP: {_short_error(str(exc))}") from exc
+
+        items = [item for item in getattr(page, "items", ()) or () if isinstance(item, dict)]
+        batches = _payip_batch_log_entries(items)
+        return {
+            "filial": normalized_filial,
+            "company_id": getattr(page, "company_id", "") or "",
+            "page": getattr(page, "page", 1) or 1,
+            "page_size": getattr(page, "page_size", clean_page_size) or clean_page_size,
+            "items_count": len(items),
+            "total_items": getattr(page, "total_items", None),
+            "last_checked_at": datetime.now(PAYIP_LOCAL_TIMEZONE).isoformat(),
+            "source": "batch_logs",
+            "batches": batches,
+        }
+
+    def generated_batch_file(
+        self,
+        *,
+        filial: str,
+        batch_id: str,
+        kind: str,
+        context: dict[str, Any] | None,
+        mfa_code: str = "",
+    ) -> tuple[bytes, str, str]:
+        normalized_filial = normalize_numeric_code(filial)
+        self._ensure_filial_allowed(normalized_filial, context)
+        if self.payip_payments_service is None:
+            raise HTTPException(status_code=503, detail="PayIP nao configurada.")
+        normalized_batch_id = str(batch_id or "").strip()
+        if not normalized_batch_id:
+            raise HTTPException(status_code=400, detail="Informe o batchId do lote PayIP.")
+        action = PAYIP_BATCH_PDF_ACTIONS.get(str(kind or "").strip().lower())
+        if not action:
+            raise HTTPException(status_code=400, detail="Tipo de arquivo PayIP invalido.")
+        try:
+            self._bootstrap_mfa_if_provided(mfa_code)
+            file_bytes, media_type = self.payip_payments_service.invoice_batch_download_file(
+                filial=normalized_filial,
+                batch_id=normalized_batch_id,
+            )
+        except PayipMfaRequired as exc:
+            raise HTTPException(status_code=400, detail="PayIP pediu MFA. Atualize a sessao PayIP e tente novamente.") from exc
+        except Exception as exc:
+            self.logger.exception(
+                "Falha ao gerar PDF PayIP em lote filial=%s batch=%s kind=%s: %s",
+                normalized_filial,
+                normalized_batch_id,
+                kind,
+                exc,
+            )
+            raise HTTPException(status_code=503, detail=f"Falha ao gerar arquivo PayIP: {_short_error(str(exc))}") from exc
+        extension = _payip_batch_file_extension(media_type)
+        filename = f"{action['filename_prefix']}_payip_revenda_{normalized_filial}_{normalized_batch_id[:8]}.{extension}"
+        return file_bytes, filename, media_type or "application/zip"
+
+    def generated_batch_process(
+        self,
+        *,
+        filial: str,
+        batch_id: str,
+        kind: str,
+        context: dict[str, Any] | None,
+        mfa_code: str = "",
+    ) -> dict[str, Any]:
+        normalized_filial = normalize_numeric_code(filial)
+        self._ensure_filial_allowed(normalized_filial, context)
+        if self.payip_payments_service is None:
+            raise HTTPException(status_code=503, detail="PayIP nao configurada.")
+        normalized_batch_id = str(batch_id or "").strip()
+        if not normalized_batch_id:
+            raise HTTPException(status_code=400, detail="Informe o batchId do lote PayIP.")
+        action = PAYIP_BATCH_PDF_ACTIONS.get(str(kind or "").strip().lower())
+        if not action:
+            raise HTTPException(status_code=400, detail="Tipo de arquivo PayIP invalido.")
+        try:
+            self._bootstrap_mfa_if_provided(mfa_code)
+            result = self.payip_payments_service.invoice_batch_process(
+                filial=normalized_filial,
+                batch_id=normalized_batch_id,
+                payment_shape=str(action["payment_shape"]),
+                payment_method=str(action.get("payment_method") or ""),
+                sort_invoice="desc",
+            )
+        except PayipMfaRequired as exc:
+            raise HTTPException(status_code=400, detail="PayIP pediu MFA. Atualize a sessao PayIP e tente novamente.") from exc
+        except Exception as exc:
+            self.logger.exception(
+                "Falha ao iniciar geracao PayIP em lote filial=%s batch=%s kind=%s: %s",
+                normalized_filial,
+                normalized_batch_id,
+                kind,
+                exc,
+            )
+            raise HTTPException(status_code=503, detail=f"Falha ao iniciar geracao PayIP: {_short_error(str(exc))}") from exc
+        return {
+            "filial": normalized_filial,
+            "batch_id": normalized_batch_id,
+            "kind": str(kind or "").strip().lower(),
+            "status": str((result or {}).get("status") or "solicitado"),
+            "message": str((result or {}).get("message") or "Geracao solicitada na PayIP."),
+            "raw": result if isinstance(result, dict) else {},
+        }
+
     def run_promax_import(self, payload: Any, context: dict[str, Any] | None) -> dict[str, Any]:
         options = _promax_import_options(payload)
         self._ensure_filial_allowed(options.filial, context)
@@ -147,7 +313,7 @@ class AdminPayipBatchService:
         client_creation = {"created": [], "not_found": [], "failed": []}
         missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
         if missing_codes and options.auto_create_clients:
-            self._bootstrap_mfa_if_provided(options.mfa_code)
+            self._bootstrap_mfa_if_provided(options.mfa_code, force=True)
             client_creation = self._create_missing_clients(filial=options.filial, codes=missing_codes)
             validation = self._validate_promax_import_after_client_creation(options, client_creation=client_creation)
             missing_codes = tuple(str(item or "").strip() for item in getattr(validation, "missing_client_codes", ()) or () if str(item or "").strip())
@@ -347,16 +513,23 @@ class AdminPayipBatchService:
             self.logger.exception("Falha ao validar importacao automatizada PayIP: %s", exc)
             raise HTTPException(status_code=503, detail=f"Falha ao validar importacao PayIP: {_short_error(str(exc))}") from exc
 
-    def _bootstrap_mfa_if_provided(self, mfa_code: str) -> None:
+    def _bootstrap_mfa_if_provided(self, mfa_code: str, *, force: bool = False) -> None:
         clean_code = str(mfa_code or "").strip()
         if not clean_code:
             return
+        if not force:
+            try:
+                status = self.payip_payments_service.status()
+            except Exception:
+                status = {}
+            if bool(status.get("access_token_valid")) or bool(status.get("refresh_token_valid")):
+                return
         try:
             self.payip_payments_service.bootstrap_session(mfa_code=clean_code)
         except PayipMfaRequired as exc:
             raise HTTPException(status_code=400, detail="Token MFA PayIP nao validou. Confira o codigo e tente novamente.") from exc
         except Exception as exc:
-            self.logger.exception("Falha ao validar MFA PayIP antes de criar clientes: %s", exc)
+            self.logger.exception("Falha ao validar MFA PayIP: %s", exc)
             raise HTTPException(status_code=503, detail=f"Falha ao validar MFA PayIP: {_short_error(str(exc))}") from exc
 
     def _validate_promax_import_after_client_creation(
@@ -871,6 +1044,18 @@ def _decimal_text(value: Decimal) -> str:
     return str(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
+def _safe_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(Decimal(str(value).replace(",", ".")))
+        except (InvalidOperation, ValueError):
+            return None
+
+
 def _new_job_id() -> str:
     return f"payip-batch-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
 
@@ -903,6 +1088,245 @@ def _payment_company_id(data: Any) -> str:
             return value
     nested = data.get("data")
     return _payment_company_id(nested) if isinstance(nested, dict) else ""
+
+
+def _payip_batch_file_extension(media_type: str) -> str:
+    normalized = str(media_type or "").lower()
+    if "pdf" in normalized:
+        return "pdf"
+    return "zip"
+
+
+def _payip_batch_log_entries(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for item in items:
+        batch_id = _payip_batch_log_id(item)
+        created_at = _payip_history_created_at(item)
+        count = _payip_batch_log_count(item)
+        total_amount = _payip_history_amount(item) or Decimal("0")
+        status = _payip_history_status(item) or "-"
+        entries.append(
+            {
+                "key": batch_id or _payip_history_group_key(created_at),
+                "batch_id": batch_id,
+                "created_at": created_at,
+                "created_label": _payip_history_created_label(created_at),
+                "count": count,
+                "total_amount": _decimal_text(total_amount),
+                "status_counts": {status: 1},
+                "samples": _payip_batch_log_samples(item),
+                "raw_status": status,
+            }
+        )
+    return sorted(entries, key=lambda batch: str(batch.get("created_at") or ""), reverse=True)
+
+
+def _payip_batch_log_id(item: dict[str, Any]) -> str:
+    for key in ("id", "batchId", "batch_id", "invoiceBatchId"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    nested = item.get("batch")
+    if isinstance(nested, dict):
+        for key in ("id", "batchId"):
+            value = str(nested.get(key) or "").strip()
+            if value:
+                return value
+    return ""
+
+
+def _payip_batch_log_count(item: dict[str, Any]) -> int:
+    for key in ("paymentsCount", "paymentCount", "itemsCount", "items_count", "totalItems", "total_items", "count", "quantity"):
+        value = _safe_int(item.get(key))
+        if value is not None:
+            return value
+    for key in ("payments", "items", "details"):
+        value = item.get(key)
+        if isinstance(value, list):
+            return len(value)
+    return 1
+
+
+def _payip_batch_log_samples(item: dict[str, Any]) -> list[dict[str, str]]:
+    for key in ("payments", "items", "details"):
+        value = item.get(key)
+        if isinstance(value, list) and value:
+            return [
+                {
+                    "nb": _payip_history_client_code(child) if isinstance(child, dict) else "",
+                    "client": _payip_history_client_name(child) if isinstance(child, dict) else "",
+                    "invoice": _payip_history_invoice(child) if isinstance(child, dict) else "",
+                    "amount": _decimal_text(_payip_history_amount(child) or Decimal("0")) if isinstance(child, dict) else "0.00",
+                    "due_date": _payip_history_due_date(child) if isinstance(child, dict) else "",
+                    "status": _payip_history_status(child) if isinstance(child, dict) else "",
+                }
+                for child in value[:5]
+            ]
+    description = str(item.get("description") or item.get("name") or item.get("fileName") or item.get("filename") or "").strip()
+    return [{"nb": "", "client": description, "invoice": "", "amount": _decimal_text(_payip_history_amount(item) or Decimal("0")), "due_date": "", "status": _payip_history_status(item)}]
+
+
+def _group_payip_history_batches(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for item in items:
+        created_at = _payip_history_created_at(item)
+        batch_id = _payip_history_batch_id(item)
+        group_key = batch_id or _payip_history_group_key(created_at)
+        batch = grouped.setdefault(
+            group_key,
+            {
+                "key": group_key,
+                "batch_id": batch_id,
+                "created_at": created_at,
+                "created_label": _payip_history_created_label(created_at),
+                "count": 0,
+                "total_amount": "0.00",
+                "status_counts": {},
+                "samples": [],
+            },
+        )
+        batch["count"] += 1
+        if batch_id and not batch.get("batch_id"):
+            batch["batch_id"] = batch_id
+        current_total = _parse_money(batch["total_amount"]) or Decimal("0")
+        batch["total_amount"] = _decimal_text(current_total + (_payip_history_amount(item) or Decimal("0")))
+        status = _payip_history_status(item) or "-"
+        status_counts = batch["status_counts"]
+        status_counts[status] = int(status_counts.get(status, 0)) + 1
+        if len(batch["samples"]) < 5:
+            batch["samples"].append(
+                {
+                    "nb": _payip_history_client_code(item),
+                    "client": _payip_history_client_name(item),
+                    "invoice": _payip_history_invoice(item),
+                    "amount": _decimal_text(_payip_history_amount(item) or Decimal("0")),
+                    "due_date": _payip_history_due_date(item),
+                    "status": status,
+                }
+            )
+    return sorted(grouped.values(), key=lambda batch: str(batch.get("created_at") or ""), reverse=True)
+
+
+def _payip_history_created_at(item: dict[str, Any]) -> str:
+    for key in ("createdAt", "created_at", "createdDate", "createdDateTime", "created"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _payip_history_batch_id(item: dict[str, Any]) -> str:
+    candidates = [item.get("batchId"), item.get("batch_id"), item.get("invoiceBatchId")]
+    batch = item.get("batch")
+    if isinstance(batch, dict):
+        candidates.extend([batch.get("id"), batch.get("batchId")])
+    invoice_batch = item.get("invoiceBatch")
+    if isinstance(invoice_batch, dict):
+        candidates.extend([invoice_batch.get("id"), invoice_batch.get("batchId")])
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _payip_history_group_key(created_at: str) -> str:
+    dt = _parse_payip_datetime(created_at)
+    if dt is None:
+        return "sem-data"
+    minute_bucket = (dt.minute // 10) * 10
+    bucket = dt.replace(minute=minute_bucket, second=0, microsecond=0)
+    return bucket.strftime("%Y-%m-%d %H:%M")
+
+
+def _payip_history_created_label(created_at: str) -> str:
+    dt = _parse_payip_datetime(created_at)
+    if dt is None:
+        return "Sem data de criacao"
+    return dt.strftime("%d/%m/%Y %H:%M")
+
+
+def _parse_payip_datetime(value: str) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        try:
+            dt = datetime.strptime(text[:19], "%Y-%m-%dT%H:%M:%S")
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(PAYIP_LOCAL_TIMEZONE)
+
+
+def _payip_history_amount(item: dict[str, Any]) -> Decimal | None:
+    amount_details = item.get("amountDetails")
+    candidates = [
+        item.get("total"),
+        item.get("amount"),
+        item.get("value"),
+        item.get("valor"),
+    ]
+    if isinstance(amount_details, dict):
+        candidates.extend([amount_details.get("amountTotal"), amount_details.get("amount")])
+    for candidate in candidates:
+        parsed = _parse_money(candidate)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _payip_history_status(item: dict[str, Any]) -> str:
+    status = item.get("status")
+    if isinstance(status, dict):
+        return str(status.get("name") or status.get("description") or status.get("code") or "").strip()
+    return str(status or "").strip()
+
+
+def _payip_history_client_code(item: dict[str, Any]) -> str:
+    client = item.get("client")
+    candidates = [item.get("clientCode"), item.get("client_code"), item.get("externalId")]
+    if isinstance(client, dict):
+        candidates.extend([client.get("code"), client.get("clientCode")])
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _payip_history_client_name(item: dict[str, Any]) -> str:
+    client = item.get("client")
+    if isinstance(client, dict):
+        for key in ("fantasyName", "name", "companyName"):
+            value = str(client.get(key) or "").strip()
+            if value:
+                return value
+    for key in ("clientName", "client_name", "name", "fantasyName"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _payip_history_invoice(item: dict[str, Any]) -> str:
+    for key in ("invoice", "notaFiscal", "nf", "documentNumber"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _payip_history_due_date(item: dict[str, Any]) -> str:
+    for key in ("dueDate", "due_date", "vencimento"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _pix_code(data: Any) -> str:

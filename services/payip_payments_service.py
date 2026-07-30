@@ -230,6 +230,62 @@ class PayipPaymentsService:
             company_id=company_id,
         )
 
+    def list_payments_history(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        filial: str = "",
+    ) -> PayipPaymentsPage:
+        company_id = self.client.resolve_company_id(filial=filial)
+        raw = self.client.list_payments_history(
+            page=page,
+            page_size=page_size,
+            filial=filial,
+            company_id=company_id,
+        )
+        summary = summarize_collection_response(raw)
+        items = tuple(item for item in _extract_payment_items(raw) if isinstance(item, dict))
+        return PayipPaymentsPage(
+            raw=raw,
+            items=items,
+            items_count=summary["items_count"],
+            total_items=summary["total_items"],
+            page=summary["page"] or page,
+            page_size=summary["page_size"] or page_size,
+            filial=filial,
+            company_id=company_id,
+        )
+
+    def list_payment_batches(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        batch_type: str = "CREATE-PAYMENT",
+        filial: str = "",
+    ) -> PayipPaymentsPage:
+        company_id = self.client.resolve_company_id(filial=filial)
+        raw = self.client.list_payment_batches(
+            page=page,
+            page_size=page_size,
+            batch_type=batch_type,
+            filial=filial,
+            company_id=company_id,
+        )
+        summary = summarize_collection_response(raw)
+        items = tuple(item for item in _extract_payment_items(raw) if isinstance(item, dict))
+        return PayipPaymentsPage(
+            raw=raw,
+            items=items,
+            items_count=summary["items_count"],
+            total_items=summary["total_items"],
+            page=summary["page"] or page,
+            page_size=summary["page_size"] or page_size,
+            filial=filial,
+            company_id=company_id,
+        )
+
     def list_routes(
         self,
         *,
@@ -476,6 +532,57 @@ class PayipPaymentsService:
         return self.client.invoice_report_pdf(
             company_id=resolved_company_id,
             payment_ids=payment_ids,
+        )
+
+    def invoice_batch_process_file(
+        self,
+        *,
+        filial: str,
+        batch_id: str,
+        payment_shape: str,
+        payment_method: str,
+        sort_invoice: str = "asc",
+        company_id: str = "",
+    ) -> tuple[bytes, str]:
+        resolved_company_id = self.client.resolve_company_id(filial=filial, company_id=company_id)
+        return self.client.invoice_batch_process_file(
+            company_id=resolved_company_id,
+            batch_id=batch_id,
+            payment_shape=payment_shape,
+            payment_method=payment_method,
+            sort_invoice=sort_invoice,
+        )
+
+    def invoice_batch_process(
+        self,
+        *,
+        filial: str,
+        batch_id: str,
+        payment_shape: str,
+        payment_method: str,
+        sort_invoice: str = "asc",
+        company_id: str = "",
+    ) -> dict[str, Any]:
+        resolved_company_id = self.client.resolve_company_id(filial=filial, company_id=company_id)
+        return self.client.invoice_batch_process(
+            company_id=resolved_company_id,
+            batch_id=batch_id,
+            payment_shape=payment_shape,
+            payment_method=payment_method,
+            sort_invoice=sort_invoice,
+        )
+
+    def invoice_batch_download_file(
+        self,
+        *,
+        filial: str,
+        batch_id: str,
+        company_id: str = "",
+    ) -> tuple[bytes, str]:
+        resolved_company_id = self.client.resolve_company_id(filial=filial, company_id=company_id)
+        return self.client.invoice_batch_download_file(
+            company_id=resolved_company_id,
+            batch_id=batch_id,
         )
 
     def statement_movements_resume(

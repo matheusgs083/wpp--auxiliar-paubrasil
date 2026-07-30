@@ -562,7 +562,7 @@ class PromaxWorker:
                     filial=filial,
                     filename=pdf_path.name,
                     pdf_bytes=pdf_bytes,
-                    reference_date=_file_reference_date(pdf_path),
+                    reference_date=_current_reference_date(),
                 )
                 self._heartbeat_active_job(job_id, lease_token)
                 result_payload = response.get("result") if isinstance(response, Mapping) else None
@@ -680,7 +680,7 @@ class PromaxWorker:
                     filial=filial,
                     filename=csv_path.name,
                     csv_bytes=csv_path.read_bytes(),
-                    reference_date=str(payload.get("end_date") or payload.get("start_date") or "") or None,
+                    reference_date=_current_reference_date(),
                 )
                 self._heartbeat_active_job(job_id, lease_token)
                 result_payload = response.get("result") if isinstance(response, Mapping) else None
@@ -790,7 +790,7 @@ class PromaxWorker:
                 job_id=job_id,
                 lease_token=lease_token,
                 files={path.name: path.read_bytes() for path in csv_paths},
-                reference_date=str(payload.get("end_date") or payload.get("start_date") or "") or None,
+                reference_date=_current_reference_date(),
             )
             self._heartbeat_active_job(job_id, lease_token)
             result_payload = response.get("result") if isinstance(response, Mapping) else None
@@ -963,7 +963,7 @@ class PromaxWorker:
                 missing.append(unit)
                 continue
             try:
-                reference_date = _file_reference_date(csv_path)
+                reference_date = _current_reference_date()
                 self._heartbeat_active_job(job_id, lease_token)
                 response = self.client.import_critica_csvs(
                     job_id=job_id,
@@ -1082,7 +1082,7 @@ class PromaxWorker:
             return
 
         try:
-            reference_date = str(payload.get("end_date") or payload.get("start_date") or "") or None
+            reference_date = _current_reference_date()
             self._heartbeat_active_job(job_id, lease_token)
             response = importer({path.name: path.read_bytes() for path in csv_paths}, reference_date)
             self._heartbeat_active_job(job_id, lease_token)
@@ -1147,12 +1147,8 @@ def _string_list(value: Any) -> list[str]:
     return normalized
 
 
-def _file_reference_date(path: Path) -> str:
-    try:
-        timestamp = path.stat().st_mtime
-    except OSError:
-        return datetime.now(PROMAX_LOCAL_TIMEZONE).date().isoformat()
-    return datetime.fromtimestamp(timestamp, tz=timezone.utc).astimezone(PROMAX_LOCAL_TIMEZONE).date().isoformat()
+def _current_reference_date() -> str:
+    return datetime.now(PROMAX_LOCAL_TIMEZONE).date().isoformat()
 
 
 def _routine_selected(payload: Mapping[str, Any], routine_id: str) -> bool:

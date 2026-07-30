@@ -221,11 +221,6 @@ def _admin_import_actor(context: dict[str, Any] | None) -> str:
     return f"{mode}:{filiais}" if filiais else mode
 
 
-def _is_admin_boleto_dataset(dataset: str) -> bool:
-    normalized_dataset = _normalize_admin_import_dataset(dataset)
-    return normalized_dataset.startswith(ADMIN_BOLETOS_DATASET_PREFIX)
-
-
 def _parse_admin_upload_reference_date(value: Any) -> date | None:
     raw_value = str(value or "").strip()
     if not raw_value:
@@ -243,7 +238,7 @@ def _parse_admin_upload_reference_date(value: Any) -> date | None:
         return None
 
 
-def _admin_boleto_upload_reference_date(dataset: str) -> date | None:
+def _admin_upload_reference_date(dataset: str) -> date | None:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
     manifest = _read_admin_upload_manifest(normalized_dataset) or {}
     manifest_date = _parse_admin_upload_reference_date(manifest.get("activated_at"))
@@ -257,9 +252,9 @@ def _admin_boleto_upload_reference_date(dataset: str) -> date | None:
 
 def _resolve_admin_import_reference_date(dataset: str, reference_date: str | None = None) -> str:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
-    if _is_admin_boleto_dataset(normalized_dataset):
-        upload_date = _admin_boleto_upload_reference_date(normalized_dataset)
-        return upload_date.isoformat() if upload_date else ""
+    upload_date = _admin_upload_reference_date(normalized_dataset)
+    if upload_date:
+        return upload_date.isoformat()
     return str(reference_date or "").strip()
 
 

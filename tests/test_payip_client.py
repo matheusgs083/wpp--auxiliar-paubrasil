@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import date
 from decimal import Decimal
 
 import httpx
 
+from bot_api.integrations import payip_client
 from bot_api.integrations.payip_client import PayipClient, PayipConfig, PayipImportClientsNotFound, PayipTokenManager, TokenPair, summarize_collection_response
 from bot_api.services.payip_payments_service import (
     PayipPaymentsService,
@@ -524,6 +526,217 @@ class PayipClientTests(unittest.TestCase):
             requests[2].headers["accept"],
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+    def test_invoice_batch_process_generates_then_downloads_zip(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if request.url.path == "/v1/payments/invoices/batch/process":
+                return httpx.Response(200, json={"data": {"downloadUrl": "https://s3.example.test/downloads/payip-lote.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256"}})
+            if request.url.path == "/v1/batchs/batch-1/pdf/sume-company":
+                return httpx.Response(200, json={"data": {"url": "https://s3.example.test/downloads/payip-lote.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256"}})
+            if request.url.path == "/downloads/payip-lote.zip":
+                self.assertNotIn("authorization", request.headers)
+                return httpx.Response(200, content=b"PK\x03\x04zip-content", headers={"content-type": "application/zip"})
+            return httpx.Response(404, json={"message": "not found"})
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+            company_ids=(("4", "sume-company"),),
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        file_bytes, media_type = client.invoice_batch_process_file(
+            filial="4",
+            company_id="",
+            batch_id="batch-1",
+            payment_shape="shape-1",
+            payment_method="method-1",
+        )
+
+        self.assertEqual(file_bytes, b"PK\x03\x04zip-content")
+        self.assertEqual(media_type, "application/zip")
+        self.assertEqual([request.method for request in requests], ["POST", "GET", "GET"])
+        self.assertEqual(requests[0].url.path, "/v1/payments/invoices/batch/process")
+        self.assertEqual(requests[0].url.params["sortInvoice"], "asc")
+        self.assertEqual(requests[0].headers["accept"], "application/zip, application/octet-stream, application/pdf, */*")
+        self.assertEqual(requests[1].url.path, "/v1/batchs/batch-1/pdf/sume-company")
+        self.assertEqual(requests[2].url.path, "/downloads/payip-lote.zip")
+        self.assertNotIn("authorization", requests[2].headers)
+
+    def test_invoice_batch_process_downloads_from_batch_pdf_when_generation_is_in_progress(self) -> None:
+        requests: list[httpx.Request] = []
+        pdf_attempts = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal pdf_attempts
+            requests.append(request)
+            if request.url.path == "/v1/payments/invoices/batch/process":
+                return httpx.Response(200, json={"status": "Sucesso", "message": "Criacao do arquivo pdf em progresso"})
+            if request.url.path == "/v1/batchs/batch-1/pdf/sume-company":
+                pdf_attempts += 1
+                if pdf_attempts == 1:
+                    return httpx.Response(200, json={"status": "Sucesso", "message": "Criacao do arquivo pdf em progresso"})
+                return httpx.Response(200, json={"data": {"url": "https://s3.example.test/downloads/payip-lote.zip?X-Amz-Signature=abc"}})
+            if request.url.path == "/downloads/payip-lote.zip":
+                self.assertNotIn("authorization", request.headers)
+                return httpx.Response(200, content=b"PK\x03\x04zip-content", headers={"content-type": "application/zip"})
+            return httpx.Response(404, json={"message": "not found"})
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+            company_ids=(("4", "sume-company"),),
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        original_retry_seconds = payip_client.PAYIP_BATCH_DOWNLOAD_RETRY_SECONDS
+        payip_client.PAYIP_BATCH_DOWNLOAD_RETRY_SECONDS = 0
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        try:
+            file_bytes, media_type = client.invoice_batch_process_file(
+                filial="4",
+                company_id="",
+                batch_id="batch-1",
+                payment_shape="shape-1",
+                payment_method="method-1",
+            )
+        finally:
+            payip_client.PAYIP_BATCH_DOWNLOAD_RETRY_SECONDS = original_retry_seconds
+
+        self.assertEqual(file_bytes, b"PK\x03\x04zip-content")
+        self.assertEqual(media_type, "application/zip")
+        self.assertEqual([request.method for request in requests], ["POST", "GET", "GET", "GET"])
+        self.assertEqual(requests[1].url.path, "/v1/batchs/batch-1/pdf/sume-company")
+        self.assertEqual(requests[2].url.path, "/v1/batchs/batch-1/pdf/sume-company")
+        self.assertEqual(requests[3].url.path, "/downloads/payip-lote.zip")
+        self.assertNotIn("authorization", requests[3].headers)
+
+    def test_invoice_batch_process_omits_payment_method_when_all_methods_selected(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"status": "Sucesso"})
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+            company_ids=(("4", "sume-company"),),
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        client.invoice_batch_process(
+            filial="4",
+            company_id="",
+            batch_id="batch-1",
+            payment_shape="shape-1",
+            payment_method="",
+            sort_invoice="desc",
+        )
+
+        payload = json.loads(requests[0].content.decode("utf-8"))
+        self.assertEqual(payload["paymentShape"], "shape-1")
+        self.assertEqual(payload["sortInvoice"], "desc")
+        self.assertNotIn("paymentMethod", payload)
+
+    def test_list_payment_batches_uses_batchs_endpoint(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "id": "batch-1",
+                            "type": "CREATE-PAYMENT",
+                            "status": "DONE",
+                        }
+                    ],
+                    "total": 1,
+                    "page": 1,
+                    "pageSize": 50,
+                },
+            )
+
+        config = PayipConfig(
+            base_url="https://api.example.test",
+            client_id="client",
+            username="user",
+            password="password",
+            company_id="patos-company",
+            token_cache_file="tokens.json",
+            company_ids=(("4", "sume-company"),),
+        )
+        client = PayipClient(config)
+        client._client.close()
+        client._client = httpx.Client(base_url=config.base_url, transport=httpx.MockTransport(handler))
+        token = TokenPair(
+            access_token="access",
+            refresh_token="refresh",
+            access_expires_at=9999999999,
+            refresh_expires_at=9999999999,
+            expires_in=3600,
+            refresh_expires_in=21600,
+        )
+        client.tokens.ensure_access_token = lambda _http_client: token  # type: ignore[method-assign]
+
+        data = client.list_payment_batches(filial="4", page=1, page_size=50)
+
+        self.assertEqual(data["data"][0]["id"], "batch-1")
+        self.assertEqual(requests[0].method, "GET")
+        self.assertEqual(requests[0].url.path, "/v1/batchs/sume-company")
+        self.assertEqual(requests[0].url.params["type"], "CREATE-PAYMENT")
+        self.assertEqual(requests[0].url.params["page"], "1")
+        self.assertEqual(requests[0].url.params["pageSize"], "50")
 
     def test_promax_import_validate_batch_uses_company_route_and_dates(self) -> None:
         requests: list[httpx.Request] = []

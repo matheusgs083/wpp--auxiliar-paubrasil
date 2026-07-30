@@ -275,6 +275,13 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                 "items_count": 1,
                 "missing_client_codes": [],
             },
+            "list_payip_generated_batches": lambda **_kwargs: {
+                "filial": "3",
+                "items_count": 0,
+                "batches": [],
+            },
+            "payip_generated_batch_process": lambda **_kwargs: {"status": "Sucesso"},
+            "payip_generated_batch_file_bytes": lambda **_kwargs: (b"PK\x03\x04\n", "payip-lote.zip", "application/zip"),
             "create_payip_promax_import_clients": lambda payload, _context: {
                 "items_count": 1,
                 "missing_client_codes": [],
@@ -466,6 +473,9 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/api/admin/payip/batch/result"),
             EndpointCase("GET", "/api/admin/payip/batch/pdf/item-1"),
             EndpointCase("GET", "/api/admin/payip/batch/export.csv"),
+            EndpointCase("GET", "/api/admin/payip/generated-batches?filial=3"),
+            EndpointCase("POST", "/api/admin/payip/generated-batches/batch-1/process?filial=3&kind=pix1"),
+            EndpointCase("GET", "/api/admin/payip/generated-batches/batch-1/pdf?filial=3&kind=pix1"),
             EndpointCase("POST", "/api/admin/payip/import/validate", kwargs={"json": payip_import_payload}),
             EndpointCase(
                 "POST",
@@ -788,6 +798,8 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "/api/admin/panel/users/1/reset-password": "/api/admin/panel/users/{user_id}/reset-password",
             "/api/admin/recolhas/rec-1": "/api/admin/recolhas/{recolha_id}",
             "/api/admin/payip/batch/pdf/item-1": "/api/admin/payip/batch/pdf/{item_id}",
+            "/api/admin/payip/generated-batches/batch-1/process": "/api/admin/payip/generated-batches/{batch_id}/process",
+            "/api/admin/payip/generated-batches/batch-1/pdf": "/api/admin/payip/generated-batches/{batch_id}/pdf",
             "/api/admin/promax/jobs/job-1": "/api/admin/promax/jobs/{job_id}",
             "/api/admin/promax/jobs/job-1/retry": "/api/admin/promax/jobs/{job_id}/retry",
             "/api/admin/promax/jobs/job-1/logs": "/api/admin/promax/jobs/{job_id}/logs",
