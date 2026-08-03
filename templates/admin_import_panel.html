@@ -287,6 +287,22 @@
     .promax-status--success { color: var(--success); border-color: rgba(4, 120, 87, 0.28); }
     .promax-status--warning { color: var(--warning); border-color: rgba(180, 83, 9, 0.3); }
     .promax-status--danger { color: var(--danger); border-color: rgba(185, 28, 28, 0.34); background: rgba(185, 28, 28, 0.06); }
+    .promax-impact-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.65rem; }
+    .promax-impact-kpi { display: grid; gap: 0.18rem; min-height: 92px; padding: 0.75rem; border: 1px solid var(--promax-neutral-border); border-radius: 8px; background: var(--promax-neutral-bg); }
+    .promax-impact-label { color: var(--ink-500); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
+    .promax-impact-kpi strong { color: var(--ink-900); font-size: 1.35rem; line-height: 1.15; }
+    .promax-impact-kpi small { color: var(--ink-500); font-weight: 700; }
+    .promax-impact-chart-wrap { padding: 0.75rem; border: 1px solid var(--promax-neutral-border); border-radius: 8px; background: var(--surface); }
+    .promax-impact-chart { min-height: 180px; }
+    .promax-impact-chart svg { display: block; width: 100%; height: 180px; overflow: visible; }
+    .promax-impact-axis { stroke: var(--line-strong); stroke-width: 1; }
+    .promax-impact-gridline { stroke: var(--line); stroke-width: 1; }
+    .promax-impact-bar { fill: rgba(64, 86, 109, 0.72); }
+    .promax-impact-bar.partial { fill: rgba(180, 83, 9, 0.72); }
+    .promax-impact-chart text { fill: var(--ink-500); font-size: 10px; font-weight: 700; }
+    .promax-impact-empty { display: flex; align-items: center; justify-content: center; min-height: 160px; color: var(--ink-500); font-size: 0.85rem; font-weight: 700; text-align: center; }
+    @media (max-width: 1100px) { .promax-impact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .promax-impact-grid { grid-template-columns: 1fr; } }
     .promax-unit-summary { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
     .promax-unit-modal-table th,
     .promax-unit-modal-table td { vertical-align: middle; }
@@ -1158,6 +1174,45 @@
             <button class="btn btn-outline-primary btn-sm" id="promaxReprocessPublicationsBtn" type="button" disabled title="Tentar novamente o envio dos arquivos preservados no worker"><i class="bi bi-arrow-clockwise me-1"></i>Reprocessar publicacoes</button>
           </div>
           <div class="form-text mt-2">A fila aceita varios jobs e executa um por vez, na ordem de prioridade e inclusao.</div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Impacto operacional</h2>
+              <div class="form-text">Estimativa baseada nas execucoes carregadas: 12 min por rotina x revenda, menos o tempo real do worker.</div>
+            </div>
+            <span class="pill" id="promaxImpactPeriod">Sem historico</span>
+          </div>
+          <div class="promax-impact-grid mb-3">
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Tempo economizado</span>
+              <strong id="promaxImpactSaved">--</strong>
+              <small id="promaxImpactManual">Manual estimado: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Execucoes concluidas</span>
+              <strong id="promaxImpactDone">--</strong>
+              <small id="promaxImpactSuccessRate">Taxa de sucesso: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Tempo medio do worker</span>
+              <strong id="promaxImpactAvgRuntime">--</strong>
+              <small id="promaxImpactRuns">Automacoes analisadas: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Rotinas x revendas</span>
+              <strong id="promaxImpactWorkUnits">--</strong>
+              <small>Base do calculo do ganho</small>
+            </div>
+          </div>
+          <div class="promax-impact-chart-wrap">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="small fw-bold text-secondary">Ganho estimado por dia</span>
+              <span class="small text-secondary">Ultimos dias carregados</span>
+            </div>
+            <div id="promaxImpactChart" class="promax-impact-chart" aria-label="Grafico de ganho de tempo do Promax"></div>
+          </div>
         </section>
 
         <section class="panel-card p-3 mb-3">
@@ -2423,6 +2478,15 @@
       promaxResumeBtn: document.getElementById("promaxResumeBtn"),
       promaxClearBtn: document.getElementById("promaxClearBtn"),
       promaxReprocessPublicationsBtn: document.getElementById("promaxReprocessPublicationsBtn"),
+      promaxImpactPeriod: document.getElementById("promaxImpactPeriod"),
+      promaxImpactSaved: document.getElementById("promaxImpactSaved"),
+      promaxImpactManual: document.getElementById("promaxImpactManual"),
+      promaxImpactDone: document.getElementById("promaxImpactDone"),
+      promaxImpactSuccessRate: document.getElementById("promaxImpactSuccessRate"),
+      promaxImpactAvgRuntime: document.getElementById("promaxImpactAvgRuntime"),
+      promaxImpactRuns: document.getElementById("promaxImpactRuns"),
+      promaxImpactWorkUnits: document.getElementById("promaxImpactWorkUnits"),
+      promaxImpactChart: document.getElementById("promaxImpactChart"),
       promaxStartDate: document.getElementById("promaxStartDate"),
       promaxEndDate: document.getElementById("promaxEndDate"),
       promaxSendDates: document.getElementById("promaxSendDates"),
@@ -4179,6 +4243,164 @@
       return `${rows.length} unidade(s)`;
     }
 
+    function promaxImpactMetrics(jobs) {
+      const manualMinutesPerWorkUnit = 12;
+      const sourceJobs = Array.isArray(jobs) ? jobs : [];
+      const relevantJobs = sourceJobs.filter(job => {
+        const status = String(job && job.status || "");
+        return String(job && job.job_type || "") !== "reprocess_publication"
+          && ["success", "partial_success", "failed", "cancelled"].includes(status);
+      });
+      const analyzedJobs = relevantJobs.filter(job => promaxJobRuntimeMinutes(job) > 0 || promaxJobWorkUnits(job) > 0);
+      const totals = analyzedJobs.reduce((acc, job) => {
+        const status = String(job && job.status || "");
+        const workUnits = promaxJobWorkUnits(job);
+        const runtimeMinutes = promaxJobRuntimeMinutes(job);
+        const manualMinutes = workUnits * manualMinutesPerWorkUnit;
+        const savedMinutes = Math.max(0, manualMinutes - runtimeMinutes);
+        acc.workUnits += workUnits;
+        acc.runtimeMinutes += runtimeMinutes;
+        acc.manualMinutes += manualMinutes;
+        acc.savedMinutes += savedMinutes;
+        acc.done += ["success", "partial_success"].includes(status) ? 1 : 0;
+        acc.success += status === "success" ? 1 : 0;
+        acc.partial += status === "partial_success" ? 1 : 0;
+        acc.failed += ["failed", "cancelled"].includes(status) ? 1 : 0;
+        const dayKey = promaxJobFinishedDay(job);
+        if (dayKey) {
+          if (!acc.days[dayKey]) acc.days[dayKey] = { day: dayKey, savedMinutes: 0, partial: 0, jobs: 0 };
+          acc.days[dayKey].savedMinutes += savedMinutes;
+          acc.days[dayKey].partial += status === "partial_success" ? 1 : 0;
+          acc.days[dayKey].jobs += 1;
+        }
+        return acc;
+      }, {
+        analyzed: analyzedJobs.length,
+        done: 0,
+        success: 0,
+        partial: 0,
+        failed: 0,
+        workUnits: 0,
+        runtimeMinutes: 0,
+        manualMinutes: 0,
+        savedMinutes: 0,
+        days: {}
+      });
+      const daySeries = Object.values(totals.days)
+        .sort((a, b) => String(a.day).localeCompare(String(b.day)))
+        .slice(-7);
+      return { ...totals, daySeries, manualMinutesPerWorkUnit };
+    }
+
+    function promaxJobWorkUnits(job) {
+      const payload = job && job.payload && typeof job.payload === "object" ? job.payload : {};
+      const units = Array.isArray(payload.units) && payload.units.length ? payload.units : [];
+      let routineCount = 0;
+      if (Array.isArray(payload.groups)) {
+        routineCount = payload.groups.reduce((total, group) => {
+          const routines = group && Array.isArray(group.routines) ? group.routines : [];
+          return total + routines.length;
+        }, 0);
+      } else if (Array.isArray(payload.routines)) {
+        routineCount = payload.routines.length;
+      }
+      return Math.max(0, units.length * routineCount);
+    }
+
+    function promaxJobRuntimeMinutes(job) {
+      const started = new Date(job && job.started_at || "");
+      const finished = new Date(job && job.finished_at || "");
+      if (Number.isNaN(started.getTime()) || Number.isNaN(finished.getTime()) || finished <= started) return 0;
+      return Math.round((finished.getTime() - started.getTime()) / 60000);
+    }
+
+    function promaxJobFinishedDay(job) {
+      const dt = new Date(job && (job.finished_at || job.updated_at || job.created_at) || "");
+      if (Number.isNaN(dt.getTime())) return "";
+      const year = dt.getFullYear();
+      const month = String(dt.getMonth() + 1).padStart(2, "0");
+      const day = String(dt.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatPromaxDuration(minutes) {
+      const safeMinutes = Math.max(0, Math.round(Number(minutes || 0)));
+      if (!safeMinutes) return "0min";
+      const hours = Math.floor(safeMinutes / 60);
+      const mins = safeMinutes % 60;
+      if (!hours) return `${mins}min`;
+      return mins ? `${hours}h ${mins}min` : `${hours}h`;
+    }
+
+    function renderPromaxImpact(jobs) {
+      const metrics = promaxImpactMetrics(jobs);
+      if (E.promaxImpactSaved) E.promaxImpactSaved.textContent = formatPromaxDuration(metrics.savedMinutes);
+      if (E.promaxImpactManual) E.promaxImpactManual.textContent = `Manual estimado: ${formatPromaxDuration(metrics.manualMinutes)}`;
+      if (E.promaxImpactDone) E.promaxImpactDone.textContent = formatNumber(metrics.done);
+      if (E.promaxImpactSuccessRate) {
+        const denominator = metrics.success + metrics.partial + metrics.failed;
+        const rate = denominator ? Math.round((metrics.success / denominator) * 100) : 0;
+        E.promaxImpactSuccessRate.textContent = `Taxa de sucesso: ${rate}%`;
+      }
+      if (E.promaxImpactAvgRuntime) {
+        const avg = metrics.analyzed ? metrics.runtimeMinutes / metrics.analyzed : 0;
+        E.promaxImpactAvgRuntime.textContent = formatPromaxDuration(avg);
+      }
+      if (E.promaxImpactRuns) E.promaxImpactRuns.textContent = `Automacoes analisadas: ${formatNumber(metrics.analyzed)}`;
+      if (E.promaxImpactWorkUnits) E.promaxImpactWorkUnits.textContent = formatNumber(metrics.workUnits);
+      if (E.promaxImpactPeriod) {
+        E.promaxImpactPeriod.textContent = metrics.daySeries.length
+          ? `${formatDate(metrics.daySeries[0].day)} a ${formatDate(metrics.daySeries[metrics.daySeries.length - 1].day)}`
+          : "Sem historico";
+        E.promaxImpactPeriod.className = `pill ${metrics.daySeries.length ? "ok" : "warn"}`;
+      }
+      renderPromaxImpactChart(metrics.daySeries);
+    }
+
+    function renderPromaxImpactChart(daySeries) {
+      if (!E.promaxImpactChart) return;
+      const series = Array.isArray(daySeries) ? daySeries : [];
+      if (!series.length) {
+        E.promaxImpactChart.innerHTML = '<div class="promax-impact-empty">Sem execucoes finalizadas para montar o grafico.</div>';
+        return;
+      }
+      const width = 720;
+      const height = 180;
+      const top = 16;
+      const bottom = 30;
+      const left = 34;
+      const right = 12;
+      const plotHeight = height - top - bottom;
+      const plotWidth = width - left - right;
+      const maxValue = Math.max(...series.map(item => Number(item.savedMinutes || 0)), 1);
+      const gap = 12;
+      const barWidth = Math.max(28, (plotWidth - gap * (series.length - 1)) / series.length);
+      const bars = series.map((item, index) => {
+        const value = Number(item.savedMinutes || 0);
+        const barHeight = Math.max(2, (value / maxValue) * plotHeight);
+        const x = left + index * (barWidth + gap);
+        const y = top + plotHeight - barHeight;
+        const label = formatDate(item.day);
+        const valueLabel = formatPromaxDuration(value);
+        const partialClass = Number(item.partial || 0) > 0 ? " partial" : "";
+        return `
+          <rect class="promax-impact-bar${partialClass}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5">
+            <title>${escapeHtml(label)}: ${escapeHtml(valueLabel)}</title>
+          </rect>
+          <text x="${(x + barWidth / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle">${escapeHtml(valueLabel)}</text>
+          <text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 8}" text-anchor="middle">${escapeHtml(label)}</text>
+        `;
+      }).join("");
+      E.promaxImpactChart.innerHTML = `
+        <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Ganho estimado por dia">
+          <line class="promax-impact-gridline" x1="${left}" y1="${top}" x2="${width - right}" y2="${top}"></line>
+          <line class="promax-impact-axis" x1="${left}" y1="${top + plotHeight}" x2="${width - right}" y2="${top + plotHeight}"></line>
+          <line class="promax-impact-axis" x1="${left}" y1="${top}" x2="${left}" y2="${top + plotHeight}"></line>
+          ${bars}
+        </svg>
+      `;
+    }
+
     function promaxOpenUnitsModal(jobId) {
       const job = (Array.isArray(state.promax.jobs) ? state.promax.jobs : []).find(item => String(item && item.id || "") === String(jobId));
       if (!job) {
@@ -4234,6 +4456,7 @@
       if (E.promaxReprocessPublicationsBtn) {
         E.promaxReprocessPublicationsBtn.disabled = !onlineWorker || Boolean(queue.paused);
       }
+      renderPromaxImpact(jobs);
 
       if (E.promaxJobsBody) {
         E.promaxJobsBody.innerHTML = jobs.length ? jobs.map(job => {
