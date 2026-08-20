@@ -313,6 +313,7 @@ class AdminFinanceiroService:
 
         result_payload = payload.get("result") if isinstance(payload.get("result"), dict) else payload
         dados_fechamento = _extract_dados_fechamento_03030702(result_payload)
+        motorista_promax = _extract_motorista_030303(result_payload)
         metrics = _financeiro_metrics_from_fechamento(dados_fechamento)
         username = str((context or {}).get("username") or (context or {}).get("worker_id") or "promax-worker")
         obs_parts = [
@@ -337,10 +338,14 @@ class AdminFinanceiroService:
                             boletos_rota, total_promax, credito_conta, observacao,
                             created_by, updated_by
                         )
-                        VALUES (%s, %s, 'mapa', %s, %s, '', %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, 'mapa', %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
                             tipo_bloco = 'mapa',
                             mapa_ref = EXCLUDED.mapa_ref,
+                            motorista = CASE
+                                WHEN {}.financeiro_caixa_mapas.motorista = '' THEN EXCLUDED.motorista
+                                ELSE {}.financeiro_caixa_mapas.motorista
+                            END,
                             boletos_rota = EXCLUDED.boletos_rota,
                             total_promax = EXCLUDED.total_promax,
                             credito_conta = EXCLUDED.credito_conta,
@@ -358,19 +363,22 @@ class AdminFinanceiroService:
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
                     ),
                     (
                         caixa_date,
                         filial,
                         mapa,
                         mapa,
+                        motorista_promax,
                         metrics["boletos_rota"],
                         metrics["total_promax"],
                         metrics["credito_conta"],
                         "\n".join(obs_parts),
+                        username,
+                        username,
                         "Mapa criado/atualizado automaticamente pelo fechamento Promax.%",
-                        username,
-                        username,
                     ),
                 )
                 row = dict(cur.fetchone() or {})
@@ -1065,6 +1073,28 @@ def _extract_dados_fechamento_03030702(source: Any) -> dict[str, Any]:
     if isinstance(metadata, dict):
         return _extract_dados_fechamento_03030702(metadata)
     return {}
+
+
+def _extract_motorista_030303(source: Any) -> str:
+    if not isinstance(source, dict):
+        return ""
+    candidates = (
+        ("metadata", "resultado_030303", "dados_030303", "motorista", "nome"),
+        ("metadata", "resultado_030303", "metadata", "dados_030303", "motorista", "nome"),
+        ("resultado_030303", "dados_030303", "motorista", "nome"),
+        ("resultado_030303", "metadata", "dados_030303", "motorista", "nome"),
+        ("dados_030303", "motorista", "nome"),
+        ("result", "metadata", "resultado_030303", "dados_030303", "motorista", "nome"),
+    )
+    for path in candidates:
+        value = _nested_get(source, path)
+        text = str(value or "").strip()
+        if text:
+            return text
+    metadata = source.get("metadata")
+    if isinstance(metadata, dict) and metadata is not source:
+        return _extract_motorista_030303(metadata)
+    return ""
 
 
 def _financeiro_metrics_from_fechamento(dados: dict[str, Any]) -> dict[str, Decimal]:

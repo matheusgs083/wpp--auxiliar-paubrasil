@@ -33,7 +33,8 @@ def discover_report_catalog(driver_dir: str | Path) -> dict[str, Any]:
             continue
         category_key = category["key"]
         if category_key in categories:
-            warnings.append(f"{manifest_path.name}: grupo duplicado {category_key}")
+            warnings.append(
+                f"{manifest_path.name}: grupo duplicado {category_key}")
             continue
         categories[category_key] = category
 
@@ -50,12 +51,14 @@ def read_report_group_manifest(path: str | Path) -> dict[str, Any]:
     source = manifest_path.read_text(encoding="utf-8-sig")
     tree = ast.parse(source, filename=str(manifest_path))
     if len(tree.body) != 1:
-        raise ValueError("arquivo deve conter somente a atribuicao literal REPORT_GROUP")
+        raise ValueError(
+            "arquivo deve conter somente a atribuicao literal REPORT_GROUP")
     manifest_value: Any = _MISSING
     for node in tree.body:
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
             continue
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        targets = node.targets if isinstance(
+            node, ast.Assign) else [node.target]
         if not any(isinstance(target, ast.Name) and target.id == "REPORT_GROUP" for target in targets):
             continue
         if manifest_value is not _MISSING:
@@ -66,7 +69,8 @@ def read_report_group_manifest(path: str | Path) -> dict[str, Any]:
         try:
             manifest_value = ast.literal_eval(value_node)
         except (ValueError, TypeError) as exc:
-            raise ValueError("REPORT_GROUP deve ser um literal Python") from exc
+            raise ValueError(
+                "REPORT_GROUP deve ser um literal Python") from exc
 
     if manifest_value is _MISSING:
         raise ValueError("REPORT_GROUP nao encontrado")
@@ -79,7 +83,8 @@ def normalize_report_group(value: Any) -> dict[str, Any]:
     key = str(value.get("key") or "").strip().lower()
     if not _CATEGORY_PATTERN.fullmatch(key):
         raise ValueError("key de grupo invalida")
-    name = _limited_text(value.get("name") or key, field_name="name", max_length=120)
+    name = _limited_text(value.get("name") or key,
+                         field_name="name", max_length=120)
     description = _limited_text(
         value.get("description") or "",
         field_name="description",
