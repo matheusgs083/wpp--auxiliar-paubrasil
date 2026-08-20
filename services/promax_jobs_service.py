@@ -254,11 +254,13 @@ class PromaxJobsService:
         *,
         schema: str = DEFAULT_SCHEMA,
         connect_timeout_seconds: float = 3.0,
+        max_concurrent_jobs: int = 1,
         pool: ConnectionPool[Any] | None = None,
     ) -> None:
         self.database_url = str(database_url or "").strip()
         self.schema = _normalize_schema(schema)
         self.connect_timeout_seconds = max(float(connect_timeout_seconds), 1.0)
+        self.max_concurrent_jobs = max(1, int(max_concurrent_jobs))
         self._pool = pool
         self._pool_lock = RLock()
         self._schema_lock = RLock()
@@ -457,12 +459,12 @@ class PromaxJobsService:
                              AND j.concurrency_key = %s
                             WHERE q.singleton = TRUE
                               AND q.paused = FALSE
-                              AND NOT EXISTS (
-                                  SELECT 1
+                              AND (
+                                  SELECT COUNT(*)
                                   FROM {schema}.{jobs} AS active_job
                                   WHERE active_job.concurrency_key = j.concurrency_key
                                     AND active_job.status IN ('running', 'cancel_requested')
-                              )
+                              ) < %s
                             ORDER BY j.priority DESC, j.available_at, j.created_at, j.id
                             FOR UPDATE OF q, j SKIP LOCKED
                             LIMIT 1
@@ -486,7 +488,13 @@ class PromaxJobsService:
                         queue_state=sql.Identifier(QUEUE_STATE_TABLE),
                         jobs=sql.Identifier(JOBS_TABLE),
                     ),
-                    (clean_concurrency_key, lease_token, clean_worker_id, normalized_lease_seconds),
+                    (
+                        clean_concurrency_key,
+                        self.max_concurrent_jobs,
+                        lease_token,
+                        clean_worker_id,
+                        normalized_lease_seconds,
+                    ),
                 )
                 row = cur.fetchone()
                 if row is None:
@@ -503,7 +511,10 @@ class PromaxJobsService:
                     job_id=str(row["id"]),
                     level="info",
                     message="Job reivindicado pelo worker.",
-                    data={"lease_seconds": normalized_lease_seconds},
+                    data={
+                        "lease_seconds": normalized_lease_seconds,
+                        "max_concurrent_jobs": self.max_concurrent_jobs,
+                    },
                     worker_id=clean_worker_id,
                     lease_token=lease_token,
                 )
@@ -2139,15 +2150,23 @@ class PromaxJobsService:
                         index=sql.Identifier("promax_jobs_schedule_occurrence_idx"),
                     )
                 )
+                cur.execute(
+                    sql.SQL(
+                        "DROP INDEX IF EXISTS {schema}.{index}"
+                    ).format(
+                        schema=schema,
+                        index=sql.Identifier("promax_jobs_one_active_per_key_idx"),
+                    )
+                )
                 statements = (
                     sql.SQL(
                         """
-                        CREATE UNIQUE INDEX IF NOT EXISTS {index}
+                        CREATE INDEX IF NOT EXISTS {index}
                         ON {schema}.{jobs} (concurrency_key)
                         WHERE status IN ('running', 'cancel_requested')
                         """
                     ).format(
-                        index=sql.Identifier("promax_jobs_one_active_per_key_idx"),
+                        index=sql.Identifier("promax_jobs_active_per_key_idx"),
                         schema=schema,
                         jobs=sql.Identifier(JOBS_TABLE),
                     ),

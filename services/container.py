@@ -95,6 +95,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         database_url=settings.promax_database_url or settings.reports_database_url,
         schema=settings.promax_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
+        max_concurrent_jobs=settings.promax_max_concurrent_jobs,
     )
     dclientes_query_service = DClientesQueryService(
         database_url=settings.reports_runtime_database_url,

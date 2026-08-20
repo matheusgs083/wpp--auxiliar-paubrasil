@@ -78,6 +78,47 @@ PROMAX_VISUAL_LOCK_FILE=C:\ProgramData\bot_api\locks\promax_visual.lock
 Mantenha `PROMAX_VISUAL_LOCK_ENABLED=1` em producao. Desativar essa trava so
 faz sentido em teste local sem Promax visual.
 
+## Multiplos workers
+
+Para usar outro PC com outro usuario Promax, rode um worker separado nesse PC.
+O `bot_api` continua sendo somente a fila central; cada worker apenas
+reivindica o proximo job disponivel pela API.
+
+Na maquina da API/Docker, aumente o limite global:
+
+```dotenv
+PROMAX_MAX_CONCURRENT_JOBS=2
+```
+
+Use `2` para dois PCs, `3` para tres PCs, e assim por diante. O padrao `1`
+mantem o comportamento antigo.
+
+No segundo PC, nao e necessario copiar o projeto `bot_api`. Use o worker
+embutido no `promax-web-driver` desse PC e configure o `.env` dele com um
+identificador unico, apontando para a API central:
+
+```dotenv
+PROMAX_API_BASE_URL=http://IP-DO-SERVIDOR:8080
+PROMAX_WORKER_TOKEN=mesmo-token-configurado-na-api
+PROMAX_WORKER_ID=worker-sousa
+
+PROMAX_USER=usuario_promax_do_segundo_pc
+PROMAX_PASS=senha_do_segundo_pc
+```
+
+Depois inicie no segundo PC:
+
+```powershell
+cd C:\Users\OUTRO_USUARIO\Documents\promax-web-driver
+.\venv\Scripts\python.exe .\mainWorker.py
+```
+
+Nao rode dois workers Promax no mesmo Windows para ganhar paralelismo visual. A
+trava local permite somente um job por maquina porque Edge/IE Mode, foco de
+janela e downloads locais continuam compartilhados. O ganho vem de maquinas
+diferentes, cada uma com seu proprio usuario Windows, usuario Promax, perfil do
+Edge e pasta de downloads.
+
 ## Execucao
 
 Para validar manualmente:

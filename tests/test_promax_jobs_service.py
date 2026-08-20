@@ -215,7 +215,7 @@ class PromaxSqlContractTests(unittest.TestCase):
         service._schema_ready = schema_ready
         return service, connection
 
-    def test_schema_contract_creates_all_tables_and_active_job_uniqueness(self) -> None:
+    def test_schema_contract_creates_all_tables_and_active_job_indexes(self) -> None:
         cursor = FakeCursor()
         service, connection = self.make_service(
             cursor,
@@ -228,7 +228,8 @@ class PromaxSqlContractTests(unittest.TestCase):
         ddl = "\n".join(query_text(query) for query, _params in cursor.executions)
         for table_name in ("jobs", "job_logs", "schedules", "worker_heartbeats", "queue_state"):
             self.assertIn(f'"promax_test"."{table_name}"', ddl)
-        self.assertIn("CREATE UNIQUE INDEX", ddl)
+        self.assertIn("DROP INDEX IF EXISTS \"promax_test\".\"promax_jobs_one_active_per_key_idx\"", ddl)
+        self.assertIn("CREATE INDEX IF NOT EXISTS \"promax_jobs_active_per_key_idx\"", ddl)
         self.assertIn("status IN ('running', 'cancel_requested')", ddl)
         self.assertIn("needs_review BOOLEAN", ddl)
         self.assertIn("promax_jobs_schedule_occurrence_idx", ddl)
@@ -397,8 +398,32 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("UPDATE \"promax\".\"jobs\" AS j", statement)
         self.assertIn("lease_token = %s", statement)
         self.assertIn("active_job.status IN ('running', 'cancel_requested')", statement)
+        self.assertIn("SELECT COUNT(*)", statement)
+        self.assertIn(") < %s", statement)
         self.assertEqual(cursor.executions[0][1][0], "promax")
+        self.assertEqual(cursor.executions[0][1][1], 1)
         self.assertEqual(cursor.executions[0][1][-1], 45)
+
+    def test_claim_respects_configured_max_concurrent_jobs(self) -> None:
+        cursor = FakeCursor(fetchone_values=[None])
+        connection = FakeConnection(cursor)
+        service = PromaxJobsService(
+            "postgresql://unused",
+            schema=DEFAULT_SCHEMA,
+            max_concurrent_jobs=2,
+            pool=FakePool(connection),  # type: ignore[arg-type]
+        )
+        service._schema_ready = True
+
+        claimed = service.claim_next_job(worker_id="worker-2", lease_seconds=60)
+
+        self.assertIsNone(claimed)
+        statement = query_text(cursor.executions[0][0])
+        self.assertIn("SELECT COUNT(*)", statement)
+        self.assertIn(") < %s", statement)
+        self.assertEqual(cursor.executions[0][1][0], "promax")
+        self.assertEqual(cursor.executions[0][1][1], 2)
+        self.assertEqual(cursor.executions[0][1][-1], 60)
 
     def test_heartbeat_fences_wrong_or_expired_lease(self) -> None:
         cursor = FakeCursor(fetchone_values=[None])

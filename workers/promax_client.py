@@ -381,6 +381,31 @@ class PromaxClient:
             reference_date=reference_date,
         )
 
+    def sync_financeiro_fechamento_mapa(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        data: str,
+        filial: str,
+        mapa: str,
+        result: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        del lease_token
+        return self._request(
+            "POST",
+            "/api/internal/promax/financeiro/fechamento-mapa",
+            {
+                "worker_id": self.worker_id,
+                "job_id": _path_identifier(job_id),
+                "data": str(data or "").strip(),
+                "filial": str(filial or "").strip(),
+                "mapa": str(mapa or "").strip(),
+                "result": dict(result or {}),
+            },
+            timeout_seconds=self.boleto_import_timeout_seconds,
+        )
+
     def _import_csv_batch(
         self,
         *,

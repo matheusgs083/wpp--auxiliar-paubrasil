@@ -209,6 +209,7 @@ def create_admin_panel_router(
     @router.get("/admin/tables", response_class=HTMLResponse)
     @router.get("/admin/critica", response_class=HTMLResponse)
     @router.get("/admin/recolhas", response_class=HTMLResponse)
+    @router.get("/admin/financeiro", response_class=HTMLResponse)
     @router.get("/admin/giro-recolha", response_class=HTMLResponse)
     @router.get("/admin/usage", response_class=HTMLResponse)
     def admin_import_panel(request: Request) -> Response:
@@ -258,6 +259,7 @@ def create_admin_panel_router(
             "can_import": can_reports,
             "can_import_critica": can_critica,
             "can_manage_recolhas": is_admin or is_finance or panel_context_can_access_feature(context, "recolhas"),
+            "can_financeiro": is_admin or is_finance or panel_context_can_access_feature(context, "financeiro"),
             "can_armazem": is_admin or panel_context_can_access_feature(context, "armazem"),
             "can_payip": is_admin or is_finance or panel_context_can_access_feature(context, "payip"),
             "can_view_giro": is_admin or is_finance or panel_context_can_access_feature(context, "giro"),

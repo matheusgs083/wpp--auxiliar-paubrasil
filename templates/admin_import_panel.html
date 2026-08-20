@@ -136,6 +136,86 @@
     .table { --bs-table-color: var(--ink-900); --bs-table-bg: transparent; --bs-table-hover-bg: rgba(37, 99, 235, 0.07); margin-bottom: 0; }
     .table-scroll thead th, .table thead th { position: sticky; top: 0; z-index: 3; color: var(--ink-700); background: var(--surface-soft); border-bottom: 1px solid var(--line-strong); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
     .table td { color: var(--ink-900); font-size: 0.86rem; vertical-align: middle; border-color: var(--line); }
+    .finance-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 0.85rem; align-items: start; }
+    .finance-side { position: sticky; top: 92px; display: grid; gap: 0.65rem; }
+    .finance-map-list { display: grid; gap: 0.45rem; max-height: 620px; overflow: auto; padding-right: 0.15rem; }
+    .finance-map-btn { width: 100%; padding: 0.68rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-900); background: var(--surface); text-align: left; transition: border-color 0.18s ease, background 0.18s ease; }
+    .finance-map-btn:hover, .finance-map-btn.is-active { border-color: var(--brand-600); background: rgba(37, 99, 235, 0.08); }
+    .finance-map-btn strong { display: block; margin-bottom: 0.18rem; font-size: 0.92rem; }
+    .finance-map-btn .meta { display: block; color: var(--ink-500); font-size: 0.78rem; font-weight: 700; }
+    .finance-map-btn .status-line { display: block; margin-top: 0.2rem; font-size: 0.82rem; font-weight: 800; }
+    .finance-editor-card { padding: 0; overflow: hidden; }
+    .finance-editor-head { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-start; justify-content: space-between; padding: 0.9rem 1rem; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+    .finance-editor-body { display: grid; gap: 0.9rem; padding: 1rem; }
+    .finance-editor-grid { display: grid; grid-template-columns: repeat(4, minmax(145px, 1fr)); gap: 0.65rem; }
+    .finance-money-grid { display: grid; grid-template-columns: repeat(7, minmax(80px, 1fr)); gap: 0.45rem; }
+    .finance-detail-grid { display: grid; grid-template-columns: 1fr; gap: 0.7rem; }
+    .finance-entry-block { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+    .finance-entry-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+    .finance-entry-head h4 { color: var(--ink-900); font-size: 0.86rem; font-weight: 800; }
+    .finance-entry-list { display: grid; gap: 0.45rem; padding: 0.65rem; }
+    .finance-detail-list { display: grid; gap: 0.45rem; }
+    .finance-detail-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 34px; gap: 0.4rem; align-items: center; }
+    .finance-transfer-row { display: grid; grid-template-columns: 105px 1fr 85px 85px 110px 34px; gap: 0.4rem; align-items: center; }
+    .finance-diarista-row { display: grid; grid-template-columns: minmax(180px, 1fr) 120px 145px 34px; gap: 0.45rem; align-items: center; }
+    .finance-review-table { width: 100%; border-collapse: collapse; }
+    .finance-review-table th, .finance-review-table td { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--line); color: var(--ink-900); vertical-align: middle; }
+    .finance-review-table th { color: var(--ink-500); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
+    .finance-review-table tbody tr:last-child td { border-bottom: 0; }
+    .finance-review-check { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 30px; }
+    .grid-column-full { grid-column: 1 / -1; }
+    .finance-summary-strip { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 0.65rem; }
+    .finance-summary-item { padding: 0.65rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .finance-summary-item span { display: block; color: var(--ink-500); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
+    .finance-summary-item strong { color: var(--ink-900); font-size: 1.05rem; }
+    .finance-sheet { display: grid; gap: 0.8rem; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 0.8rem; }
+    .finance-sheet-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.72rem 0.8rem; color: var(--ink-900); background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; }
+    .finance-sheet-title h3 { margin: 0; color: var(--ink-900); font-size: 0.98rem; font-weight: 900; }
+    .finance-sheet-title .finance-sheet-muted { color: var(--ink-500); }
+    .finance-sheet-body { display: grid; grid-template-columns: 290px minmax(320px, 1fr) minmax(300px, 0.92fr); gap: 0.8rem; }
+    .finance-sheet-box { min-width: 0; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); overflow: hidden; }
+    .finance-sheet-box-title { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.42rem 0.55rem; color: var(--ink-700); background: var(--surface-soft); border-bottom: 1px solid var(--line); font-size: 0.78rem; font-weight: 900; text-transform: uppercase; }
+    .finance-sheet-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .finance-sheet-table th, .finance-sheet-table td { padding: 0.32rem 0.42rem; border-bottom: 1px solid var(--line); color: var(--ink-900); vertical-align: middle; }
+    .finance-sheet-table th { color: var(--ink-700); background: var(--surface-soft); font-size: 0.72rem; font-weight: 900; text-transform: uppercase; }
+    .finance-sheet-table tr:last-child td { border-bottom: 0; }
+    .finance-sheet-muted { color: var(--ink-500); font-size: 0.76rem; font-weight: 700; }
+    .finance-sheet-value { color: var(--ink-900); font-weight: 900; text-align: right; white-space: nowrap; }
+    .finance-sheet-quick { padding: 0.62rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .finance-sheet-quick-title { display: block; margin-bottom: 0.42rem; color: var(--ink-500); font-size: 0.7rem; font-weight: 900; text-transform: uppercase; }
+    .finance-sheet-quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+    .finance-sheet-quick-item { padding: 0.48rem 0.52rem; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+    .finance-sheet-quick-item span { display: block; color: var(--ink-500); font-size: 0.66rem; font-weight: 900; text-transform: uppercase; }
+    .finance-sheet-quick-item strong { display: block; margin-top: 0.08rem; color: var(--ink-900); font-size: 0.86rem; font-weight: 900; white-space: nowrap; }
+    .finance-sheet-side { display: grid; gap: 0.75rem; align-content: start; }
+    .finance-sheet-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+    .finance-sheet-mini { padding: 0.5rem; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-soft); }
+    .finance-sheet-mini span { display: block; color: var(--ink-500); font-size: 0.68rem; font-weight: 900; text-transform: uppercase; }
+    .finance-sheet-mini strong { display: block; margin-top: 0.1rem; color: var(--ink-900); font-size: 0.95rem; font-weight: 900; }
+    .finance-sheet-scroll { max-height: 330px; overflow: auto; }
+    .finance-sheet-ass.ok { color: var(--success); font-weight: 900; }
+    .finance-sheet-ass.nok { color: var(--danger); font-weight: 900; }
+    .finance-closing-card { display: grid; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .finance-closing-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding-bottom: 0.65rem; border-bottom: 1px solid var(--line); }
+    .finance-closing-title { margin: 0; color: var(--ink-900); font-size: 0.98rem; font-weight: 900; }
+    .finance-closing-filters { display: grid; grid-template-columns: repeat(2, minmax(180px, 260px)) 150px; gap: 0.55rem; align-items: end; }
+    .finance-map-toolbar { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 0.75rem; padding: 0.72rem 0.8rem; margin-bottom: 0.85rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .finance-map-toolbar label { min-width: min(100%, 260px); }
+    .finance-subtabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem; padding: 0.32rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .finance-subtab { border: 1px solid transparent; border-radius: 7px; padding: 0.42rem 0.7rem; color: var(--ink-500); background: transparent; font-size: 0.78rem; font-weight: 900; }
+    .finance-subtab:hover { color: var(--ink-900); border-color: var(--line); background: var(--surface); }
+    .finance-subtab.is-active { color: var(--brand-700); border-color: rgba(37, 99, 235, 0.36); background: rgba(37, 99, 235, 0.1); }
+    .finance-subpanel[hidden] { display: none !important; }
+    .finance-action-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 0.6rem; }
+    .finance-action-card { display: flex; align-items: flex-start; gap: 0.6rem; width: 100%; min-height: 92px; padding: 0.75rem; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-900); background: var(--surface); text-align: left; transition: border-color 0.18s ease, background 0.18s ease; }
+    .finance-action-card:hover { border-color: rgba(37, 99, 235, 0.48); background: rgba(37, 99, 235, 0.08); }
+    .finance-action-card i { color: var(--brand-700); font-size: 1rem; line-height: 1.2; }
+    .finance-action-card strong { display: block; font-size: 0.86rem; font-weight: 900; }
+    .finance-action-card span { display: block; margin-top: 0.16rem; color: var(--ink-500); font-size: 0.74rem; font-weight: 700; line-height: 1.25; }
+    @media (max-width: 1180px) { .finance-sheet-body { grid-template-columns: 1fr; } .finance-sheet-quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 1180px) { .finance-action-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
+    @media (max-width: 820px) { .finance-closing-filters { grid-template-columns: 1fr; } }
+    @media (max-width: 620px) { .finance-sheet-mini-grid, .finance-sheet-quick-grid, .finance-action-grid { grid-template-columns: 1fr; } }
     .panel-users-card { overflow: hidden; }
     .panel-users-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.8rem 0.9rem; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
     .panel-users-title { display: flex; align-items: center; gap: 0.65rem; min-width: 240px; }
@@ -301,6 +381,12 @@
     .promax-impact-bar.partial { fill: rgba(180, 83, 9, 0.72); }
     .promax-impact-chart text { fill: var(--ink-500); font-size: 10px; font-weight: 700; }
     .promax-impact-empty { display: flex; align-items: center; justify-content: center; min-height: 160px; color: var(--ink-500); font-size: 0.85rem; font-weight: 700; text-align: center; }
+    .promax-worker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.55rem; margin-top: 0.75rem; }
+    .promax-worker-card { display: grid; gap: 0.25rem; padding: 0.65rem 0.75rem; border: 1px solid var(--promax-neutral-border); border-radius: 8px; background: var(--promax-neutral-bg); }
+    .promax-worker-card strong { color: var(--ink-900); font-size: 0.86rem; }
+    .promax-worker-card small { color: var(--ink-500); font-weight: 700; }
+    .promax-worker-card.is-online { border-color: rgba(4, 120, 87, 0.35); }
+    .promax-worker-card.is-offline { border-color: rgba(180, 83, 9, 0.32); }
     @media (max-width: 1100px) { .promax-impact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 640px) { .promax-impact-grid { grid-template-columns: 1fr; } }
     .promax-unit-summary { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
@@ -352,6 +438,7 @@
     body[data-theme="dark"] .flow-path.is-active { background: linear-gradient(180deg, rgba(37, 99, 235, 0.28), var(--surface)); }
     .promax-log { min-height: 180px; max-height: 360px; margin: 0; padding: 0.8rem; overflow: auto; color: var(--log-fg); background: var(--log-bg); border-radius: 8px; white-space: pre-wrap; font-size: 0.78rem; }
     @media (max-width: 1200px) { .metric-grid, .usage-metric-grid, .recolha-dashboard-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
+    @media (max-width: 1200px) { .finance-grid, .finance-detail-grid { grid-template-columns: 1fr; } .finance-side { position: static; } .finance-editor-grid, .finance-summary-strip { grid-template-columns: repeat(2, minmax(145px, 1fr)); } .finance-money-grid { grid-template-columns: repeat(4, minmax(80px, 1fr)); } }
     @media (max-width: 1200px) { .flow-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); } }
     @media (max-width: 1200px) { .panel-user-layout { grid-template-columns: 1fr; } .panel-user-feature-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     @media (max-width: 900px) { .recolha-insights { grid-template-columns: 1fr; } }
@@ -363,6 +450,7 @@
       .brand-name { font-size: 0.82rem; }
       .ops-bar { position: static; }
       .metric-grid, .usage-metric-grid, .recolha-dashboard-grid { grid-template-columns: 1fr; }
+      .finance-editor-grid, .finance-money-grid, .finance-summary-strip, .finance-transfer-row, .finance-detail-row, .finance-diarista-row { grid-template-columns: 1fr; }
       .usage-bar-row { grid-template-columns: 64px 1fr 56px; }
       .dataset-grid { grid-template-columns: 1fr; }
       .table-scroll { max-height: 340px; }
@@ -476,6 +564,10 @@
           <span class="flow-icon"><i class="bi bi-truck"></i></span>
           <span><span class="flow-title">Recolhas</span><span class="flow-desc">CSV financeiro, baixas e status por filial.</span><span class="flow-meta">Financeiro</span></span>
         </a>
+        <a href="/admin/financeiro" class="flow-path" data-flow-target="financeiroTab" data-flow-label="Fechamento financeiro" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-cash-coin"></i></span>
+          <span><span class="flow-title">Financeiro</span><span class="flow-desc">Caixa diario, mapas, despesas, vales e consolidado.</span><span class="flow-meta">Caixa</span></span>
+        </a>
         <a href="/admin/giro-recolha" class="flow-path" data-flow-target="giroRecolhaTab" data-flow-label="Giro e rotas" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-signpost-split"></i></span>
           <span><span class="flow-title">Giro</span><span class="flow-desc">Giro baixo, filtros e montagem de rotas.</span><span class="flow-meta">Prioridade</span></span>
@@ -517,6 +609,11 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link" id="recolhasTab" href="/admin/recolhas" data-admin-page-link="true" data-bs-target="#recolhasPane" role="tab" aria-controls="recolhasPane" aria-selected="false">
             <i class="bi bi-truck me-1"></i>Recolhas
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="financeiroTab" href="/admin/financeiro" data-admin-page-link="true" data-bs-target="#financeiroPane" role="tab" aria-controls="financeiroPane" aria-selected="false">
+            <i class="bi bi-cash-coin me-1"></i>Financeiro
           </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -1173,6 +1270,9 @@
             <button class="btn btn-outline-danger btn-sm" id="promaxClearBtn" type="button"><i class="bi bi-trash3 me-1"></i>Limpar pendentes</button>
             <button class="btn btn-outline-primary btn-sm" id="promaxReprocessPublicationsBtn" type="button" disabled title="Tentar novamente o envio dos arquivos preservados no worker"><i class="bi bi-arrow-clockwise me-1"></i>Reprocessar publicacoes</button>
           </div>
+          <div class="promax-worker-grid" id="promaxWorkerGrid">
+            <div class="empty-state py-2">Nenhum worker verificado.</div>
+          </div>
           <div class="form-text mt-2">A fila aceita varios jobs e executa um por vez, na ordem de prioridade e inclusao.</div>
         </section>
 
@@ -1575,6 +1675,137 @@
       </div>
 
       <div class="tab-pane fade" id="recolhasPane" role="tabpanel" aria-labelledby="recolhasTab" tabindex="0"></div>
+
+      <div class="tab-pane fade" id="financeiroPane" role="tabpanel" aria-labelledby="financeiroTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cash-coin me-2 text-primary"></i>Fechamento financeiro</h2>
+              <div class="form-text">Um caixa por dia, com um mapa por aba e consolidado automatico dos valores lancados.</div>
+            </div>
+          </div>
+          <div class="finance-subtabs" role="tablist" aria-label="Financeiro">
+            <button class="finance-subtab is-active" type="button" data-financeiro-subtab="fechamento" role="tab" aria-selected="true">Fechamento</button>
+            <button class="finance-subtab" type="button" data-financeiro-subtab="mapas" role="tab" aria-selected="false">Mapas</button>
+          </div>
+          <section class="finance-subpanel" data-financeiro-subpanel="fechamento">
+            <div class="finance-closing-card mb-3" aria-labelledby="financeiroFechamentoResumoTitle">
+              <div class="finance-closing-head">
+                <div>
+                  <h3 class="finance-closing-title" id="financeiroFechamentoResumoTitle"><i class="bi bi-clipboard-data me-1 text-primary"></i>Fechamento</h3>
+                  <div class="form-text">Selecione a data e a revenda para visualizar o caixa noturno consolidado.</div>
+                </div>
+                <span class="pill" id="financeiroStatus">Aguardando caixa</span>
+              </div>
+              <div class="finance-closing-filters">
+                <label class="form-label small fw-semibold mb-0" for="financeiroData">Data do caixa
+                  <input type="date" class="form-control form-control-sm mt-1" id="financeiroData">
+                </label>
+                <label class="form-label small fw-semibold mb-0" for="financeiroFilial">Revenda
+                  <select class="form-select form-select-sm mt-1" id="financeiroFilial">
+                    <option value="">Escolha a revenda</option>
+                  </select>
+                </label>
+                <div class="d-grid gap-1">
+                  <button class="btn btn-outline-primary btn-sm w-100" id="financeiroRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+                  <button class="btn btn-outline-success btn-sm w-100" id="financeiroExportPdfBtn" type="button"><i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF</button>
+                </div>
+              </div>
+              <div class="finance-sheet" id="financeiroFechamentoSheet"></div>
+            </div>
+          </section>
+          <section class="finance-subpanel" data-financeiro-subpanel="mapas" hidden>
+          <div class="finance-map-toolbar">
+            <div>
+              <h3 class="h6 fw-bold mb-1">Mapas</h3>
+              <div class="form-text">Troque a revenda sem sair da tela de mapas e lancamentos.</div>
+            </div>
+            <label class="form-label small fw-semibold mb-0" for="financeiroFilialMapas">Revenda
+              <select class="form-select form-select-sm mt-1" id="financeiroFilialMapas">
+                <option value="">Escolha a revenda</option>
+              </select>
+            </label>
+          </div>
+          <div class="finance-entry-block mb-3">
+            <div class="finance-entry-head">
+              <div>
+                <h4 class="mb-0"><i class="bi bi-play-circle me-1 text-primary"></i>Fechamento Promax</h4>
+                <div class="form-text">Solicite o fechamento fisico, financeiro ou completo. Ao concluir, o mapa e preenchido no caixa automaticamente.</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2 justify-content-end">
+                <span class="pill" id="financeiroFechamentoWorkerStatus">Worker nao verificado</span>
+                <span class="pill" id="financeiroFechamentoStatus">Aguardando solicitacao</span>
+              </div>
+            </div>
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-md-3">
+                <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoMapa">Mapa</label>
+                <input type="text" class="form-control form-control-sm" id="financeiroFechamentoMapa" placeholder="Ex: 93741">
+              </div>
+              <div class="col-12 col-md-3">
+                <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoModo">Execucao</label>
+                <select class="form-select form-select-sm" id="financeiroFechamentoModo">
+                  <option value="completo">Fechamento completo</option>
+                  <option value="fisico">Somente fisico 030302</option>
+                  <option value="financeiro">Somente financeiro 03030702</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-2">
+                <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoPontoApoio">Ponto apoio</label>
+                <input type="text" class="form-control form-control-sm" id="financeiroFechamentoPontoApoio" value="0">
+              </div>
+              <div class="col-12 col-md-2">
+                <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoKm">KM atual</label>
+                <input type="number" class="form-control form-control-sm" id="financeiroFechamentoKm" min="0" step="1" inputmode="numeric" placeholder="Opcional">
+              </div>
+              <div class="col-12 col-md-2 d-flex flex-wrap gap-2">
+                <button class="btn btn-primary btn-sm" id="financeiroFechamentoBtn" type="button"><i class="bi bi-play-fill me-1"></i>Solicitar fechamento</button>
+                <button class="btn btn-outline-primary btn-sm" id="financeiroFechamentoRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar caixa</button>
+              </div>
+            </div>
+          </div>
+          <div class="finance-entry-block mb-3">
+              <div class="finance-entry-head">
+                <div>
+                  <h4 class="mb-0"><i class="bi bi-plus-square me-1 text-primary"></i>Lancamentos</h4>
+                  <div class="form-text">Crie mapas e lancamentos avulsos vinculados ao caixa do dia.</div>
+                </div>
+              </div>
+              <div class="finance-entry-list">
+                <div class="finance-action-grid">
+                  <button class="finance-action-card" id="financeiroNewMapBtn" type="button">
+                    <i class="bi bi-plus-square"></i>
+                    <span><strong>Novo mapa</strong><span>Adicionar um mapa normal para fechamento.</span></span>
+                  </button>
+                  <button class="finance-action-card" id="financeiroCompraBtn" type="button">
+                    <i class="bi bi-bag-check"></i>
+                    <span><strong>Bloco Compra</strong><span>Registrar compras ligadas ao caixa do dia.</span></span>
+                  </button>
+                  <button class="finance-action-card" id="financeiroDespesaBtn" type="button">
+                    <i class="bi bi-receipt"></i>
+                    <span><strong>Conferir despesas</strong><span>Revisar despesas lancadas nos mapas do dia.</span></span>
+                  </button>
+                  <button class="finance-action-card" id="financeiroValeBtn" type="button">
+                    <i class="bi bi-journal-check"></i>
+                    <span><strong>Conferir vales</strong><span>Marcar vales assinados ou pendentes.</span></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          <div class="finance-summary-strip mb-3" id="financeiroSummaryCards"></div>
+          <div class="finance-grid">
+            <aside class="finance-side">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <h3 class="h6 fw-bold mb-0">Mapas do dia</h3>
+                <span class="badge text-bg-secondary" id="financeiroMapCount">0</span>
+              </div>
+              <div class="finance-map-list" id="financeiroMapList"></div>
+            </aside>
+            <article class="panel-card p-3 shadow-none" id="financeiroEditor"></article>
+          </div>
+          </section>
+        </section>
+      </div>
 
       <div class="tab-pane fade" id="giroRecolhaPane" role="tabpanel" aria-labelledby="giroRecolhaTab" tabindex="0">
         <section class="panel-card p-3 mb-3">
@@ -2131,6 +2362,13 @@
           exportCsv: "/api/admin/recolhas/export",
           delete: "/api/admin/recolhas"
         },
+        financeiro: {
+          caixas: "/api/admin/financeiro/caixas",
+          caixaPdf: "/api/admin/financeiro/caixa/pdf",
+          mapas: "/api/admin/financeiro/mapas",
+          fechamentoPromax: "/api/admin/financeiro/fechamento-promax",
+          worker: "/api/admin/financeiro/worker/status"
+        },
         giroRecolha: {
           dashboard: "/api/admin/giro/recolha-dashboard",
           options: "/api/admin/giro/recolha-filter-options",
@@ -2171,6 +2409,7 @@
       { id: "promax", label: "Promax", icon: "bi-cloud-arrow-down", description: "Execucoes, agendas e workers." },
       { id: "critica", label: "Critica", icon: "bi-clipboard-data", description: "Importacao, dashboard e PDFs." },
       { id: "recolhas", label: "Recolhas", icon: "bi-box-arrow-in-down", description: "Solicitacoes e acompanhamento." },
+      { id: "financeiro", label: "Financeiro", icon: "bi-cash-coin", description: "Fechamento de caixa por dia e mapa." },
       { id: "armazem", label: "Armazem", icon: "bi-box-seam", description: "Consultas basicas de cliente e estoque." },
       { id: "giro", label: "Giro", icon: "bi-arrow-repeat", description: "Giro e oportunidades da carteira." },
       { id: "usage", label: "Uso Evolution", icon: "bi-activity", description: "Numero x funcao e auditoria." }
@@ -2238,6 +2477,7 @@
         canImport: true,
         canImportCritica: true,
         canManageRecolhas: true,
+        canFinanceiro: true,
         canArmazem: true,
         canPayip: true,
         canOperations: true,
@@ -2253,6 +2493,7 @@
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
       payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
       payipGenerated: { payload: null, loading: false, error: "", polling: false, lastFilial: "", generating: "" },
+      financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null },
       promax: {
         catalog: null,
         jobs: [],
@@ -2472,6 +2713,7 @@
       jobsTable: document.getElementById("jobsBody"),
       promaxTab: document.getElementById("promaxTab"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
+      promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxQueueState: document.getElementById("promaxQueueState"),
       promaxRefreshBtn: document.getElementById("promaxRefreshBtn"),
       promaxPauseBtn: document.getElementById("promaxPauseBtn"),
@@ -2905,6 +3147,7 @@
       "/admin/power-bi": "reportsTab",
       "/admin/critica": "criticaTab",
       "/admin/recolhas": "recolhasTab",
+      "/admin/financeiro": "financeiroTab",
       "/admin/giro-recolha": "giroRecolhaTab",
       "/admin/usage": "usageEvolutionTab"
     };
@@ -2915,6 +3158,7 @@
       promaxTab: "/admin/promax",
       criticaTab: "/admin/critica",
       recolhasTab: "/admin/recolhas",
+      financeiroTab: "/admin/financeiro",
       giroRecolhaTab: "/admin/giro-recolha",
       usageEvolutionTab: "/admin/usage"
     };
@@ -4420,6 +4664,67 @@
       if (promaxUnitsModalInstance) promaxUnitsModalInstance.show();
     }
 
+    function promaxWorkersFromPayload(payload) {
+      const workers = Array.isArray(payload && payload.workers) ? payload.workers : [];
+      return workers.slice().sort((a, b) => {
+        const onlineDelta = Number(Boolean(b && b.online)) - Number(Boolean(a && a.online));
+        if (onlineDelta) return onlineDelta;
+        return new Date(b && b.heartbeat_at || 0) - new Date(a && a.heartbeat_at || 0);
+      });
+    }
+
+    function promaxWorkerDisplayName(worker) {
+      const id = String(worker && worker.worker_id || "").trim();
+      return id || "worker-sem-id";
+    }
+
+    function promaxFechamentoWorker(workers) {
+      return (workers || []).find(worker => /fechamento/i.test(promaxWorkerDisplayName(worker)))
+        || (workers || []).find(worker => worker && worker.online)
+        || null;
+    }
+
+    function renderPromaxWorkers(workers) {
+      if (!E.promaxWorkerGrid) return;
+      if (!workers.length) {
+        E.promaxWorkerGrid.innerHTML = '<div class="empty-state py-2">Nenhum worker registrado ainda.</div>';
+        return;
+      }
+      E.promaxWorkerGrid.innerHTML = workers.map(worker => {
+        const online = Boolean(worker && worker.online);
+        const metadata = worker && worker.metadata && typeof worker.metadata === "object" ? worker.metadata : {};
+        const currentJob = worker && worker.current_job_id ? String(worker.current_job_id).slice(0, 8) : "";
+        const subtitle = currentJob
+          ? `Job ${currentJob}`
+          : (metadata.status ? `Status ${metadata.status}` : "Sem job ativo");
+        return `<div class="promax-worker-card ${online ? "is-online" : "is-offline"}">
+          <div class="d-flex align-items-center justify-content-between gap-2">
+            <strong>${escapeHtml(promaxWorkerDisplayName(worker))}</strong>
+            <span class="pill ${online ? "ok" : "warn"}">${online ? "Online" : "Offline"}</span>
+          </div>
+          <small>${escapeHtml(subtitle)}</small>
+          <small>Ultimo sinal: ${escapeHtml(formatDateTime(worker && worker.heartbeat_at))}</small>
+        </div>`;
+      }).join("");
+    }
+
+    function renderFinanceiroFechamentoWorker(payload) {
+      const els = financeiroElements();
+      if (!els.fechamentoWorkerStatus) return;
+      const workers = promaxWorkersFromPayload(payload || state.financeiro.worker || state.promax.worker || {});
+      const worker = promaxFechamentoWorker(workers);
+      if (!worker) {
+        els.fechamentoWorkerStatus.textContent = "Worker fechamento offline";
+        els.fechamentoWorkerStatus.className = "pill warn";
+        return;
+      }
+      const online = Boolean(worker.online);
+      els.fechamentoWorkerStatus.textContent = online
+        ? `Fechamento online: ${promaxWorkerDisplayName(worker)}`
+        : `Fechamento offline: ${promaxWorkerDisplayName(worker)}`;
+      els.fechamentoWorkerStatus.className = `pill ${online ? "ok" : "warn"}`;
+    }
+
     function renderPromax() {
       renderPromaxRunCatalog({
         categoryIds: state.promax.runSelectedCategories,
@@ -4435,17 +4740,19 @@
 
       const workerPayload = state.promax.worker || {};
       const queue = workerPayload.queue || {};
-      const workers = Array.isArray(workerPayload.workers) ? workerPayload.workers : [];
+      const workers = promaxWorkersFromPayload(workerPayload);
       const jobs = Array.isArray(state.promax.jobs) ? state.promax.jobs : [];
       const pendingJobs = jobs.filter(job => String(job && job.status || "") === "pending").length;
       const activeJobs = jobs.filter(job => ["running", "cancel_requested"].includes(String(job && job.status || ""))).length;
-      const onlineWorker = workers.find(worker => worker && worker.online);
+      const onlineWorkers = workers.filter(worker => worker && worker.online);
       if (E.promaxWorkerState) {
-        E.promaxWorkerState.textContent = onlineWorker
-          ? `Worker online: ${onlineWorker.worker_id || "-"}`
-          : "Worker offline";
-        E.promaxWorkerState.className = `pill ${onlineWorker ? "ok" : "warn"}`;
+        E.promaxWorkerState.textContent = onlineWorkers.length
+          ? `${onlineWorkers.length}/${workers.length} worker(s) online`
+          : "Workers offline";
+        E.promaxWorkerState.className = `pill ${onlineWorkers.length ? "ok" : "warn"}`;
       }
+      renderPromaxWorkers(workers);
+      renderFinanceiroFechamentoWorker(workerPayload);
       if (E.promaxQueueState) {
         const queueLabel = queue.paused ? "Fila pausada" : "Fila liberada";
         E.promaxQueueState.textContent = `${queueLabel}: ${activeJobs} executando, ${pendingJobs} aguardando`;
@@ -4454,7 +4761,7 @@
       if (E.promaxPauseBtn) E.promaxPauseBtn.disabled = Boolean(queue.paused);
       if (E.promaxResumeBtn) E.promaxResumeBtn.disabled = !queue.paused;
       if (E.promaxReprocessPublicationsBtn) {
-        E.promaxReprocessPublicationsBtn.disabled = !onlineWorker || Boolean(queue.paused);
+        E.promaxReprocessPublicationsBtn.disabled = !onlineWorkers.length || Boolean(queue.paused);
       }
       renderPromaxImpact(jobs);
 
@@ -5153,6 +5460,1042 @@
       }
     }
 
+    const FINANCEIRO_DENOMS = ["200", "100", "50", "20", "10", "5", "2"];
+
+    function financeiroElements() {
+      return {
+        data: document.getElementById("financeiroData"),
+        filial: document.getElementById("financeiroFilial"),
+        filialMapas: document.getElementById("financeiroFilialMapas"),
+        status: document.getElementById("financeiroStatus"),
+        refresh: document.getElementById("financeiroRefreshBtn"),
+        exportPdf: document.getElementById("financeiroExportPdfBtn"),
+        novo: document.getElementById("financeiroNewMapBtn"),
+        compra: document.getElementById("financeiroCompraBtn"),
+        despesa: document.getElementById("financeiroDespesaBtn"),
+        vale: document.getElementById("financeiroValeBtn"),
+        fechamentoMapa: document.getElementById("financeiroFechamentoMapa"),
+        fechamentoModo: document.getElementById("financeiroFechamentoModo"),
+        fechamentoPontoApoio: document.getElementById("financeiroFechamentoPontoApoio"),
+        fechamentoKm: document.getElementById("financeiroFechamentoKm"),
+        fechamentoWorkerStatus: document.getElementById("financeiroFechamentoWorkerStatus"),
+        fechamentoStatus: document.getElementById("financeiroFechamentoStatus"),
+        fechamentoBtn: document.getElementById("financeiroFechamentoBtn"),
+        fechamentoRefresh: document.getElementById("financeiroFechamentoRefreshBtn"),
+        fechamentoSheet: document.getElementById("financeiroFechamentoSheet"),
+        summary: document.getElementById("financeiroSummaryCards"),
+        list: document.getElementById("financeiroMapList"),
+        count: document.getElementById("financeiroMapCount"),
+        editor: document.getElementById("financeiroEditor")
+      };
+    }
+
+    function financeiroBlankMap(overrides = {}) {
+      const els = financeiroElements();
+      const data = els.data && els.data.value ? els.data.value : formatDateInputValue(new Date());
+      const filial = els.filial && els.filial.value ? els.filial.value : "";
+      const map = {
+        id: "",
+        data,
+        filial,
+        tipo_bloco: "mapa",
+        mapa: "",
+        mapa_ref: "",
+        motorista: "",
+        boletos_rota: 0,
+        boletos_recebido_qtd: 0,
+        total_promax: 0,
+        credito_conta: 0,
+        dinheiro: FINANCEIRO_DENOMS.reduce((acc, denom) => { acc[denom] = 0; return acc; }, {}),
+        moedas: 0,
+        diarista: 0,
+        diarista_recibo_recebido: true,
+        diaristas: [],
+        pernoite: 0,
+        hospedagem: 0,
+        janta: 0,
+        almoco: 0,
+        cafe: 0,
+        transferencias: [],
+        despesas: [],
+        vales: [],
+        observacao: ""
+      };
+      return Object.assign(map, overrides || {});
+    }
+
+    function financeiroNumber(value) {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      let cleaned = String(value ?? "").replace("R$", "").replace(/\s/g, "");
+      if (cleaned.includes(",") && cleaned.includes(".")) {
+        cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+      } else if (cleaned.includes(",")) {
+        cleaned = cleaned.replace(",", ".");
+      }
+      const parsed = Number(cleaned);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function financeiroTotals(map) {
+      const dinheiroTotal = FINANCEIRO_DENOMS.reduce((total, denom) => {
+        return total + financeiroNumber(denom) * Math.max(0, Math.trunc(financeiroNumber(map.dinheiro && map.dinheiro[denom])));
+      }, 0);
+      const sumRows = rows => (Array.isArray(rows) ? rows : []).reduce((total, row) => total + financeiroNumber(row.valor), 0);
+      const valesCalculados = (Array.isArray(map.vales) ? map.vales : []).filter(row => !financeiroIsValeChapa(row));
+      const diaristasTotal = financeiroNumber(map.diarista) + sumRows(map.diaristas);
+      const alimentacao = financeiroNumber(map.pernoite) + financeiroNumber(map.hospedagem) + financeiroNumber(map.janta) + financeiroNumber(map.almoco) + financeiroNumber(map.cafe);
+      const totalApurado = dinheiroTotal + financeiroNumber(map.moedas) + sumRows(map.transferencias) + sumRows(map.despesas) + sumRows(valesCalculados) + diaristasTotal + alimentacao;
+      const diferenca = financeiroNumber(map.total_promax) - totalApurado;
+      const boletosDiferencaQtd = financeiroNumber(map.boletos_rota) - financeiroNumber(map.boletos_recebido_qtd);
+      return { dinheiroTotal, diaristasTotal, alimentacao, totalApurado, diferenca, boletosDiferencaQtd };
+    }
+
+    function financeiroMapaEntraNoCaixa(map) {
+      const tipo = String(map && map.tipo_bloco || "mapa");
+      return !["despesa", "vale", "vale_conferencia", "despesa_conferencia"].includes(tipo);
+    }
+
+    function financeiroRowsFromMaps(maps, key) {
+      const rows = [];
+      (Array.isArray(maps) ? maps : []).forEach(map => {
+        (Array.isArray(map[key]) ? map[key] : []).forEach(row => {
+          rows.push({ map, row });
+        });
+      });
+      return rows;
+    }
+
+    function financeiroRenderFechamentoSheet(payload) {
+      const els = financeiroElements();
+      const el = els.fechamentoSheet;
+      if (!el) return;
+      const maps = Array.isArray(payload && payload.maps) ? payload.maps : [];
+      const summary = payload && payload.summary ? payload.summary : {};
+      const caixaMaps = maps.filter(financeiroMapaEntraNoCaixa);
+      const denomTotals = FINANCEIRO_DENOMS.reduce((acc, denom) => {
+        acc[denom] = caixaMaps.reduce((total, map) => total + Math.max(0, Math.trunc(financeiroNumber(map.dinheiro && map.dinheiro[denom]))), 0);
+        return acc;
+      }, {});
+      const numerarioMalote = financeiroNumber(summary.dinheiro_total) + financeiroNumber(summary.moedas);
+      const depositos = financeiroNumber(summary.credito_conta) + financeiroNumber(summary.transferencias_total);
+      const totalPromax = financeiroNumber(summary.total_promax);
+      const diferenca = financeiroNumber(summary.diferenca);
+      const dinheiroPct = totalPromax ? (numerarioMalote / totalPromax) * 100 : 0;
+      const depositoPct = totalPromax ? (depositos / totalPromax) * 100 : 0;
+      const transfers = financeiroRowsFromMaps(caixaMaps, "transferencias");
+      const vales = financeiroRowsFromMaps(maps, "vales");
+      const despesas = financeiroRowsFromMaps(maps, "despesas");
+      const despesasBody = despesas.length ? despesas.slice(0, 12).map(({ map, row }) => `
+        <tr>
+          <td>${escapeHtml(map.mapa || "-")}</td>
+          <td>${escapeHtml(row.nome || row.observacao || "-")}</td>
+          <td class="finance-sheet-value">${escapeHtml(formatMoneyText(row.valor || 0))}</td>
+        </tr>
+      `).join("") : '<tr><td colspan="3" class="text-center finance-sheet-muted">Sem despesas lancadas.</td></tr>';
+      const transferBody = transfers.length ? transfers.slice(0, 16).map(({ row }) => `
+        <tr>
+          <td>${escapeHtml(row.data || "-")}</td>
+          <td>${escapeHtml(row.banco || "-")}</td>
+          <td>${escapeHtml(row.nb || "-")}</td>
+          <td>${escapeHtml(row.nf || "-")}</td>
+          <td class="finance-sheet-value">${escapeHtml(formatMoneyText(row.valor || 0))}</td>
+        </tr>
+      `).join("") : '<tr><td colspan="5" class="text-center finance-sheet-muted">Sem comprovantes lancados.</td></tr>';
+      const valeBody = vales.length ? vales.slice(0, 16).map(({ map, row }) => `
+        <tr>
+          <td>${escapeHtml(row.nome || map.motorista || "-")}</td>
+          <td class="finance-sheet-value">${escapeHtml(formatMoneyText(row.valor || 0))}</td>
+          <td>${escapeHtml(row.observacao || "-")}</td>
+          <td class="text-center finance-sheet-ass ${row.assinado ? "ok" : "nok"}">${row.assinado ? "OK" : "NOK"}</td>
+        </tr>
+      `).join("") : '<tr><td colspan="4" class="text-center finance-sheet-muted">Sem vales lancados.</td></tr>';
+      el.innerHTML = `
+        <div class="finance-sheet-title">
+          <h3>Caixa Noturno ${escapeHtml((payload.filiais || []).find(item => String(item.code) === String(payload.filial))?.name || payload.filial || "")}</h3>
+          <span class="finance-sheet-muted">${escapeHtml(formatDate(payload.data || ""))} | ${caixaMaps.length} mapa(s)</span>
+        </div>
+        <div class="finance-sheet-body">
+          <div class="finance-sheet-side">
+            <div class="finance-sheet-box">
+              <div class="finance-sheet-box-title"><span>Resumo</span><strong>${escapeHtml(summary.status || "-")}</strong></div>
+              <table class="finance-sheet-table">
+                <tbody>
+                  <tr><td>Total Promax</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.total_promax || 0))}</td></tr>
+                  <tr><td>Numerario do Malote</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(numerarioMalote))}</td></tr>
+                  <tr><td>Boletos rota</td><td class="finance-sheet-value">${escapeHtml(String(financeiroNumber(summary.boletos_recebido_qtd || 0)))} / ${escapeHtml(String(financeiroNumber(summary.boletos_rota || 0)))}</td></tr>
+                  <tr><td>Despesas</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.despesas_total || 0))}</td></tr>
+                  <tr><td>Diaristas</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.diaristas_total || 0))}</td></tr>
+                  <tr><td>Alimentacao</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_total || 0))}</td></tr>
+                  <tr><td class="finance-sheet-muted ps-3">Pernoite</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_pernoite_total || 0))}</td></tr>
+                  <tr><td class="finance-sheet-muted ps-3">Hospedagem</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_hospedagem_total || 0))}</td></tr>
+                  <tr><td class="finance-sheet-muted ps-3">Janta</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_janta_total || 0))}</td></tr>
+                  <tr><td class="finance-sheet-muted ps-3">Almoco</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_almoco_total || 0))}</td></tr>
+                  <tr><td class="finance-sheet-muted ps-3">Cafe</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_cafe_total || 0))}</td></tr>
+                  <tr><td>Depositos</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(depositos))}</td></tr>
+                  <tr><td>Vales</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.vales_total || 0))}</td></tr>
+                  <tr><td>Moedas</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.moedas || 0))}</td></tr>
+                  <tr><td><strong>Diferenca</strong></td><td class="finance-sheet-value ${Math.abs(diferenca) < 0.01 ? "text-success" : "text-danger"}">${escapeHtml(formatMoneyText(diferenca))}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="finance-sheet-box">
+              <div class="finance-sheet-box-title"><span>Numerario do Malote</span><strong>${escapeHtml(formatMoneyText(numerarioMalote))}</strong></div>
+              <table class="finance-sheet-table">
+                <tbody>
+                  ${FINANCEIRO_DENOMS.slice().reverse().map(denom => `
+                    <tr><td>R$ ${escapeHtml(denom)}</td><td class="finance-sheet-value">${escapeHtml(String(denomTotals[denom] || 0))}</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(financeiroNumber(denom) * (denomTotals[denom] || 0)))}</td></tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+            <div class="finance-sheet-mini-grid">
+              <div class="finance-sheet-mini"><span>% Dinheiro</span><strong>${escapeHtml(dinheiroPct.toFixed(2).replace(".", ","))}%</strong></div>
+              <div class="finance-sheet-mini"><span>% Deposito</span><strong>${escapeHtml(depositoPct.toFixed(2).replace(".", ","))}%</strong></div>
+            </div>
+          </div>
+          <div class="finance-sheet-side">
+            <div class="finance-sheet-quick">
+              <span class="finance-sheet-quick-title">Lancamentos do caixa</span>
+              <div class="finance-sheet-quick-grid">
+                <div class="finance-sheet-quick-item"><span>Compras</span><strong>${escapeHtml(String(maps.filter(map => (map.tipo_bloco || "") === "compra").length))}</strong></div>
+                <div class="finance-sheet-quick-item"><span>Despesas</span><strong>${escapeHtml(String(despesas.length))}</strong></div>
+                <div class="finance-sheet-quick-item"><span>Vales</span><strong>${escapeHtml(String(vales.length))}</strong></div>
+                <div class="finance-sheet-quick-item"><span>Transferencias</span><strong>${escapeHtml(String(transfers.length))}</strong></div>
+              </div>
+            </div>
+            <div class="finance-sheet-mini-grid">
+              <div class="finance-sheet-mini"><span>Credito em conta</span><strong>${escapeHtml(formatMoneyText(summary.credito_conta || 0))}</strong></div>
+              <div class="finance-sheet-mini"><span>Transferencias</span><strong>${escapeHtml(formatMoneyText(summary.transferencias_total || 0))}</strong></div>
+            </div>
+            <div class="finance-sheet-box">
+              <div class="finance-sheet-box-title"><span>Comprovantes</span><strong>${escapeHtml(formatMoneyText(summary.transferencias_total || 0))}</strong></div>
+              <div class="finance-sheet-scroll">
+                <table class="finance-sheet-table">
+                  <thead><tr><th>Data</th><th>Banco</th><th>NB</th><th>NF</th><th>Valor</th></tr></thead>
+                  <tbody>${transferBody}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="finance-sheet-side">
+            <div class="finance-sheet-box">
+              <div class="finance-sheet-box-title"><span>Vales</span><strong>${escapeHtml(formatMoneyText(summary.vales_total || 0))}</strong></div>
+              <div class="finance-sheet-scroll">
+                <table class="finance-sheet-table">
+                  <thead><tr><th>Nome</th><th>Valor</th><th>Obs.</th><th>Ass.</th></tr></thead>
+                  <tbody>${valeBody}</tbody>
+                </table>
+              </div>
+            </div>
+            <div class="finance-sheet-box">
+              <div class="finance-sheet-box-title"><span>Despesas</span><strong>${escapeHtml(formatMoneyText(summary.despesas_total || 0))}</strong></div>
+              <div class="finance-sheet-scroll">
+                <table class="finance-sheet-table">
+                  <thead><tr><th>Mapa</th><th>Descricao</th><th>Valor</th></tr></thead>
+                  <tbody>${despesasBody}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function financeiroCollectDraft() {
+      const root = document.getElementById("financeiroEditor");
+      if (!root) return state.financeiro.draft || financeiroBlankMap();
+      const map = state.financeiro.draft || financeiroBlankMap();
+      const get = selector => root.querySelector(selector);
+      const dataEl = document.getElementById("financeiroData");
+      const filialEl = document.getElementById("financeiroFilial");
+      map.data = dataEl && dataEl.value ? dataEl.value : map.data;
+      map.filial = filialEl && filialEl.value ? filialEl.value : map.filial;
+      ["tipo_bloco", "mapa", "mapa_ref", "motorista", "boletos_rota", "boletos_recebido_qtd", "total_promax", "credito_conta", "moedas", "diarista", "diarista_recibo_recebido", "pernoite", "hospedagem", "janta", "almoco", "cafe", "observacao"].forEach(key => {
+        const el = get(`[data-financeiro-field="${key}"]`);
+        if (el) map[key] = el.type === "checkbox" ? el.checked : el.value;
+      });
+      FINANCEIRO_DENOMS.forEach(denom => {
+        const el = get(`[data-financeiro-denom="${denom}"]`);
+        map.dinheiro[denom] = el ? el.value : 0;
+      });
+      map.transferencias = financeiroCollectRows(root, "transferencias");
+      map.despesas = financeiroCollectRows(root, "despesas");
+      map.vales = financeiroCollectRows(root, "vales");
+      map.diaristas = financeiroCollectRows(root, "diaristas");
+      return map;
+    }
+
+    function financeiroCollectRows(root, type) {
+      return Array.from(root.querySelectorAll(`[data-financeiro-row="${type}"]`)).map(row => {
+        const item = {};
+        row.querySelectorAll("[data-financeiro-cell]").forEach(input => {
+          item[input.dataset.financeiroCell] = input.type === "checkbox" ? input.checked : input.value;
+        });
+        return item;
+      }).filter(item => {
+        if (type === "diaristas") {
+          return ["nome", "valor", "observacao"].some(key => String(item[key] || "").trim());
+        }
+        return Object.values(item).some(value => typeof value === "boolean" ? value : String(value || "").trim());
+      });
+    }
+
+    function financeiroRender() {
+      const els = financeiroElements();
+      if (!els.editor) return;
+      const payload = state.financeiro.payload || { maps: [], summary: {}, filiais: [] };
+      if (els.count) els.count.textContent = `${payload.summary && payload.summary.mapas || 0}/${payload.summary && payload.summary.compras || 0}`;
+      if (els.status) {
+        const extras = [];
+        if (payload.summary && payload.summary.compras) extras.push(`${payload.summary.compras} compra`);
+        if (payload.summary && payload.summary.despesas_blocos) extras.push(`${payload.summary.despesas_blocos} desp.`);
+        if (payload.summary && payload.summary.vales_blocos) extras.push(`${payload.summary.vales_blocos} vale`);
+        els.status.textContent = state.financeiro.loading ? "Carregando caixa" : `${payload.summary && payload.summary.mapas || 0} mapa(s)${extras.length ? " + " + extras.join(" + ") : ""}`;
+        els.status.className = `pill ${payload.summary && payload.summary.status === "OK" ? "ok" : ""}`;
+      }
+      financeiroRenderFiliais(payload.filiais || []);
+      renderFinanceiroFechamentoWorker(state.financeiro.worker);
+      financeiroRenderFechamentoSheet(payload);
+      financeiroRenderSummary(payload.summary || {});
+      financeiroRenderMapList(payload.maps || []);
+      if (!state.financeiro.draft) {
+        const selected = (payload.maps || []).find(item => String(item.id) === String(state.financeiro.selectedId));
+        state.financeiro.draft = selected ? JSON.parse(JSON.stringify(selected)) : financeiroBlankMap();
+      }
+      financeiroRenderEditor(state.financeiro.draft);
+    }
+
+    function financeiroRenderFiliais(filiais) {
+      const selects = [document.getElementById("financeiroFilial"), document.getElementById("financeiroFilialMapas")].filter(Boolean);
+      if (!selects.length) return;
+      const current = selects.find(el => el.value)?.value || "";
+      const items = filiais || [];
+      const options = ['<option value="">Escolha a revenda</option>'].concat(items.map(item => {
+        return `<option value="${escapeHtml(item.code)}">${escapeHtml(item.code)} - ${escapeHtml(item.name || item.code)}</option>`;
+      }));
+      const nextValue = current && items.some(item => String(item.code) === String(current)) ? current : (!current && items.length === 1 ? items[0].code : "");
+      selects.forEach(el => {
+        el.innerHTML = options.join("");
+        el.value = nextValue;
+      });
+      if (!current && nextValue) {
+        setTimeout(() => syncFinanceiro({ silent: true }), 0);
+      }
+    }
+
+    function financeiroSyncFilialSelects(source) {
+      const els = financeiroElements();
+      const value = source && typeof source.value !== "undefined" ? source.value : (els.filial && els.filial.value) || (els.filialMapas && els.filialMapas.value) || "";
+      [els.filial, els.filialMapas].forEach(element => {
+        if (element && element.value !== value) element.value = value;
+      });
+      return value;
+    }
+
+    function financeiroRenderSummary(summary) {
+      const el = document.getElementById("financeiroSummaryCards");
+      if (!el) return;
+      const items = [
+        ["Mapas", summary.mapas || 0],
+        ["Compra", summary.compras || 0],
+        ["Desp./Vales", `${summary.despesas_blocos || 0} / ${summary.vales_blocos || 0}`],
+        ["Total Promax", formatMoneyText(summary.total_promax || 0)],
+        ["Total Apurado", formatMoneyText(summary.total_apurado || 0)],
+        ["Credito em conta", formatMoneyText(summary.credito_conta || 0)],
+        ["Boletos rota", `${financeiroNumber(summary.boletos_recebido_qtd || 0)} / ${financeiroNumber(summary.boletos_rota || 0)}`],
+        ["Transferencias", formatMoneyText(summary.transferencias_total || 0)],
+        ["Diaristas", formatMoneyText(summary.diaristas_total || 0)],
+        ["Diferenca", formatMoneyText(summary.diferenca || 0)]
+      ];
+      el.innerHTML = items.map(([label, value]) => `<div class="finance-summary-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join("");
+    }
+
+    function financeiroRenderMapList(maps) {
+      const el = document.getElementById("financeiroMapList");
+      if (!el) return;
+      if (!maps.length) {
+        el.innerHTML = '<div class="empty-state py-3">Nenhum mapa criado para este caixa.</div>';
+        return;
+      }
+      el.innerHTML = maps.map(map => {
+        const active = String(map.id) === String(state.financeiro.selectedId) ? " is-active" : "";
+        return `<button type="button" class="finance-map-btn${active}" data-financeiro-select="${escapeHtml(map.id)}">
+          <strong>${escapeHtml(financeiroTipoLabel(map.tipo_bloco))} ${escapeHtml(map.mapa || "-")}</strong>
+          <span class="meta">${escapeHtml(map.motorista || "Sem motorista")} | ${escapeHtml(map.filial_nome || map.filial || "-")}</span>
+          <span class="status-line ${map.status === "OK" ? "text-success" : "text-danger"}">${escapeHtml(map.status || "-")} | Dif. ${escapeHtml(formatMoneyText(map.diferenca || 0))}</span>
+        </button>`;
+      }).join("");
+      el.querySelectorAll("[data-financeiro-select]").forEach(button => {
+        button.addEventListener("click", () => {
+          const id = button.dataset.financeiroSelect;
+          const selected = (state.financeiro.payload.maps || []).find(item => String(item.id) === String(id));
+          state.financeiro.selectedId = id;
+          state.financeiro.draft = selected ? JSON.parse(JSON.stringify(selected)) : financeiroBlankMap();
+          const fechamentoMapa = document.getElementById("financeiroFechamentoMapa");
+          if (fechamentoMapa && selected && selected.tipo_bloco === "mapa") fechamentoMapa.value = selected.mapa || selected.mapa_key || "";
+          financeiroRender();
+        });
+      });
+    }
+
+    function financeiroTipoLabel(tipo) {
+      if (tipo === "compra") return "Compra";
+      if (tipo === "despesa") return "Despesa";
+      if (tipo === "vale") return "Vale";
+      if (tipo === "vale_conferencia") return "Vales";
+      if (tipo === "despesa_conferencia") return "Despesas";
+      return "Mapa";
+    }
+
+    function financeiroIsValeChapa(row) {
+      return String(row && row.observacao || "").trim().toLowerCase() === "vale de chapa";
+    }
+
+    function financeiroRenderEditor(map) {
+      const el = document.getElementById("financeiroEditor");
+      if (!el) return;
+      const totals = financeiroTotals(map || {});
+      const tipo = map && map.tipo_bloco ? map.tipo_bloco : "mapa";
+      if (tipo === "vale_conferencia") {
+        financeiroRenderValeReview(map || {});
+        return;
+      }
+      if (tipo === "despesa_conferencia") {
+        financeiroRenderDespesaReview(map || {});
+        return;
+      }
+      const isCompra = tipo === "compra";
+      const isDespesa = tipo === "despesa";
+      const isVale = tipo === "vale";
+      const isLancamento = isDespesa || isVale;
+      const visibleBlocks = [];
+      if (!isLancamento) {
+        visibleBlocks.push(financeiroRowsBlock("transferencias", "Transferencias parciais", map.transferencias || []));
+        visibleBlocks.push(financeiroRowsBlock("diaristas", "Diaristas", map.diaristas || []));
+        visibleBlocks.push(financeiroRowsBlock("despesas", "Despesas do mapa", map.despesas || []));
+        visibleBlocks.push(financeiroRowsBlock("vales", "Vales do mapa", map.vales || []));
+      }
+      if (isDespesa) visibleBlocks.push(financeiroRowsBlock("despesas", "Despesas", map.despesas || []));
+      if (isVale) visibleBlocks.push(financeiroRowsBlock("vales", "Vales", map.vales || []));
+      el.classList.add("finance-editor-card");
+      el.innerHTML = `
+        <div class="finance-editor-head">
+          <div>
+            <h3 class="h6 fw-bold mb-1">${map && map.id ? "Editar" : "Novo"} ${escapeHtml(financeiroTipoLabel(tipo))}</h3>
+            <div class="form-text">${isLancamento ? "Lancamento separado do caixa, vinculado ao mapa e motorista informados." : (isCompra ? "Bloco especial que pertence ao caixa do dia e entra no consolidado." : "Preencha o mapa e detalhe transferencias parciais.")}</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            ${map && map.id ? '<button type="button" class="btn btn-outline-danger btn-sm" id="financeiroDeleteMapBtn"><i class="bi bi-trash me-1"></i>Excluir</button>' : ""}
+            <button type="button" class="btn btn-primary btn-sm" id="financeiroSaveMapBtn"><i class="bi bi-check2-circle me-1"></i>Salvar mapa</button>
+          </div>
+        </div>
+        <div class="finance-editor-body">
+          <input type="hidden" data-financeiro-field="tipo_bloco" value="${escapeHtml(tipo)}">
+          ${isLancamento ? `<input type="hidden" data-financeiro-field="mapa" value="${escapeHtml(map.mapa_key || map.mapa || `${tipo.toUpperCase()}-${Date.now()}`)}">` : ""}
+          <section>
+            <h4 class="h6 fw-bold mb-2">Identificacao</h4>
+            <div class="finance-editor-grid">
+              ${isLancamento ? financeiroInput("mapa_ref", "Mapa vinculado", map.mapa_ref || map.mapa) : financeiroInput("mapa", isCompra ? "Identificacao do bloco" : "Numero do mapa", map.mapa)}
+              ${financeiroInput("motorista", isCompra ? "Responsavel" : "Motorista", map.motorista)}
+              ${isLancamento ? "" : financeiroInput("boletos_rota", "Boletos rota (qtd.)", map.boletos_rota, "number", "1")}
+              ${isLancamento ? "" : financeiroInput("boletos_recebido_qtd", "Boletos que voltaram (qtd.)", map.boletos_recebido_qtd, "number", "1")}
+              ${isLancamento ? "" : financeiroInput("total_promax", "Total Promax", map.total_promax, "number")}
+              ${isLancamento ? "" : financeiroInput("credito_conta", "Credito em conta", map.credito_conta, "number")}
+            </div>
+          </section>
+          ${isLancamento ? "" : `
+            <section>
+              <h4 class="h6 fw-bold mb-2">Dinheiro e alimentacao</h4>
+              <div class="finance-money-grid mb-2">
+                ${FINANCEIRO_DENOMS.map(denom => `<label class="form-label small fw-semibold">R$ ${denom}<input class="form-control form-control-sm mt-1" type="number" min="0" step="1" data-financeiro-denom="${denom}" value="${escapeHtml(String(map.dinheiro && map.dinheiro[denom] || 0))}"></label>`).join("")}
+              </div>
+              <div class="finance-editor-grid">
+                ${financeiroInput("moedas", "Moedas", map.moedas, "number")}
+                ${financeiroInput("pernoite", "Pernoite", map.pernoite, "number")}
+                ${financeiroInput("hospedagem", "Hospedagem", map.hospedagem, "number")}
+                ${financeiroInput("janta", "Janta", map.janta, "number")}
+                ${financeiroInput("almoco", "Almoco", map.almoco, "number")}
+                ${financeiroInput("cafe", "Cafe", map.cafe, "number")}
+                <div class="finance-summary-item"><span>Total dinheiro</span><strong>${formatMoneyText(totals.dinheiroTotal)}</strong></div>
+              </div>
+            </section>
+          `}
+          <section class="finance-detail-grid">${visibleBlocks.join("")}</section>
+          <label class="form-label small fw-semibold w-100">Observacao<textarea class="form-control mt-1" rows="2" data-financeiro-field="observacao">${escapeHtml(map.observacao || "")}</textarea></label>
+          <div class="finance-summary-strip">
+            <div class="finance-summary-item"><span>Total apurado</span><strong>${formatMoneyText(totals.totalApurado)}</strong></div>
+            ${isLancamento ? "" : `<div class="finance-summary-item"><span>Conferencia boletos</span><strong class="${Math.abs(totals.boletosDiferencaQtd) < 0.01 ? "text-success" : "text-danger"}">${financeiroNumber(map.boletos_recebido_qtd)} / ${financeiroNumber(map.boletos_rota)}</strong></div>`}
+            ${isLancamento ? "" : `<div class="finance-summary-item"><span>Diferenca</span><strong class="${Math.abs(totals.diferenca) < 0.01 ? "text-success" : "text-danger"}">${formatMoneyText(totals.diferenca)}</strong></div>`}
+          </div>
+        </div>
+      `;
+      el.querySelectorAll("input, textarea").forEach(input => input.addEventListener("change", () => {
+        state.financeiro.draft = financeiroCollectDraft();
+        financeiroRenderEditor(state.financeiro.draft);
+      }));
+      el.querySelectorAll("[data-financeiro-add]").forEach(button => button.addEventListener("click", () => financeiroAddRow(button.dataset.financeiroAdd)));
+      el.querySelectorAll("[data-financeiro-remove]").forEach(button => button.addEventListener("click", () => financeiroRemoveRow(button.dataset.financeiroRemove, Number(button.dataset.index))));
+      const gerarValesDiarista = document.getElementById("financeiroGerarValesDiaristaBtn");
+      if (gerarValesDiarista) gerarValesDiarista.addEventListener("click", financeiroGerarValesDiaristas);
+      const save = document.getElementById("financeiroSaveMapBtn");
+      const del = document.getElementById("financeiroDeleteMapBtn");
+      if (save) save.addEventListener("click", financeiroSaveMap);
+      if (del) del.addEventListener("click", financeiroDeleteMap);
+    }
+
+    function financeiroValeRows() {
+      const maps = state.financeiro.payload && Array.isArray(state.financeiro.payload.maps) ? state.financeiro.payload.maps : [];
+      const rows = [];
+      maps.forEach(map => {
+        (map.vales || []).forEach((vale, index) => {
+          rows.push({ map, vale, index });
+        });
+      });
+      return rows;
+    }
+
+    function financeiroDespesaRows() {
+      const maps = state.financeiro.payload && Array.isArray(state.financeiro.payload.maps) ? state.financeiro.payload.maps : [];
+      const rows = [];
+      maps.forEach(map => {
+        (map.despesas || []).forEach((despesa, index) => {
+          rows.push({ map, despesa, index });
+        });
+      });
+      return rows;
+    }
+
+    function financeiroRenderValeReview(map) {
+      const el = document.getElementById("financeiroEditor");
+      if (!el) return;
+      const rows = financeiroValeRows();
+      const total = rows.reduce((sum, row) => sum + financeiroNumber(row.vale.valor), 0);
+      const body = rows.length ? rows.map(({ map: itemMap, vale, index }) => `
+        <tr>
+          <td><strong>${escapeHtml(itemMap.mapa || "-")}</strong></td>
+          <td>${escapeHtml(itemMap.motorista || "-")}</td>
+          <td>${escapeHtml(vale.nome || vale.observacao || "-")}</td>
+          <td class="text-end fw-bold">${escapeHtml(formatMoneyText(vale.valor || 0))}</td>
+          <td class="text-center">
+            <label class="finance-review-check">
+              <input class="form-check-input" type="checkbox" data-financeiro-vale-map="${escapeHtml(itemMap.id)}" data-financeiro-vale-index="${index}" data-financeiro-vale-field="assinado" ${vale.assinado ? "checked" : ""}>
+            </label>
+          </td>
+        </tr>
+      `).join("") : '<tr><td colspan="5" class="text-center text-secondary py-4">Nenhum vale lancado nos mapas deste caixa.</td></tr>';
+      el.innerHTML = `
+        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3">
+          <div>
+            <h3 class="h6 fw-bold mb-1">Conferencia de vales</h3>
+            <div class="form-text">Vales lancados nos mapas do dia. Ajuste apenas se o vale esta assinado.</div>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="financeiroSaveValeReviewBtn" ${rows.length ? "" : "disabled"}><i class="bi bi-check2-circle me-1"></i>Salvar conferencia</button>
+        </div>
+        <div class="table-scroll border rounded">
+          <table class="finance-review-table">
+            <thead>
+              <tr>
+                <th>Mapa</th>
+                <th>Motorista</th>
+                <th>Vale</th>
+                <th class="text-end">Valor</th>
+                <th class="text-center">Assinado</th>
+              </tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+        <div class="finance-summary-strip mt-3">
+          <div class="finance-summary-item"><span>Vales</span><strong>${rows.length}</strong></div>
+          <div class="finance-summary-item"><span>Total em vales</span><strong>${formatMoneyText(total)}</strong></div>
+          <div class="finance-summary-item"><span>Assinados</span><strong>${rows.filter(row => row.vale.assinado).length}</strong></div>
+        </div>
+      `;
+      el.querySelectorAll("[data-financeiro-vale-field]").forEach(input => {
+        input.addEventListener("change", () => {
+          const targetMap = (state.financeiro.payload.maps || []).find(item => String(item.id) === String(input.dataset.financeiroValeMap));
+          if (!targetMap || !Array.isArray(targetMap.vales)) return;
+          const vale = targetMap.vales[Number(input.dataset.financeiroValeIndex)];
+          if (!vale) return;
+          vale[input.dataset.financeiroValeField] = input.checked;
+          state.financeiro.draft = Object.assign({}, map, { tipo_bloco: "vale_conferencia" });
+        });
+      });
+      const save = document.getElementById("financeiroSaveValeReviewBtn");
+      if (save) save.addEventListener("click", financeiroSaveValeReview);
+    }
+
+    function financeiroRenderDespesaReview(map) {
+      const el = document.getElementById("financeiroEditor");
+      if (!el) return;
+      const rows = financeiroDespesaRows();
+      const total = rows.reduce((sum, row) => sum + financeiroNumber(row.despesa.valor), 0);
+      const body = rows.length ? rows.map(({ map: itemMap, despesa, index }) => `
+        <tr>
+          <td><strong>${escapeHtml(itemMap.mapa || "-")}</strong></td>
+          <td>${escapeHtml(itemMap.motorista || "-")}</td>
+          <td><input class="form-control form-control-sm" data-financeiro-despesa-map="${escapeHtml(itemMap.id)}" data-financeiro-despesa-index="${index}" data-financeiro-despesa-field="nome" value="${escapeHtml(despesa.nome || "")}"></td>
+          <td><input class="form-control form-control-sm" data-financeiro-despesa-map="${escapeHtml(itemMap.id)}" data-financeiro-despesa-index="${index}" data-financeiro-despesa-field="observacao" value="${escapeHtml(despesa.observacao || "")}"></td>
+          <td class="text-end"><input class="form-control form-control-sm text-end" type="number" step="0.01" data-financeiro-despesa-map="${escapeHtml(itemMap.id)}" data-financeiro-despesa-index="${index}" data-financeiro-despesa-field="valor" value="${escapeHtml(String(despesa.valor || ""))}"></td>
+        </tr>
+      `).join("") : '<tr><td colspan="5" class="text-center text-secondary py-4">Nenhuma despesa lancada nos mapas deste caixa.</td></tr>';
+      el.innerHTML = `
+        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3">
+          <div>
+            <h3 class="h6 fw-bold mb-1">Conferencia de despesas</h3>
+            <div class="form-text">Despesas lancadas nos mapas do dia. Ajuste descricao, observacao ou valor quando necessario.</div>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="financeiroSaveDespesaReviewBtn" ${rows.length ? "" : "disabled"}><i class="bi bi-check2-circle me-1"></i>Salvar conferencia</button>
+        </div>
+        <div class="table-scroll border rounded">
+          <table class="finance-review-table">
+            <thead>
+              <tr>
+                <th>Mapa</th>
+                <th>Motorista</th>
+                <th>Despesa</th>
+                <th>Observacao</th>
+                <th class="text-end">Valor</th>
+              </tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+        <div class="finance-summary-strip mt-3">
+          <div class="finance-summary-item"><span>Despesas</span><strong>${rows.length}</strong></div>
+          <div class="finance-summary-item"><span>Total em despesas</span><strong>${formatMoneyText(total)}</strong></div>
+        </div>
+      `;
+      const save = document.getElementById("financeiroSaveDespesaReviewBtn");
+      if (save) save.addEventListener("click", financeiroSaveDespesaReview);
+    }
+
+    async function financeiroSaveDespesaReview() {
+      if (!financeiroRequireFilial()) return;
+      const maps = state.financeiro.payload && Array.isArray(state.financeiro.payload.maps) ? state.financeiro.payload.maps : [];
+      const changedMapIds = new Set();
+      document.querySelectorAll("[data-financeiro-despesa-field]").forEach(input => {
+        const targetMap = maps.find(item => String(item.id) === String(input.dataset.financeiroDespesaMap));
+        if (!targetMap || !Array.isArray(targetMap.despesas)) return;
+        const despesa = targetMap.despesas[Number(input.dataset.financeiroDespesaIndex)];
+        if (!despesa) return;
+        const field = input.dataset.financeiroDespesaField;
+        despesa[field] = field === "valor" ? financeiroNumber(input.value) : input.value;
+        changedMapIds.add(String(targetMap.id));
+      });
+      const changedMaps = maps.filter(map => changedMapIds.has(String(map.id)));
+      if (!changedMaps.length) {
+        addLog("Nenhuma despesa para conferir neste caixa.", "warn");
+        return;
+      }
+      try {
+        for (const map of changedMaps) {
+          const payload = Object.assign({}, map, { mapa: map.mapa_key || map.mapa });
+          await req(CONFIG.endpoints.financeiro.mapas, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            timeoutMs: 20000
+          });
+        }
+        state.financeiro.selectedId = null;
+        state.financeiro.draft = { tipo_bloco: "despesa_conferencia" };
+        addLog("Conferencia de despesas salva.", "ok");
+        await syncFinanceiro({ silent: true });
+        state.financeiro.draft = { tipo_bloco: "despesa_conferencia" };
+        financeiroRender();
+      } catch (err) {
+        addLog(`Falha ao salvar conferencia de despesas: ${err.message}`, "err");
+      }
+    }
+
+    async function financeiroSaveValeReview() {
+      if (!financeiroRequireFilial()) return;
+      const maps = state.financeiro.payload && Array.isArray(state.financeiro.payload.maps) ? state.financeiro.payload.maps : [];
+      const changedMaps = maps.filter(map => Array.isArray(map.vales) && map.vales.length);
+      if (!changedMaps.length) {
+        addLog("Nenhum vale para conferir neste caixa.", "warn");
+        return;
+      }
+      try {
+        for (const map of changedMaps) {
+          const payload = Object.assign({}, map, { mapa: map.mapa_key || map.mapa });
+          await req(CONFIG.endpoints.financeiro.mapas, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            timeoutMs: 20000
+          });
+        }
+        state.financeiro.selectedId = null;
+        state.financeiro.draft = { tipo_bloco: "vale_conferencia" };
+        addLog("Conferencia de vales salva.", "ok");
+        await syncFinanceiro({ silent: true });
+        state.financeiro.draft = { tipo_bloco: "vale_conferencia" };
+        financeiroRender();
+      } catch (err) {
+        addLog(`Falha ao salvar conferencia de vales: ${err.message}`, "err");
+      }
+    }
+
+    function financeiroInput(key, label, value, type = "text", numberStep = "0.01") {
+      const step = type === "number" ? ` step="${numberStep}"` : "";
+      return `<label class="form-label small fw-semibold">${escapeHtml(label)}<input class="form-control form-control-sm mt-1" type="${type}"${step} data-financeiro-field="${key}" value="${escapeHtml(String(value ?? ""))}"></label>`;
+    }
+
+    function financeiroCheckbox(key, label, checked) {
+      return `<label class="finance-summary-item d-flex align-items-center gap-2 mb-0">
+        <input class="form-check-input m-0" type="checkbox" data-financeiro-field="${escapeHtml(key)}" ${checked ? "checked" : ""}>
+        <span class="text-uppercase">${escapeHtml(label)}</span>
+      </label>`;
+    }
+
+    function financeiroRowsBlock(type, title, rows) {
+      const body = (rows && rows.length ? rows : [{}]).map((row, index) => financeiroRow(type, row, index)).join("");
+      return `<section class="finance-entry-block">
+        <div class="finance-entry-head">
+          <h4 class="mb-0">${escapeHtml(title)}</h4>
+          <div class="d-flex gap-2">
+            ${type === "diaristas" ? '<button type="button" class="btn btn-outline-success btn-sm" id="financeiroGerarValesDiaristaBtn"><i class="bi bi-journal-plus me-1"></i>Gerar vales</button>' : ""}
+            <button type="button" class="btn btn-outline-primary btn-sm" data-financeiro-add="${type}"><i class="bi bi-plus"></i></button>
+          </div>
+        </div>
+        <div class="finance-entry-list">${body}</div>
+      </section>`;
+    }
+
+    function financeiroRow(type, row, index) {
+      if (type === "transferencias") {
+        return `<div class="finance-transfer-row" data-financeiro-row="${type}">
+          <input class="form-control form-control-sm" data-financeiro-cell="data" placeholder="Data" value="${escapeHtml(row.data || "")}">
+          <input class="form-control form-control-sm" data-financeiro-cell="banco" placeholder="Banco" value="${escapeHtml(row.banco || "")}">
+          <input class="form-control form-control-sm" data-financeiro-cell="nb" placeholder="NB" value="${escapeHtml(row.nb || "")}">
+          <input class="form-control form-control-sm" data-financeiro-cell="nf" placeholder="NF" value="${escapeHtml(row.nf || "")}">
+          <input class="form-control form-control-sm" type="number" step="0.01" data-financeiro-cell="valor" placeholder="Valor" value="${escapeHtml(String(row.valor || ""))}">
+          <button type="button" class="btn btn-outline-danger btn-sm" data-financeiro-remove="${type}" data-index="${index}"><i class="bi bi-x"></i></button>
+        </div>`;
+      }
+      if (type === "diaristas") {
+        return `<div class="finance-diarista-row" data-financeiro-row="${type}">
+          <input class="form-control form-control-sm" data-financeiro-cell="nome" placeholder="Nome" value="${escapeHtml(row.nome || "")}">
+          <input class="form-control form-control-sm" type="number" step="0.01" data-financeiro-cell="valor" placeholder="Valor" value="${escapeHtml(String(row.valor || ""))}">
+          <label class="form-check small fw-semibold d-flex align-items-center gap-2 mb-0">
+            <input class="form-check-input m-0" type="checkbox" data-financeiro-cell="recibo_recebido" ${row.recibo_recebido === false ? "" : "checked"}>
+            Recibo recebido
+          </label>
+          <button type="button" class="btn btn-outline-danger btn-sm" data-financeiro-remove="${type}" data-index="${index}"><i class="bi bi-x"></i></button>
+        </div>`;
+      }
+      return `<div class="finance-detail-row" data-financeiro-row="${type}">
+        <input class="form-control form-control-sm" data-financeiro-cell="nome" placeholder="${type === "despesas" ? "Ex: almoco, janta, chapa" : "Nome"}" value="${escapeHtml(row.nome || "")}">
+        <input class="form-control form-control-sm" type="number" step="0.01" data-financeiro-cell="valor" placeholder="Valor" value="${escapeHtml(String(row.valor || ""))}">
+        <button type="button" class="btn btn-outline-danger btn-sm" data-financeiro-remove="${type}" data-index="${index}"><i class="bi bi-x"></i></button>
+        <input class="form-control form-control-sm grid-column-full" data-financeiro-cell="observacao" placeholder="Observacao" value="${escapeHtml(row.observacao || "")}">
+      </div>`;
+    }
+
+    function financeiroAddRow(type) {
+      state.financeiro.draft = financeiroCollectDraft();
+      state.financeiro.draft[type] = state.financeiro.draft[type] || [];
+      state.financeiro.draft[type].push({});
+      financeiroRenderEditor(state.financeiro.draft);
+    }
+
+    function financeiroRemoveRow(type, index) {
+      state.financeiro.draft = financeiroCollectDraft();
+      state.financeiro.draft[type] = (state.financeiro.draft[type] || []).filter((_, idx) => idx !== index);
+      financeiroRenderEditor(state.financeiro.draft);
+    }
+
+    function financeiroGerarValesDiaristas() {
+      state.financeiro.draft = financeiroCollectDraft();
+      const map = state.financeiro.draft || financeiroBlankMap();
+      const diaristas = Array.isArray(map.diaristas) ? map.diaristas : [];
+      const valesBase = (Array.isArray(map.vales) ? map.vales : []).filter(row => !financeiroIsValeChapa(row));
+      const novosVales = diaristas
+        .filter(row => financeiroNumber(row.valor) > 0 && row.recibo_recebido === false)
+        .map(row => ({
+          nome: String(row.nome || map.motorista || "").trim(),
+          valor: row.valor,
+          observacao: "vale de chapa",
+          assinado: false
+        }));
+      map.vales = valesBase.concat(novosVales);
+      state.financeiro.draft = map;
+      addLog(`${novosVales.length} vale(s) de chapa gerado(s).`, novosVales.length ? "ok" : "warn");
+      financeiroRenderEditor(state.financeiro.draft);
+    }
+
+    function financeiroRequireFilial() {
+      const filial = document.getElementById("financeiroFilial");
+      if (filial && String(filial.value || "").trim()) return true;
+      addLog("Escolha uma revenda antes de lancar o caixa.", "warn");
+      if (filial) filial.focus();
+      return false;
+    }
+
+    async function financeiroSolicitarFechamentoPromax() {
+      const els = financeiroElements();
+      if (!financeiroRequireFilial()) return;
+      const mapa = els.fechamentoMapa ? String(els.fechamentoMapa.value || "").trim() : "";
+      if (!mapa) {
+        addLog("Informe o numero do mapa para solicitar o fechamento Promax.", "warn");
+        if (els.fechamentoMapa) els.fechamentoMapa.focus();
+        return;
+      }
+      const payload = {
+        data: els.data && els.data.value ? els.data.value : formatDateInputValue(new Date()),
+        filial: els.filial && els.filial.value ? els.filial.value : "",
+        mapa,
+        modo: els.fechamentoModo && els.fechamentoModo.value ? els.fechamentoModo.value : "completo",
+        ponto_apoio: els.fechamentoPontoApoio && els.fechamentoPontoApoio.value ? els.fechamentoPontoApoio.value : "0",
+        km_atual: els.fechamentoKm && els.fechamentoKm.value ? els.fechamentoKm.value : ""
+      };
+      if (els.fechamentoBtn) els.fechamentoBtn.disabled = true;
+      if (els.fechamentoStatus) {
+        els.fechamentoStatus.textContent = "Enfileirando fechamento";
+        els.fechamentoStatus.className = "pill";
+      }
+      try {
+        const result = await req(CONFIG.endpoints.financeiro.fechamentoPromax, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 20000
+        });
+        const job = result && result.job ? result.job : {};
+        const shortId = String(job.id || "").slice(0, 8);
+        if (els.fechamentoStatus) {
+          els.fechamentoStatus.textContent = shortId ? `Job ${shortId} enfileirado` : "Fechamento enfileirado";
+          els.fechamentoStatus.className = "pill ok";
+        }
+        addLog(`Fechamento Promax solicitado para o mapa ${mapa}.`, "ok");
+      } catch (err) {
+        if (els.fechamentoStatus) {
+          els.fechamentoStatus.textContent = "Falha ao enfileirar";
+          els.fechamentoStatus.className = "pill danger";
+        }
+        addLog(`Falha ao solicitar fechamento Promax: ${err.message}`, "err");
+      } finally {
+        if (els.fechamentoBtn) els.fechamentoBtn.disabled = false;
+      }
+    }
+
+    async function syncFinanceiro({ silent = true } = {}) {
+      const els = financeiroElements();
+      if (!els.editor || !(state.panel && state.panel.canFinanceiro)) return;
+      if (!els.data.value) els.data.value = formatDateInputValue(new Date());
+      const params = new URLSearchParams({ data: els.data.value });
+      if (els.filial && els.filial.value) params.set("filial", els.filial.value);
+      state.financeiro.loading = true;
+      financeiroRender();
+      try {
+        const [caixaResult, workerResult] = await Promise.allSettled([
+          req(`${CONFIG.endpoints.financeiro.caixas}?${params.toString()}`, { timeoutMs: 20000 }),
+          req(CONFIG.endpoints.financeiro.worker, { timeoutMs: 12000 })
+        ]);
+        if (workerResult.status === "fulfilled") {
+          state.financeiro.worker = workerResult.value || null;
+        }
+        if (caixaResult.status === "rejected") throw caixaResult.reason;
+        const payload = caixaResult.value;
+        state.financeiro.payload = payload;
+        if (payload.maps && payload.maps.length && !payload.maps.some(item => String(item.id) === String(state.financeiro.selectedId))) {
+          state.financeiro.selectedId = payload.maps[0].id;
+          state.financeiro.draft = null;
+        }
+        if (!payload.maps || !payload.maps.length) {
+          state.financeiro.selectedId = null;
+          state.financeiro.draft = financeiroBlankMap();
+        }
+        if (workerResult.status === "rejected" && !silent) {
+          addLog(`Financeiro: nao foi possivel consultar o worker de fechamento: ${workerResult.reason.message}`, "warn");
+        }
+        if (!silent) addLog("Fechamento financeiro atualizado.", "ok");
+      } catch (err) {
+        if (!silent) addLog(`Falha ao carregar fechamento financeiro: ${err.message}`, "err");
+      } finally {
+        state.financeiro.loading = false;
+        financeiroRender();
+      }
+    }
+
+    async function downloadFinanceiroCaixaPdf() {
+      updateTokens();
+      const els = financeiroElements();
+      if (!els.data || !els.data.value) {
+        addLog("Informe a data do caixa antes de exportar.", "warn");
+        return;
+      }
+      financeiroSyncFilialSelects((els.filial && els.filial.value) ? els.filial : els.filialMapas);
+      const filial = els.filial && els.filial.value ? els.filial.value : "";
+      if (!filial) {
+        addLog("Escolha uma revenda antes de exportar o PDF do caixa.", "warn");
+        return;
+      }
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+      const params = new URLSearchParams({ data: els.data.value, filial });
+      const originalHtml = els.exportPdf ? els.exportPdf.innerHTML : "";
+      if (els.exportPdf) {
+        els.exportPdf.disabled = true;
+        els.exportPdf.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Gerando';
+      }
+      try {
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.financeiro.caixaPdf}?${params.toString()}`, {
+          method: "GET",
+          credentials: "same-origin",
+          headers
+        });
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = matchedName && matchedName[1] ? matchedName[1] : `caixa-financeiro-${filial}-${els.data.value}.pdf`;
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog("PDF do caixa exportado.", "ok");
+      } catch (err) {
+        addLog(`Falha ao exportar PDF do caixa: ${err.message}`, "err");
+      } finally {
+        if (els.exportPdf) {
+          els.exportPdf.disabled = false;
+          els.exportPdf.innerHTML = originalHtml || '<i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF';
+        }
+      }
+    }
+
+    async function financeiroSaveMap() {
+      state.financeiro.draft = financeiroCollectDraft();
+      if (!financeiroRequireFilial()) return;
+      if (!String(state.financeiro.draft.mapa || "").trim()) {
+        addLog("Informe o numero do mapa antes de salvar.", "warn");
+        return;
+      }
+      if (["despesa", "vale"].includes(state.financeiro.draft.tipo_bloco || "")) {
+        if (!String(state.financeiro.draft.mapa_ref || "").trim()) {
+          addLog("Informe o mapa vinculado antes de salvar o lancamento.", "warn");
+          return;
+        }
+        if (!String(state.financeiro.draft.motorista || "").trim()) {
+          addLog("Informe o motorista antes de salvar o lancamento.", "warn");
+          return;
+        }
+      }
+      try {
+        const result = await req(CONFIG.endpoints.financeiro.mapas, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state.financeiro.draft),
+          timeoutMs: 20000
+        });
+        state.financeiro.selectedId = result.map && result.map.id;
+        state.financeiro.draft = null;
+        addLog("Mapa financeiro salvo.", "ok");
+        await syncFinanceiro({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao salvar mapa financeiro: ${err.message}`, "err");
+      }
+    }
+
+    async function financeiroDeleteMap() {
+      const draft = state.financeiro.draft || {};
+      if (!draft.id || !await askConfirmation("Excluir este mapa do fechamento?")) return;
+      try {
+        await req(`${CONFIG.endpoints.financeiro.mapas}/${encodeURIComponent(draft.id)}`, { method: "DELETE", timeoutMs: 20000 });
+        state.financeiro.selectedId = null;
+        state.financeiro.draft = null;
+        addLog("Mapa financeiro excluido.", "ok");
+        await syncFinanceiro({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao excluir mapa financeiro: ${err.message}`, "err");
+      }
+    }
+
+    function financeiroSetSubtab(tab) {
+      const activeTab = tab || "fechamento";
+      document.querySelectorAll("[data-financeiro-subtab]").forEach(button => {
+        const isActive = button.dataset.financeiroSubtab === activeTab;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+      document.querySelectorAll("[data-financeiro-subpanel]").forEach(panel => {
+        panel.hidden = panel.dataset.financeiroSubpanel !== activeTab;
+      });
+    }
+
+    function setupFinanceiroEvents() {
+      const els = financeiroElements();
+      if (!els.editor) return;
+      if (!els.data.value) els.data.value = formatDateInputValue(new Date());
+      document.querySelectorAll("[data-financeiro-subtab]").forEach(button => {
+        button.addEventListener("click", () => financeiroSetSubtab(button.dataset.financeiroSubtab));
+      });
+      financeiroSetSubtab("fechamento");
+      if (els.refresh) els.refresh.addEventListener("click", () => syncFinanceiro({ silent: false }));
+      if (els.exportPdf) els.exportPdf.addEventListener("click", downloadFinanceiroCaixaPdf);
+      if (els.fechamentoBtn) els.fechamentoBtn.addEventListener("click", financeiroSolicitarFechamentoPromax);
+      if (els.fechamentoRefresh) els.fechamentoRefresh.addEventListener("click", () => syncFinanceiro({ silent: false }));
+      if (els.novo) els.novo.addEventListener("click", () => {
+        if (!financeiroRequireFilial()) return;
+        state.financeiro.selectedId = null;
+        state.financeiro.draft = financeiroBlankMap();
+        if (els.fechamentoMapa) els.fechamentoMapa.value = "";
+        if (els.fechamentoKm) els.fechamentoKm.value = "";
+        financeiroRender();
+        financeiroSetSubtab("mapas");
+      });
+      if (els.compra) els.compra.addEventListener("click", () => {
+        if (!financeiroRequireFilial()) return;
+        state.financeiro.selectedId = null;
+        state.financeiro.draft = financeiroBlankMap({ tipo_bloco: "compra", mapa: "COMPRA", motorista: "Compra" });
+        financeiroRender();
+        financeiroSetSubtab("mapas");
+      });
+      if (els.despesa) els.despesa.addEventListener("click", () => {
+        if (!financeiroRequireFilial()) return;
+        state.financeiro.selectedId = null;
+        state.financeiro.draft = { tipo_bloco: "despesa_conferencia" };
+        financeiroRender();
+        financeiroSetSubtab("mapas");
+      });
+      if (els.vale) els.vale.addEventListener("click", () => {
+        if (!financeiroRequireFilial()) return;
+        state.financeiro.selectedId = null;
+        state.financeiro.draft = { tipo_bloco: "vale_conferencia" };
+        financeiroRender();
+        financeiroSetSubtab("mapas");
+      });
+      if (els.data) els.data.addEventListener("change", () => {
+        state.financeiro.selectedId = null;
+        state.financeiro.draft = null;
+        syncFinanceiro({ silent: false });
+      });
+      [els.filial, els.filialMapas].forEach(element => {
+        if (element) element.addEventListener("change", () => {
+          financeiroSyncFilialSelects(element);
+          state.financeiro.selectedId = null;
+          state.financeiro.draft = null;
+          syncFinanceiro({ silent: false });
+        });
+      });
+      if (els.fechamentoMapa) {
+        els.fechamentoMapa.addEventListener("keydown", event => {
+          if (event.key === "Enter") financeiroSolicitarFechamentoPromax();
+        });
+      }
+    }
+
     function init() {
       applyTheme(localStorage.getItem("bot_admin_theme") || "dark");
       setupRecolhasPane();
@@ -5175,6 +6518,7 @@
       renderCriticaDashboard();
       renderRecolhas();
       renderPayipBatch();
+      financeiroRender();
       renderPanelUserFeatureChecks();
       setupAllowedUsersCardSizing();
       ensureUsageFunctionDateRange();
@@ -5188,6 +6532,7 @@
       syncPromaxScheduleFields();
       setupPromaxScheduleSlicerEvents("run");
       setupPromaxScheduleSlicerEvents("schedule");
+      setupFinanceiroEvents();
       renderPromax();
 
       document.getElementById("refreshBtn").addEventListener("click", syncAll);
@@ -5528,6 +6873,8 @@
         else renderEvolutionUsage();
       } else if (activeTabId === "recolhasTab") {
         if (state.panel && state.panel.canManageRecolhas) tasks.push(syncRecolhas({ silent }));
+      } else if (activeTabId === "financeiroTab") {
+        if (state.panel && state.panel.canFinanceiro) tasks.push(syncFinanceiro({ silent }));
       } else if (activeTabId === "giroRecolhaTab") {
         if (state.panel && state.panel.canViewGiro) tasks.push(syncGiroRecolha({ silent }));
       } else if (activeTabId === "criticaTab") {
@@ -5806,6 +7153,9 @@
         canManageRecolhas: payload && Object.prototype.hasOwnProperty.call(payload, "can_manage_recolhas")
           ? Boolean(payload.can_manage_recolhas)
           : true,
+        canFinanceiro: payload && Object.prototype.hasOwnProperty.call(payload, "can_financeiro")
+          ? Boolean(payload.can_financeiro)
+          : true,
         canArmazem: payload && Object.prototype.hasOwnProperty.call(payload, "can_armazem")
           ? Boolean(payload.can_armazem)
           : true,
@@ -5884,6 +7234,7 @@
       setPanelTabVisible("promaxTab", Boolean(state.panel && state.panel.canManagePromax));
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
+      setPanelTabVisible("financeiroTab", Boolean(state.panel && state.panel.canFinanceiro) && !isCritica);
       setPanelTabVisible("giroRecolhaTab", Boolean(state.panel && state.panel.canViewGiro));
       updateFlowNavigation(document.querySelector("#adminTabs .nav-link.active")?.id || "operationsTab");
       const activeTab = document.querySelector("#adminTabs .nav-link.active");
@@ -10327,6 +11678,7 @@
         renderEvolutionUsage();
         renderBroadcastOptions();
         renderPayipBatch();
+        financeiroRender();
       } finally {
         setSyncState(false);
       }

@@ -16,6 +16,7 @@ from bot_api.services import (
     admin_usage_service,
 )
 from bot_api.services.admin_broadcast_config import build_admin_broadcast_config
+from bot_api.services.admin_financeiro_service import AdminFinanceiroService
 from bot_api.services.admin_import_config import ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS, build_admin_import_datasets
 from bot_api.services.admin_templates import AdminTemplateLoader
 from bot_api.services.app_lifecycle import register_app_lifecycle
@@ -321,6 +322,18 @@ def configure_app_runtime(
     _import_admin_recolhas_csv = admin_recolhas_service.import_recolhas_csv
     _delete_admin_recolha = admin_recolhas_service.delete_recolha
 
+    admin_financeiro_service = AdminFinanceiroService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+        filial_labels=services.filial_labels,
+    )
+    _list_financeiro_caixa = admin_financeiro_service.list_caixa
+    _upsert_financeiro_mapa = admin_financeiro_service.upsert_mapa
+    _export_financeiro_caixa_pdf = admin_financeiro_service.export_caixa_pdf
+    _sync_financeiro_fechamento_promax = admin_financeiro_service.sync_fechamento_promax
+    _delete_financeiro_mapa = admin_financeiro_service.delete_mapa
+
 
     def _panel_context_allowed_report_scopes(context: dict[str, Any] | None) -> tuple[list[str] | None, list[str] | None]:
         if not context or bool(context.get("is_admin")):
@@ -419,6 +432,7 @@ def configure_app_runtime(
         stop_daily_route_broadcast_scheduler=_stop_daily_route_broadcast_scheduler,
         admin_imports_runtime=admin_imports_runtime,
         admin_panel_user_service=admin_panel_user_service,
+        admin_financeiro_service=admin_financeiro_service,
         critica_pdf_prebuild_executor=critica_pdf_prebuild_executor,
         admin_broadcast_executor=admin_broadcast_executor,
         admin_payip_batch_service=admin_payip_batch_service,
@@ -529,6 +543,12 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "export_admin_recolhas_csv": runtime["_export_admin_recolhas_csv"],
         "update_admin_recolha": runtime["_update_admin_recolha"],
         "delete_admin_recolha": runtime["_delete_admin_recolha"],
+        "list_financeiro_caixa": runtime["_list_financeiro_caixa"],
+        "upsert_financeiro_mapa": runtime["_upsert_financeiro_mapa"],
+        "export_financeiro_caixa_pdf": runtime["_export_financeiro_caixa_pdf"],
+        "sync_financeiro_fechamento_promax": runtime["_sync_financeiro_fechamento_promax"],
+        "enqueue_promax_job": runtime["promax_jobs_service"].enqueue_job,
+        "delete_financeiro_mapa": runtime["_delete_financeiro_mapa"],
         "preview_payip_batch": runtime["_preview_payip_batch"],
         "queue_payip_batch": runtime["_queue_payip_batch"],
         "snapshot_payip_batch": runtime["_snapshot_payip_batch"],

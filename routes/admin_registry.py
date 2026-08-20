@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from bot_api.routes.admin_access import create_admin_access_router
 from bot_api.routes.admin_broadcast import create_admin_broadcast_router
 from bot_api.routes.admin_critica import create_admin_critica_router
+from bot_api.routes.admin_financeiro import create_admin_financeiro_router
 from bot_api.routes.admin_giro import create_admin_giro_router
 from bot_api.routes.admin_imports import create_admin_imports_router
 from bot_api.routes.admin_panel import create_admin_panel_router
@@ -27,6 +28,7 @@ def build_admin_route_registrars(deps: dict[str, Any]) -> tuple[RouteRegistrar, 
         lambda app: _register_admin_critica_routes(app, deps=deps),
         lambda app: _register_admin_panel_routes(app, deps=deps),
         lambda app: _register_admin_recolha_routes(app, deps=deps),
+        lambda app: _register_admin_financeiro_routes(app, deps=deps),
         lambda app: _register_admin_payip_routes(app, deps=deps),
         lambda app: _register_admin_usage_routes(app, deps=deps),
         lambda app: _register_admin_broadcast_routes(app, deps=deps),
@@ -125,6 +127,24 @@ def _register_admin_recolha_routes(app: FastAPI, *, deps: dict[str, Any]) -> Non
             export_admin_recolhas_csv=deps["export_admin_recolhas_csv"],
             update_admin_recolha=deps["update_admin_recolha"],
             delete_admin_recolha=deps["delete_admin_recolha"],
+            record_security_event=deps["record_security_event"],
+        )
+    )
+
+
+def _register_admin_financeiro_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    app.include_router(
+        create_admin_financeiro_router(
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
+            list_financeiro_caixa=deps["list_financeiro_caixa"],
+            upsert_financeiro_mapa=deps["upsert_financeiro_mapa"],
+            export_financeiro_caixa_pdf=deps["export_financeiro_caixa_pdf"],
+            sync_financeiro_fechamento_promax=deps["sync_financeiro_fechamento_promax"],
+            enqueue_promax_job=deps["enqueue_promax_job"],
+            list_promax_worker_heartbeats=deps["promax_jobs_service"].list_worker_heartbeats,
+            delete_financeiro_mapa=deps["delete_financeiro_mapa"],
+            worker_token=deps["settings"].promax_worker_token,
             record_security_event=deps["record_security_event"],
         )
     )

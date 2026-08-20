@@ -450,6 +450,7 @@ class PromaxWorker:
                     self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
                     self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
                     self._import_030111_critica_if_needed(job, job_id, lease_token, result)
+                    self._sync_financeiro_fechamento_if_needed(job, job_id, lease_token, result)
                     post_import_attempted = True
                 self.client.finish(
                     job_id,
@@ -1017,6 +1018,82 @@ class PromaxWorker:
                 "missing_units": missing,
             },
         )
+
+    def _sync_financeiro_fechamento_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        operation = str(payload.get("operation") or job.get("job_type") or "").strip().lower().replace("-", "_")
+        if operation not in {"fechamento_mapa", "mapa_fechamento"}:
+            return
+        mapa = str(payload.get("mapa") or payload.get("map") or "").strip()
+        filial = str(payload.get("filial") or "").strip()
+        data = str(payload.get("data") or payload.get("start_date") or "").strip()
+        if not mapa or not filial or not data:
+            self._send_log(
+                job_id,
+                lease_token,
+                "Fechamento Promax nao sincronizado com o caixa: payload sem mapa, filial ou data.",
+                "warning",
+                {
+                    "event": "promax_financeiro_fechamento_sync_missing_payload",
+                    "mapa": mapa,
+                    "filial": filial,
+                    "data": data,
+                },
+            )
+            return
+        try:
+            self._heartbeat_active_job(job_id, lease_token)
+            response = self.client.sync_financeiro_fechamento_mapa(
+                job_id=job_id,
+                lease_token=lease_token,
+                data=data,
+                filial=filial,
+                mapa=mapa,
+                result={
+                    **dict(result.details or {}),
+                    "message": result.message or "",
+                    "return_code": result.return_code,
+                    "child_pid": result.child_pid or None,
+                },
+            )
+            self._heartbeat_active_job(job_id, lease_token)
+            metrics = response.get("metrics") if isinstance(response, Mapping) else {}
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    f"Mapa financeiro {mapa} sincronizado pelo fechamento Promax. "
+                    f"Total Promax: {metrics.get('total_promax', 0) if isinstance(metrics, Mapping) else 0}; "
+                    f"Credito em conta: {metrics.get('credito_conta', 0) if isinstance(metrics, Mapping) else 0}; "
+                    f"Boletos rota: {metrics.get('boletos_rota', 0) if isinstance(metrics, Mapping) else 0}."
+                ),
+                "info",
+                {
+                    "event": "promax_financeiro_fechamento_sync_done",
+                    "mapa": mapa,
+                    "filial": filial,
+                    "data": data,
+                    "response": dict(response) if isinstance(response, Mapping) else {},
+                },
+            )
+        except (PromaxClientError, ValueError) as exc:
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Falha ao sincronizar fechamento Promax com o caixa financeiro: {exc}",
+                "error",
+                {"event": "promax_financeiro_fechamento_sync_failed", "mapa": mapa, "filial": filial},
+            )
 
     def _import_csv_folder_if_needed(
         self,

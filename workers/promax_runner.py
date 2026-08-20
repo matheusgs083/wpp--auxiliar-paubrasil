@@ -111,6 +111,7 @@ class PromaxRunner:
         job_type = str(job.get("job_type") or "").strip()
         operation = str(payload.get("operation") or "").strip()
         job_id = str(job.get("id") or job.get("job_id") or "").strip()
+        normalized_job_kind = _normalize_job_kind(operation or job_type)
         if job_type == "reprocess_publication" or operation == "reprocess_publication":
             if job_type != "reprocess_publication" or operation != "reprocess_publication":
                 raise ValueError("Invalid Promax publication reprocessing job.")
@@ -119,6 +120,44 @@ class PromaxRunner:
                 str(self.config.cli_path),
                 "reprocessar-publicacao",
             ]
+            if job_id:
+                command.extend(["--job-id", job_id])
+            return command
+
+        if normalized_job_kind in {"fechamento_mapa", "mapa_fechamento"}:
+            mapa = str(payload.get("mapa") or payload.get("map") or "").strip()
+            if not mapa:
+                raise ValueError("Promax fechamento-mapa job requires payload.mapa.")
+            command = [
+                str(self.config.python_executable),
+                str(self.config.cli_path),
+                "fechamento-mapa",
+                "--mapa",
+                mapa,
+            ]
+            ponto_apoio = str(payload.get("ponto_apoio") or payload.get("pontoApoio") or "").strip()
+            if ponto_apoio:
+                command.extend(["--ponto-apoio", ponto_apoio])
+            km_atual = str(payload.get("km_atual") or payload.get("kmAtual") or payload.get("km") or "").strip()
+            if km_atual:
+                command.extend(["--km-atual", km_atual])
+            unidade = str(payload.get("unit") or payload.get("unidade") or "").strip()
+            units = _identifier_list(payload.get("units"), field_name="units")
+            if not unidade and units:
+                unidade = units[0]
+            if unidade:
+                command.extend(["--unidade", unidade])
+            modo = str(payload.get("modo") or payload.get("mode") or "").strip().lower()
+            if modo:
+                if modo not in {"completo", "fisico", "financeiro"}:
+                    raise ValueError("Promax fechamento-mapa modo must be completo, fisico or financeiro.")
+                command.extend(["--modo", modo])
+            if payload.get("save") is False or payload.get("salvar") is False:
+                command.append("--nao-salvar")
+            if payload.get("sessoes_separadas") is True or payload.get("separate_sessions") is True:
+                command.append("--sessoes-separadas")
+            if payload.get("fechar_ao_falhar") is True or payload.get("close_on_failure") is True:
+                command.append("--fechar-ao-falhar")
             if job_id:
                 command.extend(["--job-id", job_id])
             return command
@@ -237,7 +276,18 @@ class PromaxRunner:
                     try:
                         process.wait(timeout=10)
                     except subprocess.TimeoutExpired:
-                        termination_requested = False
+                        try:
+                            process.kill()
+                        except Exception:
+                            pass
+                        try:
+                            process.wait(timeout=3)
+                        except subprocess.TimeoutExpired:
+                            on_line(
+                                "stderr",
+                                "Subprocesso Promax nao encerrou apos taskkill/process.kill; finalizando job como cancelado.",
+                            )
+                            break
                 next_control = now + self.config.control_interval_seconds
 
             try:
@@ -356,6 +406,10 @@ def _parse_job_result_event(line: str) -> dict[str, Any] | None:
     if not isinstance(payload, dict) or payload.get("event") != "promax_job_result":
         return None
     return payload
+
+
+def _normalize_job_kind(value: object) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
 
 
 def _identifier_list(value: object, *, field_name: str) -> list[str]:
