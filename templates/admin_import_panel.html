@@ -1274,6 +1274,32 @@
             <div class="empty-state py-2">Nenhum worker verificado.</div>
           </div>
           <div class="form-text mt-2">A fila aceita varios jobs e executa um por vez, na ordem de prioridade e inclusao.</div>
+          <div class="mt-3 pt-3 border-top">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+              <div>
+                <h3 class="h6 fw-bold mb-1">Configuracao dos workers</h3>
+                <div class="form-text">Defina qual worker deve executar cada grupo. Deixe automatico para manter a fila livre.</div>
+              </div>
+              <button class="btn btn-outline-primary btn-sm" id="promaxSaveWorkerAssignmentsBtn" type="button">
+                <i class="bi bi-check2-circle me-1"></i>Salvar configuracao
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Grupo</th>
+                    <th>Rotinas</th>
+                    <th>Worker</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="promaxWorkerAssignmentsBody">
+                  <tr><td colspan="4" class="text-secondary">Carregando configuracao.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
         <section class="panel-card p-3 mb-3">
@@ -2383,6 +2409,7 @@
           jobs: "/api/admin/promax/jobs",
           jobsBatch: "/api/admin/promax/jobs/batch",
           worker: "/api/admin/promax/worker/status",
+          workerAssignments: "/api/admin/promax/worker-assignments",
           pause: "/api/admin/promax/queue/pause",
           resume: "/api/admin/promax/queue/resume",
           pending: "/api/admin/promax/queue/pending",
@@ -2498,6 +2525,7 @@
         catalog: null,
         jobs: [],
         worker: null,
+        workerAssignments: [],
         schedules: [],
         scheduleGroups: [],
         activeScheduleGroupKey: "",
@@ -2714,6 +2742,8 @@
       promaxTab: document.getElementById("promaxTab"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
+      promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
+      promaxSaveWorkerAssignmentsBtn: document.getElementById("promaxSaveWorkerAssignmentsBtn"),
       promaxQueueState: document.getElementById("promaxQueueState"),
       promaxRefreshBtn: document.getElementById("promaxRefreshBtn"),
       promaxPauseBtn: document.getElementById("promaxPauseBtn"),
@@ -4708,10 +4738,103 @@
       }).join("");
     }
 
+    function promaxAssignableCategories() {
+      const categories = promaxCatalogCategories().map(category => ({
+        id: category.id,
+        name: category.name,
+        routines: Array.isArray(category.routines) ? category.routines.map(routine => routine.id).filter(Boolean) : []
+      }));
+      if (!categories.some(category => category.id === "fechamento-mapa")) {
+        categories.push({
+          id: "fechamento-mapa",
+          name: "Fechamento financeiro",
+          routines: ["030302", "03030702"]
+        });
+      }
+      return categories;
+    }
+
+    function promaxAssignmentForCategory(categoryId) {
+      return (state.promax.workerAssignments || []).find(assignment =>
+        String(assignment && assignment.scope_type || "category") === "category"
+        && String(assignment && assignment.category || "") === String(categoryId || "")
+      ) || null;
+    }
+
+    function renderPromaxWorkerAssignmentOptions(workers, selectedWorkerId) {
+      const options = ['<option value="">Automatico</option>'];
+      workers.forEach(worker => {
+        const workerId = String(worker && worker.worker_id || "").trim();
+        if (!workerId) return;
+        const status = worker && worker.online ? "online" : "offline";
+        const busy = worker && worker.current_job_id ? " - ocupado" : "";
+        options.push(`<option value="${escapeHtml(workerId)}"${workerId === selectedWorkerId ? " selected" : ""}>${escapeHtml(promaxWorkerDisplayName(worker))} (${status}${busy})</option>`);
+      });
+      return options.join("");
+    }
+
+    function renderPromaxWorkerAssignments(workers) {
+      if (!E.promaxWorkerAssignmentsBody) return;
+      const categories = promaxAssignableCategories();
+      if (!categories.length) {
+        E.promaxWorkerAssignmentsBody.innerHTML = '<tr><td colspan="4" class="text-secondary">Nenhum grupo disponivel.</td></tr>';
+        return;
+      }
+      E.promaxWorkerAssignmentsBody.innerHTML = categories.map(category => {
+        const assignment = promaxAssignmentForCategory(category.id);
+        const selectedWorkerId = String(assignment && assignment.target_worker_id || "");
+        const worker = workers.find(item => String(item && item.worker_id || "") === selectedWorkerId);
+        const status = !selectedWorkerId
+          ? '<span class="pill">Automatico</span>'
+          : worker
+            ? `<span class="pill ${worker.online ? "ok" : "warn"}">${worker.online ? "Online" : "Offline"}</span>`
+            : '<span class="pill warn">Nao registrado</span>';
+        const routineText = category.routines.length ? category.routines.join(", ") : "-";
+        return `<tr>
+          <td><strong>${escapeHtml(category.name)}</strong><div class="text-secondary small">${escapeHtml(category.id)}</div></td>
+          <td class="small">${escapeHtml(routineText)}</td>
+          <td>
+            <select class="form-select form-select-sm promax-worker-assignment" data-category="${escapeHtml(category.id)}">
+              ${renderPromaxWorkerAssignmentOptions(workers, selectedWorkerId)}
+            </select>
+          </td>
+          <td>${status}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    async function savePromaxWorkerAssignments() {
+      if (!E.promaxWorkerAssignmentsBody) return;
+      const assignments = Array.from(E.promaxWorkerAssignmentsBody.querySelectorAll(".promax-worker-assignment"))
+        .map(select => ({
+          scope_type: "category",
+          category: String(select.dataset.category || ""),
+          target_worker_id: String(select.value || "")
+        }))
+        .filter(item => item.category && item.target_worker_id);
+      if (E.promaxSaveWorkerAssignmentsBtn) E.promaxSaveWorkerAssignmentsBtn.disabled = true;
+      try {
+        const result = await req(CONFIG.endpoints.promax.workerAssignments, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignments }),
+          timeoutMs: 20000
+        });
+        state.promax.workerAssignments = Array.isArray(result.assignments) ? result.assignments : [];
+        renderPromax();
+        addLog("Configuracao dos workers salva.", "ok");
+      } catch (err) {
+        addLog(`Falha ao salvar configuracao dos workers: ${err.message}`, "err");
+      } finally {
+        if (E.promaxSaveWorkerAssignmentsBtn) E.promaxSaveWorkerAssignmentsBtn.disabled = false;
+      }
+    }
+
     function renderFinanceiroFechamentoWorker(payload) {
       const els = financeiroElements();
-      if (!els.fechamentoWorkerStatus) return;
       const workers = promaxWorkersFromPayload(payload || state.financeiro.worker || state.promax.worker || {});
+      renderFinanceiroFechamentoWorkerSelect(workers);
+      if (!els.fechamentoWorkerStatus) return;
       const worker = promaxFechamentoWorker(workers);
       if (!worker) {
         els.fechamentoWorkerStatus.textContent = "Worker fechamento offline";
@@ -4723,6 +4846,32 @@
         ? `Fechamento online: ${promaxWorkerDisplayName(worker)}`
         : `Fechamento offline: ${promaxWorkerDisplayName(worker)}`;
       els.fechamentoWorkerStatus.className = `pill ${online ? "ok" : "warn"}`;
+    }
+
+    function renderFinanceiroFechamentoWorkerSelect(workers) {
+      const els = financeiroElements();
+      const select = els.fechamentoWorker;
+      if (!select) return;
+      const current = String(select.value || "");
+      const options = ['<option value="">Automatico</option>'];
+      (Array.isArray(workers) ? workers : [])
+        .slice()
+        .sort((a, b) => {
+          const onlineDiff = (b && b.online ? 1 : 0) - (a && a.online ? 1 : 0);
+          if (onlineDiff) return onlineDiff;
+          return String(a && a.worker_id || "").localeCompare(String(b && b.worker_id || ""));
+        })
+        .forEach(worker => {
+          const workerId = String(worker && worker.worker_id || "").trim();
+          if (!workerId) return;
+          const status = worker && worker.online ? "online" : "offline";
+          const busy = worker && worker.current_job_id ? " - ocupado" : "";
+          options.push(`<option value="${escapeHtml(workerId)}">${escapeHtml(promaxWorkerDisplayName(worker))} (${status}${busy})</option>`);
+        });
+      select.innerHTML = options.join("");
+      if (Array.from(select.options).some(option => option.value === current)) {
+        select.value = current;
+      }
     }
 
     function renderPromax() {
@@ -4752,6 +4901,7 @@
         E.promaxWorkerState.className = `pill ${onlineWorkers.length ? "ok" : "warn"}`;
       }
       renderPromaxWorkers(workers);
+      renderPromaxWorkerAssignments(workers);
       renderFinanceiroFechamentoWorker(workerPayload);
       if (E.promaxQueueState) {
         const queueLabel = queue.paused ? "Fila pausada" : "Fila liberada";
@@ -4853,7 +5003,8 @@
         req(CONFIG.endpoints.promax.catalog, { timeoutMs: 20000 }),
         req(`${CONFIG.endpoints.promax.jobs}?${params.toString()}`, { timeoutMs: 30000 }),
         req(CONFIG.endpoints.promax.worker, { timeoutMs: 20000 }),
-        req(`${CONFIG.endpoints.promax.schedules}?limit=1000`, { timeoutMs: 20000 })
+        req(`${CONFIG.endpoints.promax.schedules}?limit=1000`, { timeoutMs: 20000 }),
+        req(CONFIG.endpoints.promax.workerAssignments, { timeoutMs: 20000 })
       ];
       const results = await Promise.allSettled(requests);
       state.promax.catalog = results[0].status === "fulfilled"
@@ -4862,6 +5013,7 @@
       if (results[1].status === "fulfilled") state.promax.jobs = Array.isArray(results[1].value.jobs) ? results[1].value.jobs : [];
       if (results[2].status === "fulfilled") state.promax.worker = results[2].value || null;
       if (results[3].status === "fulfilled") state.promax.schedules = Array.isArray(results[3].value.schedules) ? results[3].value.schedules : [];
+      if (results[4].status === "fulfilled") state.promax.workerAssignments = Array.isArray(results[4].value.assignments) ? results[4].value.assignments : [];
       renderPromax();
       const failed = results.filter(result => result.status === "rejected");
       if (failed.length && !silent) addLog(`Promax: ${failed.length} consulta(s) falharam.`, "err");
@@ -6543,6 +6695,7 @@
       if (E.promaxResumeBtn) E.promaxResumeBtn.addEventListener("click", () => promaxQueueAction("resume"));
       if (E.promaxClearBtn) E.promaxClearBtn.addEventListener("click", () => promaxQueueAction("pending"));
       if (E.promaxReprocessPublicationsBtn) E.promaxReprocessPublicationsBtn.addEventListener("click", promaxReprocessPublications);
+      if (E.promaxSaveWorkerAssignmentsBtn) E.promaxSaveWorkerAssignmentsBtn.addEventListener("click", savePromaxWorkerAssignments);
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobFromDate) E.promaxJobFromDate.addEventListener("change", applyPromaxJobFilters);

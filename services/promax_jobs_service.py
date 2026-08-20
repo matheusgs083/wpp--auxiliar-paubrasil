@@ -56,6 +56,7 @@ JOB_LOGS_TABLE = "job_logs"
 SCHEDULES_TABLE = "schedules"
 WORKER_HEARTBEATS_TABLE = "worker_heartbeats"
 QUEUE_STATE_TABLE = "queue_state"
+WORKER_ASSIGNMENTS_TABLE = "worker_assignments"
 
 
 class JobRecord(TypedDict):
@@ -321,6 +322,11 @@ class PromaxJobsService:
             payload = item.get("payload")
             if payload is not None and not isinstance(payload, Mapping):
                 raise ValueError("payload deve ser um objeto.")
+            clean_job_type = _required_text(
+                item.get("job_type"),
+                field_name="job_type",
+                max_length=120,
+            )
             item_available_at = item.get("available_at")
             normalized_available_at = (
                 _aware_utc(item_available_at, field_name="available_at")
@@ -331,12 +337,8 @@ class PromaxJobsService:
             prepared.append(
                 {
                     "id": str(uuid4()),
-                    "job_type": _required_text(
-                        item.get("job_type"),
-                        field_name="job_type",
-                        max_length=120,
-                    ),
-                    "payload": dict(payload or {}),
+                    "job_type": clean_job_type,
+                    "payload": self._apply_worker_assignment(clean_job_type, dict(payload or {})),
                     "priority": int(item.get("priority", 0)),
                     "concurrency_key": _required_text(
                         item.get("concurrency_key", DEFAULT_CONCURRENCY_KEY),
@@ -428,6 +430,95 @@ class PromaxJobsService:
                         )
         return [_job_record(row) for row in rows]
 
+    def list_worker_assignments(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        SELECT scope_type, category, routine, target_worker_id, updated_by, updated_at
+                        FROM {schema}.{worker_assignments}
+                        ORDER BY scope_type, category, routine
+                        """
+                    ).format(
+                        schema=sql.Identifier(self.schema),
+                        worker_assignments=sql.Identifier(WORKER_ASSIGNMENTS_TABLE),
+                    )
+                )
+                rows = cur.fetchall()
+        return [_worker_assignment_record(row) for row in rows]
+
+    def replace_worker_assignments(
+        self,
+        assignments: Sequence[Mapping[str, Any]],
+        *,
+        updated_by: str = "",
+    ) -> list[dict[str, Any]]:
+        if len(assignments) > 300:
+            raise ValueError("assignments excede o limite.")
+        prepared: list[dict[str, str]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for assignment in assignments:
+            if not isinstance(assignment, Mapping):
+                raise ValueError("assignment deve ser um objeto.")
+            scope_type = str(assignment.get("scope_type") or "category").strip().lower()
+            if scope_type not in {"category", "routine"}:
+                raise ValueError("scope_type deve ser category ou routine.")
+            category = _required_text(assignment.get("category"), field_name="category", max_length=120)
+            routine = str(assignment.get("routine") or "").strip() if scope_type == "routine" else ""
+            if scope_type == "routine":
+                routine = _required_text(routine, field_name="routine", max_length=120)
+            target_worker_id = _required_text(
+                assignment.get("target_worker_id"),
+                field_name="target_worker_id",
+                max_length=160,
+            )
+            key = (scope_type, category, routine)
+            if key in seen:
+                raise ValueError("assignments contem regra duplicada.")
+            seen.add(key)
+            prepared.append(
+                {
+                    "scope_type": scope_type,
+                    "category": category,
+                    "routine": routine,
+                    "target_worker_id": target_worker_id,
+                }
+            )
+
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL("DELETE FROM {schema}.{worker_assignments}").format(
+                        schema=sql.Identifier(self.schema),
+                        worker_assignments=sql.Identifier(WORKER_ASSIGNMENTS_TABLE),
+                    )
+                )
+                for item in prepared:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            INSERT INTO {schema}.{worker_assignments} (
+                                scope_type, category, routine, target_worker_id, updated_by
+                            )
+                            VALUES (%s, %s, %s, %s, %s)
+                            """
+                        ).format(
+                            schema=sql.Identifier(self.schema),
+                            worker_assignments=sql.Identifier(WORKER_ASSIGNMENTS_TABLE),
+                        ),
+                        (
+                            item["scope_type"],
+                            item["category"],
+                            item["routine"],
+                            item["target_worker_id"],
+                            str(updated_by or "").strip(),
+                        ),
+                    )
+        return self.list_worker_assignments()
+
     def claim_next_job(
         self,
         *,
@@ -457,7 +548,8 @@ class PromaxJobsService:
                               ON j.status = 'pending'
                              AND j.available_at <= NOW()
                              AND j.concurrency_key = %s
-                            WHERE q.singleton = TRUE
+                             AND COALESCE(NULLIF(BTRIM(j.payload->>'target_worker_id'), ''), %s) = %s
+                             WHERE q.singleton = TRUE
                               AND q.paused = FALSE
                               AND (
                                   SELECT COUNT(*)
@@ -490,6 +582,8 @@ class PromaxJobsService:
                     ),
                     (
                         clean_concurrency_key,
+                        clean_worker_id,
+                        clean_worker_id,
                         self.max_concurrent_jobs,
                         lease_token,
                         clean_worker_id,
@@ -1597,6 +1691,8 @@ class PromaxJobsService:
         triggered_by_job_id: str | None,
     ) -> JobRecord:
         schedule_id = str(schedule["id"])
+        job_type = str(schedule["job_type"])
+        payload = self._apply_worker_assignment(job_type, dict(schedule["payload"] or {}), cur=cur)
         idempotency_key = (
             _schedule_trigger_idempotency_key(schedule_id, triggered_by_job_id)
             if triggered_by_job_id is not None
@@ -1624,8 +1720,8 @@ class PromaxJobsService:
             ),
             (
                 job_id,
-                str(schedule["job_type"]),
-                Jsonb(dict(schedule["payload"] or {})),
+                job_type,
+                Jsonb(payload),
                 DEFAULT_CONCURRENCY_KEY,
                 idempotency_key,
                 schedule_id,
@@ -1693,6 +1789,96 @@ class PromaxJobsService:
                 },
             )
         return _job_record(job)
+
+    def _apply_worker_assignment(
+        self,
+        job_type: str,
+        payload: dict[str, Any],
+        *,
+        cur: Any | None = None,
+    ) -> dict[str, Any]:
+        if str(payload.get("target_worker_id") or "").strip():
+            return payload
+        target_worker_id = self._resolve_worker_assignment(job_type, payload, cur=cur)
+        if target_worker_id:
+            payload["target_worker_id"] = target_worker_id
+        return payload
+
+    def _resolve_worker_assignment(
+        self,
+        job_type: str,
+        payload: Mapping[str, Any],
+        *,
+        cur: Any | None = None,
+    ) -> str:
+        category = str(payload.get("category") or job_type or "").strip()
+        routines = payload.get("routines")
+        routine_values = [str(item or "").strip() for item in routines] if isinstance(routines, Sequence) and not isinstance(routines, (str, bytes)) else []
+        routine_values = [item for item in routine_values if item]
+
+        def query(cursor: Any) -> list[Mapping[str, Any]]:
+            if not routine_values:
+                cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT scope_type, routine, target_worker_id
+                        FROM {schema}.{worker_assignments}
+                        WHERE category = %s
+                          AND scope_type = 'category'
+                        ORDER BY routine
+                        """
+                    ).format(
+                        schema=sql.Identifier(self.schema),
+                        worker_assignments=sql.Identifier(WORKER_ASSIGNMENTS_TABLE),
+                    ),
+                    (category,),
+                )
+                return cursor.fetchall()
+            cursor.execute(
+                sql.SQL(
+                    """
+                    SELECT scope_type, routine, target_worker_id
+                    FROM {schema}.{worker_assignments}
+                    WHERE category = %s
+                      AND (
+                        scope_type = 'category'
+                        OR (scope_type = 'routine' AND routine = ANY(%s))
+                      )
+                    ORDER BY CASE WHEN scope_type = 'routine' THEN 0 ELSE 1 END, routine
+                    """
+                ).format(
+                    schema=sql.Identifier(self.schema),
+                    worker_assignments=sql.Identifier(WORKER_ASSIGNMENTS_TABLE),
+                ),
+                (category, routine_values),
+            )
+            return cursor.fetchall()
+
+        if not category:
+            return ""
+        if cur is not None:
+            rows = query(cur)
+        else:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                with conn.cursor(row_factory=dict_row) as local_cur:
+                    rows = query(local_cur)
+        if not rows:
+            return ""
+        routine_targets = {
+            str(row.get("target_worker_id") or "").strip()
+            for row in rows
+            if str(row.get("scope_type") or "") == "routine"
+            and str(row.get("target_worker_id") or "").strip()
+        }
+        if len(routine_targets) == 1:
+            return next(iter(routine_targets))
+        if len(routine_targets) > 1:
+            return ""
+        for row in rows:
+            if str(row.get("scope_type") or "") == "category":
+                return str(row.get("target_worker_id") or "").strip()
+        return ""
 
     def reap_expired_leases(self, *, limit: int = 100) -> int:
         safe_limit = _bounded_limit(limit, maximum=1_000)
@@ -2042,6 +2228,25 @@ class PromaxJobsService:
                         schema=schema,
                         worker_heartbeats=sql.Identifier(WORKER_HEARTBEATS_TABLE),
                         jobs=sql.Identifier(JOBS_TABLE),
+                    )
+                )
+                cur.execute(
+                    sql.SQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS {schema}.{worker_assignments} (
+                            scope_type VARCHAR(16) NOT NULL
+                                CHECK (scope_type IN ('category', 'routine')),
+                            category VARCHAR(120) NOT NULL,
+                            routine VARCHAR(120) NOT NULL DEFAULT '',
+                            target_worker_id VARCHAR(160) NOT NULL,
+                            updated_by VARCHAR(160) NOT NULL DEFAULT '',
+                            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                            PRIMARY KEY (scope_type, category, routine)
+                        )
+                        """
+                    ).format(
+                        schema=schema,
+                        worker_assignments=sql.Identifier(WORKER_ASSIGNMENTS_TABLE),
                     )
                 )
                 cur.execute(
@@ -2623,6 +2828,17 @@ def _schedule_record(row: Mapping[str, Any]) -> ScheduleRecord:
         "created_by": str(row.get("created_by") or ""),
         "created_at": _iso_required(row["created_at"]),
         "updated_at": _iso_required(row["updated_at"]),
+    }
+
+
+def _worker_assignment_record(row: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "scope_type": str(row.get("scope_type") or ""),
+        "category": str(row.get("category") or ""),
+        "routine": str(row.get("routine") or ""),
+        "target_worker_id": str(row.get("target_worker_id") or ""),
+        "updated_by": str(row.get("updated_by") or ""),
+        "updated_at": _iso(row.get("updated_at")),
     }
 
 

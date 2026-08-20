@@ -55,6 +55,7 @@ class AdminFinanceiroFechamentoRequest(BaseModel):
     modo: str = "completo"
     ponto_apoio: str = "0"
     km_atual: str = ""
+    target_worker_id: str = Field(default="", max_length=120)
 
 
 class InternalFinanceiroFechamentoSyncRequest(BaseModel):
@@ -255,6 +256,7 @@ def create_admin_financeiro_router(
             clean_km_atual = clean_km_atual.replace(".", "").replace(",", "")
             if not clean_km_atual.isdigit():
                 raise HTTPException(status_code=400, detail="KM atual deve conter apenas numeros.")
+        clean_target_worker_id = str(payload.target_worker_id or "").strip()
         promax_unit = PROMAX_UNIT_BY_FILIAL.get(str(int(clean_filial)) if clean_filial.isdigit() else clean_filial, clean_filial)
         job_payload = {
             "operation": "fechamento-mapa",
@@ -273,6 +275,8 @@ def create_admin_financeiro_router(
             "send_dates": False,
             "publish": False,
         }
+        if clean_target_worker_id:
+            job_payload["target_worker_id"] = clean_target_worker_id
         job = enqueue_promax_job(
             job_type="fechamento_mapa",
             payload=job_payload,
@@ -284,7 +288,7 @@ def create_admin_financeiro_router(
             channel="api",
             event_type="admin_financeiro_fechamento_promax",
             decision="allowed",
-            reason=f"mapa={clean_mapa}; filial={clean_filial}; modo={clean_modo}",
+            reason=f"mapa={clean_mapa}; filial={clean_filial}; modo={clean_modo}; worker={clean_target_worker_id or 'auto'}",
         )
         return {"ok": True, "job": job}
 

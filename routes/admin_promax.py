@@ -534,6 +534,34 @@ class PromaxWorkerClaimRequest(_StrictPayload):
     lease_seconds: int = Field(default=120, ge=15, le=3600)
 
 
+class PromaxWorkerAssignmentItem(_StrictPayload):
+    scope_type: Literal["category", "routine"] = "category"
+    category: str = Field(min_length=1, max_length=120)
+    routine: str = Field(default="", max_length=120)
+    target_worker_id: str = Field(min_length=1, max_length=160)
+
+    @field_validator("category", "routine", "target_worker_id")
+    @classmethod
+    def clean_text(cls, value: str) -> str:
+        return str(value or "").strip()
+
+    @model_validator(mode="after")
+    def validate_assignment(self) -> PromaxWorkerAssignmentItem:
+        if not self.category:
+            raise ValueError("category e obrigatoria")
+        if not self.target_worker_id:
+            raise ValueError("target_worker_id e obrigatorio")
+        if self.scope_type == "routine" and not self.routine:
+            raise ValueError("routine e obrigatoria para regra por rotina")
+        if self.scope_type == "category":
+            self.routine = ""
+        return self
+
+
+class PromaxWorkerAssignmentsRequest(_StrictPayload):
+    assignments: list[PromaxWorkerAssignmentItem] = Field(default_factory=list, max_length=300)
+
+
 class PromaxWorkerHeartbeatRequest(_StrictPayload):
     worker_id: str = Field(min_length=1, max_length=120)
     pid: int = Field(gt=0, le=2_147_483_647)
@@ -1009,6 +1037,38 @@ def create_admin_promax_router(
         resolved_catalog = resolve_catalog()
         record_admin_event(request, "admin_promax_catalog")
         return _item_response(resolved_catalog, key="catalog")
+
+    @router.get("/api/admin/promax/worker-assignments")
+    def api_admin_promax_worker_assignments(
+        request: Request,
+        _context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        list_assignments = getattr(service, "list_worker_assignments", None)
+        if not callable(list_assignments):
+            raise HTTPException(status_code=503, detail="Configuracao de workers nao disponivel.")
+        assignments = list_assignments()
+        record_admin_event(request, "admin_promax_worker_assignments_list")
+        return _mapping_or_value(assignments, key="assignments")
+
+    @router.put("/api/admin/promax/worker-assignments")
+    def api_admin_promax_replace_worker_assignments(
+        request: Request,
+        payload: PromaxWorkerAssignmentsRequest,
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        replace_assignments = getattr(service, "replace_worker_assignments", None)
+        if not callable(replace_assignments):
+            raise HTTPException(status_code=503, detail="Configuracao de workers nao disponivel.")
+        assignments = replace_assignments(
+            [item.model_dump(mode="json") for item in payload.assignments],
+            updated_by=context_actor(context),
+        )
+        record_admin_event(
+            request,
+            "admin_promax_worker_assignments_replace",
+            reason=f"assignments={len(payload.assignments)}",
+        )
+        return _mapping_or_value(assignments, key="assignments")
 
     @router.post("/api/admin/promax/jobs", status_code=202)
     def api_admin_promax_create_job(
