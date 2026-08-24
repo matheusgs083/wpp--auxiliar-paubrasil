@@ -50,3 +50,29 @@ def test_extract_030302_items_from_real_promax_linhas_disponiveis():
     assert rows["863059"].total_sistema == Decimal("238")
     assert rows["37108"].total_sistema == Decimal("4")
     assert "42069" in rows
+
+
+def test_extract_030302_items_from_nested_result_metadata_linhas_disponiveis():
+    payload = {
+        "metadata": {
+            "resultado_fisico": {
+                "metadata": {
+                    "linhasDisponiveis": [
+                        {"codigo": "27983", "texto": " un GFA VIDRO 635ML,AMBAR,", "vazUn": "192"},
+                        {"codigo": "188006", "texto": " un GFA VIDRO 1L,AMBAR,RET", "vazUn": "12"},
+                        {"codigo": "198214", "texto": " un GFA VIDRO 330ML,AMBAR,", "vazUn": "5382"},
+                        {"codigo": "37108", "texto": " pc CHAPATEX,1,00 M,1,20 M", "vazUn": "4"},
+                    ],
+                    "naoAplicados": [],
+                    "totalRecebido": 8,
+                }
+            }
+        }
+    }
+
+    rows = {row.cod_item: row for row in _extract_030302_items(payload)}
+
+    assert rows["27983"].total_sistema == Decimal("192")
+    assert rows["188006"].total_sistema == Decimal("12")
+    assert rows["198214"].total_sistema == Decimal("5382")
+    assert rows["37108"].total_sistema == Decimal("4")

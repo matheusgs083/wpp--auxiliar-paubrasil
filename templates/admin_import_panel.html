@@ -228,6 +228,23 @@
     .finance-closing-log-list { display: grid; gap: 0.28rem; margin: 0; padding: 0; list-style: none; color: var(--ink-900); font-size: 0.78rem; font-weight: 700; }
     .finance-closing-log-list li { display: flex; gap: 0.45rem; align-items: baseline; }
     .finance-closing-log-list .time { color: var(--ink-500); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.72rem; white-space: nowrap; }
+    .finance-workspace { display: grid; gap: 0.85rem; }
+    .finance-topbar { display: grid; grid-template-columns: minmax(180px, 230px) minmax(220px, 280px) minmax(220px, 1fr); gap: 0.75rem; align-items: end; padding: 0.8rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .finance-topbar-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+    .finance-step-grid { display: grid; grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.35fr); gap: 0.85rem; align-items: stretch; }
+    .finance-step-card { display: grid; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .finance-step-card.primary { border-color: rgba(37, 99, 235, 0.38); background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), var(--surface)); }
+    .finance-step-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+    .finance-step-title { margin: 0; color: var(--ink-900); font-size: 0.98rem; font-weight: 900; }
+    .finance-step-form { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(150px, 1fr) minmax(100px, 0.7fr) auto; gap: 0.55rem; align-items: end; }
+    .finance-step-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .finance-compact-panel { display: grid; gap: 0.6rem; padding: 0.75rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .finance-compact-panel.compact { align-self: start; }
+    .finance-compact-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.65rem; }
+    .finance-compact-panel h4 { margin: 0; color: var(--ink-900); font-size: 0.88rem; font-weight: 900; }
+    .finance-compact-panel .finance-step-form { grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.25fr); }
+    .finance-compact-panel .finance-step-form .btn { width: 100%; }
+    .finance-primary-action { min-width: 172px; }
     .finance-closing-card { display: grid; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
     .finance-closing-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding-bottom: 0.65rem; border-bottom: 1px solid var(--line); }
     .finance-closing-title { margin: 0; color: var(--ink-900); font-size: 0.98rem; font-weight: 900; }
@@ -285,6 +302,7 @@
       .conference-table-wrap td .d-flex { width: 100%; }
     }
     @media (max-width: 1180px) { .finance-sheet-body { grid-template-columns: 1fr; } .finance-sheet-quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 1180px) { .finance-topbar, .finance-step-grid, .finance-step-form { grid-template-columns: 1fr; } .finance-topbar-actions, .finance-step-actions { justify-content: stretch; } .finance-topbar-actions .btn, .finance-step-actions .btn { flex: 1 1 160px; } }
     @media (max-width: 1180px) { .finance-action-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
     @media (max-width: 820px) { .finance-closing-filters { grid-template-columns: 1fr; } }
     @media (max-width: 620px) { .finance-sheet-mini-grid, .finance-sheet-quick-grid, .finance-action-grid { grid-template-columns: 1fr; } }
@@ -1806,15 +1824,8 @@
             <button class="finance-subtab" type="button" data-financeiro-subtab="mapas" role="tab" aria-selected="false">Mapas</button>
           </div>
           <section class="finance-subpanel" data-financeiro-subpanel="fechamento">
-            <div class="finance-closing-card mb-3" aria-labelledby="financeiroFechamentoResumoTitle">
-              <div class="finance-closing-head">
-                <div>
-                  <h3 class="finance-closing-title" id="financeiroFechamentoResumoTitle"><i class="bi bi-clipboard-data me-1 text-primary"></i>Fechamento</h3>
-                  <div class="form-text">Selecione a data e a revenda para visualizar o caixa noturno consolidado.</div>
-                </div>
-                <span class="pill" id="financeiroStatus">Aguardando caixa</span>
-              </div>
-              <div class="finance-closing-filters">
+            <div class="finance-workspace">
+              <div class="finance-topbar">
                 <label class="form-label small fw-semibold mb-0" for="financeiroData">Data do caixa
                   <input type="date" class="form-control form-control-sm mt-1" id="financeiroData">
                 </label>
@@ -1823,32 +1834,40 @@
                     <option value="">Escolha a revenda</option>
                   </select>
                 </label>
-                <div class="d-grid gap-1">
-                  <button class="btn btn-outline-primary btn-sm w-100" id="financeiroRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
-                  <button class="btn btn-outline-success btn-sm w-100" id="financeiroExportPdfBtn" type="button"><i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF</button>
+                <div class="finance-topbar-actions">
+                  <span class="pill" id="financeiroStatus">Aguardando caixa</span>
+                  <button class="btn btn-outline-primary btn-sm" id="financeiroRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+                  <button class="btn btn-outline-success btn-sm" id="financeiroExportPdfBtn" type="button"><i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF</button>
                 </div>
               </div>
-              <div class="finance-entry-block mb-3">
-                <div class="finance-entry-head">
-                  <div>
-                    <h4 class="mb-0"><i class="bi bi-map me-1 text-primary"></i>Relatorio de Rotas do Dia - 031120</h4>
-                    <div class="form-text" id="financeiro031120Hint">Escolha uma revenda para solicitar o download ou importar o CSV da operacao correta.</div>
+              <div class="finance-step-grid">
+                <div class="finance-step-card primary" aria-labelledby="financeiroFechamentoResumoTitle">
+                  <div class="finance-step-head">
+                    <div>
+                      <h3 class="finance-step-title" id="financeiroFechamentoResumoTitle"><i class="bi bi-clipboard-data me-1 text-primary"></i>Caixa noturno</h3>
+                      <div class="form-text">Resumo do dia, malote, comprovantes, vales, despesas e validacao das rotas.</div>
+                    </div>
                   </div>
-                  <span class="pill" id="financeiro031120Status">Aguardando revenda</span>
+                  <div class="finance-summary-strip" id="financeiroSummaryCards"></div>
                 </div>
-                <div class="row g-2 align-items-end">
-                  <div class="col-12 col-lg-4">
-                    <div class="small fw-semibold text-secondary">Operacao selecionada</div>
-                    <div class="mono fw-bold" id="financeiro031120Target">-</div>
-                    <div class="form-text">Rotina Promax: 031120_BOT | Classificacao: Mapa | Armazem central.</div>
+                <div class="finance-compact-panel compact">
+                  <div class="finance-compact-panel-head">
+                    <div>
+                      <h4><i class="bi bi-map me-1 text-primary"></i>Rotas do dia - 031120</h4>
+                      <div class="form-text" id="financeiro031120Hint">Escolha uma revenda para solicitar o download ou importar o CSV da operacao correta.</div>
+                    </div>
+                    <span class="pill" id="financeiro031120Status">Aguardando revenda</span>
                   </div>
-                  <div class="col-12 col-lg-4">
-                    <label class="form-label small fw-semibold mb-1" for="financeiro031120File">Upload manual do CSV 031120</label>
-                    <input class="form-control form-control-sm" id="financeiro031120File" type="file" accept=".csv">
-                  </div>
-                  <div class="col-12 col-lg-4 d-flex flex-wrap gap-2 justify-content-lg-end">
-                    <button class="btn btn-outline-primary btn-sm" id="financeiro031120DownloadBtn" type="button"><i class="bi bi-cloud-arrow-down me-1"></i>Solicitar download</button>
-                    <button class="btn btn-primary btn-sm" id="financeiro031120UploadBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Importar CSV</button>
+                  <div class="finance-step-form">
+                    <div>
+                      <div class="small fw-semibold text-secondary">Operacao selecionada</div>
+                      <div class="mono fw-bold" id="financeiro031120Target">-</div>
+                    </div>
+                    <label class="form-label small fw-semibold mb-0" for="financeiro031120File">Upload manual do CSV 031120
+                      <input class="form-control form-control-sm mt-1" id="financeiro031120File" type="file" accept=".csv">
+                    </label>
+                    <button class="btn btn-outline-primary btn-sm" id="financeiro031120DownloadBtn" type="button"><i class="bi bi-cloud-arrow-down me-1"></i>Solicitar</button>
+                    <button class="btn btn-primary btn-sm" id="financeiro031120UploadBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Importar</button>
                   </div>
                 </div>
               </div>
@@ -1867,10 +1886,10 @@
               </select>
             </label>
           </div>
-          <div class="finance-entry-block mb-3">
-            <div class="finance-entry-head">
+          <div class="finance-step-card primary mb-3">
+            <div class="finance-step-head">
               <div>
-                <h4 class="mb-0"><i class="bi bi-play-circle me-1 text-primary"></i>Fechamento Promax</h4>
+                <h4 class="finance-step-title"><i class="bi bi-play-circle me-1 text-primary"></i>Fechamento Promax</h4>
                 <div class="form-text">Solicite o fechamento fisico, financeiro ou completo. Ao concluir, o mapa e preenchido no caixa automaticamente.</div>
               </div>
               <div class="d-flex flex-wrap gap-2 justify-content-end">
@@ -1878,25 +1897,22 @@
                 <span class="pill" id="financeiroFechamentoStatus">Aguardando solicitacao</span>
               </div>
             </div>
-            <div class="row g-2 align-items-end">
-              <div class="col-12 col-md-3">
-                <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoMapa">Mapa</label>
+            <div class="finance-step-form">
+              <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoMapa">Mapa
                 <input type="text" class="form-control form-control-sm" id="financeiroFechamentoMapa" placeholder="Ex: 93741">
-              </div>
-              <div class="col-12 col-md-3">
-                <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoModo">Execucao</label>
+              </label>
+              <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoModo">Execucao
                 <select class="form-select form-select-sm" id="financeiroFechamentoModo">
                   <option value="completo">Fechamento completo</option>
                   <option value="fisico">Somente fisico 030302</option>
                   <option value="financeiro">Somente financeiro 03030702</option>
                 </select>
-              </div>
-              <div class="col-12 col-md-2">
-                <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoKm">KM atual</label>
+              </label>
+              <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoKm">KM atual
                 <input type="number" class="form-control form-control-sm" id="financeiroFechamentoKm" min="0" step="1" inputmode="numeric" placeholder="Opcional">
-              </div>
-              <div class="col-12 col-md-2 d-flex flex-wrap gap-2">
-                <button class="btn btn-primary btn-sm" id="financeiroFechamentoBtn" type="button"><i class="bi bi-play-fill me-1"></i>Solicitar fechamento</button>
+              </label>
+              <div class="finance-step-actions">
+                <button class="btn btn-primary btn-sm finance-primary-action" id="financeiroFechamentoBtn" type="button"><i class="bi bi-play-fill me-1"></i>Solicitar fechamento</button>
                 <button class="btn btn-outline-primary btn-sm" id="financeiroFechamentoRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar caixa</button>
               </div>
             </div>
@@ -1938,7 +1954,6 @@
                 </div>
               </div>
             </div>
-          <div class="finance-summary-strip mb-3" id="financeiroSummaryCards"></div>
           <div class="finance-grid">
             <aside class="finance-side">
               <div class="d-flex align-items-center justify-content-between mb-2">

@@ -151,10 +151,10 @@ class ConferenciaService:
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
-                            placa = CASE WHEN {}.conferencia_mapas.placa = '' THEN EXCLUDED.placa ELSE {}.conferencia_mapas.placa END,
-                            motorista = CASE WHEN {}.conferencia_mapas.motorista = '' THEN EXCLUDED.motorista ELSE {}.conferencia_mapas.motorista END,
-                            ajudante1 = CASE WHEN {}.conferencia_mapas.ajudante1 = '' THEN EXCLUDED.ajudante1 ELSE {}.conferencia_mapas.ajudante1 END,
-                            ajudante2 = CASE WHEN {}.conferencia_mapas.ajudante2 = '' THEN EXCLUDED.ajudante2 ELSE {}.conferencia_mapas.ajudante2 END,
+                            placa = CASE WHEN current_map.placa = '' THEN EXCLUDED.placa ELSE current_map.placa END,
+                            motorista = CASE WHEN current_map.motorista = '' THEN EXCLUDED.motorista ELSE current_map.motorista END,
+                            ajudante1 = CASE WHEN current_map.ajudante1 = '' THEN EXCLUDED.ajudante1 ELSE current_map.ajudante1 END,
+                            ajudante2 = CASE WHEN current_map.ajudante2 = '' THEN EXCLUDED.ajudante2 ELSE current_map.ajudante2 END,
                             status = 'aberta',
                             source_job_id = EXCLUDED.source_job_id,
                             source_payload = EXCLUDED.source_payload,
@@ -162,13 +162,6 @@ class ConferenciaService:
                         RETURNING id
                         """
                     ).format(
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
                     ),
                     (
@@ -239,7 +232,10 @@ class ConferenciaService:
             "mapa": mapa,
             "created_by": username,
             "itens": len(grouped_items),
+            "itens_extraidos_030302": len(item_drafts),
             "conferidos": int(stats.get("conferidos") or 0),
+            "dados_030302_found": bool(item_drafts),
+            "dados_030303_found": any(dados_030303.values()),
         }
 
     def list_mapas(
@@ -326,8 +322,6 @@ class ConferenciaService:
                 _assert_filial_allowed(str(mapa.get("filial") or ""), context)
                 item_where = ["i.conferencia_id = %s"]
                 params: list[Any] = [int(mapa_id)]
-                if not reveal_totals:
-                    item_where.append("c.item_id IS NOT NULL")
                 clean_search = str(item_search or "").strip().lower()
                 if clean_search:
                     item_where.append("(LOWER(i.cod_item) LIKE %s OR LOWER(i.descricao) LIKE %s OR LOWER(i.categoria) LIKE %s)")
@@ -372,14 +366,12 @@ class ConferenciaService:
                         FROM {}.conferencia_itens i
                         LEFT JOIN {}.conferencia_contagens c ON c.item_id = i.id
                         WHERE i.conferencia_id = %s
-                          {}
                         GROUP BY grupo_contagem
                         ORDER BY grupo_contagem
                         """
                     ).format(
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
-                        sql.SQL("AND c.item_id IS NOT NULL") if not reveal_totals else sql.SQL(""),
                     ),
                     (int(mapa_id),),
                 )
@@ -615,7 +607,7 @@ class ConferenciaService:
             "ajudante2": str(row.get("ajudante2") or ""),
             "status": str(row.get("status") or "aberta"),
             "source_status": _source_status_label(row.get("status")),
-            "itens": int(row.get("itens") or 0) if reveal_totals else int(row.get("conferidos") or 0),
+            "itens": int(row.get("itens") or 0),
             "conferidos": int(row.get("conferidos") or 0),
             "updated_at": _datetime_iso(row.get("updated_at")),
         }

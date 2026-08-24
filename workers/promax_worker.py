@@ -1338,6 +1338,59 @@ class PromaxWorker:
                     "response": dict(response) if isinstance(response, Mapping) else {},
                 },
             )
+            if isinstance(response, Mapping):
+                conferencia = response.get("conferencia")
+                conferencia_error = str(response.get("conferencia_error") or "").strip()
+                if isinstance(conferencia, Mapping):
+                    itens = int(conferencia.get("itens") or 0)
+                    extraidos = int(conferencia.get("itens_extraidos_030302") or 0)
+                    conferidos = int(conferencia.get("conferidos") or 0)
+                    level = "info" if itens > 0 else "warning"
+                    self._send_log(
+                        job_id,
+                        lease_token,
+                        (
+                            f"Conferencia do mapa {mapa} sincronizada: "
+                            f"{itens} item(ns) esperado(s) gravado(s), "
+                            f"{extraidos} item(ns) extraido(s) da 030302, "
+                            f"{conferidos} ja conferido(s)."
+                        ),
+                        level,
+                        {
+                            "event": "promax_conferencia_fechamento_sync_done",
+                            "mapa": mapa,
+                            "filial": filial,
+                            "data": data,
+                            "conferencia": dict(conferencia),
+                        },
+                    )
+                elif conferencia_error:
+                    self._send_log(
+                        job_id,
+                        lease_token,
+                        f"Falha ao sincronizar conferencia do mapa {mapa}: {conferencia_error}",
+                        "error",
+                        {
+                            "event": "promax_conferencia_fechamento_sync_failed",
+                            "mapa": mapa,
+                            "filial": filial,
+                            "data": data,
+                            "error": conferencia_error,
+                        },
+                    )
+                else:
+                    self._send_log(
+                        job_id,
+                        lease_token,
+                        f"Conferencia do mapa {mapa} nao retornou diagnostico de sincronizacao.",
+                        "warning",
+                        {
+                            "event": "promax_conferencia_fechamento_sync_missing_response",
+                            "mapa": mapa,
+                            "filial": filial,
+                            "data": data,
+                        },
+                    )
         except (PromaxClientError, ValueError) as exc:
             self._send_log(
                 job_id,
