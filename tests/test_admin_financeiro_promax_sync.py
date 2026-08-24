@@ -40,7 +40,7 @@ def test_extract_motorista_030303_from_direct_result_metadata():
     assert _extract_motorista_030303(payload) == "JOAO DA SILVA"
 
 
-def test_financeiro_metrics_recalcula_total_promax_com_dinheiro_da_saida():
+def test_financeiro_metrics_usa_total_promax_como_dinheiro_da_saida():
     dados = {
         "saida": {
             "total": "",
@@ -56,7 +56,7 @@ def test_financeiro_metrics_recalcula_total_promax_com_dinheiro_da_saida():
 
     metrics = _financeiro_metrics_from_fechamento(dados)
 
-    assert metrics["total_promax"] == Decimal("41380.23")
+    assert metrics["total_promax"] == Decimal("161.70")
     assert metrics["credito_conta"] == Decimal("17127.80")
     assert metrics["dinheiro_promax"] == Decimal("161.70")
     assert metrics["boletos_rota"] == Decimal("7")

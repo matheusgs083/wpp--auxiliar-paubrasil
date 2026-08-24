@@ -794,7 +794,7 @@ def _iter_item_dicts(value: Any, parent_key: str = "") -> Iterable[tuple[dict[st
             yield value, parent_key
         for key, child in value.items():
             key_text = str(key or "")
-            if isinstance(child, list) and key_text.lower() in {"materiais", "material", "produtos", "produto", "itens", "items", "diferencas"}:
+            if isinstance(child, list) and _norm_key(key_text) in {"materiais", "material", "produtos", "produto", "itens", "items", "diferencas", "linhasdisponiveis"}:
                 for item in child:
                     yield from _iter_item_dicts(item, key_text)
             elif isinstance(child, dict):
@@ -807,7 +807,24 @@ def _iter_item_dicts(value: Any, parent_key: str = "") -> Iterable[tuple[dict[st
 def _looks_like_item(value: dict[str, Any]) -> bool:
     keys = {_norm_key(key) for key in value}
     has_code = bool(keys.intersection({"codigo", "coditem", "cod_item", "cod", "item", "produto", "material", "codigoproduto", "codigomaterial"}))
-    has_qty = bool(keys.intersection({"total", "quantidade", "qtd", "qtde", "saldo", "cobrado", "sistema", "diferenca"}))
+    has_qty = bool(keys.intersection({
+        "total",
+        "quantidade",
+        "qtd",
+        "qtde",
+        "saldo",
+        "cobrado",
+        "sistema",
+        "diferenca",
+        "faltaun",
+        "faltaav",
+        "vazun",
+        "vazav",
+        "troun",
+        "troav",
+        "devun",
+        "devav",
+    }))
     return has_code and has_qty
 
 
@@ -816,11 +833,11 @@ def _draft_from_raw_item(raw: dict[str, Any], parent_key: str) -> ConferenciaIte
     code = _digits_or_text(code)
     if not code:
         return None
-    descricao = _first_text(raw, "descricao", "descrição", "nome", "descricao_item", "produto_descricao", "material_descricao", "desc")
+    descricao = _first_text(raw, "descricao", "descrição", "nome", "texto", "descricao_item", "produto_descricao", "material_descricao", "desc")
     tipo_item = "material" if "material" in str(parent_key or "").lower() else "produto" if "produto" in str(parent_key or "").lower() else _first_text(raw, "tipo_item", "tipo")
     if not tipo_item:
         tipo_item = "item"
-    total = _first_decimal(raw, "total", "quantidade", "qtd", "qtde", "saldo", "cobrado", "sistema", "diferenca")
+    total = _first_decimal(raw, "total", "quantidade", "qtd", "qtde", "saldo", "cobrado", "sistema", "diferenca", "faltaUn", "faltaAv", "vazUn", "vazAv", "troUn", "troAv", "devUn", "devAv")
     unidade = _first_text(raw, "unidade", "un", "embalagem")
     valor_unit = _first_decimal(raw, "valor_unitario", "valorUnitario", "preco", "valor")
     categoria = _first_text(raw, "categoria", "tipo_material", "grupo", "familia", "tipo")

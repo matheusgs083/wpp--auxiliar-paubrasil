@@ -1612,29 +1612,24 @@ def _financeiro_metrics_from_fechamento(dados: dict[str, Any]) -> dict[str, Deci
 
     saida = dados.get("saida")
     if isinstance(saida, dict):
-        metrics["total_promax"] = abs(_decimal(saida.get("total")))
         itens = saida.get("itens")
-        total_saida_itens = Decimal("0")
         if isinstance(itens, list):
             for item in itens:
                 if not isinstance(item, dict):
                     continue
                 descricao = _text_key(item.get("descricao"))
                 valor = abs(_decimal(item.get("valor")))
-                total_saida_itens += valor
                 if any(term in descricao for term in ("BOLETO", "BLOQUETO")):
                     metrics["boletos_rota"] += _decimal(item.get("qtNfs"))
                 if any(term in descricao for term in ("TRANSFERENCIA", "CREDITO", "CREDITO EM CONTA", "PIX")):
                     metrics["credito_conta"] += valor
                 if any(term in descricao for term in ("A VISTA", "AVISTA", "DINHEIRO")):
                     metrics["dinheiro_promax"] += valor
-        if metrics["total_promax"] == 0 and total_saida_itens:
-            metrics["total_promax"] = total_saida_itens
+        metrics["total_promax"] = metrics["dinheiro_promax"]
 
     if metrics["total_promax"] == 0:
         retorno = dados.get("retorno")
         if isinstance(retorno, dict):
-            metrics["total_promax"] = abs(_decimal(retorno.get("totalRetorno")))
             itens = retorno.get("itens")
             if isinstance(itens, list):
                 for item in itens:
@@ -1645,6 +1640,7 @@ def _financeiro_metrics_from_fechamento(dados: dict[str, Any]) -> dict[str, Deci
                         metrics["credito_conta"] += abs(_decimal(item.get("valor")))
                     if any(term in descricao for term in ("A VISTA", "AVISTA", "DINHEIRO")):
                         metrics["dinheiro_promax"] += abs(_decimal(item.get("valor")))
+            metrics["total_promax"] = metrics["dinheiro_promax"]
     return metrics
 
 
