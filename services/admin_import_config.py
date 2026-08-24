@@ -88,6 +88,17 @@ def build_admin_import_datasets(
             "summarize_method": "summarize_source",
             "import_method": "import_source",
         },
+        "dmateriais": {
+            "label": "Tabela de Materiais - 0112",
+            "default_path": project_root / "data" / "dMateriais" / "0112.csv",
+            "allow_default_source": False,
+            "service": services.dmateriais_import_service,
+            "upload_mode": "single",
+            "accept_extensions": ".csv",
+            "validate_method": "validate_source",
+            "summarize_method": "summarize_source",
+            "import_method": "import_source",
+        },
         **{
             f"boletos_bradesco_op_{filial_code}": {
                 "label": f"Boletos Operacao {filial_code} - {filial_labels[filial_code]}",
@@ -115,6 +126,31 @@ def build_admin_import_datasets(
                 "import_method": "import_source",
             }
             for filial_code in sorted(filial_labels, key=int)
+        },
+        **{
+            f"relatorio_031120_op_{filial_code}": {
+                "label": f"Relatorio 031120 Operacao {filial_code} - {filial_labels[filial_code]}",
+                "default_path": project_root / "data" / "Relatorio031120" / f"031120_operacao_{filial_code}.csv",
+                "allow_default_source": False,
+                "service": services.relatorio_031120_import_services[filial_code],
+                "upload_mode": "single",
+                "accept_extensions": ".csv",
+                "validate_method": "validate_source",
+                "summarize_method": "summarize_source",
+                "import_method": "import_source",
+            }
+            for filial_code in sorted(filial_labels, key=int)
+        },
+        "relatorio_03114902_geo": {
+            "label": "Relatorio 03114902 Geo - Todas as operacoes",
+            "default_path": project_root / "data" / "Relatorio03114902" / "03114902_geo.csv",
+            "allow_default_source": False,
+            "service": services.relatorio_03114902_import_service,
+            "upload_mode": "single",
+            "accept_extensions": ".csv",
+            "validate_method": "validate_source",
+            "summarize_method": "summarize_source",
+            "import_method": "import_source",
         },
         "dclientes": {
             "label": "dClientes",

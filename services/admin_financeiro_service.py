@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import io
 from contextlib import contextmanager
-from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterator
 
 from fastapi import HTTPException
@@ -50,6 +50,9 @@ class AdminFinanceiroService:
                             mapa TEXT NOT NULL,
                             mapa_ref TEXT NOT NULL DEFAULT '',
                             motorista TEXT NOT NULL DEFAULT '',
+                            placa TEXT NOT NULL DEFAULT '',
+                            ajudante1 TEXT NOT NULL DEFAULT '',
+                            ajudante2 TEXT NOT NULL DEFAULT '',
                             boletos_rota NUMERIC(14,2) NOT NULL DEFAULT 0,
                             boletos_recebido_qtd NUMERIC(14,2) NOT NULL DEFAULT 0,
                             total_promax NUMERIC(14,2) NOT NULL DEFAULT 0,
@@ -89,6 +92,13 @@ class AdminFinanceiroService:
                         sql.Identifier(self.schema)
                     )
                 )
+                for column in ("placa", "ajudante1", "ajudante2"):
+                    cur.execute(
+                        sql.SQL("ALTER TABLE {}.financeiro_caixa_mapas ADD COLUMN IF NOT EXISTS {} TEXT NOT NULL DEFAULT ''").format(
+                            sql.Identifier(self.schema),
+                            sql.Identifier(column),
+                        )
+                    )
                 cur.execute(
                     sql.SQL("ALTER TABLE {}.financeiro_caixa_mapas ADD COLUMN IF NOT EXISTS boletos_recebido_qtd NUMERIC(14,2) NOT NULL DEFAULT 0").format(
                         sql.Identifier(self.schema)
@@ -191,6 +201,7 @@ class AdminFinanceiroService:
                 mapas = [dict(row) for row in cur.fetchall()]
                 ids = [int(row["id"]) for row in mapas]
                 details = self._load_details(cur, ids)
+                rotas_dia = self._load_rotas_dia_031120(cur, caixa_date=caixa_date, filial=requested_filial)
 
         records = [self._serialize_map(row, details) for row in mapas]
         return {
@@ -199,6 +210,7 @@ class AdminFinanceiroService:
             "filiais": self._visible_filiais(allowed_filiais),
             "maps": records,
             "summary": self._build_summary(records),
+            "rotas_dia": rotas_dia,
         }
 
     def upsert_mapa(self, payload: dict[str, Any], *, context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -227,20 +239,26 @@ class AdminFinanceiroService:
                 diarista = _decimal(payload.get("diarista"))
                 diarista_recibo_recebido = _bool(payload.get("diarista_recibo_recebido"), default=True)
                 motorista = str(payload.get("motorista") or "").strip()
+                placa = str(payload.get("placa") or "").strip()
+                ajudante1 = str(payload.get("ajudante1") or "").strip()
+                ajudante2 = str(payload.get("ajudante2") or "").strip()
                 cur.execute(
                     sql.SQL(
                         """
                         INSERT INTO {}.financeiro_caixa_mapas (
-                            caixa_date, filial, tipo_bloco, mapa, mapa_ref, motorista, boletos_rota,
+                            caixa_date, filial, tipo_bloco, mapa, mapa_ref, motorista, placa, ajudante1, ajudante2, boletos_rota,
                             boletos_recebido_qtd, total_promax, credito_conta, dinheiro,
                             moedas, diarista, diarista_recibo_recebido, pernoite, hospedagem, janta, almoco, cafe,
                             pagamentos, observacao, created_by, updated_by
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
                             tipo_bloco = EXCLUDED.tipo_bloco,
                             mapa_ref = EXCLUDED.mapa_ref,
                             motorista = EXCLUDED.motorista,
+                            placa = EXCLUDED.placa,
+                            ajudante1 = EXCLUDED.ajudante1,
+                            ajudante2 = EXCLUDED.ajudante2,
                             boletos_rota = EXCLUDED.boletos_rota,
                             boletos_recebido_qtd = EXCLUDED.boletos_recebido_qtd,
                             total_promax = EXCLUDED.total_promax,
@@ -268,6 +286,9 @@ class AdminFinanceiroService:
                         mapa,
                         mapa_ref,
                         motorista,
+                        placa,
+                        ajudante1,
+                        ajudante2,
                         _decimal(payload.get("boletos_rota")),
                         _decimal(payload.get("boletos_recebido_qtd")),
                         _decimal(payload.get("total_promax")),
@@ -313,7 +334,8 @@ class AdminFinanceiroService:
 
         result_payload = payload.get("result") if isinstance(payload.get("result"), dict) else payload
         dados_fechamento = _extract_dados_fechamento_03030702(result_payload)
-        motorista_promax = _extract_motorista_030303(result_payload)
+        dados_030303 = _extract_030303_fields(result_payload)
+        motorista_promax = dados_030303.get("motorista") or ""
         metrics = _financeiro_metrics_from_fechamento(dados_fechamento)
         username = str((context or {}).get("username") or (context or {}).get("worker_id") or "promax-worker")
         obs_parts = [
@@ -334,17 +356,29 @@ class AdminFinanceiroService:
                     sql.SQL(
                         """
                         INSERT INTO {}.financeiro_caixa_mapas (
-                            caixa_date, filial, tipo_bloco, mapa, mapa_ref, motorista,
+                            caixa_date, filial, tipo_bloco, mapa, mapa_ref, motorista, placa, ajudante1, ajudante2,
                             boletos_rota, total_promax, credito_conta, observacao,
                             created_by, updated_by
                         )
-                        VALUES (%s, %s, 'mapa', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, 'mapa', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
                             tipo_bloco = 'mapa',
                             mapa_ref = EXCLUDED.mapa_ref,
                             motorista = CASE
                                 WHEN {}.financeiro_caixa_mapas.motorista = '' THEN EXCLUDED.motorista
                                 ELSE {}.financeiro_caixa_mapas.motorista
+                            END,
+                            placa = CASE
+                                WHEN {}.financeiro_caixa_mapas.placa = '' THEN EXCLUDED.placa
+                                ELSE {}.financeiro_caixa_mapas.placa
+                            END,
+                            ajudante1 = CASE
+                                WHEN {}.financeiro_caixa_mapas.ajudante1 = '' THEN EXCLUDED.ajudante1
+                                ELSE {}.financeiro_caixa_mapas.ajudante1
+                            END,
+                            ajudante2 = CASE
+                                WHEN {}.financeiro_caixa_mapas.ajudante2 = '' THEN EXCLUDED.ajudante2
+                                ELSE {}.financeiro_caixa_mapas.ajudante2
                             END,
                             boletos_rota = EXCLUDED.boletos_rota,
                             total_promax = EXCLUDED.total_promax,
@@ -365,6 +399,12 @@ class AdminFinanceiroService:
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
                     ),
                     (
                         caixa_date,
@@ -372,6 +412,9 @@ class AdminFinanceiroService:
                         mapa,
                         mapa,
                         motorista_promax,
+                        dados_030303.get("placa") or "",
+                        dados_030303.get("ajudante1") or "",
+                        dados_030303.get("ajudante2") or "",
                         metrics["boletos_rota"],
                         metrics["total_promax"],
                         metrics["credito_conta"],
@@ -416,6 +459,107 @@ class AdminFinanceiroService:
                 )
             conn.commit()
         return {"ok": True, "deleted_id": int(mapa_id)}
+
+    def resolve_fechamento_km(self, *, filial: str, mapa: str, caixa_date: date) -> dict[str, Any]:
+        clean_filial = _normalize_filial(filial)
+        clean_mapa = _strip_left_zeroes(mapa)
+        if not clean_filial or not clean_mapa:
+            return {"ok": False, "km_atual": "", "km_inicial": "", "km_prev": "", "source": "missing_payload"}
+
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                km_inicial = self._lookup_031120_saida_km_atual(
+                    cur,
+                    filial=clean_filial,
+                    mapa=clean_mapa,
+                    caixa_date=caixa_date,
+                )
+                km_prev = self._lookup_03114902_km_prev(
+                    cur,
+                    filial=clean_filial,
+                    mapa=clean_mapa,
+                    caixa_date=caixa_date,
+                )
+
+        if km_inicial > 0 and km_prev > 0:
+            return {
+                "ok": True,
+                "km_atual": _fmt_km_integer(km_inicial + km_prev),
+                "km_inicial": _fmt_km_integer(km_inicial),
+                "km_prev": _fmt_km_integer(km_prev),
+                "source": "031120_saida_km_atual_plus_03114902_km_prev",
+            }
+        return {
+            "ok": False,
+            "km_atual": "",
+            "km_inicial": _fmt_km_integer(km_inicial),
+            "km_prev": _fmt_km_integer(km_prev),
+            "source": "insufficient_data",
+        }
+
+    def _lookup_031120_saida_km_atual(self, cur: Any, *, filial: str, mapa: str, caixa_date: date) -> Decimal:
+        if not _relation_exists_cur(cur, self.schema, "relatorio_031120_rows") or not _relation_exists_cur(cur, self.schema, "dataset_state"):
+            return Decimal("0")
+        dataset_name = f"relatorio_031120_op_{_normalize_filial(filial)}"
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT r.payload
+                FROM {}.relatorio_031120_rows r
+                JOIN {}.dataset_state s
+                  ON s.dataset_name = r.dataset_name
+                 AND s.active_batch_id = r.batch_id
+                WHERE r.dataset_name = %s
+                  AND r.filial = %s
+                ORDER BY r.row_number
+                """
+            ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
+            (dataset_name, _normalize_filial(filial)),
+        )
+        for row in cur.fetchall():
+            payload = dict(row.get("payload") or {})
+            row_date = _parse_report_date(payload.get("Emissao")) or _parse_report_date(payload.get("DtOper"))
+            if row_date != caixa_date:
+                continue
+            if _strip_left_zeroes(payload.get("Mapa")) != mapa:
+                continue
+            if _normalize_031120_fase(payload.get("Fase")) != "saida":
+                continue
+            km_atual = _decimal(payload.get("KmAtual") or payload.get("KM Atual") or payload.get("Km Atual"))
+            if km_atual > 0:
+                return km_atual
+        return Decimal("0")
+
+    def _lookup_03114902_km_prev(self, cur: Any, *, filial: str, mapa: str, caixa_date: date) -> Decimal:
+        if not _relation_exists_cur(cur, self.schema, "relatorio_031120_rows") or not _relation_exists_cur(cur, self.schema, "dataset_state"):
+            return Decimal("0")
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT r.payload
+                FROM {}.relatorio_031120_rows r
+                JOIN {}.dataset_state s
+                  ON s.dataset_name = r.dataset_name
+                 AND s.active_batch_id = r.batch_id
+                WHERE r.dataset_name = 'relatorio_03114902_geo'
+                ORDER BY r.row_number
+                """
+            ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
+        )
+        for row in cur.fetchall():
+            payload = dict(row.get("payload") or {})
+            row_date = _parse_report_date(payload.get("Data Entrega")) or _parse_report_date(payload.get("Data"))
+            if row_date != caixa_date:
+                continue
+            if _normalize_filial(payload.get("UNB")) != filial:
+                continue
+            if _strip_left_zeroes(payload.get("Nro do Mapa")) != mapa:
+                continue
+            km_prev = _decimal(payload.get("KM Prev.") or payload.get("KM Prev") or payload.get("Km Prev."))
+            if km_prev > 0:
+                return km_prev
+        return Decimal("0")
 
     def export_caixa_pdf(self, *, data: str, filial: str = "", context: dict[str, Any] | None = None) -> tuple[bytes, str]:
         payload = self.list_caixa(data=data, filial=filial, context=context)
@@ -540,6 +684,9 @@ class AdminFinanceiroService:
             "mapa_key": mapa_key,
             "mapa_ref": mapa_ref,
             "motorista": str(row.get("motorista") or ""),
+            "placa": str(row.get("placa") or ""),
+            "ajudante1": str(row.get("ajudante1") or ""),
+            "ajudante2": str(row.get("ajudante2") or ""),
             "boletos_rota": _money(boletos_rota),
             "boletos_recebido_qtd": _money(boletos_recebido_qtd),
             "boletos_diferenca_qtd": _money(boletos_diferenca_qtd),
@@ -599,6 +746,13 @@ class AdminFinanceiroService:
             "credito_conta",
         )
         summary = {key: _money(sum(_decimal(row.get(key)) for row in records)) for key in keys}
+        numerario_total = _decimal(summary.get("dinheiro_total")) + _decimal(summary.get("moedas"))
+        depositos_total = _decimal(summary.get("credito_conta")) + _decimal(summary.get("transferencias_total"))
+        total_promax = _decimal(summary.get("total_promax"))
+        summary["numerario_total"] = _money(numerario_total)
+        summary["depositos_total"] = _money(depositos_total)
+        summary["dinheiro_percent"] = _money((numerario_total / total_promax * Decimal("100")) if total_promax else Decimal("0"))
+        summary["deposito_percent"] = _money((depositos_total / total_promax * Decimal("100")) if total_promax else Decimal("0"))
         summary["mapas"] = len([row for row in records if row.get("tipo_bloco") == "mapa"])
         summary["compras"] = len([row for row in records if row.get("tipo_bloco") == "compra"])
         summary["despesas_blocos"] = len([row for row in records if row.get("tipo_bloco") == "despesa"])
@@ -623,6 +777,37 @@ class AdminFinanceiroService:
                     merged.update(item)
                     output[key].append(merged)
         return output
+
+    def _load_rotas_dia_031120(self, cur: Any, *, caixa_date: date, filial: str) -> list[dict[str, Any]]:
+        if not filial:
+            return []
+        cur.execute("SELECT to_regclass(%s) AS rel", (f"{self.schema}.relatorio_031120_rows",))
+        table_row = cur.fetchone()
+        if not table_row or not table_row.get("rel"):
+            return []
+        cur.execute("SELECT to_regclass(%s) AS rel", (f"{self.schema}.dataset_state",))
+        state_row = cur.fetchone()
+        if not state_row or not state_row.get("rel"):
+            return []
+
+        dataset_name = f"relatorio_031120_op_{_normalize_filial(filial)}"
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT r.payload
+                FROM {}.relatorio_031120_rows r
+                JOIN {}.dataset_state s
+                  ON s.dataset_name = r.dataset_name
+                 AND s.active_batch_id = r.batch_id
+                WHERE r.dataset_name = %s
+                  AND r.filial = %s
+                ORDER BY r.row_number
+                """
+            ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
+            (dataset_name, _normalize_filial(filial)),
+        )
+        rows = [dict(row.get("payload") or {}) for row in cur.fetchall()]
+        return _build_rotas_dia_031120(rows, caixa_date=caixa_date)
 
     def _visible_filiais(self, allowed_filiais: set[str] | None) -> list[dict[str, str]]:
         items = self.filial_labels.items()
@@ -751,6 +936,9 @@ def _build_caixa_pdf(payload: dict[str, Any]) -> bytes:
     story.append(Paragraph("Numerario do Malote", styles["section"]))
     story.append(_pdf_denoms_table(caixa_maps))
     story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph("Relatorio de Rotas do Dia - 031120", styles["section"]))
+    story.append(_pdf_rotas_dia_table(list(payload.get("rotas_dia") or []), styles, p))
+    story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Lancamentos Consolidados", styles["section"]))
     story.append(_pdf_detail_table("Transferencias", _flatten_detail_rows(caixa_maps, "transferencias"), ["Mapa", "Motorista", "Data", "Banco", "NB", "NF", "Valor"], styles, p))
     story.append(Spacer(1, 2 * mm))
@@ -820,8 +1008,10 @@ def _pdf_summary_table(summary: dict[str, Any]) -> Any:
         ("Total Promax", _fmt_money(summary.get("total_promax"))),
         ("Total Apurado", _fmt_money(summary.get("total_apurado"))),
         ("Diferenca", _fmt_money(summary.get("diferenca"))),
-        ("Numerario", _fmt_money(_decimal(summary.get("dinheiro_total")) + _decimal(summary.get("moedas")))),
+        ("Numerario", _fmt_money(summary.get("numerario_total"))),
         ("Credito em conta", _fmt_money(summary.get("credito_conta"))),
+        ("Depositos", _fmt_money(summary.get("depositos_total"))),
+        ("% Deposito", f"{_fmt_qty(summary.get('deposito_percent'))}%"),
         ("Transferencias", _fmt_money(summary.get("transferencias_total"))),
         ("Boletos rota", f"{_fmt_qty(summary.get('boletos_recebido_qtd'))} / {_fmt_qty(summary.get('boletos_rota'))}"),
         ("Despesas", _fmt_money(summary.get("despesas_total"))),
@@ -855,6 +1045,48 @@ def _pdf_denoms_table(maps: list[dict[str, Any]]) -> Any:
         data.append([Paragraph(f"R$ {escape(denom)}", cell), Paragraph(str(qtd), value), Paragraph(_fmt_money(Decimal(denom) * Decimal(qtd)), value)])
     data.append([Paragraph("Moedas", cell), Paragraph("-", value), Paragraph(_fmt_money(sum(_decimal(item.get("moedas")) for item in maps)), value)])
     table = Table(data, colWidths=[50 * mm, 55 * mm, 75 * mm], repeatRows=1)
+    table.setStyle(_pdf_table_style())
+    return table
+
+
+def _pdf_rotas_dia_table(rows: list[dict[str, Any]], styles: dict[str, Any], p: Any) -> Any:
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Table
+
+    data = [[
+        p("Mapa", "cell_bold"),
+        p("Placa", "cell_bold"),
+        p("Km", "cell_bold"),
+        p("Km Prev.", "cell_bold"),
+        p("Saida", "cell_bold"),
+        p("Entrada", "cell_bold"),
+        p("Tempo rota", "cell_bold"),
+        p("TI Fisico", "cell_bold"),
+        p("TI Financeiro", "cell_bold"),
+        p("TI total", "cell_bold"),
+        p("Validacao", "cell_bold"),
+    ]]
+    if not rows:
+        data.append([p("Sem relatorio 031120 importado para esta data."), "", "", "", "", "", "", "", "", "", ""])
+    for row in rows:
+        data.append([
+            p(row.get("mapa")),
+            p(row.get("placa")),
+            p(row.get("km_percorrido"), "value"),
+            p(row.get("km_prev"), "value"),
+            p(row.get("saida"), "center"),
+            p(row.get("entrada"), "center"),
+            p(row.get("tempo_rota"), "center"),
+            p(row.get("ti_fisico"), "center"),
+            p(row.get("ti_financeiro"), "center"),
+            p(row.get("ti_total"), "center"),
+            p(row.get("fechamento_status")),
+        ])
+    table = Table(
+        data,
+        colWidths=[13 * mm, 20 * mm, 13 * mm, 15 * mm, 18 * mm, 18 * mm, 20 * mm, 20 * mm, 22 * mm, 17 * mm, 24 * mm],
+        repeatRows=1,
+    )
     table.setStyle(_pdf_table_style())
     return table
 
@@ -903,6 +1135,8 @@ def _pdf_map_table(item: dict[str, Any], styles: dict[str, Any], p: Any) -> Any:
 
     data = [
         [p("Campo", "cell_bold"), p("Valor", "cell_bold"), p("Campo", "cell_bold"), p("Valor", "cell_bold")],
+        [p("Placa"), p(item.get("placa") or "-"), p("Ajudante 1"), p(item.get("ajudante1") or "-")],
+        [p("Motorista"), p(item.get("motorista") or "-"), p("Ajudante 2"), p(item.get("ajudante2") or "-")],
         [p("Tipo"), p(_tipo_bloco_label(item.get("tipo_bloco"))), p("Status"), p(item.get("status"))],
         [p("Total Promax"), p(_fmt_money(item.get("total_promax")), "value"), p("Total Apurado"), p(_fmt_money(item.get("total_apurado")), "value")],
         [p("Diferenca"), p(_fmt_money(item.get("diferenca")), "value"), p("Credito em conta"), p(_fmt_money(item.get("credito_conta")), "value")],
@@ -994,6 +1228,199 @@ def _tipo_bloco_label(value: Any) -> str:
     if tipo == "vale":
         return "Vale"
     return "Mapa"
+
+
+def _build_rotas_dia_031120(rows: list[dict[str, Any]], *, caixa_date: date) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for raw in rows:
+        if not isinstance(raw, dict):
+            continue
+        row_date = _parse_report_date(raw.get("Emissao")) or _parse_report_date(raw.get("DtOper"))
+        if row_date != caixa_date:
+            continue
+        mapa = _strip_left_zeroes(raw.get("Mapa"))
+        if not mapa:
+            continue
+        bucket = grouped.setdefault(
+            mapa,
+            {
+                "mapa": mapa,
+                "placa": "",
+                "km_prev": Decimal("0"),
+                "km_atual": Decimal("0"),
+                "fase_kms": {},
+                "fases": {},
+            },
+        )
+        placa = str(raw.get("Placa") or "").strip()
+        if placa and not bucket["placa"]:
+            bucket["placa"] = placa
+        km_prev = _decimal(raw.get("KmPrev"))
+        km_atual = _decimal(raw.get("KmAtual"))
+        if km_prev > 0 and bucket["km_prev"] == 0:
+            bucket["km_prev"] = km_prev
+        if km_atual > bucket["km_atual"]:
+            bucket["km_atual"] = km_atual
+        fase_key = _normalize_031120_fase(raw.get("Fase"))
+        when = _parse_report_datetime(raw.get("DtOper"), raw.get("HrOper"))
+        if fase_key and when:
+            bucket["fases"][fase_key] = when
+        if fase_key and km_atual > 0:
+            bucket["fase_kms"][fase_key] = km_atual
+
+    output: list[dict[str, Any]] = []
+    for mapa, bucket in grouped.items():
+        fases = bucket["fases"]
+        fase_kms = bucket["fase_kms"]
+        saida = fases.get("saida")
+        entrada = fases.get("entrada")
+        pc_fisica = fases.get("pc_fisica")
+        pc_financeira = fases.get("pc_financeira")
+        fechamento_status, fechamento_ok = _status_fechamento_031120(
+            saida=saida,
+            entrada=entrada,
+            pc_fisica=pc_fisica,
+            pc_financeira=pc_financeira,
+        )
+        km_prev = _decimal(bucket.get("km_prev"))
+        km_atual = _decimal(bucket.get("km_atual"))
+        km_carregado = _decimal(fase_kms.get("carregado"))
+        km_pc_fisica = _decimal(fase_kms.get("pc_fisica"))
+        if km_carregado > 0 and km_pc_fisica > 0:
+            km_percorrido = abs(km_pc_fisica - km_carregado)
+        else:
+            km_percorrido = Decimal("0")
+        output.append(
+            {
+                "mapa": mapa,
+                "placa": bucket.get("placa") or "",
+                "km_prev": _fmt_plain_qty(km_prev),
+                "km_atual": _fmt_plain_qty(km_atual),
+                "km_percorrido": _fmt_plain_qty(km_percorrido),
+                "saida": _fmt_datetime_short(saida),
+                "entrada": _fmt_datetime_short(entrada),
+                "tempo_rota": _fmt_duration(_duration_minutes(saida, entrada)),
+                "ti_fisico": _fmt_duration(_duration_minutes(entrada, pc_fisica)),
+                "ti_financeiro": _fmt_duration(_duration_minutes(pc_fisica, pc_financeira)),
+                "ti_total": _fmt_duration(_duration_minutes(entrada, pc_financeira)),
+                "fechamento_status": fechamento_status,
+                "fechamento_ok": fechamento_ok,
+            }
+        )
+    return sorted(output, key=lambda item: int(item["mapa"]) if str(item.get("mapa") or "").isdigit() else 999999999)
+
+
+def _normalize_031120_fase(value: Any) -> str:
+    text = _text_key(value)
+    if text == "CARREGADO":
+        return "carregado"
+    if "SAIDA" in text and ("CDD" in text or "FAB" in text):
+        return "saida"
+    if "ENTRADA" in text and ("CDD" in text or "FAB" in text):
+        return "entrada"
+    if "PC_FISICA" in text or "PC FISICA" in text:
+        return "pc_fisica"
+    if "PC_FINANCEIRA" in text or "PC FINANCEIRA" in text:
+        return "pc_financeira"
+    return ""
+
+
+def _status_fechamento_031120(
+    *,
+    saida: datetime | None,
+    entrada: datetime | None,
+    pc_fisica: datetime | None,
+    pc_financeira: datetime | None,
+) -> tuple[str, bool]:
+    if entrada and pc_fisica and pc_financeira:
+        return "Fechado", True
+    if entrada and not pc_fisica:
+        return "Entrada sem fechamento fisico", False
+    if entrada and pc_fisica and not pc_financeira:
+        return "Entrada sem fechamento financeiro", False
+    if saida and not entrada:
+        return "Em rota / sem entrada", True
+    return "Sem saida", True
+
+
+def _parse_report_date(value: Any) -> date | None:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return None
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(cleaned, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_report_datetime(raw_date: Any, raw_time: Any) -> datetime | None:
+    parsed_date = _parse_report_date(raw_date)
+    if not parsed_date:
+        return None
+    time_text = str(raw_time or "").strip()
+    if not time_text:
+        return None
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            parsed_time = datetime.strptime(time_text, fmt).time()
+            return datetime.combine(parsed_date, parsed_time)
+        except ValueError:
+            continue
+    return None
+
+
+def _duration_minutes(start: datetime | None, end: datetime | None) -> int | None:
+    if not start or not end:
+        return None
+    if end < start:
+        end = end + timedelta(days=1)
+    return max(0, int((end - start).total_seconds() // 60))
+
+
+def _fmt_duration(minutes: int | None) -> str:
+    if minutes is None:
+        return ""
+    hours, mins = divmod(int(minutes), 60)
+    return f"{hours:02d}:{mins:02d}"
+
+
+def _fmt_time(value: datetime | None) -> str:
+    return value.strftime("%H:%M") if value else ""
+
+
+def _fmt_datetime_short(value: datetime | None) -> str:
+    return value.strftime("%d/%m/%Y %H:%M") if value else ""
+
+
+def _fmt_plain_qty(value: Any) -> str:
+    number = _decimal(value)
+    if number == 0:
+        return ""
+    if number == number.to_integral_value():
+        return str(int(number))
+    return f"{number:.2f}".replace(".", ",")
+
+
+def _fmt_km_integer(value: Any) -> str:
+    number = _decimal(value)
+    if number <= 0:
+        return ""
+    return str(int(number.quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+
+
+def _strip_left_zeroes(value: Any) -> str:
+    cleaned = str(value or "").strip()
+    if cleaned.isdigit():
+        return str(int(cleaned))
+    return cleaned
+
+
+def _relation_exists_cur(cur: Any, schema: str, relation: str) -> bool:
+    cur.execute("SELECT to_regclass(%s) AS rel", (f"{schema}.{relation}",))
+    row = cur.fetchone()
+    return bool(row and row.get("rel"))
 
 
 def _parse_date(value: Any) -> date:
@@ -1095,6 +1522,69 @@ def _extract_motorista_030303(source: Any) -> str:
     if isinstance(metadata, dict) and metadata is not source:
         return _extract_motorista_030303(metadata)
     return ""
+
+
+def _extract_030303_fields(source: Any) -> dict[str, str]:
+    dados = _extract_dados_030303(source)
+    motorista = _extract_motorista_030303(source)
+    return {
+        "motorista": motorista,
+        "placa": _clean_030303_select_text(_field_030303_value(dados, "placa"), keep_code=True),
+        "ajudante1": _clean_030303_select_text(_field_030303_value(dados, "ajudante1")),
+        "ajudante2": _clean_030303_select_text(_field_030303_value(dados, "ajudante2")),
+    }
+
+
+def _extract_dados_030303(source: Any) -> dict[str, Any]:
+    if not isinstance(source, dict):
+        return {}
+    candidates = (
+        ("metadata", "resultado_030303", "dados_030303"),
+        ("metadata", "resultado_030303", "metadata", "dados_030303"),
+        ("resultado_030303", "dados_030303"),
+        ("resultado_030303", "metadata", "dados_030303"),
+        ("dados_030303",),
+        ("result", "metadata", "resultado_030303", "dados_030303"),
+    )
+    for path in candidates:
+        value = _nested_get(source, path)
+        if isinstance(value, dict) and value:
+            return value
+    metadata = source.get("metadata")
+    if isinstance(metadata, dict) and metadata is not source:
+        return _extract_dados_030303(metadata)
+    return {}
+
+
+def _field_030303_value(dados: dict[str, Any], field_name: str) -> Any:
+    if not isinstance(dados, dict):
+        return ""
+    target = _text_key(field_name)
+    campos = dados.get("campos")
+    if isinstance(campos, list):
+        for campo in campos:
+            if not isinstance(campo, dict):
+                continue
+            if _text_key(campo.get("name")) == target or _text_key(campo.get("id")) == target:
+                return campo.get("value")
+    return dados.get(field_name) or ""
+
+
+def _clean_030303_select_text(value: Any, *, keep_code: bool = False) -> str:
+    if isinstance(value, dict):
+        text = str(value.get("texto") or value.get("label") or value.get("value") or "").strip()
+        raw_code = str(value.get("valor") or "").strip()
+        if raw_code in {"", "00000"} and _text_key(text) in {"--SELECIONAR--", "SELECIONAR"}:
+            return ""
+    else:
+        text = str(value or "").strip()
+    if not text or _text_key(text) in {"--SELECIONAR--", "SELECIONAR", "00000"}:
+        return ""
+    if keep_code:
+        return text
+    if " - " in text:
+        text = text.split(" - ", 1)[1]
+    return text.replace("(*)", "").strip()
 
 
 def _financeiro_metrics_from_fechamento(dados: dict[str, Any]) -> dict[str, Decimal]:

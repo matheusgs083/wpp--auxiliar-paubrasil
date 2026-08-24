@@ -88,6 +88,29 @@
     .recolha-dashboard-card .sub { color: var(--ink-500); font-size: 0.82rem; font-weight: 700; }
     .ops-bar { position: sticky; top: 8px; z-index: 1020; margin-bottom: 0.85rem; padding: 0.75rem; border: 1px solid var(--line-strong); border-radius: 8px; background: rgba(255, 255, 255, 0.94); box-shadow: var(--shadow-md); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
     body[data-theme="dark"] .ops-bar { background: rgba(15, 23, 42, 0.94); }
+    body.panel-simple-mode .admin-metrics,
+    body.panel-simple-mode .admin-flow-card,
+    body.panel-simple-mode .admin-tabs-card { display: none !important; }
+    body.panel-simple-mode .layout { padding-top: 0.55rem; }
+    body.panel-simple-mode .admin-hero { min-height: auto; margin-bottom: 0.65rem; padding: 0.72rem 0.85rem; }
+    body.panel-simple-mode .admin-hero .hero-brand { margin-bottom: 0; }
+    body.panel-simple-mode .admin-hero .hero-title,
+    body.panel-simple-mode .admin-hero .hero-subtitle { display: none; }
+    body.panel-simple-mode .ops-bar { position: static; margin-bottom: 0.65rem; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+    body.panel-simple-mode .ops-bar .row { justify-content: flex-end; }
+    body.panel-simple-mode .ops-bar .row > div:not(:last-child),
+    body.panel-simple-mode #apiTokenField,
+    body.panel-simple-mode #adminTokenField,
+    body.panel-simple-mode #themeToggle,
+    body.panel-simple-mode #clearLogBtn,
+    body.panel-simple-mode #runningState,
+    body.panel-simple-mode #lastJobState { display: none !important; }
+    body.panel-simple-mode .ops-bar .col-md-3.d-flex { width: auto; flex: 0 0 auto; margin-left: auto; }
+    body.panel-simple-mode #refreshBtn { width: auto !important; min-width: 132px; }
+    body.panel-simple-mode #logoutBtn { min-width: 42px; }
+    body.panel-simple-mode #authState { padding: 0.38rem 0.7rem; font-size: 0.78rem; }
+    body.panel-simple-mode .tab-content { margin-top: 0; }
+    body.panel-simple-mode #conferenciaPane > .panel-card { border-color: var(--line-strong); }
     .panel-card, .dataset-card, .recolha-operation, .critica-dashboard-block, .recolha-insight-box { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-sm); }
     .panel-card > header, .dataset-head, .recolha-operation-head { border-bottom: 1px solid var(--line); background: var(--surface-soft); }
     .panel-card h2, .panel-card h3 { color: var(--ink-900); }
@@ -188,6 +211,7 @@
     .finance-sheet-quick-item span { display: block; color: var(--ink-500); font-size: 0.66rem; font-weight: 900; text-transform: uppercase; }
     .finance-sheet-quick-item strong { display: block; margin-top: 0.08rem; color: var(--ink-900); font-size: 0.86rem; font-weight: 900; white-space: nowrap; }
     .finance-sheet-side { display: grid; gap: 0.75rem; align-content: start; }
+    .finance-sheet-wide { grid-column: 1 / -1; min-width: 0; }
     .finance-sheet-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
     .finance-sheet-mini { padding: 0.5rem; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-soft); }
     .finance-sheet-mini span { display: block; color: var(--ink-500); font-size: 0.68rem; font-weight: 900; text-transform: uppercase; }
@@ -195,6 +219,13 @@
     .finance-sheet-scroll { max-height: 330px; overflow: auto; }
     .finance-sheet-ass.ok { color: var(--success); font-weight: 900; }
     .finance-sheet-ass.nok { color: var(--danger); font-weight: 900; }
+    .finance-route-status.ok { color: var(--success); font-weight: 900; white-space: nowrap; }
+    .finance-route-status.pending { color: var(--danger); font-weight: 900; white-space: nowrap; }
+    .finance-closing-log { margin-top: 0.75rem; padding: 0.65rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .finance-closing-log-title { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.45rem; color: var(--ink-700); font-size: 0.72rem; font-weight: 900; text-transform: uppercase; }
+    .finance-closing-log-list { display: grid; gap: 0.28rem; margin: 0; padding: 0; list-style: none; color: var(--ink-900); font-size: 0.78rem; font-weight: 700; }
+    .finance-closing-log-list li { display: flex; gap: 0.45rem; align-items: baseline; }
+    .finance-closing-log-list .time { color: var(--ink-500); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.72rem; white-space: nowrap; }
     .finance-closing-card { display: grid; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
     .finance-closing-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding-bottom: 0.65rem; border-bottom: 1px solid var(--line); }
     .finance-closing-title { margin: 0; color: var(--ink-900); font-size: 0.98rem; font-weight: 900; }
@@ -212,6 +243,45 @@
     .finance-action-card i { color: var(--brand-700); font-size: 1rem; line-height: 1.2; }
     .finance-action-card strong { display: block; font-size: 0.86rem; font-weight: 900; }
     .finance-action-card span { display: block; margin-top: 0.16rem; color: var(--ink-500); font-size: 0.74rem; font-weight: 700; line-height: 1.25; }
+    .conference-grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 0.85rem; align-items: start; }
+    .conference-side { position: sticky; top: 92px; display: grid; gap: 0.65rem; }
+    .conference-map-list { display: grid; gap: 0.45rem; max-height: 620px; overflow: auto; padding-right: 0.15rem; }
+    .conference-map-btn { width: 100%; padding: 0.68rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-900); background: var(--surface); text-align: left; transition: border-color 0.18s ease, background 0.18s ease; }
+    .conference-map-btn:hover, .conference-map-btn.is-active { border-color: var(--brand-600); background: rgba(37, 99, 235, 0.08); }
+    .conference-map-btn strong { display: block; margin-bottom: 0.18rem; font-size: 0.94rem; }
+    .conference-map-btn .meta { display: block; color: var(--ink-500); font-size: 0.78rem; font-weight: 700; }
+    .conference-map-btn .status-line { display: block; margin-top: 0.24rem; color: var(--brand-700); font-size: 0.78rem; font-weight: 900; }
+    .conference-map-btn .open-line { display: block; margin-top: 0.35rem; color: var(--brand-700); font-size: 0.74rem; font-weight: 900; }
+    .conference-toolbar { display: grid; grid-template-columns: 150px 190px minmax(180px, 1fr) 150px; gap: 0.55rem; align-items: end; }
+    .conference-kpis { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 0.55rem; }
+    .conference-kpi { padding: 0.58rem 0.65rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .conference-kpi span { display: block; color: var(--ink-500); font-size: 0.68rem; font-weight: 900; text-transform: uppercase; }
+    .conference-kpi strong { display: block; color: var(--ink-900); font-size: 1rem; font-weight: 900; }
+    .conference-table-wrap { max-height: 640px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+    .conference-count-input { width: 132px; min-width: 132px; border-color: rgba(37, 99, 235, 0.55); background: rgba(37, 99, 235, 0.08); color: var(--ink-900); font-weight: 900; }
+    .conference-note-input { min-width: 180px; }
+    .conference-blind-note { padding: 0.55rem 0.65rem; border: 1px solid rgba(37, 99, 235, 0.26); border-radius: 8px; color: var(--brand-700); background: rgba(37, 99, 235, 0.08); font-size: 0.8rem; font-weight: 800; }
+    .conference-product-picker { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.2fr) auto; gap: 0.5rem; align-items: end; padding: 0.7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .conference-simple-list { display: grid; gap: 0.45rem; }
+    .conference-simple-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 42px; gap: 0.45rem; align-items: center; padding: 0.58rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .conference-simple-row .name { color: var(--ink-900); font-size: 0.92rem; font-weight: 900; }
+    .conference-simple-row .meta { color: var(--ink-500); font-size: 0.74rem; font-weight: 800; }
+    @media (max-width: 1180px) { .conference-grid { grid-template-columns: 1fr; } .conference-side { position: static; } }
+    @media (max-width: 820px) {
+      .conference-toolbar, .conference-kpis, .conference-product-picker { grid-template-columns: 1fr; }
+      .conference-count-input { width: 100%; min-width: 0; min-height: 42px; font-size: 1rem; }
+      .conference-simple-row { grid-template-columns: 1fr; }
+      .conference-simple-row .btn { width: 100%; }
+      .conference-table-wrap { max-height: none; overflow: visible; border: 0; }
+      .conference-table-wrap table, .conference-table-wrap thead, .conference-table-wrap tbody, .conference-table-wrap tr, .conference-table-wrap td { display: block; width: 100%; }
+      .conference-table-wrap thead { display: none; }
+      .conference-table-wrap tr { margin-bottom: 0.55rem; padding: 0.58rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+      .conference-table-wrap td { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 0.45rem; align-items: center; padding: 0.28rem 0 !important; border: 0; }
+      .conference-table-wrap td::before { content: attr(data-label); color: var(--ink-500); font-size: 0.68rem; font-weight: 900; text-transform: uppercase; }
+      .conference-table-wrap td[data-label="Item"] { display: block; }
+      .conference-table-wrap td[data-label="Item"]::before { display: block; margin-bottom: 0.15rem; }
+      .conference-table-wrap td .d-flex { width: 100%; }
+    }
     @media (max-width: 1180px) { .finance-sheet-body { grid-template-columns: 1fr; } .finance-sheet-quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 1180px) { .finance-action-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
     @media (max-width: 820px) { .finance-closing-filters { grid-template-columns: 1fr; } }
@@ -482,7 +552,7 @@
 <body>
   <a href="#mainContent" class="skip-link">Pular para conteúdo principal</a>
   <main class="layout" id="mainContent" aria-live="polite">
-    <section class="hero">
+    <section class="hero admin-hero">
       <div class="hero-brand">
         <div class="brand-logo" aria-hidden="true">
           <span class="brand-initial">P</span>
@@ -496,7 +566,7 @@
       <p class="hero-subtitle">Painel oficial da Pau Brasil para gerenciar importações, validar relatórios e controlar acessos sem fricção.</p>
     </section>
 
-    <section class="metric-grid">
+    <section class="metric-grid admin-metrics">
       <article class="metric"><span class="k">Bases</span><span class="v" id="metricDatasets">5</span></article>
       <article class="metric"><span class="k">Usuarios RBAC</span><span class="v" id="metricUsers">0</span></article>
       <article class="metric"><span class="k">Status</span><span class="v" id="metricRunning">Ocioso</span></article>
@@ -531,7 +601,7 @@
       </div>
     </section>
 
-    <section class="panel-card flow-gateway" id="flowNav" aria-labelledby="flowNavTitle">
+    <section class="panel-card flow-gateway admin-flow-card" id="flowNav" aria-labelledby="flowNavTitle">
       <div class="flow-gateway-head">
         <div>
           <h2 class="flow-gateway-title" id="flowNavTitle">Caminhos rápidos</h2>
@@ -568,6 +638,10 @@
           <span class="flow-icon"><i class="bi bi-cash-coin"></i></span>
           <span><span class="flow-title">Financeiro</span><span class="flow-desc">Caixa diario, mapas, despesas, vales e consolidado.</span><span class="flow-meta">Caixa</span></span>
         </a>
+        <a href="/admin/conferencia" class="flow-path" data-flow-target="conferenciaTab" data-flow-label="Conferência de carga" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-clipboard-check"></i></span>
+          <span><span class="flow-title">Conferência</span><span class="flow-desc">Contagem cega por mapa, material e produto.</span><span class="flow-meta">Mapa</span></span>
+        </a>
         <a href="/admin/giro-recolha" class="flow-path" data-flow-target="giroRecolhaTab" data-flow-label="Giro e rotas" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-signpost-split"></i></span>
           <span><span class="flow-title">Giro</span><span class="flow-desc">Giro baixo, filtros e montagem de rotas.</span><span class="flow-meta">Prioridade</span></span>
@@ -579,7 +653,7 @@
       </div>
     </section>
 
-    <section class="panel-card p-2 mb-3">
+    <section class="panel-card p-2 mb-3 admin-tabs-card">
       <ul class="nav nav-pills nav-fill gap-2" id="adminTabs" role="tablist">
         <li class="nav-item" role="presentation">
           <a class="nav-link active" id="operationsTab" href="/admin/operations" data-admin-page-link="true" data-bs-target="#operationsPane" role="tab" aria-controls="operationsPane" aria-selected="true">
@@ -614,6 +688,11 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link" id="financeiroTab" href="/admin/financeiro" data-admin-page-link="true" data-bs-target="#financeiroPane" role="tab" aria-controls="financeiroPane" aria-selected="false">
             <i class="bi bi-cash-coin me-1"></i>Financeiro
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="conferenciaTab" href="/admin/conferencia" data-admin-page-link="true" data-bs-target="#conferenciaPane" role="tab" aria-controls="conferenciaPane" aria-selected="false">
+            <i class="bi bi-clipboard-check me-1"></i>Conferência
           </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -1195,7 +1274,7 @@
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
             <div>
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-table me-2 text-primary"></i>Operacional</h2>
-              <div class="form-text">Bases auxiliares internas: setores, precos, operacoes, condicoes, produtos e cesta.</div>
+              <div class="form-text">Bases auxiliares internas: setores, precos, operacoes, condicoes, produtos, materiais e cesta.</div>
             </div>
             <span class="pill">Uploads administrativos</span>
           </div>
@@ -1737,6 +1816,30 @@
                   <button class="btn btn-outline-success btn-sm w-100" id="financeiroExportPdfBtn" type="button"><i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF</button>
                 </div>
               </div>
+              <div class="finance-entry-block mb-3">
+                <div class="finance-entry-head">
+                  <div>
+                    <h4 class="mb-0"><i class="bi bi-map me-1 text-primary"></i>Relatorio de Rotas do Dia - 031120</h4>
+                    <div class="form-text" id="financeiro031120Hint">Escolha uma revenda para solicitar o download ou importar o CSV da operacao correta.</div>
+                  </div>
+                  <span class="pill" id="financeiro031120Status">Aguardando revenda</span>
+                </div>
+                <div class="row g-2 align-items-end">
+                  <div class="col-12 col-lg-4">
+                    <div class="small fw-semibold text-secondary">Operacao selecionada</div>
+                    <div class="mono fw-bold" id="financeiro031120Target">-</div>
+                    <div class="form-text">Rotina Promax: 031120_BOT | Classificacao: Mapa | Armazem central.</div>
+                  </div>
+                  <div class="col-12 col-lg-4">
+                    <label class="form-label small fw-semibold mb-1" for="financeiro031120File">Upload manual do CSV 031120</label>
+                    <input class="form-control form-control-sm" id="financeiro031120File" type="file" accept=".csv">
+                  </div>
+                  <div class="col-12 col-lg-4 d-flex flex-wrap gap-2 justify-content-lg-end">
+                    <button class="btn btn-outline-primary btn-sm" id="financeiro031120DownloadBtn" type="button"><i class="bi bi-cloud-arrow-down me-1"></i>Solicitar download</button>
+                    <button class="btn btn-primary btn-sm" id="financeiro031120UploadBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Importar CSV</button>
+                  </div>
+                </div>
+              </div>
               <div class="finance-sheet" id="financeiroFechamentoSheet"></div>
             </div>
           </section>
@@ -1789,6 +1892,15 @@
                 <button class="btn btn-outline-primary btn-sm" id="financeiroFechamentoRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar caixa</button>
               </div>
             </div>
+            <div class="finance-closing-log" id="financeiroFechamentoLogBox">
+              <div class="finance-closing-log-title">
+                <span>Log do fechamento</span>
+                <span id="financeiroFechamentoLogJob">Sem job ativo</span>
+              </div>
+              <ul class="finance-closing-log-list" id="financeiroFechamentoLogList">
+                <li><span class="time">--:--</span><span>Aguardando solicitacao.</span></li>
+              </ul>
+            </div>
           </div>
           <div class="finance-entry-block mb-3">
               <div class="finance-entry-head">
@@ -1830,6 +1942,65 @@
             <article class="panel-card p-3 shadow-none" id="financeiroEditor"></article>
           </div>
           </section>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="conferenciaPane" role="tabpanel" aria-labelledby="conferenciaTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-clipboard-check me-2 text-primary"></i>Conferência de carga</h2>
+              <div class="form-text">Contagem por mapa alimentada pelo fechamento Promax 030302. O conferente lança apenas o que voltou de fato.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="conferenciaStatus">Aguardando dados</span>
+              <button class="btn btn-outline-primary btn-sm" id="conferenciaRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+              <button class="btn btn-primary btn-sm" id="conferenciaSaveBtn" type="button" disabled><i class="bi bi-check2-circle me-1"></i>Salvar contagem</button>
+            </div>
+          </div>
+          <div class="conference-toolbar mb-3">
+            <label class="form-label small fw-semibold mb-0" for="conferenciaData">Data
+              <input class="form-control form-control-sm mt-1" id="conferenciaData" type="date">
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="conferenciaFilial">Revenda
+              <select class="form-select form-select-sm mt-1" id="conferenciaFilial">
+                <option value="">Todas liberadas</option>
+              </select>
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="conferenciaSearch">Buscar mapa, placa ou motorista
+              <input class="form-control form-control-sm mt-1" id="conferenciaSearch" type="search" placeholder="Ex: 93709, placa, motorista">
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="conferenciaGrupo">Grupo
+              <select class="form-select form-select-sm mt-1" id="conferenciaGrupo">
+                <option value="">Todos</option>
+                <option value="300">300</option>
+                <option value="600">600</option>
+                <option value="1L">1L</option>
+                <option value="51">51</option>
+                <option value="FREEZER">Freezer</option>
+                <option value="CADEIRA">Cadeira</option>
+                <option value="MESA">Mesa</option>
+                <option value="BARRIL">Barril</option>
+                <option value="BARRACA">Barraca</option>
+                <option value="OUTRAS GARRAFEIRAS">Outras garrafeiras</option>
+                <option value="OUTROS MATERIAIS">Outros materiais</option>
+              </select>
+            </label>
+          </div>
+          <div class="conference-grid">
+            <aside class="conference-side">
+              <div class="d-flex align-items-center justify-content-between">
+                <h3 class="h6 fw-bold mb-0">Mapas do dia</h3>
+                <span class="badge text-bg-secondary" id="conferenciaMapCount">0</span>
+              </div>
+              <div class="conference-map-list" id="conferenciaMapList">
+                <div class="empty-state py-3">Nenhum mapa carregado.</div>
+              </div>
+            </aside>
+            <article class="panel-card shadow-none overflow-hidden" id="conferenciaEditor">
+              <div class="p-3 empty-state">Selecione um mapa para iniciar a conferência.</div>
+            </article>
+          </div>
         </section>
       </div>
 
@@ -2393,7 +2564,14 @@
           caixaPdf: "/api/admin/financeiro/caixa/pdf",
           mapas: "/api/admin/financeiro/mapas",
           fechamentoPromax: "/api/admin/financeiro/fechamento-promax",
+          fechamentoPromaxLogs: "/api/admin/financeiro/fechamento-promax",
+          relatorio031120Download: "/api/admin/financeiro/031120/download",
+          relatorio031120Upload: "/api/admin/financeiro/031120/upload",
           worker: "/api/admin/financeiro/worker/status"
+        },
+        conferencia: {
+          mapas: "/api/admin/conferencia/mapas",
+          produtos: "/api/admin/conferencia/produtos"
         },
         giroRecolha: {
           dashboard: "/api/admin/giro/recolha-dashboard",
@@ -2437,6 +2615,7 @@
       { id: "critica", label: "Critica", icon: "bi-clipboard-data", description: "Importacao, dashboard e PDFs." },
       { id: "recolhas", label: "Recolhas", icon: "bi-box-arrow-in-down", description: "Solicitacoes e acompanhamento." },
       { id: "financeiro", label: "Financeiro", icon: "bi-cash-coin", description: "Fechamento de caixa por dia e mapa." },
+      { id: "conferencia", label: "Conferência", icon: "bi-clipboard-check", description: "Contagem cega de materiais e produtos por mapa." },
       { id: "armazem", label: "Armazem", icon: "bi-box-seam", description: "Consultas basicas de cliente e estoque." },
       { id: "giro", label: "Giro", icon: "bi-arrow-repeat", description: "Giro e oportunidades da carteira." },
       { id: "usage", label: "Uso Evolution", icon: "bi-activity", description: "Numero x funcao e auditoria." }
@@ -2452,6 +2631,17 @@
       { id: "3610007", name: "Barra da Estiva" },
       { id: "3610008", name: "Cacule" }
     ];
+
+    const PROMAX_UNIT_BY_FILIAL = {
+      "1": "0640001",
+      "2": "0640002",
+      "3": "2210003",
+      "4": "2210004",
+      "5": "3480005",
+      "6": "3610006",
+      "7": "3610007",
+      "8": "3610008"
+    };
 
     const PROMAX_WEEKDAYS = [
       { value: 0, short: "Seg", name: "Segunda" },
@@ -2505,6 +2695,7 @@
         canImportCritica: true,
         canManageRecolhas: true,
         canFinanceiro: true,
+        canConferencia: true,
         canArmazem: true,
         canPayip: true,
         canOperations: true,
@@ -2520,7 +2711,8 @@
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
       payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
       payipGenerated: { payload: null, loading: false, error: "", polling: false, lastFilial: "", generating: "" },
-      financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null },
+      financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null, fechamentoJobId: "", fechamentoLogTimer: null, fechamentoLogDone: false },
+      conferencia: { payload: null, selectedId: null, detail: null, loading: false, manualRows: [], productResults: [] },
       promax: {
         catalog: null,
         jobs: [],
@@ -2562,12 +2754,13 @@
     };
 
     const DATASET_UI_OVERRIDES = {
-      dsetores: { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2", area: "operational", group: "Operacional", groupNote: "Tabelas operacionais de apoio: setores, precos, operacoes, condicoes, produtos e cesta." },
+      dsetores: { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2", area: "operational", group: "Operacional", groupNote: "Tabelas operacionais de apoio: setores, precos, operacoes, condicoes, produtos, materiais e cesta." },
       dprecos: { id: "DPrecos", name: "Tabela de Precos", icon: "bi-tags", area: "operational", group: "Operacional" },
       doperacoes: { id: "dOperacoes", name: "Tabela de Operacoes", icon: "bi-list-columns", area: "operational", group: "Operacional" },
       drevendas: { id: "dRevendas", name: "Tabela de Revendas", icon: "bi-building", area: "operational", group: "Operacional" },
       dcondicoes: { id: "dCondicoes", name: "Tabela de Condicoes", icon: "bi-receipt", area: "operational", group: "Operacional" },
       dprodutos: { id: "dProdutos", name: "Cadastro de Produtos", icon: "bi-boxes", area: "operational", group: "Operacional" },
+      dmateriais: { id: "dMateriais", name: "Tabela de Materiais", icon: "bi-box-seam", area: "operational", group: "Operacional" },
       produto_cestas: { id: "ProdutoCestas", name: "Cesta de Produtos", icon: "bi-collection", area: "operational", group: "Operacional" },
       dclientes: { id: "dClientes", name: "dClientes - 0105070402", icon: "bi-person-badge", area: "promax", group: "Promax", groupNote: "Relatorios oriundos do Promax: dClientes, inadimplencia, comodatos, documentacao pendente e boletos." },
       inadimplencia: { id: "Inadimplencia", name: "Inadimplencia - 120601", icon: "bi-graph-down-arrow", area: "promax", group: "Promax" },
@@ -2579,7 +2772,7 @@
     };
 
     const DATASET_FALLBACK_ORDER = [
-      "dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "produto_cestas",
+      "dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dmateriais", "produto_cestas",
       "dclientes", "inadimplencia", "comodatos", "documentacao_pendente",
       "prazo_limite", "giro", "critica_rn"
     ];
@@ -2590,6 +2783,9 @@
       if (boletoMatch) return `BoletosOp${boletoMatch[1]}`;
       const estoqueMatch = name.match(/^estoque_020304_op_(\d+)$/);
       if (estoqueMatch) return `Estoque020304Op${estoqueMatch[1]}`;
+      const rel031120Match = name.match(/^relatorio_031120_op_(\d+)$/);
+      if (rel031120Match) return `Relatorio031120Op${rel031120Match[1]}`;
+      if (name === "relatorio_03114902_geo") return "Relatorio03114902Geo";
       const criticaMatch = name.match(/^critica_op_(\d+)$/);
       if (criticaMatch) return `CriticaOp${criticaMatch[1]}`;
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].id) return DATASET_UI_OVERRIDES[name].id;
@@ -2602,8 +2798,10 @@
       if (name.startsWith("critica_op_")) return "critica";
       if (name.startsWith("boletos_bradesco_op_")) return "promax";
       if (name.startsWith("estoque_020304_op_")) return "promax";
+      if (name.startsWith("relatorio_031120_op_")) return "promax";
+      if (name === "relatorio_03114902_geo") return "promax";
       if (["prazo_limite", "giro"].includes(name)) return "powerbi";
-      if (["dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "produto_cestas"].includes(name)) return "operational";
+      if (["dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dmateriais", "produto_cestas"].includes(name)) return "operational";
       return "promax";
     }
 
@@ -2613,6 +2811,8 @@
       if (name.startsWith("critica_op_")) return "bi-clipboard-data";
       if (name.startsWith("boletos_bradesco_op_")) return "bi-upc-scan";
       if (name.startsWith("estoque_020304_op_")) return "bi-boxes";
+      if (name.startsWith("relatorio_031120_op_")) return "bi-map";
+      if (name === "relatorio_03114902_geo") return "bi-geo-alt";
       return "bi-table";
     }
 
@@ -2621,6 +2821,8 @@
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].group) return DATASET_UI_OVERRIDES[name].group;
       if (name.startsWith("critica_op_")) return "Promax 030111 - Critica por operacao";
       if (name.startsWith("estoque_020304_op_")) return "Promax 020304 - Estoque por operacao";
+      if (name.startsWith("relatorio_031120_op_")) return "Promax 031120 - Mapa por operacao";
+      if (name === "relatorio_03114902_geo") return "Promax 03114902 - Geo";
       if (datasetArea(name) === "operational") return "Operacional";
       if (datasetArea(name) === "powerbi") return "Power BI";
       return "Promax";
@@ -2631,6 +2833,8 @@
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].groupNote) return DATASET_UI_OVERRIDES[name].groupNote;
       if (name.startsWith("critica_op_")) return "Upload separado por filial. A consolidacao final do bot passa a sair desta aba.";
       if (name.startsWith("estoque_020304_op_")) return "Upload separado por filial. O bot envia o PDF ativo pelo comando estoque filial.";
+      if (name.startsWith("relatorio_031120_op_")) return "Upload separado por filial. Rotina 031120 com classificacao Mapa e armazem central.";
+      if (name === "relatorio_03114902_geo") return "Relatorio unico para todas as operacoes. Rotina 03114902 gerada pelo botao CSV Geo.";
       return "";
     }
 
@@ -2643,6 +2847,12 @@
       }
       if (apiName.startsWith("estoque_020304_op_")) {
         return { accept, mode, label: "CSV da Operacao", emptyHint: `Selecione o CSV 020304 da operacao ${apiName.replace("estoque_020304_op_", "")}.` };
+      }
+      if (apiName.startsWith("relatorio_031120_op_")) {
+        return { accept, mode, label: "CSV da Operacao", emptyHint: `Selecione o CSV 031120 da operacao ${apiName.replace("relatorio_031120_op_", "")}.` };
+      }
+      if (apiName === "relatorio_03114902_geo") {
+        return { accept, mode, label: "CSV Geo", emptyHint: "Selecione o CSV Geo 03114902 consolidado." };
       }
       if (apiName.startsWith("critica_op_")) {
         return { accept, mode, label: "CSV da Operacao", emptyHint: `Selecione o CSV da operacao ${apiName.replace("critica_op_", "")}.` };
@@ -3178,6 +3388,7 @@
       "/admin/critica": "criticaTab",
       "/admin/recolhas": "recolhasTab",
       "/admin/financeiro": "financeiroTab",
+      "/admin/conferencia": "conferenciaTab",
       "/admin/giro-recolha": "giroRecolhaTab",
       "/admin/usage": "usageEvolutionTab"
     };
@@ -3189,6 +3400,7 @@
       criticaTab: "/admin/critica",
       recolhasTab: "/admin/recolhas",
       financeiroTab: "/admin/financeiro",
+      conferenciaTab: "/admin/conferencia",
       giroRecolhaTab: "/admin/giro-recolha",
       usageEvolutionTab: "/admin/usage"
     };
@@ -5612,6 +5824,589 @@
       }
     }
 
+    const CONFERENCIA_GRUPOS = ["300", "600", "1L", "51", "FREEZER", "CADEIRA", "MESA", "BARRIL", "BARRACA", "OUTRAS GARRAFEIRAS", "OUTROS MATERIAIS", "PRODUTO"];
+    const CONFERENCIA_FAST_GROUPS = ["300", "600", "1L", "51"];
+    const CONFERENCIA_MANUAL_GROUPS = ["300", "600", "1L", "51", "FREEZER", "CADEIRA", "MESA", "BARRIL", "BARRACA", "OUTRAS GARRAFEIRAS", "OUTROS MATERIAIS"];
+    const CONFERENCIA_MATERIAL_QUICK_GROUPS = ["300", "600", "1L", "51", "FREEZER", "CADEIRA", "MESA", "BARRIL", "BARRACA"];
+    const CONFERENCIA_INTEGER_GROUPS = ["300", "600", "1L", "51", "FREEZER", "CADEIRA", "MESA", "BARRIL", "BARRACA", "OUTRAS GARRAFEIRAS", "OUTROS MATERIAIS", "PRODUTO"];
+    const scheduleConferenciaSearch = debounce(() => {
+      if (state.panel && state.panel.canConferencia) syncConferencia({ silent: true });
+    }, 240);
+    const scheduleConferenciaItemSearch = debounce(() => {
+      if (state.conferencia && state.conferencia.selectedId) loadConferenciaMapa(state.conferencia.selectedId);
+    }, 220);
+    const scheduleConferenciaProductSearch = debounce(() => searchConferenciaProducts(), 260);
+
+    function conferenciaElements() {
+      return {
+        data: document.getElementById("conferenciaData"),
+        filial: document.getElementById("conferenciaFilial"),
+        search: document.getElementById("conferenciaSearch"),
+        grupo: document.getElementById("conferenciaGrupo"),
+        status: document.getElementById("conferenciaStatus"),
+        refresh: document.getElementById("conferenciaRefreshBtn"),
+        save: document.getElementById("conferenciaSaveBtn"),
+        count: document.getElementById("conferenciaMapCount"),
+        list: document.getElementById("conferenciaMapList"),
+        editor: document.getElementById("conferenciaEditor")
+      };
+    }
+
+    function setupConferenciaControls() {
+      const els = conferenciaElements();
+      if (els.data && !els.data.value) els.data.value = formatDateInputValue(new Date());
+      if (els.filial) {
+        const previous = els.filial.value || "";
+        const allowed = Array.isArray(state.panel && state.panel.filiais) ? state.panel.filiais : [];
+        const hasAll = !allowed.length || allowed.includes("*");
+        const options = ['<option value="">Todas liberadas</option>'].concat(PROMAX_RESELLERS.map(item => {
+          const filial = promaxFilialFromUnit(item.id);
+          if (!hasAll && !allowed.includes(filial) && !allowed.includes(item.id)) return "";
+          return `<option value="${escapeHtml(filial)}">${escapeHtml(filial)} - ${escapeHtml(item.name)}</option>`;
+        })).join("");
+        els.filial.innerHTML = options;
+        if (previous && Array.from(els.filial.options).some(option => option.value === previous)) {
+          els.filial.value = previous;
+        }
+      }
+      if (els.refresh && !els.refresh.dataset.bound) {
+        els.refresh.addEventListener("click", () => syncConferencia({ silent: false, forceDetail: true }));
+        els.refresh.dataset.bound = "1";
+      }
+      if (els.save && !els.save.dataset.bound) {
+        els.save.addEventListener("click", saveConferenciaCounts);
+        els.save.dataset.bound = "1";
+      }
+      if (els.data && !els.data.dataset.bound) {
+        els.data.addEventListener("change", () => syncConferencia({ silent: true }));
+        els.data.dataset.bound = "1";
+      }
+      if (els.filial && !els.filial.dataset.bound) {
+        els.filial.addEventListener("change", () => syncConferencia({ silent: true }));
+        els.filial.dataset.bound = "1";
+      }
+      if (els.search && !els.search.dataset.bound) {
+        els.search.addEventListener("input", scheduleConferenciaSearch);
+        els.search.dataset.bound = "1";
+      }
+      if (els.grupo && !els.grupo.dataset.bound) {
+        els.grupo.addEventListener("change", scheduleConferenciaItemSearch);
+        els.grupo.dataset.bound = "1";
+      }
+    }
+
+    function promaxFilialFromUnit(unit) {
+      const clean = String(unit || "").replace(/\D/g, "");
+      if (!clean) return "";
+      if (clean.length >= 7) return String(Number(clean.slice(-4)));
+      return String(Number(clean));
+    }
+
+    function conferenciaQueryParams(includeSearch = true) {
+      const els = conferenciaElements();
+      setupConferenciaControls();
+      const params = new URLSearchParams();
+      params.set("data", els.data && els.data.value ? els.data.value : formatDateInputValue(new Date()));
+      if (els.filial && els.filial.value) params.set("filial", els.filial.value);
+      if (includeSearch && els.search && els.search.value.trim()) params.set("search", els.search.value.trim());
+      return params;
+    }
+
+    async function syncConferencia({ silent = true, forceDetail = false } = {}) {
+      setupConferenciaControls();
+      const els = conferenciaElements();
+      if (!state.panel || !state.panel.canConferencia) {
+        if (els.editor) els.editor.innerHTML = '<div class="p-3 empty-state">Acesso nao liberado para conferencia.</div>';
+        return false;
+      }
+      try {
+        state.conferencia.loading = true;
+        if (els.status) {
+          els.status.textContent = "Carregando mapas";
+          els.status.className = "pill warn";
+        }
+        const payload = await req(`${CONFIG.endpoints.conferencia.mapas}?${conferenciaQueryParams(true).toString()}`, { timeoutMs: 30000 });
+        state.conferencia.payload = payload || {};
+        const maps = Array.isArray(payload && payload.mapas) ? payload.mapas : [];
+        if (!maps.some(map => String(map.id) === String(state.conferencia.selectedId))) {
+          state.conferencia.selectedId = "";
+          state.conferencia.detail = null;
+        }
+        renderConferenciaMapList();
+        if (state.conferencia.selectedId && (forceDetail || !state.conferencia.detail || String(state.conferencia.detail?.mapa?.id) !== String(state.conferencia.selectedId))) {
+          await loadConferenciaMapa(state.conferencia.selectedId);
+        } else {
+          renderConferenciaEditor();
+        }
+        if (els.status) {
+          els.status.textContent = `${maps.length} mapa(s)`;
+          els.status.className = "pill ok";
+        }
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao carregar conferencia: ${err.message}`, "err");
+        if (els.status) {
+          els.status.textContent = "Falha na conferencia";
+          els.status.className = "pill warn";
+        }
+        if (els.editor) els.editor.innerHTML = `<div class="p-3 empty-state text-danger">${escapeHtml(err.message)}</div>`;
+        return false;
+      } finally {
+        state.conferencia.loading = false;
+      }
+    }
+
+    function renderConferenciaMapList() {
+      const els = conferenciaElements();
+      const maps = Array.isArray(state.conferencia.payload && state.conferencia.payload.mapas) ? state.conferencia.payload.mapas : [];
+      if (els.count) els.count.textContent = String(maps.length);
+      if (!els.list) return;
+      if (!maps.length) {
+        els.list.innerHTML = '<div class="empty-state py-3">Nenhum mapa encontrado para os filtros.</div>';
+        return;
+      }
+      els.list.innerHTML = maps.map(map => {
+        const active = String(map.id) === String(state.conferencia.selectedId) ? " is-active" : "";
+        const done = Number(map.conferidos || 0);
+        const total = Number(map.itens || 0);
+        return `
+          <button type="button" class="conference-map-btn${active}" data-conferencia-map="${escapeHtml(map.id)}">
+            <strong>Mapa ${escapeHtml(map.mapa || "-")}</strong>
+            <span class="meta">${escapeHtml(map.filial_label || map.filial || "-")} | ${escapeHtml(map.placa || "sem placa")}</span>
+            <span class="meta">${escapeHtml(map.motorista || "sem motorista")}</span>
+            <span class="meta">${done}/${total} item(ns) conferidos</span>
+            <span class="status-line">${escapeHtml(map.source_status || (total ? "Itens carregados" : "Aguardando 030302"))}</span>
+            <span class="open-line"><i class="bi bi-box-arrow-in-right me-1"></i>Abrir conferencia</span>
+          </button>
+        `;
+      }).join("");
+      els.list.querySelectorAll("[data-conferencia-map]").forEach(button => {
+        button.addEventListener("click", () => selectConferenciaMapa(String(button.dataset.conferenciaMap || "")));
+      });
+    }
+
+    async function selectConferenciaMapa(mapaId) {
+      const cleanId = String(mapaId || "").trim();
+      if (!cleanId) return;
+      const els = conferenciaElements();
+      state.conferencia.selectedId = cleanId;
+      state.conferencia.detail = null;
+      state.conferencia.manualRows = [];
+      renderConferenciaMapList();
+      if (els.editor) {
+        els.editor.innerHTML = '<div class="p-3 empty-state"><span class="spinner-border spinner-border-sm me-2"></span>Carregando mapa para conferencia...</div>';
+      }
+      await loadConferenciaMapa(cleanId);
+      if (els.editor) {
+        els.editor.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    function addConferenciaManualRow(group = "OUTROS MATERIAIS", description = "", quantity = "") {
+      syncConferenciaManualRowsFromDom();
+      if (!state.conferencia.manualRows) state.conferencia.manualRows = [];
+      const cleanGroup = String(group || "OUTROS MATERIAIS").toUpperCase();
+      if (focusConferenciaGroupRow(cleanGroup, quantity)) return;
+      const existing = state.conferencia.manualRows.find(item => String(item.grupo_contagem || "").toUpperCase() === cleanGroup && cleanGroup !== "PRODUTO");
+      if (existing) {
+        if (quantity !== "") existing.contagem_real = quantity;
+        renderConferenciaEditor();
+        return;
+      }
+      state.conferencia.manualRows.push({
+        key: `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        cod_item: "",
+        descricao: description || cleanGroup,
+        grupo_contagem: cleanGroup,
+        contagem_real: quantity,
+        observacao: ""
+      });
+      renderConferenciaEditor();
+    }
+
+    function focusConferenciaGroupRow(group, quantity = "") {
+      const cleanGroup = String(group || "").toUpperCase();
+      if (!cleanGroup) return false;
+      const row = Array.from(document.querySelectorAll("[data-conferencia-row-group]"))
+        .find(element => String(element.dataset.conferenciaRowGroup || "").toUpperCase() === cleanGroup);
+      if (!row) return false;
+      const input = row.querySelector("[data-conferencia-field='contagem_real']");
+      if (input) {
+        if (quantity !== "") input.value = quantity;
+        input.focus();
+        input.select();
+      }
+      return true;
+    }
+
+    function focusConferenciaProductRow(code, quantity = "") {
+      const cleanCode = String(code || "").replace(/\D/g, "");
+      if (!cleanCode) return false;
+      const row = Array.from(document.querySelectorAll("[data-conferencia-row-code]"))
+        .find(element => String(element.dataset.conferenciaRowCode || "").replace(/\D/g, "") === cleanCode);
+      if (!row) return false;
+      const input = row.querySelector("[data-conferencia-field='contagem_real']");
+      if (input) {
+        if (quantity !== "") input.value = quantity;
+        input.focus();
+        input.select();
+      }
+      return true;
+    }
+
+    function removeConferenciaManualRow(key) {
+      syncConferenciaManualRowsFromDom();
+      state.conferencia.manualRows = (state.conferencia.manualRows || []).filter(item => item.key !== key);
+      renderConferenciaEditor();
+    }
+
+    function syncConferenciaManualRowsFromDom() {
+      const els = conferenciaElements();
+      if (!els.editor) return;
+      const rows = Array.from(els.editor.querySelectorAll("[data-conferencia-manual-item]"));
+      if (!rows.length) return;
+      state.conferencia.manualRows = rows.map(row => {
+        const code = row.querySelector("[data-conferencia-field='cod_item']");
+        const desc = row.querySelector("[data-conferencia-field='descricao']");
+        const group = row.querySelector("[data-conferencia-field='grupo_contagem']");
+        const count = row.querySelector("[data-conferencia-field='contagem_real']");
+        const obs = row.querySelector("[data-conferencia-field='observacao']");
+        return {
+          key: String(row.dataset.conferenciaManualItem || ""),
+          cod_item: code ? code.value : "",
+          descricao: desc ? desc.value : "",
+          grupo_contagem: group ? group.value : "OUTROS MATERIAIS",
+          contagem_real: count ? count.value : "",
+          observacao: obs ? obs.value : ""
+        };
+      });
+    }
+
+    async function searchConferenciaProducts() {
+      const input = document.getElementById("conferenciaProductSearch");
+      const select = document.getElementById("conferenciaProductSelect");
+      const query = input ? input.value.trim() : "";
+      if (!select) return;
+      if (query.length < 2) {
+        state.conferencia.productResults = [];
+        select.innerHTML = '<option value="">Digite pelo menos 2 caracteres</option>';
+        return;
+      }
+      try {
+        select.innerHTML = '<option value="">Buscando...</option>';
+        const params = new URLSearchParams({ search: query, limit: "20" });
+        const payload = await req(`${CONFIG.endpoints.conferencia.produtos}?${params.toString()}`, { timeoutMs: 20000 });
+        state.conferencia.productResults = Array.isArray(payload && payload.products) ? payload.products : [];
+        if (!state.conferencia.productResults.length) {
+          select.innerHTML = '<option value="">Nenhum produto encontrado</option>';
+          return;
+        }
+        select.innerHTML = '<option value="">Selecione o produto</option>' + state.conferencia.productResults.map(item => (
+          `<option value="${escapeHtml(item.codigo || "")}">${escapeHtml(item.codigo || "-")} - ${escapeHtml(item.descricao || item.descricao_completa || "-")}</option>`
+        )).join("");
+      } catch (err) {
+        select.innerHTML = `<option value="">Falha: ${escapeHtml(err.message)}</option>`;
+      }
+    }
+
+    function addConferenciaProductRow() {
+      syncConferenciaManualRowsFromDom();
+      const select = document.getElementById("conferenciaProductSelect");
+      const selectedCode = select ? String(select.value || "") : "";
+      const product = (state.conferencia.productResults || []).find(item => String(item.codigo || "") === selectedCode);
+      if (!product) {
+        addLog("Selecione um produto da lista antes de adicionar.", "warn");
+        return;
+      }
+      if (focusConferenciaProductRow(product.codigo || "")) return;
+      if (!state.conferencia.manualRows) state.conferencia.manualRows = [];
+      const existing = state.conferencia.manualRows.find(item => String(item.cod_item || "").replace(/\D/g, "") === String(product.codigo || "").replace(/\D/g, ""));
+      if (existing) {
+        renderConferenciaEditor();
+        return;
+      }
+      state.conferencia.manualRows.push({
+        key: `manual-prod-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        cod_item: product.codigo || "",
+        descricao: product.descricao || product.descricao_completa || product.codigo || "",
+        grupo_contagem: "PRODUTO",
+        contagem_real: "",
+        observacao: ""
+      });
+      renderConferenciaEditor();
+    }
+
+    async function loadConferenciaMapa(mapaId) {
+      const els = conferenciaElements();
+      if (!mapaId) {
+        state.conferencia.detail = null;
+        renderConferenciaEditor();
+        return;
+      }
+      const params = new URLSearchParams();
+      const search = els.search && els.search.value ? els.search.value.trim() : "";
+      const grupo = els.grupo && els.grupo.value ? els.grupo.value.trim() : "";
+      if (search) params.set("search", search);
+      if (grupo) params.set("grupo", grupo);
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      const payload = await req(`${CONFIG.endpoints.conferencia.mapas}/${encodeURIComponent(mapaId)}${suffix}`, { timeoutMs: 30000 });
+      state.conferencia.detail = payload || null;
+      renderConferenciaEditor();
+    }
+
+    function renderConferenciaEditor() {
+      const els = conferenciaElements();
+      const detail = state.conferencia.detail || {};
+      const mapa = detail.mapa || null;
+      const items = Array.isArray(detail.items) ? detail.items : [];
+      const manualRows = Array.isArray(state.conferencia.manualRows) ? state.conferencia.manualRows : [];
+      const reveal = Boolean(detail.reveal_totals);
+      if (els.save) els.save.disabled = !mapa;
+      if (!els.editor) return;
+      if (!mapa) {
+        els.editor.innerHTML = '<div class="p-3 empty-state">Selecione um mapa para iniciar a conferencia.</div>';
+        return;
+      }
+      const groups = CONFERENCIA_GRUPOS.map(group => {
+        const total = items.filter(item => String(item.grupo_contagem || "") === group).length;
+        return `<div class="conference-kpi"><span>${escapeHtml(group)}</span><strong>${escapeHtml(String(total))}</strong></div>`;
+      }).join("");
+      const groupSummaryHtml = reveal && groups ? `<div class="conference-kpis mb-3">${groups}</div>` : "";
+      const totalHeaders = reveal ? '<th>Total</th><th>Dif.</th><th>Valor</th>' : "";
+      const materialQuick = CONFERENCIA_MATERIAL_QUICK_GROUPS.map(group => `
+        <button class="btn btn-outline-primary btn-sm" type="button" data-conferencia-add-group="${escapeHtml(group)}">
+          <i class="bi bi-plus-lg me-1"></i>${escapeHtml(group)}
+        </button>
+      `).join("");
+      const productOptions = (state.conferencia.productResults || []).map(item => (
+        `<option value="${escapeHtml(item.codigo || "")}">${escapeHtml(item.codigo || "-")} - ${escapeHtml(item.descricao || item.descricao_completa || "-")}</option>`
+      )).join("");
+      const rows = items.length ? items.map(item => {
+        const diff = Number(item.diferenca || 0);
+        const diffClass = diff === 0 ? "text-success" : "text-danger";
+        const integerCount = CONFERENCIA_INTEGER_GROUPS.includes(String(item.grupo_contagem || "").toUpperCase());
+        const countInputAttrs = integerCount ? 'step="1" inputmode="numeric" pattern="[0-9]*"' : 'step="0.001" inputmode="decimal"';
+        return `
+          <tr data-conferencia-item="${escapeHtml(item.id)}">
+            <td data-label="Cod." class="mono fw-bold">${escapeHtml(item.cod_item || "-")}</td>
+            <td data-label="Item">
+              <div class="fw-bold">${escapeHtml(item.descricao || "-")}</div>
+              <div class="text-secondary small">${escapeHtml(item.categoria || item.tipo_item || "-")}</div>
+            </td>
+            <td data-label="Grupo"><span class="pill">${escapeHtml(item.grupo_contagem || "-")}</span></td>
+            <td data-label="Un.">${escapeHtml(item.unidade || "-")}</td>
+            ${reveal ? `<td data-label="Total" class="fw-bold">${escapeHtml(formatQty(item.total_sistema || 0))}</td><td data-label="Dif." class="fw-bold ${diffClass}">${escapeHtml(formatQty(item.diferenca || 0))}</td><td data-label="Valor">${escapeHtml(formatMoneyText(item.valor_unitario || 0))}</td>` : ""}
+            <td data-label="Contagem"><input class="form-control form-control-sm conference-count-input" type="number" ${countInputAttrs} min="0" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Digite"></td>
+            <td data-label="Obs."><input class="form-control form-control-sm conference-note-input" type="text" data-conferencia-field="observacao" value="${escapeHtml(item.observacao || "")}" placeholder="Observacao"></td>
+          </tr>
+        `;
+      }).join("") : "";
+      const manualHtml = manualRows.map(item => {
+        const isProduct = String(item.grupo_contagem || "").toUpperCase() === "PRODUTO";
+        const codeCell = isProduct
+          ? `<span class="mono fw-bold">${escapeHtml(item.cod_item || "-")}</span><input type="hidden" data-conferencia-field="cod_item" value="${escapeHtml(item.cod_item || "")}">`
+          : `<span class="text-secondary small fw-bold">Sem codigo</span><input type="hidden" data-conferencia-field="cod_item" value="">`;
+        const groupCell = isProduct
+          ? '<span class="pill">PRODUTO</span><input type="hidden" data-conferencia-field="grupo_contagem" value="PRODUTO">'
+          : `<select class="form-select form-select-sm" data-conferencia-field="grupo_contagem">
+                ${CONFERENCIA_MANUAL_GROUPS.map(group => `<option value="${escapeHtml(group)}" ${String(item.grupo_contagem || "") === group ? "selected" : ""}>${escapeHtml(group)}</option>`).join("")}
+              </select>`;
+        const itemHint = isProduct ? "Produto da tabela 0111." : "Lancamento manual sem codigo.";
+        return `
+          <tr data-conferencia-manual-item="${escapeHtml(item.key)}">
+            <td data-label="Cod.">${codeCell}</td>
+            <td data-label="Item">
+              <input class="form-control form-control-sm fw-bold" type="text" data-conferencia-field="descricao" value="${escapeHtml(item.descricao || "")}" placeholder="Digite o material/produto conferido">
+              <div class="text-secondary small mt-1">${escapeHtml(itemHint)}</div>
+            </td>
+            <td data-label="Grupo">${groupCell}</td>
+            <td data-label="Un.">-</td>
+            ${reveal ? '<td data-label="Total" class="text-secondary">0</td><td data-label="Dif." class="text-secondary">-</td><td data-label="Valor" class="text-secondary">-</td>' : ""}
+            <td data-label="Contagem"><input class="form-control form-control-sm conference-count-input" type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Digite"></td>
+            <td data-label="Obs.">
+              <div class="d-flex gap-1">
+                <input class="form-control form-control-sm conference-note-input" type="text" data-conferencia-field="observacao" value="${escapeHtml(item.observacao || "")}" placeholder="Observacao">
+                <button class="btn btn-outline-danger btn-sm" type="button" data-conferencia-remove-manual="${escapeHtml(item.key)}"><i class="bi bi-x-lg"></i></button>
+              </div>
+            </td>
+          </tr>
+      `;
+      }).join("");
+      const emptyRows = (!rows && !manualHtml)
+        ? `<tr><td colspan="${reveal ? 9 : 6}" class="text-center py-4 text-secondary">Este mapa esta aberto pela 03114902 e ainda nao recebeu os itens da 030302. Use o botao Adicionar item manual para fazer a contagem mesmo assim.</td></tr>`
+        : "";
+      const blindPersistedCards = items.map(item => {
+        const integerCount = CONFERENCIA_INTEGER_GROUPS.includes(String(item.grupo_contagem || "").toUpperCase());
+        const countInputAttrs = integerCount ? 'step="1" inputmode="numeric" pattern="[0-9]*"' : 'step="0.001" inputmode="decimal"';
+        return `
+          <div class="conference-simple-row" data-conferencia-item="${escapeHtml(item.id)}" data-conferencia-row-group="${escapeHtml(String(item.grupo_contagem || "").toUpperCase())}" data-conferencia-row-code="${escapeHtml(item.cod_item || "")}">
+            <div>
+              <div class="name">${escapeHtml(item.descricao || "-")}</div>
+              <div class="meta">${escapeHtml(item.grupo_contagem || "-")}${item.cod_item ? ` | Cod. ${escapeHtml(item.cod_item)}` : ""}</div>
+              <input type="hidden" data-conferencia-field="observacao" value="${escapeHtml(item.observacao || "")}">
+            </div>
+            <input class="form-control form-control-sm conference-count-input" type="number" ${countInputAttrs} min="0" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Qtd.">
+            <span></span>
+          </div>
+        `;
+      }).join("");
+      const blindManualCards = manualRows.map(item => `
+        <div class="conference-simple-row" data-conferencia-manual-item="${escapeHtml(item.key)}" data-conferencia-row-group="${escapeHtml(String(item.grupo_contagem || "").toUpperCase())}" data-conferencia-row-code="${escapeHtml(item.cod_item || "")}">
+          <div>
+            <input class="form-control form-control-sm fw-bold mb-1" type="text" data-conferencia-field="descricao" value="${escapeHtml(item.descricao || "")}" placeholder="Item conferido">
+            <div class="meta">${escapeHtml(item.grupo_contagem || "-")}${item.observacao ? ` | ${escapeHtml(item.observacao)}` : ""}</div>
+            <input type="hidden" data-conferencia-field="cod_item" value="${escapeHtml(item.cod_item || "")}">
+            <input type="hidden" data-conferencia-field="grupo_contagem" value="${escapeHtml(item.grupo_contagem || "OUTROS MATERIAIS")}">
+            <input type="hidden" data-conferencia-field="observacao" value="${escapeHtml(item.observacao || "")}">
+          </div>
+          <input class="form-control form-control-sm conference-count-input" type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Qtd.">
+          <button class="btn btn-outline-danger btn-sm" type="button" data-conferencia-remove-manual="${escapeHtml(item.key)}"><i class="bi bi-x-lg"></i></button>
+        </div>
+      `).join("");
+      const blindListHtml = !reveal
+        ? `<div class="conference-simple-list mb-3">${blindPersistedCards}${blindManualCards}${(!blindPersistedCards && !blindManualCards) ? '<div class="empty-state py-3">Nenhum item lancado ainda. Use os botoes acima para adicionar.</div>' : ""}</div>`
+        : "";
+      const tableHtml = reveal ? `
+          <div class="conference-table-wrap">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Cod.</th>
+                  <th>Item</th>
+                  <th>Grupo</th>
+                  <th>Un.</th>
+                  ${totalHeaders}
+                  <th>Contagem real</th>
+                  <th>Obs.</th>
+                </tr>
+              </thead>
+              <tbody>${rows}${manualHtml}${emptyRows}</tbody>
+            </table>
+          </div>
+        ` : "";
+      els.editor.innerHTML = `
+        <header class="px-3 pt-3 pb-2 border-bottom">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between">
+            <div>
+              <h3 class="h6 fw-bold mb-1">Mapa ${escapeHtml(mapa.mapa || "-")}</h3>
+              <div class="form-text">${escapeHtml(mapa.filial_label || mapa.filial || "-")} | ${escapeHtml(mapa.placa || "sem placa")} | ${escapeHtml(mapa.motorista || "sem motorista")}</div>
+            </div>
+            <span class="pill">${escapeHtml(String(mapa.conferidos || 0))}/${escapeHtml(String(mapa.itens || 0))} conferidos</span>
+          </div>
+        </header>
+        <div class="p-3">
+          ${reveal ? "" : '<div class="conference-blind-note mb-3"><i class="bi bi-eye-slash me-1"></i>Contagem cega ativa: o parâmetro do sistema fica oculto para o conferente.</div>'}
+          <div class="mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+              <div>
+                <h4 class="h6 fw-bold mb-1">Itens da contagem</h4>
+                <div class="text-secondary small fw-bold">Adicione o item e preencha a quantidade na lista abaixo.</div>
+              </div>
+              <button class="btn btn-outline-primary btn-sm" id="conferenciaAddManualBtn" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar item manual</button>
+            </div>
+            <div class="text-secondary small fw-bold mb-2">Adicionar item sem codigo</div>
+            <div class="d-flex flex-wrap gap-2 mb-3">${materialQuick}</div>
+            <div class="conference-product-picker">
+              <label class="form-label small fw-semibold mb-0" for="conferenciaProductSearch">Produto
+                <input class="form-control form-control-sm mt-1" id="conferenciaProductSearch" type="search" placeholder="Buscar por nome ou codigo">
+              </label>
+              <label class="form-label small fw-semibold mb-0" for="conferenciaProductSelect">Resultado
+                <select class="form-select form-select-sm mt-1" id="conferenciaProductSelect">
+                  <option value="">Busque e selecione</option>
+                  ${productOptions}
+                </select>
+              </label>
+              <button class="btn btn-outline-primary btn-sm" id="conferenciaAddProductBtn" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar produto</button>
+            </div>
+          </div>
+          ${groupSummaryHtml}
+          ${blindListHtml}
+          ${tableHtml}
+        </div>
+      `;
+      const addManual = document.getElementById("conferenciaAddManualBtn");
+      if (addManual) addManual.addEventListener("click", () => addConferenciaManualRow());
+      els.editor.querySelectorAll("[data-conferencia-add-group]").forEach(button => {
+        button.addEventListener("click", () => {
+          const group = String(button.dataset.conferenciaAddGroup || "OUTROS MATERIAIS");
+          const description = CONFERENCIA_FAST_GROUPS.includes(group) ? `Garrafeira ${group}` : group;
+          addConferenciaManualRow(group, description);
+        });
+      });
+      const productSearch = document.getElementById("conferenciaProductSearch");
+      if (productSearch) productSearch.addEventListener("input", scheduleConferenciaProductSearch);
+      const addProduct = document.getElementById("conferenciaAddProductBtn");
+      if (addProduct) addProduct.addEventListener("click", addConferenciaProductRow);
+      els.editor.querySelectorAll("[data-conferencia-remove-manual]").forEach(button => {
+        button.addEventListener("click", () => removeConferenciaManualRow(String(button.dataset.conferenciaRemoveManual || "")));
+      });
+    }
+
+    function collectConferenciaCounts() {
+      const els = conferenciaElements();
+      if (!els.editor) return [];
+      const persisted = Array.from(els.editor.querySelectorAll("[data-conferencia-item]")).map(row => {
+        const count = row.querySelector("[data-conferencia-field='contagem_real']");
+        const obs = row.querySelector("[data-conferencia-field='observacao']");
+        return {
+          item_id: Number(row.dataset.conferenciaItem || 0),
+          contagem_real: count ? count.value : "",
+          observacao: obs ? obs.value : ""
+        };
+      }).filter(item => item.item_id > 0);
+      const manual = Array.from(els.editor.querySelectorAll("[data-conferencia-manual-item]")).map(row => {
+        const code = row.querySelector("[data-conferencia-field='cod_item']");
+        const desc = row.querySelector("[data-conferencia-field='descricao']");
+        const group = row.querySelector("[data-conferencia-field='grupo_contagem']");
+        const count = row.querySelector("[data-conferencia-field='contagem_real']");
+        const obs = row.querySelector("[data-conferencia-field='observacao']");
+        return {
+          item_id: 0,
+          cod_item: code ? code.value : "",
+          descricao: desc ? desc.value : "",
+          grupo_contagem: group ? group.value : "",
+          contagem_real: count ? count.value : "",
+          observacao: obs ? obs.value : ""
+        };
+      }).filter(item => String(item.descricao || item.cod_item || "").trim());
+      return persisted.concat(manual);
+    }
+
+    async function saveConferenciaCounts() {
+      const mapaId = state.conferencia && state.conferencia.selectedId ? state.conferencia.selectedId : "";
+      if (!mapaId) return;
+      const els = conferenciaElements();
+      try {
+        if (els.save) {
+          els.save.disabled = true;
+          els.save.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvando';
+        }
+        const result = await req(`${CONFIG.endpoints.conferencia.mapas}/${encodeURIComponent(mapaId)}/contagens`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ counts: collectConferenciaCounts() }),
+          timeoutMs: 30000
+        });
+        addLog(`Conferencia salva: ${result.saved || 0} item(ns).`, "ok");
+        state.conferencia.manualRows = [];
+        await loadConferenciaMapa(mapaId);
+        await syncConferencia({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao salvar conferencia: ${err.message}`, "err");
+      } finally {
+        if (els.save) {
+          els.save.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Salvar contagem';
+          els.save.disabled = false;
+        }
+      }
+    }
+
+    function formatQty(value) {
+      const n = Number(String(value ?? "0").replace(",", "."));
+      if (!Number.isFinite(n)) return "0";
+      return n.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+    }
+
     const FINANCEIRO_DENOMS = ["200", "100", "50", "20", "10", "5", "2"];
 
     function financeiroElements() {
@@ -5632,9 +6427,17 @@
         fechamentoKm: document.getElementById("financeiroFechamentoKm"),
         fechamentoWorkerStatus: document.getElementById("financeiroFechamentoWorkerStatus"),
         fechamentoStatus: document.getElementById("financeiroFechamentoStatus"),
+        fechamentoLogJob: document.getElementById("financeiroFechamentoLogJob"),
+        fechamentoLogList: document.getElementById("financeiroFechamentoLogList"),
         fechamentoBtn: document.getElementById("financeiroFechamentoBtn"),
         fechamentoRefresh: document.getElementById("financeiroFechamentoRefreshBtn"),
         fechamentoSheet: document.getElementById("financeiroFechamentoSheet"),
+        rel031120Hint: document.getElementById("financeiro031120Hint"),
+        rel031120Status: document.getElementById("financeiro031120Status"),
+        rel031120Target: document.getElementById("financeiro031120Target"),
+        rel031120File: document.getElementById("financeiro031120File"),
+        rel031120Download: document.getElementById("financeiro031120DownloadBtn"),
+        rel031120Upload: document.getElementById("financeiro031120UploadBtn"),
         summary: document.getElementById("financeiroSummaryCards"),
         list: document.getElementById("financeiroMapList"),
         count: document.getElementById("financeiroMapCount"),
@@ -5654,6 +6457,9 @@
         mapa: "",
         mapa_ref: "",
         motorista: "",
+        placa: "",
+        ajudante1: "",
+        ajudante2: "",
         boletos_rota: 0,
         boletos_recebido_qtd: 0,
         total_promax: 0,
@@ -5728,12 +6534,12 @@
         acc[denom] = caixaMaps.reduce((total, map) => total + Math.max(0, Math.trunc(financeiroNumber(map.dinheiro && map.dinheiro[denom]))), 0);
         return acc;
       }, {});
-      const numerarioMalote = financeiroNumber(summary.dinheiro_total) + financeiroNumber(summary.moedas);
-      const depositos = financeiroNumber(summary.credito_conta) + financeiroNumber(summary.transferencias_total);
+      const numerarioMalote = financeiroNumber(summary.numerario_total || (financeiroNumber(summary.dinheiro_total) + financeiroNumber(summary.moedas)));
+      const depositos = financeiroNumber(summary.depositos_total || (financeiroNumber(summary.credito_conta) + financeiroNumber(summary.transferencias_total)));
       const totalPromax = financeiroNumber(summary.total_promax);
       const diferenca = financeiroNumber(summary.diferenca);
-      const dinheiroPct = totalPromax ? (numerarioMalote / totalPromax) * 100 : 0;
-      const depositoPct = totalPromax ? (depositos / totalPromax) * 100 : 0;
+      const dinheiroPct = financeiroNumber(summary.dinheiro_percent || (totalPromax ? (numerarioMalote / totalPromax) * 100 : 0));
+      const depositoPct = financeiroNumber(summary.deposito_percent || (totalPromax ? (depositos / totalPromax) * 100 : 0));
       const transfers = financeiroRowsFromMaps(caixaMaps, "transferencias");
       const vales = financeiroRowsFromMaps(maps, "vales");
       const despesas = financeiroRowsFromMaps(maps, "despesas");
@@ -5761,6 +6567,24 @@
           <td class="text-center finance-sheet-ass ${row.assinado ? "ok" : "nok"}">${row.assinado ? "OK" : "NOK"}</td>
         </tr>
       `).join("") : '<tr><td colspan="4" class="text-center finance-sheet-muted">Sem vales lancados.</td></tr>';
+      const rotasDia = Array.isArray(payload && payload.rotas_dia) ? payload.rotas_dia : [];
+      const rotasDiaFechados = rotasDia.filter(row => row && row.fechamento_ok).length;
+      const rotasDiaPendentes = rotasDia.filter(row => row && row.fechamento_ok === false).length;
+      const rotasDiaBody = rotasDia.length ? rotasDia.map(row => `
+        <tr>
+          <td>${escapeHtml(row.mapa || "-")}</td>
+          <td>${escapeHtml(row.placa || "-")}</td>
+          <td class="finance-sheet-value">${escapeHtml(row.km_percorrido || "-")}</td>
+          <td class="finance-sheet-value">${escapeHtml(row.km_prev || "-")}</td>
+          <td>${escapeHtml(row.saida || "-")}</td>
+          <td>${escapeHtml(row.entrada || "-")}</td>
+          <td>${escapeHtml(row.tempo_rota || "-")}</td>
+          <td>${escapeHtml(row.ti_fisico || "-")}</td>
+          <td>${escapeHtml(row.ti_financeiro || "-")}</td>
+          <td>${escapeHtml(row.ti_total || "-")}</td>
+          <td class="finance-route-status ${row.fechamento_ok === false ? "pending" : "ok"}">${escapeHtml(row.fechamento_status || "-")}</td>
+        </tr>
+      `).join("") : '<tr><td colspan="11" class="text-center finance-sheet-muted">Sem relatorio 031120 importado para esta data.</td></tr>';
       el.innerHTML = `
         <div class="finance-sheet-title">
           <h3>Caixa Noturno ${escapeHtml((payload.filiais || []).find(item => String(item.code) === String(payload.filial))?.name || payload.filial || "")}</h3>
@@ -5849,6 +6673,31 @@
               </div>
             </div>
           </div>
+          <div class="finance-sheet-wide">
+            <div class="finance-sheet-box">
+              <div class="finance-sheet-box-title"><span>Relatorio de rotas do dia</span><strong>${escapeHtml(String(rotasDiaFechados))} fech. | ${escapeHtml(String(rotasDiaPendentes))} pend.</strong></div>
+              <div class="finance-sheet-scroll">
+                <table class="finance-sheet-table">
+                  <thead>
+                    <tr>
+                      <th>Mapa</th>
+                      <th>Placa</th>
+                      <th>Km percorrido</th>
+                      <th>Km Prev.</th>
+                      <th>Saida</th>
+                      <th>Entrada</th>
+                      <th>Tempo rota</th>
+                      <th>TI - Fisico</th>
+                      <th>TI - Financeiro</th>
+                      <th>TI total</th>
+                      <th>Validacao</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rotasDiaBody}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       `;
     }
@@ -5862,7 +6711,7 @@
       const filialEl = document.getElementById("financeiroFilial");
       map.data = dataEl && dataEl.value ? dataEl.value : map.data;
       map.filial = filialEl && filialEl.value ? filialEl.value : map.filial;
-      ["tipo_bloco", "mapa", "mapa_ref", "motorista", "boletos_rota", "boletos_recebido_qtd", "total_promax", "credito_conta", "moedas", "diarista", "diarista_recibo_recebido", "pernoite", "hospedagem", "janta", "almoco", "cafe", "observacao"].forEach(key => {
+      ["tipo_bloco", "mapa", "mapa_ref", "motorista", "placa", "ajudante1", "ajudante2", "boletos_rota", "boletos_recebido_qtd", "total_promax", "credito_conta", "moedas", "diarista", "diarista_recibo_recebido", "pernoite", "hospedagem", "janta", "almoco", "cafe", "observacao"].forEach(key => {
         const el = get(`[data-financeiro-field="${key}"]`);
         if (el) map[key] = el.type === "checkbox" ? el.checked : el.value;
       });
@@ -5907,6 +6756,7 @@
       }
       financeiroRenderFiliais(payload.filiais || []);
       renderFinanceiroFechamentoWorker(state.financeiro.worker);
+      financeiroUpdate031120Panel();
       financeiroRenderFechamentoSheet(payload);
       financeiroRenderSummary(payload.summary || {});
       financeiroRenderMapList(payload.maps || []);
@@ -5930,6 +6780,7 @@
         el.innerHTML = options.join("");
         el.value = nextValue;
       });
+      financeiroUpdate031120Panel();
       if (!current && nextValue) {
         setTimeout(() => syncFinanceiro({ silent: true }), 0);
       }
@@ -5942,6 +6793,145 @@
         if (element && element.value !== value) element.value = value;
       });
       return value;
+    }
+
+    function financeiroSelectedFilial() {
+      const els = financeiroElements();
+      return String((els.filial && els.filial.value) || (els.filialMapas && els.filialMapas.value) || "").trim();
+    }
+
+    function financeiroFilialLabel(filial) {
+      const payloadFiliais = state.financeiro.payload && Array.isArray(state.financeiro.payload.filiais) ? state.financeiro.payload.filiais : [];
+      const found = payloadFiliais.find(item => String(item.code) === String(filial));
+      return found ? `${found.code} - ${found.name || found.code}` : (filial ? `Revenda ${filial}` : "");
+    }
+
+    function financeiro031120Dataset(filial) {
+      const clean = String(filial || "").trim();
+      return clean ? `relatorio_031120_op_${clean}` : "";
+    }
+
+    function financeiro031120Unit(filial) {
+      return PROMAX_UNIT_BY_FILIAL[String(filial || "").trim()] || "";
+    }
+
+    function financeiroUpdate031120Panel() {
+      const els = financeiroElements();
+      const filial = financeiroSelectedFilial();
+      const unit = financeiro031120Unit(filial);
+      const dataset = financeiro031120Dataset(filial);
+      if (els.rel031120Target) {
+        els.rel031120Target.textContent = filial && unit
+          ? `${financeiroFilialLabel(filial)} | Unidade ${unit} | ${dataset}`
+          : "Escolha uma revenda no filtro acima";
+      }
+      if (els.rel031120Hint) {
+        els.rel031120Hint.textContent = filial && unit
+          ? "O download e o upload serao aplicados somente nesta revenda selecionada."
+          : "Escolha uma revenda para solicitar o download ou importar o CSV da operacao correta.";
+      }
+      if (els.rel031120Status && !els.rel031120Status.dataset.busy) {
+        els.rel031120Status.textContent = filial && unit ? "Pronto para a revenda" : "Aguardando revenda";
+        els.rel031120Status.className = `pill ${filial && unit ? "ok" : ""}`;
+      }
+      if (els.rel031120Download) els.rel031120Download.disabled = !filial || !unit;
+      if (els.rel031120Upload) els.rel031120Upload.disabled = !filial || !unit;
+    }
+
+    async function financeiroSolicitar031120Download() {
+      const els = financeiroElements();
+      const filial = financeiroSyncFilialSelects(els.filial);
+      const unit = financeiro031120Unit(filial);
+      if (!filial || !unit) {
+        addLog("Escolha uma revenda antes de solicitar a 031120.", "warn");
+        return;
+      }
+      const confirmed = await askConfirmation(`Solicitar download da 031120 para ${financeiroFilialLabel(filial)}?`);
+      if (!confirmed) return;
+      if (els.rel031120Status) {
+        els.rel031120Status.dataset.busy = "1";
+        els.rel031120Status.textContent = "Enfileirando download";
+        els.rel031120Status.className = "pill";
+      }
+      if (els.rel031120Download) els.rel031120Download.disabled = true;
+      try {
+        const payload = {
+          filial,
+          data: els.data && els.data.value ? els.data.value : formatDateInputValue(new Date())
+        };
+        const response = await req(CONFIG.endpoints.financeiro.relatorio031120Download, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          timeoutMs: 20000
+        });
+        const jobId = response && response.job && response.job.id ? String(response.job.id).slice(0, 8) : "";
+        if (els.rel031120Status) {
+          els.rel031120Status.textContent = jobId ? `Job ${jobId} enfileirado` : "Download enfileirado";
+          els.rel031120Status.className = "pill ok";
+        }
+        addLog(`Download 031120 solicitado para ${financeiroFilialLabel(filial)}.`, "ok");
+      } catch (err) {
+        if (els.rel031120Status) {
+          els.rel031120Status.textContent = "Falha no download";
+          els.rel031120Status.className = "pill danger";
+        }
+        addLog(`Falha ao solicitar 031120: ${err.message}`, "err");
+      } finally {
+        if (els.rel031120Status) delete els.rel031120Status.dataset.busy;
+        financeiroUpdate031120Panel();
+      }
+    }
+
+    async function financeiroImportar031120Upload() {
+      const els = financeiroElements();
+      const filial = financeiroSyncFilialSelects(els.filial);
+      const file = els.rel031120File && els.rel031120File.files && els.rel031120File.files[0] ? els.rel031120File.files[0] : null;
+      if (!filial || !financeiro031120Unit(filial)) {
+        addLog("Escolha uma revenda antes de importar a 031120.", "warn");
+        return;
+      }
+      if (!file) {
+        addLog("Selecione o CSV 031120 antes de importar.", "warn");
+        if (els.rel031120File) els.rel031120File.focus();
+        return;
+      }
+      const confirmed = await askConfirmation(`Importar o CSV 031120 em ${financeiroFilialLabel(filial)}?`);
+      if (!confirmed) return;
+      const formData = new FormData();
+      formData.append("filial", filial);
+      formData.append("file", file);
+      if (els.rel031120Status) {
+        els.rel031120Status.dataset.busy = "1";
+        els.rel031120Status.textContent = "Importando CSV";
+        els.rel031120Status.className = "pill";
+      }
+      if (els.rel031120Upload) els.rel031120Upload.disabled = true;
+      try {
+        const response = await req(CONFIG.endpoints.financeiro.relatorio031120Upload, {
+          method: "POST",
+          headers: {},
+          body: formData,
+          timeoutMs: 300000
+        });
+        const rows = response && response.result ? response.result.rows : "";
+        if (els.rel031120File) els.rel031120File.value = "";
+        if (els.rel031120Status) {
+          els.rel031120Status.textContent = rows ? `${rows} linha(s) importadas` : "CSV importado";
+          els.rel031120Status.className = "pill ok";
+        }
+        addLog(`031120 importada para ${financeiroFilialLabel(filial)}.`, "ok");
+        await syncFinanceiro({ silent: true });
+      } catch (err) {
+        if (els.rel031120Status) {
+          els.rel031120Status.textContent = "Falha no upload";
+          els.rel031120Status.className = "pill danger";
+        }
+        addLog(`Falha ao importar 031120: ${err.message}`, "err");
+      } finally {
+        if (els.rel031120Status) delete els.rel031120Status.dataset.busy;
+        financeiroUpdate031120Panel();
+      }
     }
 
     function financeiroRenderSummary(summary) {
@@ -5973,7 +6963,7 @@
         const active = String(map.id) === String(state.financeiro.selectedId) ? " is-active" : "";
         return `<button type="button" class="finance-map-btn${active}" data-financeiro-select="${escapeHtml(map.id)}">
           <strong>${escapeHtml(financeiroTipoLabel(map.tipo_bloco))} ${escapeHtml(map.mapa || "-")}</strong>
-          <span class="meta">${escapeHtml(map.motorista || "Sem motorista")} | ${escapeHtml(map.filial_nome || map.filial || "-")}</span>
+          <span class="meta">${escapeHtml(map.motorista || "Sem motorista")}${map.placa ? ` | ${escapeHtml(map.placa)}` : ""} | ${escapeHtml(map.filial_nome || map.filial || "-")}</span>
           <span class="status-line ${map.status === "OK" ? "text-success" : "text-danger"}">${escapeHtml(map.status || "-")} | Dif. ${escapeHtml(formatMoneyText(map.diferenca || 0))}</span>
         </button>`;
       }).join("");
@@ -6043,12 +7033,15 @@
         </div>
         <div class="finance-editor-body">
           <input type="hidden" data-financeiro-field="tipo_bloco" value="${escapeHtml(tipo)}">
-          ${isLancamento ? `<input type="hidden" data-financeiro-field="mapa" value="${escapeHtml(map.mapa_key || map.mapa || `${tipo.toUpperCase()}-${Date.now()}`)}">` : ""}
+              ${isLancamento ? `<input type="hidden" data-financeiro-field="mapa" value="${escapeHtml(map.mapa_key || map.mapa || `${tipo.toUpperCase()}-${Date.now()}`)}">` : ""}
           <section>
             <h4 class="h6 fw-bold mb-2">Identificacao</h4>
             <div class="finance-editor-grid">
               ${isLancamento ? financeiroInput("mapa_ref", "Mapa vinculado", map.mapa_ref || map.mapa) : financeiroInput("mapa", isCompra ? "Identificacao do bloco" : "Numero do mapa", map.mapa)}
               ${financeiroInput("motorista", isCompra ? "Responsavel" : "Motorista", map.motorista)}
+              ${isLancamento || isCompra ? "" : financeiroInput("placa", "Placa", map.placa)}
+              ${isLancamento || isCompra ? "" : financeiroInput("ajudante1", "Ajudante 1", map.ajudante1)}
+              ${isLancamento || isCompra ? "" : financeiroInput("ajudante2", "Ajudante 2", map.ajudante2)}
               ${isLancamento ? "" : financeiroInput("boletos_rota", "Boletos rota (qtd.)", map.boletos_rota, "number", "1")}
               ${isLancamento ? "" : financeiroInput("boletos_recebido_qtd", "Boletos que voltaram (qtd.)", map.boletos_recebido_qtd, "number", "1")}
               ${isLancamento ? "" : financeiroInput("total_promax", "Total Promax", map.total_promax, "number")}
@@ -6386,6 +7379,65 @@
       return false;
     }
 
+    function financeiroResetFechamentoLog(message = "Aguardando solicitacao.") {
+      const els = financeiroElements();
+      if (state.financeiro.fechamentoLogTimer) {
+        window.clearTimeout(state.financeiro.fechamentoLogTimer);
+        state.financeiro.fechamentoLogTimer = null;
+      }
+      state.financeiro.fechamentoJobId = "";
+      state.financeiro.fechamentoLogDone = false;
+      if (els.fechamentoLogJob) els.fechamentoLogJob.textContent = "Sem job ativo";
+      if (els.fechamentoLogList) {
+        els.fechamentoLogList.innerHTML = `<li><span class="time">--:--</span><span>${escapeHtml(message)}</span></li>`;
+      }
+    }
+
+    function financeiroRenderFechamentoLog(payload) {
+      const els = financeiroElements();
+      if (!els.fechamentoLogList) return;
+      const job = payload && payload.job ? payload.job : {};
+      const logs = Array.isArray(payload && payload.logs) ? payload.logs : [];
+      const phases = Array.isArray(payload && payload.phases) ? payload.phases : [];
+      const items = phases.length ? phases : logs.slice(-8).map(item => ({
+        created_at: item.created_at,
+        level: item.level || "info",
+        label: item.message || ""
+      })).filter(item => item.label);
+      if (els.fechamentoLogJob) {
+        const shortId = String(job.id || state.financeiro.fechamentoJobId || "").slice(0, 8);
+        const status = String(job.status || job.result_status || "").trim();
+        els.fechamentoLogJob.textContent = shortId ? `Job ${shortId}${status ? ` | ${status}` : ""}` : "Job ativo";
+      }
+      els.fechamentoLogList.innerHTML = items.length ? items.map(item => {
+        const level = String(item.level || "info").toLowerCase();
+        const marker = level === "error" ? "text-danger" : level === "warning" || level === "warn" ? "text-warning" : "";
+        return `<li><span class="time">${escapeHtml(formatDateTime(item.created_at) || "--:--")}</span><span class="${marker}">${escapeHtml(item.label || item.message || "")}</span></li>`;
+      }).join("") : '<li><span class="time">--:--</span><span>Job enfileirado. Aguardando worker iniciar.</span></li>';
+    }
+
+    async function financeiroPollFechamentoLog(jobId, attempt = 0) {
+      const cleanJobId = String(jobId || "").trim();
+      if (!cleanJobId || state.financeiro.fechamentoJobId !== cleanJobId) return;
+      try {
+        const payload = await req(`${CONFIG.endpoints.financeiro.fechamentoPromaxLogs}/${encodeURIComponent(cleanJobId)}/logs?limit=120`, { timeoutMs: 15000 });
+        financeiroRenderFechamentoLog(payload);
+        const status = String(payload && payload.job && payload.job.status || "").toLowerCase();
+        if (["success", "partial_success", "error", "failed", "cancelled", "canceled"].includes(status)) {
+          state.financeiro.fechamentoLogDone = true;
+          return;
+        }
+      } catch (err) {
+        const els = financeiroElements();
+        if (els.fechamentoLogList) {
+          els.fechamentoLogList.innerHTML = `<li><span class="time">--:--</span><span class="text-danger">Falha ao carregar log: ${escapeHtml(err.message)}</span></li>`;
+        }
+      }
+      if (attempt < 80 && state.financeiro.fechamentoJobId === cleanJobId) {
+        state.financeiro.fechamentoLogTimer = window.setTimeout(() => financeiroPollFechamentoLog(cleanJobId, attempt + 1), 5000);
+      }
+    }
+
     async function financeiroSolicitarFechamentoPromax() {
       const els = financeiroElements();
       if (!financeiroRequireFilial()) return;
@@ -6408,6 +7460,7 @@
         els.fechamentoStatus.textContent = "Enfileirando fechamento";
         els.fechamentoStatus.className = "pill";
       }
+      financeiroResetFechamentoLog("Enfileirando fechamento Promax.");
       try {
         const result = await req(CONFIG.endpoints.financeiro.fechamentoPromax, {
           method: "POST",
@@ -6417,10 +7470,19 @@
         });
         const job = result && result.job ? result.job : {};
         const shortId = String(job.id || "").slice(0, 8);
+        if (job.id) {
+          state.financeiro.fechamentoJobId = String(job.id);
+          state.financeiro.fechamentoLogDone = false;
+        }
         if (els.fechamentoStatus) {
           els.fechamentoStatus.textContent = shortId ? `Job ${shortId} enfileirado` : "Fechamento enfileirado";
           els.fechamentoStatus.className = "pill ok";
         }
+        if (els.fechamentoLogJob) els.fechamentoLogJob.textContent = shortId ? `Job ${shortId}` : "Job enfileirado";
+        if (els.fechamentoLogList) {
+          els.fechamentoLogList.innerHTML = '<li><span class="time">--:--</span><span>Job enfileirado. Aguardando worker iniciar.</span></li>';
+        }
+        if (job.id) financeiroPollFechamentoLog(String(job.id));
         addLog(`Fechamento Promax solicitado para o mapa ${mapa}.`, "ok");
       } catch (err) {
         if (els.fechamentoStatus) {
@@ -6598,6 +7660,8 @@
       if (els.exportPdf) els.exportPdf.addEventListener("click", downloadFinanceiroCaixaPdf);
       if (els.fechamentoBtn) els.fechamentoBtn.addEventListener("click", financeiroSolicitarFechamentoPromax);
       if (els.fechamentoRefresh) els.fechamentoRefresh.addEventListener("click", () => syncFinanceiro({ silent: false }));
+      if (els.rel031120Download) els.rel031120Download.addEventListener("click", financeiroSolicitar031120Download);
+      if (els.rel031120Upload) els.rel031120Upload.addEventListener("click", financeiroImportar031120Upload);
       if (els.novo) els.novo.addEventListener("click", () => {
         if (!financeiroRequireFilial()) return;
         state.financeiro.selectedId = null;
@@ -6636,6 +7700,7 @@
       [els.filial, els.filialMapas].forEach(element => {
         if (element) element.addEventListener("change", () => {
           financeiroSyncFilialSelects(element);
+          financeiroUpdate031120Panel();
           state.financeiro.selectedId = null;
           state.financeiro.draft = null;
           syncFinanceiro({ silent: false });
@@ -6685,6 +7750,7 @@
       setupPromaxScheduleSlicerEvents("run");
       setupPromaxScheduleSlicerEvents("schedule");
       setupFinanceiroEvents();
+      setupConferenciaControls();
       renderPromax();
 
       document.getElementById("refreshBtn").addEventListener("click", syncAll);
@@ -7028,6 +8094,8 @@
         if (state.panel && state.panel.canManageRecolhas) tasks.push(syncRecolhas({ silent }));
       } else if (activeTabId === "financeiroTab") {
         if (state.panel && state.panel.canFinanceiro) tasks.push(syncFinanceiro({ silent }));
+      } else if (activeTabId === "conferenciaTab") {
+        if (state.panel && state.panel.canConferencia) tasks.push(syncConferencia({ silent }));
       } else if (activeTabId === "giroRecolhaTab") {
         if (state.panel && state.panel.canViewGiro) tasks.push(syncGiroRecolha({ silent }));
       } else if (activeTabId === "criticaTab") {
@@ -7309,6 +8377,9 @@
         canFinanceiro: payload && Object.prototype.hasOwnProperty.call(payload, "can_financeiro")
           ? Boolean(payload.can_financeiro)
           : true,
+        canConferencia: payload && Object.prototype.hasOwnProperty.call(payload, "can_conferencia")
+          ? Boolean(payload.can_conferencia)
+          : Boolean(payload && payload.is_admin),
         canArmazem: payload && Object.prototype.hasOwnProperty.call(payload, "can_armazem")
           ? Boolean(payload.can_armazem)
           : true,
@@ -7341,6 +8412,27 @@
     function setPanelTabVisible(tabId, visible) {
       const tab = document.getElementById(tabId);
       if (tab && tab.parentElement) tab.parentElement.style.display = visible ? "" : "none";
+    }
+
+    function isConferenciaOnlyPanelUser() {
+      if (!state.panel || state.panel.isAdmin) return false;
+      const featureFlags = [
+        "canOperations",
+        "canPayip",
+        "canReports",
+        "canManagePromax",
+        "canViewCritica",
+        "canManageRecolhas",
+        "canFinanceiro",
+        "canViewGiro",
+        "canViewUsage",
+        "canArmazem"
+      ];
+      return Boolean(state.panel.canConferencia) && featureFlags.every(flag => !state.panel[flag]);
+    }
+
+    function applySimplePanelMode() {
+      document.body.classList.toggle("panel-simple-mode", isConferenciaOnlyPanelUser());
     }
 
     function showPanelTab(tabId) {
@@ -7388,7 +8480,9 @@
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
       setPanelTabVisible("financeiroTab", Boolean(state.panel && state.panel.canFinanceiro) && !isCritica);
+      setPanelTabVisible("conferenciaTab", Boolean(state.panel && state.panel.canConferencia) && !isCritica);
       setPanelTabVisible("giroRecolhaTab", Boolean(state.panel && state.panel.canViewGiro));
+      applySimplePanelMode();
       updateFlowNavigation(document.querySelector("#adminTabs .nav-link.active")?.id || "operationsTab");
       const activeTab = document.querySelector("#adminTabs .nav-link.active");
       if (isCritica && activeTab && activeTab.id !== "criticaTab") {

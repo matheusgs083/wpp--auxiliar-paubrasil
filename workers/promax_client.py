@@ -316,6 +316,64 @@ class PromaxClient:
             timeout_seconds=self.boleto_import_timeout_seconds,
         )
 
+    def import_relatorio_031120_csv(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        filial: str,
+        filename: str,
+        csv_bytes: bytes,
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        if not csv_bytes:
+            raise ValueError("CSV bytes must not be empty.")
+        payload: dict[str, Any] = {
+            "worker_id": self.worker_id,
+            "job_id": _path_identifier(job_id),
+            "lease_token": _path_identifier(lease_token),
+            "filial": str(filial or "").strip(),
+            "filename": str(filename or "").strip(),
+            "file_base64": base64.b64encode(csv_bytes).decode("ascii"),
+        }
+        if reference_date:
+            payload["reference_date"] = str(reference_date)
+        return self._request(
+            "POST",
+            "/api/internal/promax/031120/import",
+            payload,
+            timeout_seconds=self.boleto_import_timeout_seconds,
+        )
+
+    def import_relatorio_03114902_csv(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        filial: str,
+        filename: str,
+        csv_bytes: bytes,
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        if not csv_bytes:
+            raise ValueError("CSV bytes must not be empty.")
+        payload: dict[str, Any] = {
+            "worker_id": self.worker_id,
+            "job_id": _path_identifier(job_id),
+            "lease_token": _path_identifier(lease_token),
+            "filial": str(filial or "").strip(),
+            "filename": str(filename or "").strip(),
+            "file_base64": base64.b64encode(csv_bytes).decode("ascii"),
+        }
+        if reference_date:
+            payload["reference_date"] = str(reference_date)
+        return self._request(
+            "POST",
+            "/api/internal/promax/03114902/import",
+            payload,
+            timeout_seconds=self.boleto_import_timeout_seconds,
+        )
+
     def import_comodatos_csvs(
         self,
         *,
@@ -362,6 +420,23 @@ class PromaxClient:
             job_id=job_id,
             lease_token=lease_token,
             files=files,
+            reference_date=reference_date,
+        )
+
+    def import_dmateriais_csv(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        filename: str,
+        csv_bytes: bytes,
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        return self._import_csv_batch(
+            path="/api/internal/promax/dmateriais/import",
+            job_id=job_id,
+            lease_token=lease_token,
+            files={filename: csv_bytes},
             reference_date=reference_date,
         )
 

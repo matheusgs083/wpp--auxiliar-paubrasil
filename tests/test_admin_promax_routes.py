@@ -273,6 +273,21 @@ class FakeEstoque020304ImportService:
         }
 
 
+class FakeRelatorio031120ImportService:
+    def __init__(self, filial: str) -> None:
+        self.filial = filial
+        self.calls: list[tuple[Path, Any]] = []
+
+    def import_source(self, source_path: Path, reference_date: Any = None) -> dict[str, Any]:
+        self.calls.append((source_path, reference_date))
+        return {
+            "dataset_name": f"relatorio_031120_op_{self.filial}",
+            "filial": self.filial,
+            "rows": 12,
+            "batch_id": 48,
+        }
+
+
 class FakeInadimplenciaImportService:
     def __init__(self) -> None:
         self.calls: list[tuple[Path, Any]] = []
@@ -418,6 +433,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         app.state.promax_feature_calls = feature_calls
         boleto_import_service = FakeBoletoImportService()
         estoque_import_service = FakeEstoque020304ImportService("3")
+        relatorio_031120_import_service = FakeRelatorio031120ImportService("3")
         inadimplencia_import_service = FakeInadimplenciaImportService()
         comodatos_import_service = FakeComodatosImportService()
         dclientes_import_service = FakeDClientesImportService()
@@ -425,6 +441,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         critica_import_service = FakeCriticaOperacaoImportService("3")
         app.state.boleto_import_service = boleto_import_service
         app.state.estoque_import_service = estoque_import_service
+        app.state.relatorio_031120_import_service = relatorio_031120_import_service
         app.state.inadimplencia_import_service = inadimplencia_import_service
         app.state.comodatos_import_service = comodatos_import_service
         app.state.dclientes_import_service = dclientes_import_service
@@ -453,6 +470,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 worker_token=worker_token,
                 boletos_pdf_import_services={"3": boleto_import_service},
                 estoque_020304_import_services={"3": estoque_import_service},
+                relatorio_031120_import_services={"3": relatorio_031120_import_service},
                 inadimplencia_import_service=inadimplencia_import_service,
                 comodatos_import_service=comodatos_import_service,
                 dclientes_import_service=dclientes_import_service,
@@ -1044,6 +1062,36 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         source_path, reference_date = estoque_import_service.calls[0]
         self.assertEqual(source_path.suffix, ".csv")
         self.assertEqual(str(reference_date), "2026-07-23")
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["append_job_log", "append_job_log"],
+        )
+
+    def test_internal_worker_imports_031120_csv_for_filial(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/031120/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "filial": "3",
+                "filename": "031120 bot - nomeUnidade031120_2210003.csv",
+                "file_base64": base64.b64encode(b"Mapa;Data\n1;24/08/2026\n").decode("ascii"),
+                "reference_date": "2026-08-24",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(response.json()["result"]["dataset_name"], "relatorio_031120_op_3")
+        relatorio_import_service = client.app.state.relatorio_031120_import_service
+        self.assertEqual(len(relatorio_import_service.calls), 1)
+        source_path, reference_date = relatorio_import_service.calls[0]
+        self.assertEqual(source_path.suffix, ".csv")
+        self.assertEqual(str(reference_date), "2026-08-24")
         self.assertEqual(
             [name for name, _args, _kwargs in service.calls],
             ["append_job_log", "append_job_log"],

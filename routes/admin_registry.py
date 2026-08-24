@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from bot_api.routes.admin_access import create_admin_access_router
 from bot_api.routes.admin_broadcast import create_admin_broadcast_router
+from bot_api.routes.admin_conferencia import create_admin_conferencia_router
 from bot_api.routes.admin_critica import create_admin_critica_router
 from bot_api.routes.admin_financeiro import create_admin_financeiro_router
 from bot_api.routes.admin_giro import create_admin_giro_router
@@ -29,6 +30,7 @@ def build_admin_route_registrars(deps: dict[str, Any]) -> tuple[RouteRegistrar, 
         lambda app: _register_admin_panel_routes(app, deps=deps),
         lambda app: _register_admin_recolha_routes(app, deps=deps),
         lambda app: _register_admin_financeiro_routes(app, deps=deps),
+        lambda app: _register_admin_conferencia_routes(app, deps=deps),
         lambda app: _register_admin_payip_routes(app, deps=deps),
         lambda app: _register_admin_usage_routes(app, deps=deps),
         lambda app: _register_admin_broadcast_routes(app, deps=deps),
@@ -141,10 +143,30 @@ def _register_admin_financeiro_routes(app: FastAPI, *, deps: dict[str, Any]) -> 
             upsert_financeiro_mapa=deps["upsert_financeiro_mapa"],
             export_financeiro_caixa_pdf=deps["export_financeiro_caixa_pdf"],
             sync_financeiro_fechamento_promax=deps["sync_financeiro_fechamento_promax"],
+            sync_conferencia_fechamento_promax=deps["sync_conferencia_fechamento_promax"],
+            resolve_financeiro_fechamento_km=deps["resolve_financeiro_fechamento_km"],
+            relatorio_031120_import_services=deps["relatorio_031120_import_services"],
             enqueue_promax_job=deps["enqueue_promax_job"],
+            get_promax_job=deps["promax_jobs_service"].get_job,
+            list_promax_job_logs=deps["promax_jobs_service"].list_job_logs,
             list_promax_worker_heartbeats=deps["promax_jobs_service"].list_worker_heartbeats,
             delete_financeiro_mapa=deps["delete_financeiro_mapa"],
             worker_token=deps["settings"].promax_worker_token,
+            record_security_event=deps["record_security_event"],
+        )
+    )
+
+
+def _register_admin_conferencia_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    app.include_router(
+        create_admin_conferencia_router(
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
+            panel_context_can_access_feature=deps["panel_context_can_access_feature"],
+            list_conferencia_mapas=deps["list_conferencia_mapas"],
+            get_conferencia_mapa=deps["get_conferencia_mapa"],
+            save_conferencia_counts=deps["save_conferencia_counts"],
+            search_conferencia_products=deps["search_conferencia_products"],
             record_security_event=deps["record_security_event"],
         )
     )
@@ -206,9 +228,12 @@ def _register_admin_promax_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             worker_token=deps["settings"].promax_worker_token,
             boletos_pdf_import_services=deps["boletos_pdf_import_services"],
             estoque_020304_import_services=deps["estoque_020304_import_services"],
+            relatorio_031120_import_services=deps["relatorio_031120_import_services"],
+            relatorio_03114902_import_service=deps["relatorio_03114902_import_service"],
             inadimplencia_import_service=deps["inadimplencia_import_service"],
             comodatos_import_service=deps["comodatos_import_service"],
             dclientes_import_service=deps["dclientes_import_service"],
+            dmateriais_import_service=deps["dmateriais_import_service"],
             documentacao_pendente_import_service=deps["documentacao_pendente_import_service"],
             critica_operacao_import_services=deps["critica_operacao_import_services"],
             after_critica_operacao_import=deps["after_critica_operacao_import"],

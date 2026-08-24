@@ -28,6 +28,7 @@ from bot_api.services.boletos_pdf_import_service import BoletosPdfImportService
 from bot_api.services.critica_operacao_import_service import CriticaOperacaoImportService
 from bot_api.services.critica_rn_query_service import CriticaPdfCurrentImportRequiredError
 from bot_api.services.estoque_020304_service import Estoque020304ImportService
+from bot_api.services.relatorio_031120_import_service import Relatorio031120ImportService
 from bot_api.services.filial_labels import set_filial_labels
 from bot_api.services.health_service import HealthPayloadBuilder
 from bot_api.services.promax_catalog_service import DEFAULT_PROMAX_CATALOG, PromaxCatalogService
@@ -71,6 +72,7 @@ def configure_app_runtime(
     drevendas_import_service = services.drevendas_import_service
     dcondicoes_import_service = services.dcondicoes_import_service
     dprodutos_import_service = services.dprodutos_import_service
+    dmateriais_import_service = services.dmateriais_import_service
     produto_cestas_import_service = services.produto_cestas_import_service
     dclientes_import_service = services.dclientes_import_service
     inadimplencia_import_service = services.inadimplencia_import_service
@@ -152,6 +154,15 @@ def configure_app_runtime(
                         database_url=settings.reports_database_url,
                         schema=settings.reports_db_schema,
                         dataset_name=f"estoque_020304_op_{filial_code}",
+                        expected_filial=filial_code,
+                        filial_nome=latest_labels[filial_code],
+                        connect_timeout_seconds=settings.access_database_timeout_seconds,
+                    )
+                if filial_code not in services.relatorio_031120_import_services:
+                    services.relatorio_031120_import_services[filial_code] = Relatorio031120ImportService(
+                        database_url=settings.reports_database_url,
+                        schema=settings.reports_db_schema,
+                        dataset_name=f"relatorio_031120_op_{filial_code}",
                         expected_filial=filial_code,
                         filial_nome=latest_labels[filial_code],
                         connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -332,7 +343,14 @@ def configure_app_runtime(
     _upsert_financeiro_mapa = admin_financeiro_service.upsert_mapa
     _export_financeiro_caixa_pdf = admin_financeiro_service.export_caixa_pdf
     _sync_financeiro_fechamento_promax = admin_financeiro_service.sync_fechamento_promax
+    _resolve_financeiro_fechamento_km = admin_financeiro_service.resolve_fechamento_km
     _delete_financeiro_mapa = admin_financeiro_service.delete_mapa
+    conferencia_service = services.conferencia_service
+    _sync_conferencia_fechamento_promax = conferencia_service.sync_from_promax
+    _list_conferencia_mapas = conferencia_service.list_mapas
+    _get_conferencia_mapa = conferencia_service.get_mapa
+    _save_conferencia_counts = conferencia_service.save_counts
+    _search_conferencia_products = conferencia_service.search_products
 
 
     def _panel_context_allowed_report_scopes(context: dict[str, Any] | None) -> tuple[list[str] | None, list[str] | None]:
@@ -433,6 +451,7 @@ def configure_app_runtime(
         admin_imports_runtime=admin_imports_runtime,
         admin_panel_user_service=admin_panel_user_service,
         admin_financeiro_service=admin_financeiro_service,
+        conferencia_service=conferencia_service,
         critica_pdf_prebuild_executor=critica_pdf_prebuild_executor,
         admin_broadcast_executor=admin_broadcast_executor,
         admin_payip_batch_service=admin_payip_batch_service,
@@ -547,6 +566,12 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "upsert_financeiro_mapa": runtime["_upsert_financeiro_mapa"],
         "export_financeiro_caixa_pdf": runtime["_export_financeiro_caixa_pdf"],
         "sync_financeiro_fechamento_promax": runtime["_sync_financeiro_fechamento_promax"],
+        "resolve_financeiro_fechamento_km": runtime["_resolve_financeiro_fechamento_km"],
+        "sync_conferencia_fechamento_promax": runtime["_sync_conferencia_fechamento_promax"],
+        "list_conferencia_mapas": runtime["_list_conferencia_mapas"],
+        "get_conferencia_mapa": runtime["_get_conferencia_mapa"],
+        "save_conferencia_counts": runtime["_save_conferencia_counts"],
+        "search_conferencia_products": runtime["_search_conferencia_products"],
         "enqueue_promax_job": runtime["promax_jobs_service"].enqueue_job,
         "delete_financeiro_mapa": runtime["_delete_financeiro_mapa"],
         "preview_payip_batch": runtime["_preview_payip_batch"],
@@ -571,9 +596,12 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "promax_catalog": runtime["PROMAX_CATALOG"],
         "boletos_pdf_import_services": runtime["services"].boletos_pdf_import_services,
         "estoque_020304_import_services": runtime["services"].estoque_020304_import_services,
+        "relatorio_031120_import_services": runtime["services"].relatorio_031120_import_services,
+        "relatorio_03114902_import_service": runtime["services"].relatorio_03114902_import_service,
         "inadimplencia_import_service": runtime["services"].inadimplencia_import_service,
         "comodatos_import_service": runtime["services"].comodatos_import_service,
         "dclientes_import_service": runtime["services"].dclientes_import_service,
+        "dmateriais_import_service": runtime["services"].dmateriais_import_service,
         "documentacao_pendente_import_service": runtime["services"].documentacao_pendente_import_service,
         "critica_operacao_import_services": runtime["services"].critica_operacao_import_services,
         "after_critica_operacao_import": runtime["_after_critica_operacao_auto_import"],

@@ -1,0 +1,49 @@
+from datetime import date
+
+from bot_api.services.admin_financeiro_service import _build_rotas_dia_031120
+
+
+def test_build_rotas_dia_031120_groups_route_phases_by_map() -> None:
+    rows = [
+        {"Mapa": "028429", "Fase": "Carregado", "Placa": "SKZ8I57", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "03:10", "KmPrev": "85", "KmAtual": "80945"},
+        {"Mapa": "028429", "Fase": "Saida Cdd/Fab", "Placa": "SKZ8I57", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "07:34", "KmPrev": "85", "KmAtual": "0"},
+        {"Mapa": "028429", "Fase": "Entrada Cdd/Fab", "Placa": "SKZ8I57", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "21:52", "KmPrev": "85", "KmAtual": "0"},
+        {"Mapa": "028429", "Fase": "PC_Fisica", "Placa": "SKZ8I57", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "21:53", "KmPrev": "85", "KmAtual": "81027"},
+        {"Mapa": "028429", "Fase": "PC_Financeira", "Placa": "SKZ8I57", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "21:55", "KmPrev": "100", "KmAtual": "0"},
+        {"Mapa": "028430", "Fase": "Saida Cdd/Fab", "Placa": "RLS8A29", "Emissao": "19/08/2026", "DtOper": "20/08/2026", "HrOper": "07:00", "KmPrev": "0", "KmAtual": "0"},
+    ]
+
+    result = _build_rotas_dia_031120(rows, caixa_date=date(2026, 8, 20))
+
+    assert result == [
+        {
+            "mapa": "28429",
+            "placa": "SKZ8I57",
+            "km_prev": "85",
+            "km_atual": "81027",
+            "km_percorrido": "82",
+            "saida": "20/08/2026 07:34",
+            "entrada": "20/08/2026 21:52",
+            "tempo_rota": "14:18",
+            "ti_fisico": "00:01",
+            "ti_financeiro": "00:02",
+            "ti_total": "00:03",
+            "fechamento_status": "Fechado",
+            "fechamento_ok": True,
+        }
+    ]
+
+
+def test_build_rotas_dia_031120_flags_entered_route_without_financial_close() -> None:
+    rows = [
+        {"Mapa": "028430", "Fase": "Carregado", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "03:11", "KmPrev": "106", "KmAtual": "89526"},
+        {"Mapa": "028430", "Fase": "Saida Cdd/Fab", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "07:35", "KmPrev": "106", "KmAtual": "0"},
+        {"Mapa": "028430", "Fase": "Entrada Cdd/Fab", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "19:25", "KmPrev": "106", "KmAtual": "0"},
+        {"Mapa": "028430", "Fase": "PC_Fisica", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "19:25", "KmPrev": "106", "KmAtual": "89633"},
+    ]
+
+    result = _build_rotas_dia_031120(rows, caixa_date=date(2026, 8, 20))
+
+    assert result[0]["km_percorrido"] == "107"
+    assert result[0]["fechamento_status"] == "Entrada sem fechamento financeiro"
+    assert result[0]["fechamento_ok"] is False

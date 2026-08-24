@@ -445,9 +445,12 @@ class PromaxWorker:
                 if not post_import_attempted:
                     self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
                     self._import_020304_estoque_if_needed(job, job_id, lease_token, result)
+                    self._import_031120_relatorio_if_needed(job, job_id, lease_token, result)
+                    self._import_03114902_relatorio_if_needed(job, job_id, lease_token, result)
                     self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
                     self._import_020220_comodatos_if_needed(job, job_id, lease_token, result)
                     self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
+                    self._import_0112_dmateriais_if_needed(job, job_id, lease_token, result)
                     self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
                     self._import_030111_critica_if_needed(job, job_id, lease_token, result)
                     self._sync_financeiro_fechamento_if_needed(job, job_id, lease_token, result)
@@ -730,6 +733,225 @@ class PromaxWorker:
             },
         )
 
+    def _import_031120_relatorio_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        if payload.get("publish", True) is False:
+            return
+
+        requested_units = _string_list(payload.get("units"))
+        unit_filial_map = _promax_020304_unit_filial_map()
+        source_dir = _promax_publication_dir(result.details, "031120 bot")
+        if not _routine_selected(payload, "031120_BOT") and source_dir is None:
+            return
+        if source_dir is None:
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    "Importacao automatica 031120_BOT ignorada: o driver nao informou "
+                    "a pasta publicada em metadata.publication_mapping."
+                ),
+                "warning",
+                {"event": "promax_031120_auto_import_missing_publication_mapping"},
+            )
+            return
+        if not source_dir.is_dir():
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica 031120_BOT ignorada: pasta nao encontrada {source_dir}",
+                "warning",
+                {"event": "promax_031120_auto_import_missing_dir", "source_dir": str(source_dir)},
+            )
+            return
+
+        units = requested_units or _discover_promax_units_from_files(
+            source_dir,
+            unit_filial_map=unit_filial_map,
+            suffix=".csv",
+        )
+
+        imported = 0
+        missing: list[str] = []
+        failed: list[str] = []
+        for unit in units:
+            filial = unit_filial_map.get(unit)
+            if not filial:
+                continue
+            csv_path = _find_promax_csv_by_unit(
+                source_dir,
+                unit,
+                preferred_tokens=("031120", "31120"),
+            )
+            if csv_path is None:
+                missing.append(unit)
+                continue
+            try:
+                self._heartbeat_active_job(job_id, lease_token)
+                response = self.client.import_relatorio_031120_csv(
+                    job_id=job_id,
+                    lease_token=lease_token,
+                    filial=filial,
+                    filename=csv_path.name,
+                    csv_bytes=csv_path.read_bytes(),
+                    reference_date=_current_reference_date(),
+                )
+                self._heartbeat_active_job(job_id, lease_token)
+                result_payload = response.get("result") if isinstance(response, Mapping) else None
+                imported += 1
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Relatorio 031120_BOT importado automaticamente para filial {filial}: {csv_path.name}",
+                    "info",
+                    {
+                        "event": "promax_031120_auto_import_uploaded",
+                        "filial": filial,
+                        "unit": unit,
+                        "filename": csv_path.name,
+                        "result": result_payload if isinstance(result_payload, Mapping) else {},
+                    },
+                )
+            except (OSError, PromaxClientError, ValueError) as exc:
+                failed.append(unit)
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Falha na importacao automatica 031120_BOT da unidade {unit}: {exc}",
+                    "error",
+                    {"event": "promax_031120_auto_import_failed", "unit": unit, "filial": filial},
+                )
+
+        if missing:
+            self._send_log(
+                job_id,
+                lease_token,
+                "Importacao automatica 031120_BOT sem CSV para unidade(s): " + ", ".join(missing),
+                "warning",
+                {"event": "promax_031120_auto_import_missing_files", "units": missing},
+            )
+        self._send_log(
+            job_id,
+            lease_token,
+            f"Importacao automatica 031120_BOT finalizada: {imported} arquivo(s), {len(failed)} falha(s).",
+            "info" if not failed else "warning",
+            {
+                "event": "promax_031120_auto_import_summary",
+                "imported": imported,
+                "failed_units": failed,
+                "missing_units": missing,
+            },
+        )
+
+    def _import_03114902_relatorio_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        if payload.get("publish", True) is False:
+            return
+
+        source_dir = _promax_publication_dir(result.details, "03114902 bot")
+        if not _routine_selected(payload, "03114902_BOT") and source_dir is None:
+            return
+        if source_dir is None:
+            self._send_log(
+                job_id,
+                lease_token,
+                (
+                    "Importacao automatica 03114902_BOT ignorada: o driver nao informou "
+                    "a pasta publicada em metadata.publication_mapping."
+                ),
+                "warning",
+                {"event": "promax_03114902_auto_import_missing_publication_mapping"},
+            )
+            return
+        if not source_dir.is_dir():
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Importacao automatica 03114902_BOT ignorada: pasta nao encontrada {source_dir}",
+                "warning",
+                {"event": "promax_03114902_auto_import_missing_dir", "source_dir": str(source_dir)},
+            )
+            return
+
+        csv_path = _find_first_csv_by_tokens(source_dir, preferred_tokens=("03114902", "3114902", "geo"))
+        if csv_path is None:
+            self._send_log(
+                job_id,
+                lease_token,
+                "Importacao automatica 03114902_BOT sem CSV Geo na pasta publicada.",
+                "warning",
+                {"event": "promax_03114902_auto_import_missing_file"},
+            )
+            return
+
+        try:
+            self._heartbeat_active_job(job_id, lease_token)
+            response = self.client.import_relatorio_03114902_csv(
+                job_id=job_id,
+                lease_token=lease_token,
+                filial="*",
+                filename=csv_path.name,
+                csv_bytes=csv_path.read_bytes(),
+                reference_date=_current_reference_date(),
+            )
+            self._heartbeat_active_job(job_id, lease_token)
+            result_payload = response.get("result") if isinstance(response, Mapping) else None
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Relatorio 03114902_BOT importado automaticamente: {csv_path.name}",
+                "info",
+                {
+                    "event": "promax_03114902_auto_import_uploaded",
+                    "filename": csv_path.name,
+                    "result": result_payload if isinstance(result_payload, Mapping) else {},
+                },
+            )
+            imported = 1
+            failed = []
+        except (OSError, PromaxClientError, ValueError) as exc:
+            imported = 0
+            failed = [csv_path.name]
+            self._send_log(
+                job_id,
+                lease_token,
+                f"Falha na importacao automatica 03114902_BOT: {exc}",
+                "error",
+                {"event": "promax_03114902_auto_import_failed", "filename": csv_path.name},
+            )
+        self._send_log(
+            job_id,
+            lease_token,
+            f"Importacao automatica 03114902_BOT finalizada: {imported} arquivo(s), {len(failed)} falha(s).",
+            "info" if not failed else "warning",
+            {
+                "event": "promax_03114902_auto_import_summary",
+                "imported": imported,
+                "failed_units": failed,
+                "missing_units": [],
+            },
+        )
+
     def _import_120601_inadimplencia_if_needed(
         self,
         job: Mapping[str, Any],
@@ -873,6 +1095,36 @@ class PromaxWorker:
             label="dClientes 0105070402_BOT",
             event_prefix="promax_0105070402_auto_import",
             importer=import_dclientes,
+            single_latest_file=True,
+        )
+
+    def _import_0112_dmateriais_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        def import_dmateriais(files: Mapping[str, bytes], reference_date: str | None) -> dict[str, Any]:
+            filename, file_bytes = next(iter(files.items()))
+            return self.client.import_dmateriais_csv(
+                job_id=job_id,
+                lease_token=lease_token,
+                filename=filename,
+                csv_bytes=file_bytes,
+                reference_date=reference_date,
+            )
+
+        self._import_csv_folder_if_needed(
+            job,
+            job_id,
+            lease_token,
+            result,
+            routine_id="0112_BOT",
+            folder_name="0112 bot",
+            label="dMateriais 0112_BOT",
+            event_prefix="promax_0112_auto_import",
+            importer=import_dmateriais,
             single_latest_file=True,
         )
 
@@ -1333,6 +1585,29 @@ def _find_promax_csv_by_unit(
         path
         for path in source_dir.glob("*.csv")
         if path.is_file() and not path.name.startswith(".") and unit_text in path.name
+    ]
+    if not candidates:
+        return None
+    return sorted(
+        candidates,
+        key=lambda path: (
+            _promax_filename_score(path.name, preferred_tokens=tokens),
+            path.stat().st_mtime,
+            path.name,
+        ),
+    )[-1]
+
+
+def _find_first_csv_by_tokens(
+    source_dir: Path,
+    *,
+    preferred_tokens: Sequence[str] = (),
+) -> Path | None:
+    tokens = tuple(str(token or "").casefold() for token in preferred_tokens if str(token or "").strip())
+    candidates = [
+        path
+        for path in source_dir.glob("*.csv")
+        if path.is_file() and not path.name.startswith(".")
     ]
     if not candidates:
         return None

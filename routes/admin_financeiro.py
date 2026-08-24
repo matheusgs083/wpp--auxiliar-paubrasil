@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
+import tempfile
 from secrets import compare_digest
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Path, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
 
@@ -75,7 +76,12 @@ def create_admin_financeiro_router(
     upsert_financeiro_mapa: Callable[..., dict[str, Any]],
     export_financeiro_caixa_pdf: Callable[..., tuple[bytes, str]],
     sync_financeiro_fechamento_promax: Callable[..., dict[str, Any]],
+    sync_conferencia_fechamento_promax: Callable[..., dict[str, Any]] | None,
+    resolve_financeiro_fechamento_km: Callable[..., dict[str, Any]],
+    relatorio_031120_import_services: dict[str, Any],
     enqueue_promax_job: Callable[..., Any],
+    get_promax_job: Callable[..., Any],
+    list_promax_job_logs: Callable[..., list[dict[str, Any]]],
     list_promax_worker_heartbeats: Callable[..., list[dict[str, Any]]],
     delete_financeiro_mapa: Callable[..., dict[str, Any]],
     worker_token: str | None,
@@ -179,6 +185,89 @@ def create_admin_financeiro_router(
             "fechamento_online": any(bool(worker.get("online")) for worker in fechamento_workers),
         }
 
+    @router.post("/api/admin/financeiro/031120/download", status_code=202)
+    def api_admin_financeiro_031120_download(
+        payload: dict[str, Any],
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_financeiro_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        clean_filial = _require_allowed_financeiro_filial(payload.get("filial"), context)
+        promax_unit = PROMAX_UNIT_BY_FILIAL.get(clean_filial)
+        if not promax_unit:
+            raise HTTPException(status_code=400, detail="Revenda sem unidade Promax configurada para 031120.")
+        data_value = str(payload.get("data") or date.today().isoformat())
+        job_payload = {
+            "category": "bot_zap",
+            "routines": ["031120_BOT"],
+            "units": [promax_unit],
+            "start_date": data_value,
+            "end_date": data_value,
+            "send_dates": True,
+            "publish": True,
+            "source": "financeiro_031120",
+        }
+        job = enqueue_promax_job(
+            job_type="bot_zap",
+            payload=job_payload,
+            priority=60,
+            created_by=str(context.get("username") or context.get("mode") or ""),
+        )
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_financeiro_031120_download",
+            decision="allowed",
+            reason=f"filial={clean_filial}; unit={promax_unit}",
+        )
+        return {"ok": True, "job": job, "filial": clean_filial, "unit": promax_unit}
+
+    @router.post("/api/admin/financeiro/031120/upload")
+    async def api_admin_financeiro_031120_upload(
+        request: Request,
+        filial: str = Form(...),
+        file: UploadFile = File(...),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_financeiro_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        clean_filial = _require_allowed_financeiro_filial(filial, context)
+        import_service = relatorio_031120_import_services.get(clean_filial)
+        if import_service is None:
+            raise HTTPException(status_code=400, detail=f"Importador 031120 nao configurado para a revenda {clean_filial}.")
+        filename = str(file.filename or f"031120_filial_{clean_filial}.csv").strip()
+        content = await file.read()
+        if not content.strip():
+            raise HTTPException(status_code=400, detail="Arquivo CSV 031120 vazio.")
+        with tempfile.TemporaryDirectory(prefix=f"financeiro_031120_{clean_filial}_") as temp_dir:
+            from pathlib import Path as FilePath
+
+            safe_name = "".join(ch if ch.isalnum() or ch in "._- " else "_" for ch in filename) or f"031120_filial_{clean_filial}.csv"
+            file_path = FilePath(temp_dir) / safe_name
+            file_path.write_bytes(content)
+            result = import_service.import_source(file_path)
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_financeiro_031120_upload",
+            decision="allowed",
+            reason=f"filial={clean_filial}; filename={filename}",
+        )
+        return {"ok": True, "filial": clean_filial, "result": result}
+
     @router.get("/api/admin/financeiro/caixa/pdf")
     def api_admin_financeiro_caixa_pdf(
         request: Request,
@@ -256,6 +345,18 @@ def create_admin_financeiro_router(
             clean_km_atual = clean_km_atual.replace(".", "").replace(",", "")
             if not clean_km_atual.isdigit():
                 raise HTTPException(status_code=400, detail="KM atual deve conter apenas numeros.")
+        km_resolved: dict[str, Any] = {}
+        clean_km_inicial = ""
+        clean_km_prev = ""
+        if not clean_km_atual:
+            km_resolved = resolve_financeiro_fechamento_km(
+                filial=clean_filial,
+                mapa=clean_mapa,
+                caixa_date=_parse_admin_financeiro_date(payload.data),
+            )
+            clean_km_atual = str(km_resolved.get("km_atual") or "").strip().replace(".", "").replace(",", "")
+            clean_km_inicial = str(km_resolved.get("km_inicial") or "").strip().replace(".", "").replace(",", "")
+            clean_km_prev = str(km_resolved.get("km_prev") or "").strip().replace(".", "").replace(",", "")
         clean_target_worker_id = str(payload.target_worker_id or "").strip()
         promax_unit = PROMAX_UNIT_BY_FILIAL.get(str(int(clean_filial)) if clean_filial.isdigit() else clean_filial, clean_filial)
         job_payload = {
@@ -269,6 +370,9 @@ def create_admin_financeiro_router(
             "modo": clean_modo,
             "ponto_apoio": str(payload.ponto_apoio or "0").strip() or "0",
             "km_atual": clean_km_atual,
+            "km_inicial": clean_km_inicial,
+            "km_prev": clean_km_prev,
+            "km_source": km_resolved.get("source") or ("manual" if clean_km_atual else ""),
             "data": str(payload.data or date.today().isoformat()),
             "start_date": str(payload.data or date.today().isoformat()),
             "end_date": str(payload.data or date.today().isoformat()),
@@ -292,6 +396,47 @@ def create_admin_financeiro_router(
         )
         return {"ok": True, "job": job}
 
+    @router.get("/api/admin/financeiro/fechamento-promax/{job_id}/logs")
+    def api_admin_financeiro_fechamento_promax_logs(
+        request: Request,
+        job_id: str = Path(min_length=1, max_length=120),
+        limit: int = Query(default=80, ge=1, le=500),
+        after_id: int = Query(default=0, ge=0),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_financeiro_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        job = get_promax_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job de fechamento nao encontrado.")
+        payload = job.get("payload") if isinstance(job, dict) else {}
+        if not isinstance(payload, dict):
+            payload = {}
+        operation = str(payload.get("operation") or job.get("job_type") or "").strip().lower()
+        if operation not in {"fechamento-mapa", "fechamento_mapa", "mapa_fechamento"}:
+            raise HTTPException(status_code=404, detail="Job de fechamento nao encontrado.")
+        clean_filial = _require_allowed_financeiro_filial(payload.get("filial"), context)
+        logs = list_promax_job_logs(job_id, limit=limit, after_id=after_id)
+        return {
+            "ok": True,
+            "job": {
+                "id": job.get("id"),
+                "status": job.get("status"),
+                "result_status": job.get("result_status"),
+                "filial": clean_filial,
+                "mapa": str(payload.get("mapa") or ""),
+                "modo": str(payload.get("modo") or ""),
+            },
+            "logs": logs,
+            "phases": _build_fechamento_phase_logs(logs),
+        }
+
     @router.post("/api/internal/promax/financeiro/fechamento-mapa")
     def api_internal_promax_financeiro_fechamento_mapa(
         payload: InternalFinanceiroFechamentoSyncRequest,
@@ -308,6 +453,20 @@ def create_admin_financeiro_router(
             },
             context={"worker_id": payload.worker_id, "is_admin": True},
         )
+        if sync_conferencia_fechamento_promax is not None:
+            try:
+                result["conferencia"] = sync_conferencia_fechamento_promax(
+                    {
+                        "job_id": payload.job_id,
+                        "data": payload.data,
+                        "filial": payload.filial,
+                        "mapa": payload.mapa,
+                        "result": payload.result,
+                    },
+                    context={"worker_id": payload.worker_id, "is_admin": True},
+                )
+            except Exception as exc:
+                result["conferencia_error"] = str(exc)
         record_security_event(
             request,
             channel="api",
@@ -342,3 +501,78 @@ def create_admin_financeiro_router(
         return result
 
     return router
+
+
+def _parse_admin_financeiro_date(value: Any) -> date:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return date.today()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(cleaned, fmt).date()
+        except ValueError:
+            continue
+    raise HTTPException(status_code=400, detail="Data invalida. Use YYYY-MM-DD ou DD/MM/AAAA.")
+
+
+def _allowed_financeiro_filiais(context: dict[str, Any] | None) -> set[str] | None:
+    if not context or bool(context.get("is_admin")):
+        return None
+    raw = [str(item).strip() for item in context.get("filiais", ()) if str(item).strip()]
+    if not raw or "*" in raw:
+        return None
+    return {str(int(item)) if item.isdigit() else item for item in raw}
+
+
+def _require_allowed_financeiro_filial(value: Any, context: dict[str, Any] | None) -> str:
+    clean = str(value or "").strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="Escolha a revenda antes de continuar.")
+    clean = str(int(clean)) if clean.isdigit() else clean
+    allowed = _allowed_financeiro_filiais(context)
+    if allowed is not None and clean not in allowed:
+        raise HTTPException(status_code=403, detail="Revenda fora do escopo liberado para este usuario.")
+    return clean
+
+
+def _build_fechamento_phase_logs(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    phases: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for log in logs:
+        message = str((log or {}).get("message") or "").strip()
+        if not message:
+            continue
+        normalized = message.upper()
+        phase_key = ""
+        phase_label = ""
+        if "030303" in normalized:
+            phase_key = "030303"
+            phase_label = "Passando na 030303 - dados do mapa"
+        elif "030302" in normalized or "FISICO" in normalized or "FÍSICO" in normalized:
+            phase_key = "030302"
+            phase_label = "Passando na 030302 - fechamento fisico"
+        elif "03030702" in normalized or "FINANCEIRO" in normalized:
+            phase_key = "03030702"
+            phase_label = "Passando na 03030702 - fechamento financeiro"
+        elif "SINCRONIZ" in normalized or "CAIXA FINANCEIRO" in normalized:
+            phase_key = "sync_caixa"
+            phase_label = "Atualizando o caixa financeiro"
+        elif "RESULTADO FINAL" in normalized or "RESUMO FINAL" in normalized:
+            phase_key = "resultado"
+            phase_label = message
+        if not phase_key:
+            continue
+        if phase_key in seen and phase_key != "resultado":
+            continue
+        seen.add(phase_key)
+        phases.append(
+            {
+                "id": log.get("id"),
+                "created_at": log.get("created_at"),
+                "level": log.get("level") or "info",
+                "phase": phase_key,
+                "label": phase_label,
+                "message": message,
+            }
+        )
+    return phases

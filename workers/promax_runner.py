@@ -141,6 +141,12 @@ class PromaxRunner:
             km_atual = str(payload.get("km_atual") or payload.get("kmAtual") or payload.get("km") or "").strip()
             if km_atual:
                 command.extend(["--km-atual", km_atual])
+            km_inicial = str(payload.get("km_inicial") or payload.get("kmInicial") or "").strip()
+            if km_inicial:
+                command.extend(["--km-inicial", km_inicial])
+            km_prev = str(payload.get("km_prev") or payload.get("kmPrev") or payload.get("km_previsto") or payload.get("kmPrevisto") or "").strip()
+            if km_prev:
+                command.extend(["--km-prev", km_prev])
             unidade = str(payload.get("unit") or payload.get("unidade") or "").strip()
             units = _identifier_list(payload.get("units"), field_name="units")
             if not unidade and units:

@@ -14,6 +14,7 @@ from bot_api.services.boletos_pdf_import_service import BoletosPdfImportService
 from bot_api.services.boletos_query_service import BoletosQueryService
 from bot_api.services.comodatos_import_service import ComodatosImportService
 from bot_api.services.comodatos_query_service import ComodatosQueryService
+from bot_api.services.conferencia_service import ConferenciaService
 from bot_api.services.critica_operacao_import_service import CriticaOperacaoImportService
 from bot_api.services.critica_rn_import_service import CriticaRnImportService
 from bot_api.services.critica_rn_query_service import CriticaRnQueryService
@@ -24,6 +25,7 @@ from bot_api.services.dclientes_query_service import DClientesQueryService
 from bot_api.services.dcondicoes_import_service import DCondicoesImportService
 from bot_api.services.documentacao_pendente_import_service import DocumentacaoPendenteImportService
 from bot_api.services.documentacao_pendente_query_service import DocumentacaoPendenteQueryService
+from bot_api.services.dmateriais_import_service import DMateriaisImportService
 from bot_api.services.doperacoes_import_service import DOperacoesImportService
 from bot_api.services.dprecos_import_service import DPrecosImportService
 from bot_api.services.dprodutos_import_service import DProdutosImportService
@@ -40,6 +42,7 @@ from bot_api.services.prazo_limite_query_service import PrazoLimiteQueryService
 from bot_api.services.produto_cestas_import_service import ProdutoCestasImportService
 from bot_api.services.promax_jobs_service import PromaxJobsService
 from bot_api.services.recolha_request_service import RecolhaRequestService
+from bot_api.services.relatorio_031120_import_service import Relatorio031120ImportService
 
 
 @dataclass(frozen=True)
@@ -62,10 +65,13 @@ class AppServices:
     drevendas_import_service: DRevendasImportService
     dcondicoes_import_service: DCondicoesImportService
     dprodutos_import_service: DProdutosImportService
+    dmateriais_import_service: DMateriaisImportService
     produto_cestas_import_service: ProdutoCestasImportService
     boletos_pdf_import_service: BoletosPdfImportService
     boletos_pdf_import_services: dict[str, BoletosPdfImportService]
     estoque_020304_import_services: dict[str, Estoque020304ImportService]
+    relatorio_031120_import_services: dict[str, Relatorio031120ImportService]
+    relatorio_03114902_import_service: Relatorio031120ImportService
     dclientes_import_service: DClientesImportService
     inadimplencia_import_service: InadimplenciaImportService
     comodatos_import_service: ComodatosImportService
@@ -76,6 +82,7 @@ class AppServices:
     documentacao_pendente_import_service: DocumentacaoPendenteImportService
     prazo_limite_import_service: PrazoLimiteImportService
     recolha_request_service: RecolhaRequestService
+    conferencia_service: ConferenciaService
     evolution_client: EvolutionClient
     meta_cloud_client: MetaCloudClient
     access_control: AccessControl
@@ -96,6 +103,12 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         schema=settings.promax_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
         max_concurrent_jobs=settings.promax_max_concurrent_jobs,
+    )
+    conferencia_service = ConferenciaService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+        filial_labels=FILIAL_LABELS,
     )
     dclientes_query_service = DClientesQueryService(
         database_url=settings.reports_runtime_database_url,
@@ -179,6 +192,11 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
+    dmateriais_import_service = DMateriaisImportService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
     produto_cestas_import_service = ProdutoCestasImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
@@ -210,6 +228,26 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         )
         for filial_code in sorted(filial_labels, key=int)
     }
+    relatorio_031120_import_services = {
+        filial_code: Relatorio031120ImportService(
+            database_url=settings.reports_database_url,
+            schema=settings.reports_db_schema,
+            dataset_name=f"relatorio_031120_op_{filial_code}",
+            expected_filial=filial_code,
+            filial_nome=filial_labels[filial_code],
+            connect_timeout_seconds=settings.access_database_timeout_seconds,
+        )
+        for filial_code in sorted(filial_labels, key=int)
+    }
+    relatorio_03114902_import_service = Relatorio031120ImportService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        dataset_name="relatorio_03114902_geo",
+        expected_filial="*",
+        filial_nome="Todas as operacoes",
+        display_name="03114902",
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
     dclientes_import_service = DClientesImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
@@ -329,10 +367,13 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         drevendas_import_service=drevendas_import_service,
         dcondicoes_import_service=dcondicoes_import_service,
         dprodutos_import_service=dprodutos_import_service,
+        dmateriais_import_service=dmateriais_import_service,
         produto_cestas_import_service=produto_cestas_import_service,
         boletos_pdf_import_service=boletos_pdf_import_service,
         boletos_pdf_import_services=boletos_pdf_import_services,
         estoque_020304_import_services=estoque_020304_import_services,
+        relatorio_031120_import_services=relatorio_031120_import_services,
+        relatorio_03114902_import_service=relatorio_03114902_import_service,
         dclientes_import_service=dclientes_import_service,
         inadimplencia_import_service=inadimplencia_import_service,
         comodatos_import_service=comodatos_import_service,
@@ -343,6 +384,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         documentacao_pendente_import_service=documentacao_pendente_import_service,
         prazo_limite_import_service=prazo_limite_import_service,
         recolha_request_service=recolha_request_service,
+        conferencia_service=conferencia_service,
         evolution_client=evolution_client,
         meta_cloud_client=meta_cloud_client,
         access_control=access_control,

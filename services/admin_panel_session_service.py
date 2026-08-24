@@ -275,6 +275,7 @@ class AdminPanelSessionService:
             "critica_import": {"critica"},
             "recolhas": {"recolhas"},
             "financeiro": {"financeiro"},
+            "conferencia": {"conferencia"},
             "armazem": {"armazem"},
             "estoque": {"armazem"},
             "giro": {"giro"},

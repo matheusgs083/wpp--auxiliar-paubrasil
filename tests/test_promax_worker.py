@@ -368,6 +368,39 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(payload["reference_date"], "2026-07-23")
         self.assertEqual(base64.b64decode(payload["file_base64"]), b"Grade;Cod;Descricao\n1;2;Produto\n")
 
+    def test_client_uploads_031120_csv_to_internal_import_route(self) -> None:
+        captured: list[tuple[str, dict[str, object], float]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data), timeout))
+            return _FakeResponse({"ok": True, "result": {"rows": 12}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            boleto_import_timeout_seconds=120,
+            opener=opener,
+        )
+
+        client.import_relatorio_031120_csv(
+            job_id="job-1",
+            lease_token="lease-token",
+            filial="3",
+            filename="031120 bot - nomeUnidade031120_2210003.csv",
+            csv_bytes=b"Mapa;Data\n1;24/08/2026\n",
+            reference_date="2026-08-24",
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/031120/import")
+        self.assertEqual(captured[0][2], 120)
+        payload = captured[0][1]
+        self.assertEqual(payload["filial"], "3")
+        self.assertEqual(payload["filename"], "031120 bot - nomeUnidade031120_2210003.csv")
+        self.assertEqual(payload["reference_date"], "2026-08-24")
+        self.assertEqual(base64.b64decode(payload["file_base64"]), b"Mapa;Data\n1;24/08/2026\n")
+
     def test_control_flag_accepts_stop_job_ids_contract(self) -> None:
         payload = {
             "control": {
@@ -837,6 +870,63 @@ class PromaxClientTests(unittest.TestCase):
 
         client.import_estoque_020304_csv.assert_called_once()
         self.assertEqual(client.import_estoque_020304_csv.call_args.kwargs["filial"], "3")
+
+    def test_031120_bot_imports_csvs_by_unit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "031120 bot - nomeUnidade031120_2210003.csv").write_bytes(
+                b"Mapa;Data\n1;24/08/2026\n"
+            )
+            (source_dir / "031120 bot - nomeUnidade031120_2210004.csv").write_bytes(
+                b"Mapa;Data\n2;24/08/2026\n"
+            )
+            client = Mock()
+            client.import_relatorio_031120_csv.return_value = {
+                "ok": True,
+                "result": {"rows": 12, "batch_id": 48},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_031120_relatorio_if_needed(
+                {
+                    "payload": {
+                        "routines": ["031120_BOT"],
+                        "units": ["2210003", "2210004"],
+                        "end_date": "2026-08-24",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "031120 bot"): str(source_dir)}
+                        }
+                    },
+                ),
+            )
+
+        self.assertEqual(client.import_relatorio_031120_csv.call_count, 2)
+        call_kwargs = client.import_relatorio_031120_csv.call_args_list[0].kwargs
+        self.assertEqual(call_kwargs["filial"], "3")
+        self.assertEqual(call_kwargs["reference_date"], _current_reference_date())
+        self.assertEqual(client.heartbeat_job.call_count, 4)
 
     def test_020220_bot_imports_comodatos_csvs_in_one_batch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

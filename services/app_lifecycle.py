@@ -18,6 +18,7 @@ def register_app_lifecycle(
     admin_imports_runtime: Any,
     admin_panel_user_service: Any,
     admin_financeiro_service: Any,
+    conferencia_service: Any,
     critica_pdf_prebuild_executor: Any,
     admin_broadcast_executor: Any,
     admin_payip_batch_service: Any,
@@ -44,6 +45,10 @@ def register_app_lifecycle(
             admin_financeiro_service.ensure_schema()
         except Exception as exc:
             logger.warning("Fechamento financeiro indisponivel no startup: %s", exc)
+        try:
+            conferencia_service.ensure_schema()
+        except Exception as exc:
+            logger.warning("Conferencia indisponivel no startup: %s", exc)
         maintenance_result = run_admin_import_maintenance(force_stale=True)
         if not maintenance_result.get("ok"):
             logger.warning("Manutencao de imports indisponivel no startup: %s", maintenance_result.get("error"))
