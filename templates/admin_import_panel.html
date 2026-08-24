@@ -1880,10 +1880,6 @@
                 </select>
               </div>
               <div class="col-12 col-md-2">
-                <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoPontoApoio">Ponto apoio</label>
-                <input type="text" class="form-control form-control-sm" id="financeiroFechamentoPontoApoio" value="0">
-              </div>
-              <div class="col-12 col-md-2">
                 <label class="form-label small fw-semibold mb-1" for="financeiroFechamentoKm">KM atual</label>
                 <input type="number" class="form-control form-control-sm" id="financeiroFechamentoKm" min="0" step="1" inputmode="numeric" placeholder="Opcional">
               </div>
@@ -6423,7 +6419,6 @@
         vale: document.getElementById("financeiroValeBtn"),
         fechamentoMapa: document.getElementById("financeiroFechamentoMapa"),
         fechamentoModo: document.getElementById("financeiroFechamentoModo"),
-        fechamentoPontoApoio: document.getElementById("financeiroFechamentoPontoApoio"),
         fechamentoKm: document.getElementById("financeiroFechamentoKm"),
         fechamentoWorkerStatus: document.getElementById("financeiroFechamentoWorkerStatus"),
         fechamentoStatus: document.getElementById("financeiroFechamentoStatus"),
@@ -6464,6 +6459,7 @@
         boletos_recebido_qtd: 0,
         total_promax: 0,
         credito_conta: 0,
+        dinheiro_promax: 0,
         dinheiro: FINANCEIRO_DENOMS.reduce((acc, denom) => { acc[denom] = 0; return acc; }, {}),
         moedas: 0,
         diarista: 0,
@@ -6505,7 +6501,8 @@
       const totalApurado = dinheiroTotal + financeiroNumber(map.moedas) + sumRows(map.transferencias) + sumRows(map.despesas) + sumRows(valesCalculados) + diaristasTotal + alimentacao;
       const diferenca = financeiroNumber(map.total_promax) - totalApurado;
       const boletosDiferencaQtd = financeiroNumber(map.boletos_rota) - financeiroNumber(map.boletos_recebido_qtd);
-      return { dinheiroTotal, diaristasTotal, alimentacao, totalApurado, diferenca, boletosDiferencaQtd };
+      const dinheiroPromax = financeiroNumber(map.dinheiro_promax);
+      return { dinheiroTotal, dinheiroPromax, diaristasTotal, alimentacao, totalApurado, diferenca, boletosDiferencaQtd };
     }
 
     function financeiroMapaEntraNoCaixa(map) {
@@ -6711,7 +6708,7 @@
       const filialEl = document.getElementById("financeiroFilial");
       map.data = dataEl && dataEl.value ? dataEl.value : map.data;
       map.filial = filialEl && filialEl.value ? filialEl.value : map.filial;
-      ["tipo_bloco", "mapa", "mapa_ref", "motorista", "placa", "ajudante1", "ajudante2", "boletos_rota", "boletos_recebido_qtd", "total_promax", "credito_conta", "moedas", "diarista", "diarista_recibo_recebido", "pernoite", "hospedagem", "janta", "almoco", "cafe", "observacao"].forEach(key => {
+      ["tipo_bloco", "mapa", "mapa_ref", "motorista", "placa", "ajudante1", "ajudante2", "boletos_rota", "boletos_recebido_qtd", "total_promax", "credito_conta", "dinheiro_promax", "moedas", "diarista", "diarista_recibo_recebido", "pernoite", "hospedagem", "janta", "almoco", "cafe", "observacao"].forEach(key => {
         const el = get(`[data-financeiro-field="${key}"]`);
         if (el) map[key] = el.type === "checkbox" ? el.checked : el.value;
       });
@@ -7046,6 +7043,7 @@
               ${isLancamento ? "" : financeiroInput("boletos_recebido_qtd", "Boletos que voltaram (qtd.)", map.boletos_recebido_qtd, "number", "1")}
               ${isLancamento ? "" : financeiroInput("total_promax", "Total Promax", map.total_promax, "number")}
               ${isLancamento ? "" : financeiroInput("credito_conta", "Credito em conta", map.credito_conta, "number")}
+              ${isLancamento ? "" : financeiroInput("dinheiro_promax", "Dinheiro Promax", map.dinheiro_promax, "number")}
             </div>
           </section>
           ${isLancamento ? "" : `
@@ -7061,7 +7059,8 @@
                 ${financeiroInput("janta", "Janta", map.janta, "number")}
                 ${financeiroInput("almoco", "Almoco", map.almoco, "number")}
                 ${financeiroInput("cafe", "Cafe", map.cafe, "number")}
-                <div class="finance-summary-item"><span>Total dinheiro</span><strong>${formatMoneyText(totals.dinheiroTotal)}</strong></div>
+                <div class="finance-summary-item"><span>Total dinheiro</span><strong>${formatMoneyText(totals.dinheiroPromax || totals.dinheiroTotal)}</strong></div>
+                <div class="finance-summary-item"><span>Dinheiro contado</span><strong>${formatMoneyText(totals.dinheiroTotal)}</strong></div>
               </div>
             </section>
           `}
@@ -7452,7 +7451,6 @@
         filial: els.filial && els.filial.value ? els.filial.value : "",
         mapa,
         modo: els.fechamentoModo && els.fechamentoModo.value ? els.fechamentoModo.value : "completo",
-        ponto_apoio: els.fechamentoPontoApoio && els.fechamentoPontoApoio.value ? els.fechamentoPontoApoio.value : "0",
         km_atual: els.fechamentoKm && els.fechamentoKm.value ? els.fechamentoKm.value : ""
       };
       if (els.fechamentoBtn) els.fechamentoBtn.disabled = true;

@@ -57,6 +57,7 @@ class AdminFinanceiroService:
                             boletos_recebido_qtd NUMERIC(14,2) NOT NULL DEFAULT 0,
                             total_promax NUMERIC(14,2) NOT NULL DEFAULT 0,
                             credito_conta NUMERIC(14,2) NOT NULL DEFAULT 0,
+                            dinheiro_promax NUMERIC(14,2) NOT NULL DEFAULT 0,
                             dinheiro JSONB NOT NULL DEFAULT '{{}}'::jsonb,
                             moedas NUMERIC(14,2) NOT NULL DEFAULT 0,
                             diarista NUMERIC(14,2) NOT NULL DEFAULT 0,
@@ -89,6 +90,11 @@ class AdminFinanceiroService:
                 )
                 cur.execute(
                     sql.SQL("ALTER TABLE {}.financeiro_caixa_mapas ADD COLUMN IF NOT EXISTS credito_conta NUMERIC(14,2) NOT NULL DEFAULT 0").format(
+                        sql.Identifier(self.schema)
+                    )
+                )
+                cur.execute(
+                    sql.SQL("ALTER TABLE {}.financeiro_caixa_mapas ADD COLUMN IF NOT EXISTS dinheiro_promax NUMERIC(14,2) NOT NULL DEFAULT 0").format(
                         sql.Identifier(self.schema)
                     )
                 )
@@ -247,11 +253,11 @@ class AdminFinanceiroService:
                         """
                         INSERT INTO {}.financeiro_caixa_mapas (
                             caixa_date, filial, tipo_bloco, mapa, mapa_ref, motorista, placa, ajudante1, ajudante2, boletos_rota,
-                            boletos_recebido_qtd, total_promax, credito_conta, dinheiro,
+                            boletos_recebido_qtd, total_promax, credito_conta, dinheiro_promax, dinheiro,
                             moedas, diarista, diarista_recibo_recebido, pernoite, hospedagem, janta, almoco, cafe,
                             pagamentos, observacao, created_by, updated_by
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
                             tipo_bloco = EXCLUDED.tipo_bloco,
                             mapa_ref = EXCLUDED.mapa_ref,
@@ -263,6 +269,7 @@ class AdminFinanceiroService:
                             boletos_recebido_qtd = EXCLUDED.boletos_recebido_qtd,
                             total_promax = EXCLUDED.total_promax,
                             credito_conta = EXCLUDED.credito_conta,
+                            dinheiro_promax = EXCLUDED.dinheiro_promax,
                             dinheiro = EXCLUDED.dinheiro,
                             moedas = EXCLUDED.moedas,
                             diarista = EXCLUDED.diarista,
@@ -293,6 +300,7 @@ class AdminFinanceiroService:
                         _decimal(payload.get("boletos_recebido_qtd")),
                         _decimal(payload.get("total_promax")),
                         _decimal(payload.get("credito_conta")),
+                        _decimal(payload.get("dinheiro_promax")),
                         Jsonb(dinheiro),
                         _decimal(payload.get("moedas")),
                         diarista,
@@ -357,10 +365,10 @@ class AdminFinanceiroService:
                         """
                         INSERT INTO {}.financeiro_caixa_mapas (
                             caixa_date, filial, tipo_bloco, mapa, mapa_ref, motorista, placa, ajudante1, ajudante2,
-                            boletos_rota, total_promax, credito_conta, observacao,
+                            boletos_rota, total_promax, credito_conta, dinheiro_promax, observacao,
                             created_by, updated_by
                         )
-                        VALUES (%s, %s, 'mapa', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, 'mapa', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
                             tipo_bloco = 'mapa',
                             mapa_ref = EXCLUDED.mapa_ref,
@@ -383,6 +391,7 @@ class AdminFinanceiroService:
                             boletos_rota = EXCLUDED.boletos_rota,
                             total_promax = EXCLUDED.total_promax,
                             credito_conta = EXCLUDED.credito_conta,
+                            dinheiro_promax = EXCLUDED.dinheiro_promax,
                             observacao = CASE
                                 WHEN {}.financeiro_caixa_mapas.observacao = '' THEN EXCLUDED.observacao
                                 WHEN {}.financeiro_caixa_mapas.observacao LIKE %s THEN EXCLUDED.observacao
@@ -418,6 +427,7 @@ class AdminFinanceiroService:
                         metrics["boletos_rota"],
                         metrics["total_promax"],
                         metrics["credito_conta"],
+                        metrics["dinheiro_promax"],
                         "\n".join(obs_parts),
                         username,
                         username,
@@ -435,6 +445,7 @@ class AdminFinanceiroService:
                 "boletos_rota": _money(metrics["boletos_rota"]),
                 "total_promax": _money(metrics["total_promax"]),
                 "credito_conta": _money(metrics["credito_conta"]),
+                "dinheiro_promax": _money(metrics["dinheiro_promax"]),
             },
             "dados_fechamento_found": bool(dados_fechamento),
         }
@@ -692,6 +703,7 @@ class AdminFinanceiroService:
             "boletos_diferenca_qtd": _money(boletos_diferenca_qtd),
             "total_promax": _money(total_promax),
             "credito_conta": _money(row.get("credito_conta")),
+            "dinheiro_promax": _money(row.get("dinheiro_promax")),
             "dinheiro": dinheiro,
             "dinheiro_total": _money(dinheiro_total),
             "moedas": _money(row.get("moedas")),
@@ -730,6 +742,7 @@ class AdminFinanceiroService:
             "boletos_recebido_qtd",
             "boletos_diferenca_qtd",
             "dinheiro_total",
+            "dinheiro_promax",
             "moedas",
             "transferencias_total",
             "despesas_total",
@@ -1592,6 +1605,7 @@ def _financeiro_metrics_from_fechamento(dados: dict[str, Any]) -> dict[str, Deci
         "boletos_rota": Decimal("0"),
         "total_promax": Decimal("0"),
         "credito_conta": Decimal("0"),
+        "dinheiro_promax": Decimal("0"),
     }
     if not isinstance(dados, dict) or not dados:
         return metrics
@@ -1600,16 +1614,22 @@ def _financeiro_metrics_from_fechamento(dados: dict[str, Any]) -> dict[str, Deci
     if isinstance(saida, dict):
         metrics["total_promax"] = abs(_decimal(saida.get("total")))
         itens = saida.get("itens")
+        total_saida_itens = Decimal("0")
         if isinstance(itens, list):
             for item in itens:
                 if not isinstance(item, dict):
                     continue
                 descricao = _text_key(item.get("descricao"))
                 valor = abs(_decimal(item.get("valor")))
+                total_saida_itens += valor
                 if any(term in descricao for term in ("BOLETO", "BLOQUETO")):
                     metrics["boletos_rota"] += _decimal(item.get("qtNfs"))
                 if any(term in descricao for term in ("TRANSFERENCIA", "CREDITO", "CREDITO EM CONTA", "PIX")):
                     metrics["credito_conta"] += valor
+                if any(term in descricao for term in ("A VISTA", "AVISTA", "DINHEIRO")):
+                    metrics["dinheiro_promax"] += valor
+        if metrics["total_promax"] == 0 and total_saida_itens:
+            metrics["total_promax"] = total_saida_itens
 
     if metrics["total_promax"] == 0:
         retorno = dados.get("retorno")
@@ -1623,6 +1643,8 @@ def _financeiro_metrics_from_fechamento(dados: dict[str, Any]) -> dict[str, Deci
                     descricao = _text_key(item.get("descricao"))
                     if any(term in descricao for term in ("TRANSFERENCIA", "CREDITO", "CREDITO EM CONTA", "PIX")):
                         metrics["credito_conta"] += abs(_decimal(item.get("valor")))
+                    if any(term in descricao for term in ("A VISTA", "AVISTA", "DINHEIRO")):
+                        metrics["dinheiro_promax"] += abs(_decimal(item.get("valor")))
     return metrics
 
 

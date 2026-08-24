@@ -1324,6 +1324,27 @@ class PromaxRunnerTests(unittest.TestCase):
         self.assertNotIn("--data-inicial", command)
         self.assertNotIn("--data-final", command)
 
+    def test_runner_ignores_zero_ponto_apoio_for_fechamento_mapa(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-fechamento",
+                    "job_type": "fechamento_mapa",
+                    "payload": {
+                        "operation": "fechamento-mapa",
+                        "mapa": "93709",
+                        "unidade": "2210003",
+                        "modo": "completo",
+                        "ponto_apoio": "0",
+                    },
+                }
+            )
+
+        self.assertNotIn("--ponto-apoio", command)
+
     def test_runner_accepts_dynamic_profile_with_safe_identifiers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._config(Path(temp_dir))

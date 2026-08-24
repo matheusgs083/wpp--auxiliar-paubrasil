@@ -33,6 +33,7 @@ class AdminFinanceiroMapaRequest(BaseModel):
     boletos_recebido_qtd: Any = 0
     total_promax: Any = 0
     credito_conta: Any = 0
+    dinheiro_promax: Any = 0
     dinheiro: dict[str, Any] = Field(default_factory=dict)
     moedas: Any = 0
     diarista: Any = 0
@@ -54,7 +55,7 @@ class AdminFinanceiroFechamentoRequest(BaseModel):
     filial: str
     mapa: str = Field(min_length=1, max_length=40)
     modo: str = "completo"
-    ponto_apoio: str = "0"
+    ponto_apoio: str = ""
     km_atual: str = ""
     target_worker_id: str = Field(default="", max_length=120)
 
@@ -368,7 +369,6 @@ def create_admin_financeiro_router(
             "unidade": promax_unit,
             "units": [promax_unit],
             "modo": clean_modo,
-            "ponto_apoio": str(payload.ponto_apoio or "0").strip() or "0",
             "km_atual": clean_km_atual,
             "km_inicial": clean_km_inicial,
             "km_prev": clean_km_prev,

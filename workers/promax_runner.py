@@ -136,7 +136,7 @@ class PromaxRunner:
                 mapa,
             ]
             ponto_apoio = str(payload.get("ponto_apoio") or payload.get("pontoApoio") or "").strip()
-            if ponto_apoio:
+            if ponto_apoio and ponto_apoio != "0":
                 command.extend(["--ponto-apoio", ponto_apoio])
             km_atual = str(payload.get("km_atual") or payload.get("kmAtual") or payload.get("km") or "").strip()
             if km_atual:
