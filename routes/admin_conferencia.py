@@ -16,6 +16,7 @@ def create_admin_conferencia_router(
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     panel_context_can_access_feature: Callable[[dict[str, Any] | None, str], bool],
     list_conferencia_mapas: Callable[..., dict[str, Any]],
+    list_conferencia_garrafeiras: Callable[..., dict[str, Any]],
     get_conferencia_mapa: Callable[..., dict[str, Any]],
     save_conferencia_counts: Callable[..., dict[str, Any]],
     search_conferencia_products: Callable[..., dict[str, Any]],
@@ -73,6 +74,40 @@ def create_admin_conferencia_router(
             request,
             channel="api",
             event_type="admin_conferencia_list",
+            decision="allowed",
+            reason=f"data={data}; filial={filial or '*'}",
+        )
+        return payload
+
+    @router.get("/api/admin/conferencia/garrafeiras")
+    def api_admin_conferencia_garrafeiras(
+        request: Request,
+        data: str,
+        filial: str = "",
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_conferencia_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        if not can_reveal_totals(context):
+            raise HTTPException(status_code=403, detail="Consolidado liberado apenas para financeiro.")
+        try:
+            payload = list_conferencia_garrafeiras(
+                data=data,
+                filial=filial,
+                context=context,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_conferencia_garrafeiras",
             decision="allowed",
             reason=f"data={data}; filial={filial or '*'}",
         )

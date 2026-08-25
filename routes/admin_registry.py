@@ -164,6 +164,7 @@ def _register_admin_conferencia_routes(app: FastAPI, *, deps: dict[str, Any]) ->
             require_admin_panel_feature=deps["require_admin_panel_feature"],
             panel_context_can_access_feature=deps["panel_context_can_access_feature"],
             list_conferencia_mapas=deps["list_conferencia_mapas"],
+            list_conferencia_garrafeiras=deps["list_conferencia_garrafeiras"],
             get_conferencia_mapa=deps["get_conferencia_mapa"],
             save_conferencia_counts=deps["save_conferencia_counts"],
             search_conferencia_products=deps["search_conferencia_products"],

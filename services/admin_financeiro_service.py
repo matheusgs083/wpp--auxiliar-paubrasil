@@ -239,6 +239,8 @@ class AdminFinanceiroService:
             raise HTTPException(status_code=403, detail="Filial fora do acesso do usuario.")
 
         dinheiro = _normalize_dinheiro(payload.get("dinheiro") or {})
+        dirty_fields = _normalize_financeiro_dirty_fields(payload.get("dirty_fields"))
+        dirty_flags = _financeiro_manual_update_flags(dirty_fields)
         username = str((context or {}).get("username") or (context or {}).get("mode") or "")
         with self._connect() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
@@ -248,6 +250,7 @@ class AdminFinanceiroService:
                 placa = str(payload.get("placa") or "").strip()
                 ajudante1 = str(payload.get("ajudante1") or "").strip()
                 ajudante2 = str(payload.get("ajudante2") or "").strip()
+                schema_identifiers = [sql.Identifier(self.schema)] * 20
                 cur.execute(
                     sql.SQL(
                         """
@@ -261,31 +264,43 @@ class AdminFinanceiroService:
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
                             tipo_bloco = EXCLUDED.tipo_bloco,
                             mapa_ref = EXCLUDED.mapa_ref,
-                            motorista = EXCLUDED.motorista,
-                            placa = EXCLUDED.placa,
-                            ajudante1 = EXCLUDED.ajudante1,
-                            ajudante2 = EXCLUDED.ajudante2,
-                            boletos_rota = EXCLUDED.boletos_rota,
-                            boletos_recebido_qtd = EXCLUDED.boletos_recebido_qtd,
-                            total_promax = EXCLUDED.total_promax,
-                            credito_conta = EXCLUDED.credito_conta,
-                            dinheiro_promax = EXCLUDED.dinheiro_promax,
-                            dinheiro = EXCLUDED.dinheiro,
-                            moedas = EXCLUDED.moedas,
-                            diarista = EXCLUDED.diarista,
-                            diarista_recibo_recebido = EXCLUDED.diarista_recibo_recebido,
-                            pernoite = EXCLUDED.pernoite,
-                            hospedagem = EXCLUDED.hospedagem,
-                            janta = EXCLUDED.janta,
-                            almoco = EXCLUDED.almoco,
-                            cafe = EXCLUDED.cafe,
+                            motorista = CASE
+                                WHEN %s THEN EXCLUDED.motorista
+                                ELSE {}.financeiro_caixa_mapas.motorista
+                            END,
+                            placa = CASE
+                                WHEN %s THEN EXCLUDED.placa
+                                ELSE {}.financeiro_caixa_mapas.placa
+                            END,
+                            ajudante1 = CASE
+                                WHEN %s THEN EXCLUDED.ajudante1
+                                ELSE {}.financeiro_caixa_mapas.ajudante1
+                            END,
+                            ajudante2 = CASE
+                                WHEN %s THEN EXCLUDED.ajudante2
+                                ELSE {}.financeiro_caixa_mapas.ajudante2
+                            END,
+                            boletos_rota = CASE WHEN %s THEN EXCLUDED.boletos_rota ELSE {}.financeiro_caixa_mapas.boletos_rota END,
+                            boletos_recebido_qtd = CASE WHEN %s THEN EXCLUDED.boletos_recebido_qtd ELSE {}.financeiro_caixa_mapas.boletos_recebido_qtd END,
+                            total_promax = CASE WHEN %s THEN EXCLUDED.total_promax ELSE {}.financeiro_caixa_mapas.total_promax END,
+                            credito_conta = CASE WHEN %s THEN EXCLUDED.credito_conta ELSE {}.financeiro_caixa_mapas.credito_conta END,
+                            dinheiro_promax = CASE WHEN %s THEN EXCLUDED.dinheiro_promax ELSE {}.financeiro_caixa_mapas.dinheiro_promax END,
+                            dinheiro = CASE WHEN %s THEN EXCLUDED.dinheiro ELSE {}.financeiro_caixa_mapas.dinheiro END,
+                            moedas = CASE WHEN %s THEN EXCLUDED.moedas ELSE {}.financeiro_caixa_mapas.moedas END,
+                            diarista = CASE WHEN %s THEN EXCLUDED.diarista ELSE {}.financeiro_caixa_mapas.diarista END,
+                            diarista_recibo_recebido = CASE WHEN %s THEN EXCLUDED.diarista_recibo_recebido ELSE {}.financeiro_caixa_mapas.diarista_recibo_recebido END,
+                            pernoite = CASE WHEN %s THEN EXCLUDED.pernoite ELSE {}.financeiro_caixa_mapas.pernoite END,
+                            hospedagem = CASE WHEN %s THEN EXCLUDED.hospedagem ELSE {}.financeiro_caixa_mapas.hospedagem END,
+                            janta = CASE WHEN %s THEN EXCLUDED.janta ELSE {}.financeiro_caixa_mapas.janta END,
+                            almoco = CASE WHEN %s THEN EXCLUDED.almoco ELSE {}.financeiro_caixa_mapas.almoco END,
+                            cafe = CASE WHEN %s THEN EXCLUDED.cafe ELSE {}.financeiro_caixa_mapas.cafe END,
                             pagamentos = EXCLUDED.pagamentos,
-                            observacao = EXCLUDED.observacao,
+                            observacao = CASE WHEN %s THEN EXCLUDED.observacao ELSE {}.financeiro_caixa_mapas.observacao END,
                             updated_by = EXCLUDED.updated_by,
                             updated_at = NOW()
                         RETURNING *
                         """
-                    ).format(sql.Identifier(self.schema)),
+                    ).format(*schema_identifiers),
                     (
                         caixa_date,
                         filial,
@@ -314,6 +329,25 @@ class AdminFinanceiroService:
                         str(payload.get("observacao") or "").strip(),
                         username,
                         username,
+                        dirty_flags["motorista"],
+                        dirty_flags["placa"],
+                        dirty_flags["ajudante1"],
+                        dirty_flags["ajudante2"],
+                        dirty_flags["boletos_rota"],
+                        dirty_flags["boletos_recebido_qtd"],
+                        dirty_flags["total_promax"],
+                        dirty_flags["credito_conta"],
+                        dirty_flags["dinheiro_promax"],
+                        dirty_flags["dinheiro"],
+                        dirty_flags["moedas"],
+                        dirty_flags["diarista"],
+                        dirty_flags["diarista_recibo_recebido"],
+                        dirty_flags["pernoite"],
+                        dirty_flags["hospedagem"],
+                        dirty_flags["janta"],
+                        dirty_flags["almoco"],
+                        dirty_flags["cafe"],
+                        dirty_flags["observacao"],
                     ),
                 )
                 row = dict(cur.fetchone() or {})
@@ -343,7 +377,6 @@ class AdminFinanceiroService:
         result_payload = payload.get("result") if isinstance(payload.get("result"), dict) else payload
         dados_fechamento = _extract_dados_fechamento_03030702(result_payload)
         dados_030303 = _extract_030303_fields(result_payload)
-        motorista_promax = dados_030303.get("motorista") or ""
         metrics = _financeiro_metrics_from_fechamento(dados_fechamento)
         username = str((context or {}).get("username") or (context or {}).get("worker_id") or "promax-worker")
         obs_parts = [
@@ -360,6 +393,11 @@ class AdminFinanceiroService:
 
         with self._connect() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
+                dados_030303 = _merge_identity_fallback(
+                    dados_030303,
+                    self._lookup_conferencia_route_identity(cur, filial=filial, mapa=mapa),
+                )
+                motorista_promax = dados_030303.get("motorista") or ""
                 cur.execute(
                     sql.SQL(
                         """
@@ -373,19 +411,23 @@ class AdminFinanceiroService:
                             tipo_bloco = 'mapa',
                             mapa_ref = EXCLUDED.mapa_ref,
                             motorista = CASE
-                                WHEN {}.financeiro_caixa_mapas.motorista = '' THEN EXCLUDED.motorista
+                                WHEN EXCLUDED.motorista <> ''
+                                 AND {} THEN EXCLUDED.motorista
                                 ELSE {}.financeiro_caixa_mapas.motorista
                             END,
                             placa = CASE
-                                WHEN {}.financeiro_caixa_mapas.placa = '' THEN EXCLUDED.placa
+                                WHEN EXCLUDED.placa <> ''
+                                 AND {} THEN EXCLUDED.placa
                                 ELSE {}.financeiro_caixa_mapas.placa
                             END,
                             ajudante1 = CASE
-                                WHEN {}.financeiro_caixa_mapas.ajudante1 = '' THEN EXCLUDED.ajudante1
+                                WHEN EXCLUDED.ajudante1 <> ''
+                                 AND {} THEN EXCLUDED.ajudante1
                                 ELSE {}.financeiro_caixa_mapas.ajudante1
                             END,
                             ajudante2 = CASE
-                                WHEN {}.financeiro_caixa_mapas.ajudante2 = '' THEN EXCLUDED.ajudante2
+                                WHEN EXCLUDED.ajudante2 <> ''
+                                 AND {} THEN EXCLUDED.ajudante2
                                 ELSE {}.financeiro_caixa_mapas.ajudante2
                             END,
                             boletos_rota = EXCLUDED.boletos_rota,
@@ -403,12 +445,13 @@ class AdminFinanceiroService:
                         """
                     ).format(
                         sql.Identifier(self.schema),
+                        _sql_blankish_field(self.schema, "financeiro_caixa_mapas", "motorista"),
                         sql.Identifier(self.schema),
+                        _sql_blankish_field(self.schema, "financeiro_caixa_mapas", "placa"),
                         sql.Identifier(self.schema),
+                        _sql_blankish_field(self.schema, "financeiro_caixa_mapas", "ajudante1"),
                         sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
+                        _sql_blankish_field(self.schema, "financeiro_caixa_mapas", "ajudante2"),
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
@@ -450,6 +493,33 @@ class AdminFinanceiroService:
             "dados_fechamento_found": bool(dados_fechamento),
         }
 
+    def _lookup_conferencia_route_identity(self, cur: Any, *, filial: str, mapa: str) -> dict[str, str]:
+        if not _relation_exists_cur(cur, self.schema, "conferencia_mapas"):
+            return {}
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT placa, motorista, ajudante1, ajudante2
+                FROM {}.conferencia_mapas
+                WHERE filial = %s
+                  AND mapa = %s
+                  AND source_job_id = '03114902'
+                ORDER BY caixa_date DESC, updated_at DESC
+                LIMIT 1
+                """
+            ).format(sql.Identifier(self.schema)),
+            (_normalize_filial(filial), str(mapa or "").strip()),
+        )
+        row = cur.fetchone()
+        if not row:
+            return {}
+        return {
+            "placa": _clean_identity_text(row.get("placa"), keep_code=True),
+            "motorista": _clean_identity_text(row.get("motorista")),
+            "ajudante1": _clean_identity_text(row.get("ajudante1")),
+            "ajudante2": _clean_identity_text(row.get("ajudante2")),
+        }
+
     def delete_mapa(self, mapa_id: int, *, context: dict[str, Any] | None = None) -> dict[str, Any]:
         self.ensure_schema()
         with self._connect() as conn:
@@ -477,8 +547,8 @@ class AdminFinanceiroService:
         if not clean_filial or not clean_mapa:
             return {"ok": False, "km_atual": "", "km_inicial": "", "km_prev": "", "source": "missing_payload"}
 
+        self.ensure_schema()
         with self._connect() as conn:
-            self._ensure_schema(conn)
             with conn.cursor(row_factory=dict_row) as cur:
                 km_inicial = self._lookup_031120_saida_km_atual(
                     cur,
@@ -499,7 +569,7 @@ class AdminFinanceiroService:
                 "km_atual": _fmt_km_integer(km_inicial + km_prev),
                 "km_inicial": _fmt_km_integer(km_inicial),
                 "km_prev": _fmt_km_integer(km_prev),
-                "source": "031120_saida_km_atual_plus_03114902_km_prev",
+                "source": "031120_km_atual_plus_03114902_km_prev",
             }
         return {
             "ok": False,
@@ -528,6 +598,7 @@ class AdminFinanceiroService:
             ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
             (dataset_name, _normalize_filial(filial)),
         )
+        km_carregado_fallback = Decimal("0")
         for row in cur.fetchall():
             payload = dict(row.get("payload") or {})
             row_date = _parse_report_date(payload.get("Emissao")) or _parse_report_date(payload.get("DtOper"))
@@ -535,12 +606,13 @@ class AdminFinanceiroService:
                 continue
             if _strip_left_zeroes(payload.get("Mapa")) != mapa:
                 continue
-            if _normalize_031120_fase(payload.get("Fase")) != "saida":
-                continue
+            fase = _normalize_031120_fase(payload.get("Fase"))
             km_atual = _decimal(payload.get("KmAtual") or payload.get("KM Atual") or payload.get("Km Atual"))
-            if km_atual > 0:
+            if fase == "saida" and km_atual > 0:
                 return km_atual
-        return Decimal("0")
+            if fase == "carregado" and km_atual > 0:
+                km_carregado_fallback = km_atual
+        return km_carregado_fallback
 
     def _lookup_03114902_km_prev(self, cur: Any, *, filial: str, mapa: str, caixa_date: date) -> Decimal:
         if not _relation_exists_cur(cur, self.schema, "relatorio_031120_rows") or not _relation_exists_cur(cur, self.schema, "dataset_state"):
@@ -663,14 +735,14 @@ class AdminFinanceiroService:
     def _serialize_map(self, row: dict[str, Any], details: dict[str, dict[int, list[dict[str, Any]]]]) -> dict[str, Any]:
         mapa_id = int(row["id"])
         dinheiro = _normalize_dinheiro(row.get("dinheiro") or {})
+        hospedagem_total = _decimal(row.get("pernoite")) + _decimal(row.get("hospedagem"))
         dinheiro_total = sum(Decimal(denom) * Decimal(qtd) for denom, qtd in dinheiro.items())
         transferencias_total = _sum_detail(details["transferencias"].get(mapa_id, []))
         despesas_total = _sum_detail(details["despesas"].get(mapa_id, []))
         vales_total = _sum_detail([row for row in details["vales"].get(mapa_id, []) if not _is_vale_chapa(row)])
         diaristas_total = _decimal(row.get("diarista")) + _sum_detail(details["diaristas"].get(mapa_id, []))
         alimentacao_total = (
-            _decimal(row.get("pernoite"))
-            + _decimal(row.get("hospedagem"))
+            hospedagem_total
             + _decimal(row.get("janta"))
             + _decimal(row.get("almoco"))
             + _decimal(row.get("cafe"))
@@ -709,8 +781,8 @@ class AdminFinanceiroService:
             "moedas": _money(row.get("moedas")),
             "diarista": _money(row.get("diarista")),
             "diarista_recibo_recebido": _bool(row.get("diarista_recibo_recebido"), default=True),
-            "pernoite": _money(row.get("pernoite")),
-            "hospedagem": _money(row.get("hospedagem")),
+            "pernoite": 0.0,
+            "hospedagem": _money(hospedagem_total),
             "janta": _money(row.get("janta")),
             "almoco": _money(row.get("almoco")),
             "cafe": _money(row.get("cafe")),
@@ -722,8 +794,8 @@ class AdminFinanceiroService:
             "despesas_total": _money(despesas_total),
             "vales_total": _money(vales_total),
             "diaristas_total": _money(diaristas_total),
-            "alimentacao_pernoite_total": _money(row.get("pernoite")),
-            "alimentacao_hospedagem_total": _money(row.get("hospedagem")),
+            "alimentacao_pernoite_total": 0.0,
+            "alimentacao_hospedagem_total": _money(hospedagem_total),
             "alimentacao_janta_total": _money(row.get("janta")),
             "alimentacao_almoco_total": _money(row.get("almoco")),
             "alimentacao_cafe_total": _money(row.get("cafe")),
@@ -1528,7 +1600,7 @@ def _extract_motorista_030303(source: Any) -> str:
     )
     for path in candidates:
         value = _nested_get(source, path)
-        text = str(value or "").strip()
+        text = _clean_identity_text(value)
         if text:
             return text
     metadata = source.get("metadata")
@@ -1540,6 +1612,12 @@ def _extract_motorista_030303(source: Any) -> str:
 def _extract_030303_fields(source: Any) -> dict[str, str]:
     dados = _extract_dados_030303(source)
     motorista = _extract_motorista_030303(source)
+    if not motorista:
+        motorista = _clean_identity_text(_field_030303_value(dados, "motorista"))
+    if not motorista:
+        motorista = _clean_identity_text(_field_030303_value(dados, "csMotorista"))
+    if not motorista:
+        motorista = _clean_identity_text(_field_030303_value(dados, "cdMotorista"))
     return {
         "motorista": motorista,
         "placa": _clean_030303_select_text(_field_030303_value(dados, "placa"), keep_code=True),
@@ -1573,17 +1651,23 @@ def _field_030303_value(dados: dict[str, Any], field_name: str) -> Any:
     if not isinstance(dados, dict):
         return ""
     target = _text_key(field_name)
+    target_compact = target.replace(" ", "")
     campos = dados.get("campos")
     if isinstance(campos, list):
         for campo in campos:
             if not isinstance(campo, dict):
                 continue
-            if _text_key(campo.get("name")) == target or _text_key(campo.get("id")) == target:
+            keys = (_text_key(campo.get("name")), _text_key(campo.get("id")), _text_key(campo.get("label")))
+            if any(key == target or key.replace(" ", "") == target_compact for key in keys):
                 return campo.get("value")
     return dados.get(field_name) or ""
 
 
 def _clean_030303_select_text(value: Any, *, keep_code: bool = False) -> str:
+    return _clean_identity_text(value, keep_code=keep_code)
+
+
+def _clean_identity_text(value: Any, *, keep_code: bool = False) -> str:
     if isinstance(value, dict):
         text = str(value.get("texto") or value.get("label") or value.get("value") or "").strip()
         raw_code = str(value.get("valor") or "").strip()
@@ -1597,7 +1681,58 @@ def _clean_030303_select_text(value: Any, *, keep_code: bool = False) -> str:
         return text
     if " - " in text:
         text = text.split(" - ", 1)[1]
-    return text.replace("(*)", "").strip()
+    text = text.replace("(*)", "").strip()
+    if _is_blank_identity_text(text):
+        return ""
+    return text
+
+
+def _is_blank_identity_text(value: Any) -> bool:
+    text = _text_key(value)
+    if not text:
+        return True
+    return text in {
+        "--SELECIONAR--",
+        "SELECIONAR",
+        "00000",
+        "SEM PLACA",
+        "00001 - (*) PAU BRASIL",
+        "(*) PAU BRASIL",
+        "PAU BRASIL",
+        "DISTRIBUIDORA PAU BRASIL",
+    }
+
+
+def _merge_identity_fallback(primary: dict[str, str], fallback: dict[str, str]) -> dict[str, str]:
+    merged = dict(primary or {})
+    for key in ("motorista", "placa", "ajudante1", "ajudante2"):
+        current = _clean_identity_text(merged.get(key), keep_code=(key == "placa"))
+        candidate = _clean_identity_text((fallback or {}).get(key), keep_code=(key == "placa"))
+        merged[key] = current or candidate
+    return merged
+
+
+def _sql_blankish_field(schema: str, table: str, column: str) -> sql.SQL:
+    field = sql.SQL("{}.{}.{}").format(sql.Identifier(schema), sql.Identifier(table), sql.Identifier(column))
+    numeric_fallback = sql.SQL("")
+    if column != "placa":
+        numeric_fallback = sql.SQL("OR BTRIM({}) ~ '^[0-9]+$'").format(field)
+    return sql.SQL(
+        """(
+            COALESCE(NULLIF(BTRIM({}), ''), '') = ''
+            OR UPPER(BTRIM({})) = ANY(ARRAY[
+                '--SELECIONAR--',
+                'SELECIONAR',
+                '00000',
+                'SEM PLACA',
+                '00001 - (*) PAU BRASIL',
+                '(*) PAU BRASIL',
+                'PAU BRASIL',
+                'DISTRIBUIDORA PAU BRASIL'
+            ])
+            {}
+        )"""
+    ).format(field, field, numeric_fallback)
 
 
 def _financeiro_metrics_from_fechamento(dados: dict[str, Any]) -> dict[str, Decimal]:
@@ -1673,6 +1808,64 @@ def _normalize_dinheiro(value: dict[str, Any]) -> dict[str, int]:
         except ValueError:
             output[denom] = 0
     return output
+
+
+def _normalize_financeiro_dirty_fields(value: Any) -> set[str]:
+    supported = {
+        "tipo_bloco",
+        "mapa",
+        "mapa_ref",
+        "motorista",
+        "placa",
+        "ajudante1",
+        "ajudante2",
+        "boletos_rota",
+        "boletos_recebido_qtd",
+        "total_promax",
+        "credito_conta",
+        "dinheiro_promax",
+        "dinheiro",
+        "moedas",
+        "diarista",
+        "diarista_recibo_recebido",
+        "pernoite",
+        "hospedagem",
+        "janta",
+        "almoco",
+        "cafe",
+        "observacao",
+    }
+    return {
+        item for item in (str(raw or "").strip() for raw in (value or []))
+        if item in supported
+    }
+
+
+def _financeiro_manual_update_flags(dirty_fields: set[str]) -> dict[str, bool]:
+    return {
+        field: field in dirty_fields
+        for field in (
+            "motorista",
+            "placa",
+            "ajudante1",
+            "ajudante2",
+            "boletos_rota",
+            "boletos_recebido_qtd",
+            "total_promax",
+            "credito_conta",
+            "dinheiro_promax",
+            "dinheiro",
+            "moedas",
+            "diarista",
+            "diarista_recibo_recebido",
+            "pernoite",
+            "hospedagem",
+            "janta",
+            "almoco",
+            "cafe",
+            "observacao",
+        )
+    }
 
 
 def _normalize_filial(value: Any) -> str:

@@ -77,6 +77,17 @@ def build_admin_import_datasets(
             "summarize_method": "summarize_source",
             "import_method": "import_source",
         },
+        "dgarrafeiras": {
+            "label": "Tabela de Garrafeiras - 0109",
+            "default_path": project_root / "data" / "dGarrafeiras" / "0109.csv",
+            "allow_default_source": False,
+            "service": services.dgarrafeiras_import_service,
+            "upload_mode": "single",
+            "accept_extensions": ".csv",
+            "validate_method": "validate_source",
+            "summarize_method": "summarize_source",
+            "import_method": "import_source",
+        },
         "produto_cestas": {
             "label": "Cesta de Produtos",
             "default_path": project_root / "data" / "dProdutos" / "Cesta de Produtos.xlsx",

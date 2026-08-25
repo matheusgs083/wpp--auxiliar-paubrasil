@@ -29,6 +29,9 @@ class AdminFinanceiroMapaRequest(BaseModel):
     mapa: str = ""
     mapa_ref: str = ""
     motorista: str = ""
+    placa: str = ""
+    ajudante1: str = ""
+    ajudante2: str = ""
     boletos_rota: Any = 0
     boletos_recebido_qtd: Any = 0
     total_promax: Any = 0
@@ -48,6 +51,7 @@ class AdminFinanceiroMapaRequest(BaseModel):
     despesas: list[dict[str, Any]] = Field(default_factory=list)
     vales: list[dict[str, Any]] = Field(default_factory=list)
     observacao: str = ""
+    dirty_fields: list[str] = Field(default_factory=list)
 
 
 class AdminFinanceiroFechamentoRequest(BaseModel):
@@ -346,18 +350,18 @@ def create_admin_financeiro_router(
             clean_km_atual = clean_km_atual.replace(".", "").replace(",", "")
             if not clean_km_atual.isdigit():
                 raise HTTPException(status_code=400, detail="KM atual deve conter apenas numeros.")
-        km_resolved: dict[str, Any] = {}
-        clean_km_inicial = ""
-        clean_km_prev = ""
+        km_resolved = resolve_financeiro_fechamento_km(
+            filial=clean_filial,
+            mapa=clean_mapa,
+            caixa_date=_parse_admin_financeiro_date(payload.data),
+        )
+        clean_km_inicial = str(km_resolved.get("km_inicial") or "").strip().replace(".", "").replace(",", "")
+        clean_km_prev = str(km_resolved.get("km_prev") or "").strip().replace(".", "").replace(",", "")
         if not clean_km_atual:
-            km_resolved = resolve_financeiro_fechamento_km(
-                filial=clean_filial,
-                mapa=clean_mapa,
-                caixa_date=_parse_admin_financeiro_date(payload.data),
-            )
             clean_km_atual = str(km_resolved.get("km_atual") or "").strip().replace(".", "").replace(",", "")
-            clean_km_inicial = str(km_resolved.get("km_inicial") or "").strip().replace(".", "").replace(",", "")
-            clean_km_prev = str(km_resolved.get("km_prev") or "").strip().replace(".", "").replace(",", "")
+        km_source = km_resolved.get("source") or ""
+        if str(payload.km_atual or "").strip():
+            km_source = "manual_with_fallback" if clean_km_inicial and clean_km_prev else "manual"
         clean_target_worker_id = str(payload.target_worker_id or "").strip()
         promax_unit = PROMAX_UNIT_BY_FILIAL.get(str(int(clean_filial)) if clean_filial.isdigit() else clean_filial, clean_filial)
         job_payload = {
@@ -372,7 +376,7 @@ def create_admin_financeiro_router(
             "km_atual": clean_km_atual,
             "km_inicial": clean_km_inicial,
             "km_prev": clean_km_prev,
-            "km_source": km_resolved.get("source") or ("manual" if clean_km_atual else ""),
+            "km_source": km_source,
             "data": str(payload.data or date.today().isoformat()),
             "start_date": str(payload.data or date.today().isoformat()),
             "end_date": str(payload.data or date.today().isoformat()),
@@ -543,14 +547,44 @@ def _build_fechamento_phase_logs(logs: list[dict[str, Any]]) -> list[dict[str, A
         if not message:
             continue
         normalized = message.upper()
+        if _is_fechamento_bootstrap_log(normalized):
+            continue
         phase_key = ""
         phase_label = ""
-        if "030303" in normalized:
+        if "FECHAMENTO COMPLETO DE MAPA" in normalized and ("INICIO" in normalized or "INÍCIO" in normalized):
+            phase_key = "inicio"
+            phase_label = "Iniciando fechamento Promax"
+        elif "INICIANDO COM DRIVER" in normalized or "IEDRIVER INICIADO" in normalized:
+            phase_key = "webdriver"
+            phase_label = "Iniciando WebDriver"
+        elif (
+            "LOGIN PROMAX" in normalized
+            or "CREDENCIAIS ENVIADAS" in normalized
+            or "SELECIONANDO UNIDADE" in normalized
+            or ("SESS" in normalized and "INICIADA COM SUCESSO" in normalized)
+        ):
+            phase_key = "login"
+            phase_label = "Login Promax em andamento"
+        elif "030303" in normalized and _is_fechamento_routine_event(normalized):
             phase_key = "030303"
             phase_label = "Passando na 030303 - dados do mapa"
+        elif "RESULTADO FINAL" in normalized or "RESUMO FINAL" in normalized:
+            phase_key = "resultado"
+            phase_label = message
+        elif "SINCRONIZ" in normalized or "CAIXA FINANCEIRO" in normalized:
+            phase_key = "sync_caixa"
+            phase_label = "Atualizando o caixa financeiro"
+        elif "030302" in normalized and not _is_fechamento_routine_event(normalized):
+            continue
+        elif ("FISICO" in normalized or "FÍSICO" in normalized) and "030302" not in normalized:
+            continue
         elif "030302" in normalized or "FISICO" in normalized or "FÍSICO" in normalized:
             phase_key = "030302"
             phase_label = "Passando na 030302 - fechamento fisico"
+        elif "03030702" in normalized and not _is_fechamento_routine_event(normalized):
+            continue
+        elif "FINANCEIRO" in normalized and "03030702" not in normalized:
+            continue
         elif "03030702" in normalized or "FINANCEIRO" in normalized:
             phase_key = "03030702"
             phase_label = "Passando na 03030702 - fechamento financeiro"
@@ -576,3 +610,36 @@ def _build_fechamento_phase_logs(logs: list[dict[str, Any]]) -> list[dict[str, A
             }
         )
     return phases
+
+
+def _is_fechamento_bootstrap_log(normalized_message: str) -> bool:
+    return any(
+        token in normalized_message
+        for token in (
+            "LOGGER INICIADO",
+            "LEVEL_FILE=",
+            "LEVEL_CONSOLE=",
+        )
+    )
+
+
+def _is_fechamento_routine_event(normalized_message: str) -> bool:
+    return any(
+        token in normalized_message
+        for token in (
+            "PASSO",
+            "ACESSANDO ROTINA",
+            "CARREGANDO MAPA",
+            "SALVANDO MAPA",
+            "SALVAR",
+            "SALVO",
+            "RESULTADO DO PROCESSO",
+            "INICIANDO ROTINA",
+            "ROTINA FISICA",
+            "ROTINA FÍSICA",
+            "FECHAMENTO FINANCEIRO",
+            "APLICANDO PRODUTOS",
+            "CHECAGEM DE CODIGOS",
+            "CHECAGEM DE CÓDIGOS",
+        )
+    )

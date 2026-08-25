@@ -278,6 +278,9 @@
     .conference-kpi strong { display: block; color: var(--ink-900); font-size: 1rem; font-weight: 900; }
     .conference-table-wrap { max-height: 640px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
     .conference-count-input { width: 132px; min-width: 132px; border-color: rgba(37, 99, 235, 0.55); background: rgba(37, 99, 235, 0.08); color: var(--ink-900); font-weight: 900; }
+    .conference-count-pair { display: grid; grid-template-columns: repeat(2, minmax(74px, 1fr)); gap: 0.4rem; min-width: 180px; }
+    .conference-count-pair label { margin: 0; color: var(--ink-500); font-size: 0.66rem; font-weight: 900; text-transform: uppercase; }
+    .conference-count-pair .form-control { margin-top: 0.14rem; width: 100%; min-width: 0; border-color: rgba(37, 99, 235, 0.55); background: rgba(37, 99, 235, 0.08); color: var(--ink-900); font-weight: 900; }
     .conference-note-input { min-width: 180px; }
     .conference-blind-note { padding: 0.55rem 0.65rem; border: 1px solid rgba(37, 99, 235, 0.26); border-radius: 8px; color: var(--brand-700); background: rgba(37, 99, 235, 0.08); font-size: 0.8rem; font-weight: 800; }
     .conference-product-picker { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.2fr) auto; gap: 0.5rem; align-items: end; padding: 0.7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
@@ -285,10 +288,21 @@
     .conference-simple-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 42px; gap: 0.45rem; align-items: center; padding: 0.58rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
     .conference-simple-row .name { color: var(--ink-900); font-size: 0.92rem; font-weight: 900; }
     .conference-simple-row .meta { color: var(--ink-500); font-size: 0.74rem; font-weight: 800; }
+    .conference-garrafeira-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .conference-garrafeira-table { min-width: 1040px; margin: 0; border-collapse: collapse; }
+    .conference-garrafeira-table th, .conference-garrafeira-table td { padding: 0.42rem 0.5rem; border: 1px solid var(--line); text-align: center; vertical-align: middle; white-space: nowrap; }
+    .conference-garrafeira-table thead th { color: var(--ink-900); background: var(--surface-soft); font-weight: 900; }
+    .conference-garrafeira-table .title-row th { color: var(--ink-900); background: rgba(37, 99, 235, 0.18); font-size: 1rem; letter-spacing: 0.04em; }
+    .conference-garrafeira-table .map-col { text-align: left; font-weight: 900; }
+    .conference-garrafeira-table .diff-negative { color: #fff; background: #b42318; font-weight: 900; }
+    .conference-garrafeira-table .diff-positive { color: #064e3b; background: rgba(16, 185, 129, 0.18); font-weight: 900; }
+    .conference-garrafeira-table .value-col { min-width: 130px; font-weight: 900; }
     @media (max-width: 1180px) { .conference-grid { grid-template-columns: 1fr; } .conference-side { position: static; } }
     @media (max-width: 820px) {
       .conference-toolbar, .conference-kpis, .conference-product-picker { grid-template-columns: 1fr; }
       .conference-count-input { width: 100%; min-width: 0; min-height: 42px; font-size: 1rem; }
+      .conference-count-pair { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .conference-count-pair .form-control { min-height: 42px; font-size: 1rem; }
       .conference-simple-row { grid-template-columns: 1fr; }
       .conference-simple-row .btn { width: 100%; }
       .conference-table-wrap { max-height: none; overflow: visible; border: 0; }
@@ -2010,7 +2024,11 @@
               </select>
             </label>
           </div>
-          <div class="conference-grid">
+          <div class="finance-subtabs" id="conferenciaViews" hidden>
+            <button class="finance-subtab is-active" type="button" data-conferencia-view="mapas">Contagem por mapa</button>
+            <button class="finance-subtab" type="button" data-conferencia-view="garrafeiras">Consolidado garrafeiras</button>
+          </div>
+          <div class="conference-grid" id="conferenciaMapasView">
             <aside class="conference-side">
               <div class="d-flex align-items-center justify-content-between">
                 <h3 class="h6 fw-bold mb-0">Mapas do dia</h3>
@@ -2024,6 +2042,9 @@
               <div class="p-3 empty-state">Selecione um mapa para iniciar a conferência.</div>
             </article>
           </div>
+          <article class="panel-card shadow-none overflow-hidden" id="conferenciaGarrafeirasView" hidden>
+            <div class="p-3 empty-state">Consolidado disponivel para usuarios do financeiro.</div>
+          </article>
         </section>
       </div>
 
@@ -2594,6 +2615,7 @@
         },
         conferencia: {
           mapas: "/api/admin/conferencia/mapas",
+          garrafeiras: "/api/admin/conferencia/garrafeiras",
           produtos: "/api/admin/conferencia/produtos"
         },
         giroRecolha: {
@@ -2735,7 +2757,7 @@
       payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
       payipGenerated: { payload: null, loading: false, error: "", polling: false, lastFilial: "", generating: "" },
       financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null, fechamentoJobId: "", fechamentoLogTimer: null, fechamentoLogDone: false },
-      conferencia: { payload: null, selectedId: null, detail: null, loading: false, manualRows: [], productResults: [] },
+      conferencia: { payload: null, selectedId: null, detail: null, loading: false, manualRows: [], productResults: [], view: "mapas", garrafeiras: null },
       promax: {
         catalog: null,
         jobs: [],
@@ -2783,6 +2805,7 @@
       drevendas: { id: "dRevendas", name: "Tabela de Revendas", icon: "bi-building", area: "operational", group: "Operacional" },
       dcondicoes: { id: "dCondicoes", name: "Tabela de Condicoes", icon: "bi-receipt", area: "operational", group: "Operacional" },
       dprodutos: { id: "dProdutos", name: "Cadastro de Produtos", icon: "bi-boxes", area: "operational", group: "Operacional" },
+      dgarrafeiras: { id: "dGarrafeiras", name: "Tabela de Garrafeiras", icon: "bi-grid-3x3-gap", area: "operational", group: "Operacional" },
       dmateriais: { id: "dMateriais", name: "Tabela de Materiais", icon: "bi-box-seam", area: "operational", group: "Operacional" },
       produto_cestas: { id: "ProdutoCestas", name: "Cesta de Produtos", icon: "bi-collection", area: "operational", group: "Operacional" },
       dclientes: { id: "dClientes", name: "dClientes - 0105070402", icon: "bi-person-badge", area: "promax", group: "Promax", groupNote: "Relatorios oriundos do Promax: dClientes, inadimplencia, comodatos, documentacao pendente e boletos." },
@@ -2795,7 +2818,7 @@
     };
 
     const DATASET_FALLBACK_ORDER = [
-      "dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dmateriais", "produto_cestas",
+      "dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dgarrafeiras", "dmateriais", "produto_cestas",
       "dclientes", "inadimplencia", "comodatos", "documentacao_pendente",
       "prazo_limite", "giro", "critica_rn"
     ];
@@ -2824,7 +2847,7 @@
       if (name.startsWith("relatorio_031120_op_")) return "promax";
       if (name === "relatorio_03114902_geo") return "promax";
       if (["prazo_limite", "giro"].includes(name)) return "powerbi";
-      if (["dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dmateriais", "produto_cestas"].includes(name)) return "operational";
+      if (["dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dgarrafeiras", "dmateriais", "produto_cestas"].includes(name)) return "operational";
       return "promax";
     }
 
@@ -5852,6 +5875,7 @@
     const CONFERENCIA_MANUAL_GROUPS = ["300", "600", "1L", "51", "FREEZER", "CADEIRA", "MESA", "BARRIL", "BARRACA", "OUTRAS GARRAFEIRAS", "OUTROS MATERIAIS"];
     const CONFERENCIA_MATERIAL_QUICK_GROUPS = ["300", "600", "1L", "51", "FREEZER", "CADEIRA", "MESA", "BARRIL", "BARRACA"];
     const CONFERENCIA_INTEGER_GROUPS = ["300", "600", "1L", "51", "FREEZER", "CADEIRA", "MESA", "BARRIL", "BARRACA", "OUTRAS GARRAFEIRAS", "OUTROS MATERIAIS", "PRODUTO"];
+    const CONFERENCIA_GARRAFEIRA_GROUPS = ["300", "600", "1L", "51"];
     const scheduleConferenciaSearch = debounce(() => {
       if (state.panel && state.panel.canConferencia) syncConferencia({ silent: true });
     }, 240);
@@ -5859,6 +5883,43 @@
       if (state.conferencia && state.conferencia.selectedId) loadConferenciaMapa(state.conferencia.selectedId);
     }, 220);
     const scheduleConferenciaProductSearch = debounce(() => searchConferenciaProducts(), 260);
+
+    function isConferenciaProduto(item) {
+      return String(item && item.grupo_contagem || "").toUpperCase() === "PRODUTO";
+    }
+
+    function isConferenciaGarrafeira(item) {
+      return CONFERENCIA_GARRAFEIRA_GROUPS.includes(String(item && item.grupo_contagem || "").toUpperCase());
+    }
+
+    function conferenciaNumberAttrs() {
+      return 'type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*"';
+    }
+
+    function renderConferenciaCountFields(item) {
+      if (isConferenciaProduto(item)) {
+        const factor = Number(item.unidades_por_caixa || 0);
+        const cxLabel = factor > 1 ? `Cx (${factor} un)` : "Cx";
+        return `
+          <div class="conference-count-pair">
+            <label>${escapeHtml(cxLabel)}<input class="form-control form-control-sm" ${conferenciaNumberAttrs()} data-conferencia-field="contagem_caixas" value="${escapeHtml(item.contagem_caixas || "")}" placeholder="0"></label>
+            <label>Un<input class="form-control form-control-sm" ${conferenciaNumberAttrs()} data-conferencia-field="contagem_unidades" value="${escapeHtml(item.contagem_unidades || "")}" placeholder="0"></label>
+          </div>
+          <input type="hidden" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}">
+        `;
+      }
+      if (isConferenciaGarrafeira(item)) {
+        return `
+          <div class="conference-count-pair">
+            <label>Cheia<input class="form-control form-control-sm" ${conferenciaNumberAttrs()} data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="0"></label>
+            <label>Vazia<input class="form-control form-control-sm" ${conferenciaNumberAttrs()} data-conferencia-field="contagem_vazia" value="${escapeHtml(item.contagem_vazia || "")}" placeholder="0"></label>
+          </div>
+        `;
+      }
+      const integerCount = CONFERENCIA_INTEGER_GROUPS.includes(String(item && item.grupo_contagem || "").toUpperCase());
+      const countInputAttrs = integerCount ? 'type="number" step="1" inputmode="numeric" pattern="[0-9]*"' : 'type="number" step="0.001" inputmode="decimal"';
+      return `<input class="form-control form-control-sm conference-count-input" ${countInputAttrs} min="0" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Digite">`;
+    }
 
     function conferenciaElements() {
       return {
@@ -5871,8 +5932,15 @@
         save: document.getElementById("conferenciaSaveBtn"),
         count: document.getElementById("conferenciaMapCount"),
         list: document.getElementById("conferenciaMapList"),
-        editor: document.getElementById("conferenciaEditor")
+        editor: document.getElementById("conferenciaEditor"),
+        views: document.getElementById("conferenciaViews"),
+        mapasView: document.getElementById("conferenciaMapasView"),
+        garrafeirasView: document.getElementById("conferenciaGarrafeirasView")
       };
+    }
+
+    function canViewConferenciaGarrafeiras() {
+      return Boolean(state.panel && (state.panel.isAdmin || state.panel.canFinanceiro));
     }
 
     function setupConferenciaControls() {
@@ -5893,7 +5961,10 @@
         }
       }
       if (els.refresh && !els.refresh.dataset.bound) {
-        els.refresh.addEventListener("click", () => syncConferencia({ silent: false, forceDetail: true }));
+        els.refresh.addEventListener("click", () => {
+          if (state.conferencia.view === "garrafeiras") syncConferenciaGarrafeiras({ silent: false });
+          else syncConferencia({ silent: false, forceDetail: true });
+        });
         els.refresh.dataset.bound = "1";
       }
       if (els.save && !els.save.dataset.bound) {
@@ -5901,11 +5972,17 @@
         els.save.dataset.bound = "1";
       }
       if (els.data && !els.data.dataset.bound) {
-        els.data.addEventListener("change", () => syncConferencia({ silent: true }));
+        els.data.addEventListener("change", () => {
+          if (state.conferencia.view === "garrafeiras") syncConferenciaGarrafeiras({ silent: true });
+          else syncConferencia({ silent: true });
+        });
         els.data.dataset.bound = "1";
       }
       if (els.filial && !els.filial.dataset.bound) {
-        els.filial.addEventListener("change", () => syncConferencia({ silent: true }));
+        els.filial.addEventListener("change", () => {
+          if (state.conferencia.view === "garrafeiras") syncConferenciaGarrafeiras({ silent: true });
+          else syncConferencia({ silent: true });
+        });
         els.filial.dataset.bound = "1";
       }
       if (els.search && !els.search.dataset.bound) {
@@ -5915,6 +5992,40 @@
       if (els.grupo && !els.grupo.dataset.bound) {
         els.grupo.addEventListener("change", scheduleConferenciaItemSearch);
         els.grupo.dataset.bound = "1";
+      }
+      if (els.views) {
+        const allowed = canViewConferenciaGarrafeiras();
+        els.views.hidden = !allowed;
+        if (!allowed && state.conferencia.view === "garrafeiras") state.conferencia.view = "mapas";
+        els.views.querySelectorAll("[data-conferencia-view]").forEach(button => {
+          if (button.dataset.bound) return;
+          button.addEventListener("click", () => {
+            const next = String(button.dataset.conferenciaView || "mapas");
+            if (next === "garrafeiras" && !canViewConferenciaGarrafeiras()) return;
+            state.conferencia.view = next;
+            renderConferenciaViewState();
+            if (next === "garrafeiras") syncConferenciaGarrafeiras({ silent: true });
+          });
+          button.dataset.bound = "1";
+        });
+      }
+      renderConferenciaViewState();
+    }
+
+    function renderConferenciaViewState() {
+      const els = conferenciaElements();
+      const view = state.conferencia.view || "mapas";
+      if (els.mapasView) els.mapasView.hidden = view !== "mapas";
+      if (els.garrafeirasView) els.garrafeirasView.hidden = view !== "garrafeiras";
+      if (els.save) els.save.hidden = view === "garrafeiras";
+      const grupoLabel = els.grupo ? els.grupo.closest("label") : null;
+      const searchLabel = els.search ? els.search.closest("label") : null;
+      if (grupoLabel) grupoLabel.hidden = view === "garrafeiras";
+      if (searchLabel) searchLabel.hidden = view === "garrafeiras";
+      if (els.views) {
+        els.views.querySelectorAll("[data-conferencia-view]").forEach(button => {
+          button.classList.toggle("is-active", String(button.dataset.conferenciaView || "") === view);
+        });
       }
     }
 
@@ -5933,6 +6044,126 @@
       if (els.filial && els.filial.value) params.set("filial", els.filial.value);
       if (includeSearch && els.search && els.search.value.trim()) params.set("search", els.search.value.trim());
       return params;
+    }
+
+    function conferenciaGarrafeiraQueryParams() {
+      const els = conferenciaElements();
+      setupConferenciaControls();
+      const params = new URLSearchParams();
+      params.set("data", els.data && els.data.value ? els.data.value : formatDateInputValue(new Date()));
+      if (els.filial && els.filial.value) params.set("filial", els.filial.value);
+      return params;
+    }
+
+    async function syncConferenciaGarrafeiras({ silent = true } = {}) {
+      setupConferenciaControls();
+      const els = conferenciaElements();
+      if (!canViewConferenciaGarrafeiras()) {
+        if (els.garrafeirasView) els.garrafeirasView.innerHTML = '<div class="p-3 empty-state">Consolidado liberado apenas para financeiro.</div>';
+        return false;
+      }
+      try {
+        if (els.status) {
+          els.status.textContent = "Carregando consolidado";
+          els.status.className = "pill warn";
+        }
+        const payload = await req(`${CONFIG.endpoints.conferencia.garrafeiras}?${conferenciaGarrafeiraQueryParams().toString()}`, { timeoutMs: 30000 });
+        state.conferencia.garrafeiras = payload || {};
+        renderConferenciaGarrafeiras();
+        const total = Array.isArray(payload && payload.rows) ? payload.rows.length : 0;
+        if (els.status) {
+          els.status.textContent = `${total} mapa(s)`;
+          els.status.className = "pill ok";
+        }
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao carregar consolidado de garrafeiras: ${err.message}`, "err");
+        if (els.status) {
+          els.status.textContent = "Falha no consolidado";
+          els.status.className = "pill warn";
+        }
+        if (els.garrafeirasView) els.garrafeirasView.innerHTML = `<div class="p-3 empty-state text-danger">${escapeHtml(err.message)}</div>`;
+        return false;
+      }
+    }
+
+    function renderGarrafeiraDiff(value) {
+      const number = Number(value || 0);
+      const className = number < 0 ? "diff-negative" : number > 0 ? "diff-positive" : "";
+      return `<td class="${className}">${escapeHtml(formatQty(value || 0))}</td>`;
+    }
+
+    function renderConferenciaGarrafeiras() {
+      const els = conferenciaElements();
+      if (!els.garrafeirasView) return;
+      const payload = state.conferencia.garrafeiras || {};
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      const groups = Array.isArray(payload.groups) && payload.groups.length ? payload.groups : ["300", "600", "1L", "51"];
+      if (!rows.length) {
+        els.garrafeirasView.innerHTML = '<div class="p-3 empty-state">Nenhuma garrafeira encontrada para os filtros.</div>';
+        return;
+      }
+      const groupHeaders = groups.map(group => `<th colspan="3">${escapeHtml(group)}</th>`).join("");
+      const subHeaders = groups.map(() => "<th>total</th><th>cont</th><th>dif</th>").join("");
+      const bodyRows = rows.map(row => {
+        const cells = groups.map(group => {
+          const values = row.groups && row.groups[group] ? row.groups[group] : {};
+          return `
+            <td>${escapeHtml(formatQty(values.total || 0))}</td>
+            <td>${escapeHtml(formatQty(values.cont || 0))}</td>
+            ${renderGarrafeiraDiff(values.dif || 0)}
+          `;
+        }).join("");
+        return `
+          <tr>
+            <td class="map-col">${escapeHtml(row.placa || "-")}</td>
+            <td class="map-col">${escapeHtml(row.mapa || "-")}</td>
+            ${cells}
+            <td class="value-col">${escapeHtml(formatMoneyText(row.valor_total || 0))}</td>
+          </tr>
+        `;
+      }).join("");
+      const totalCells = groups.map(group => {
+        const values = payload.totals && payload.totals[group] ? payload.totals[group] : {};
+        return `
+          <td>${escapeHtml(formatQty(values.total || 0))}</td>
+          <td>${escapeHtml(formatQty(values.cont || 0))}</td>
+          ${renderGarrafeiraDiff(values.dif || 0)}
+        `;
+      }).join("");
+      els.garrafeirasView.innerHTML = `
+        <div class="p-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h3 class="h6 fw-bold mb-1">Consolidado de garrafeiras</h3>
+              <div class="form-text">Financeiro: totais esperados, contagem real e diferenÃ§a por mapa.</div>
+            </div>
+            <span class="pill">Valor faltante: ${escapeHtml(formatMoneyText(payload.valor_total || 0))}</span>
+          </div>
+          <div class="conference-garrafeira-wrap">
+            <table class="conference-garrafeira-table">
+              <thead>
+                <tr class="title-row"><th colspan="${escapeHtml(String(3 + groups.length * 3))}">VASILHAMES</th></tr>
+                <tr>
+                  <th rowspan="2">PLACA</th>
+                  <th rowspan="2">MAPA</th>
+                  ${groupHeaders}
+                  <th rowspan="2">VALOR TOTAL</th>
+                </tr>
+                <tr>${subHeaders}</tr>
+              </thead>
+              <tbody>
+                ${bodyRows}
+                <tr>
+                  <td class="map-col" colspan="2">TOTAL</td>
+                  ${totalCells}
+                  <td class="value-col">${escapeHtml(formatMoneyText(payload.valor_total || 0))}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
     }
 
     async function syncConferencia({ silent = true, forceDetail = false } = {}) {
@@ -6025,7 +6256,7 @@
       }
     }
 
-    function addConferenciaManualRow(group = "OUTROS MATERIAIS", description = "", quantity = "") {
+    function addConferenciaManualRow(group = "OUTROS MATERIAIS", description = "", quantity = "", unidade = "") {
       syncConferenciaManualRowsFromDom();
       if (!state.conferencia.manualRows) state.conferencia.manualRows = [];
       const cleanGroup = String(group || "OUTROS MATERIAIS").toUpperCase();
@@ -6041,7 +6272,11 @@
         cod_item: "",
         descricao: description || cleanGroup,
         grupo_contagem: cleanGroup,
+        unidade: unidade || "",
         contagem_real: quantity,
+        contagem_vazia: "",
+        contagem_caixas: "",
+        contagem_unidades: "",
         observacao: ""
       });
       renderConferenciaEditor();
@@ -6053,7 +6288,7 @@
       const row = Array.from(document.querySelectorAll("[data-conferencia-row-group]"))
         .find(element => String(element.dataset.conferenciaRowGroup || "").toUpperCase() === cleanGroup);
       if (!row) return false;
-      const input = row.querySelector("[data-conferencia-field='contagem_real']");
+      const input = row.querySelector("[data-conferencia-field='contagem_caixas'], [data-conferencia-field='contagem_real']:not([type='hidden']), [data-conferencia-field='contagem_unidades']");
       if (input) {
         if (quantity !== "") input.value = quantity;
         input.focus();
@@ -6068,7 +6303,7 @@
       const row = Array.from(document.querySelectorAll("[data-conferencia-row-code]"))
         .find(element => String(element.dataset.conferenciaRowCode || "").replace(/\D/g, "") === cleanCode);
       if (!row) return false;
-      const input = row.querySelector("[data-conferencia-field='contagem_real']");
+      const input = row.querySelector("[data-conferencia-field='contagem_caixas'], [data-conferencia-field='contagem_unidades'], [data-conferencia-field='contagem_real']:not([type='hidden'])");
       if (input) {
         if (quantity !== "") input.value = quantity;
         input.focus();
@@ -6093,13 +6328,21 @@
         const desc = row.querySelector("[data-conferencia-field='descricao']");
         const group = row.querySelector("[data-conferencia-field='grupo_contagem']");
         const count = row.querySelector("[data-conferencia-field='contagem_real']");
+        const empty = row.querySelector("[data-conferencia-field='contagem_vazia']");
+        const boxes = row.querySelector("[data-conferencia-field='contagem_caixas']");
+        const units = row.querySelector("[data-conferencia-field='contagem_unidades']");
+        const unidade = row.querySelector("[data-conferencia-field='unidade']");
         const obs = row.querySelector("[data-conferencia-field='observacao']");
         return {
           key: String(row.dataset.conferenciaManualItem || ""),
           cod_item: code ? code.value : "",
           descricao: desc ? desc.value : "",
           grupo_contagem: group ? group.value : "OUTROS MATERIAIS",
+          unidade: unidade ? unidade.value : "",
           contagem_real: count ? count.value : "",
+          contagem_vazia: empty ? empty.value : "",
+          contagem_caixas: boxes ? boxes.value : "",
+          contagem_unidades: units ? units.value : "",
           observacao: obs ? obs.value : ""
         };
       });
@@ -6153,7 +6396,11 @@
         cod_item: product.codigo || "",
         descricao: product.descricao || product.descricao_completa || product.codigo || "",
         grupo_contagem: "PRODUTO",
+        unidade: product.embalagem || "",
         contagem_real: "",
+        contagem_vazia: "",
+        contagem_caixas: "",
+        contagem_unidades: "",
         observacao: ""
       });
       renderConferenciaEditor();
@@ -6207,8 +6454,6 @@
       const rows = items.length ? items.map(item => {
         const diff = Number(item.diferenca || 0);
         const diffClass = diff === 0 ? "text-success" : "text-danger";
-        const integerCount = CONFERENCIA_INTEGER_GROUPS.includes(String(item.grupo_contagem || "").toUpperCase());
-        const countInputAttrs = integerCount ? 'step="1" inputmode="numeric" pattern="[0-9]*"' : 'step="0.001" inputmode="decimal"';
         return `
           <tr data-conferencia-item="${escapeHtml(item.id)}">
             <td data-label="Cod." class="mono fw-bold">${escapeHtml(item.cod_item || "-")}</td>
@@ -6219,7 +6464,7 @@
             <td data-label="Grupo"><span class="pill">${escapeHtml(item.grupo_contagem || "-")}</span></td>
             <td data-label="Un.">${escapeHtml(item.unidade || "-")}</td>
             ${reveal ? `<td data-label="Total" class="fw-bold">${escapeHtml(formatQty(item.total_sistema || 0))}</td><td data-label="Dif." class="fw-bold ${diffClass}">${escapeHtml(formatQty(item.diferenca || 0))}</td><td data-label="Valor">${escapeHtml(formatMoneyText(item.valor_unitario || 0))}</td>` : ""}
-            <td data-label="Contagem"><input class="form-control form-control-sm conference-count-input" type="number" ${countInputAttrs} min="0" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Digite"></td>
+            <td data-label="Contagem">${renderConferenciaCountFields(item)}</td>
             <td data-label="Obs."><input class="form-control form-control-sm conference-note-input" type="text" data-conferencia-field="observacao" value="${escapeHtml(item.observacao || "")}" placeholder="Observacao"></td>
           </tr>
         `;
@@ -6243,9 +6488,9 @@
               <div class="text-secondary small mt-1">${escapeHtml(itemHint)}</div>
             </td>
             <td data-label="Grupo">${groupCell}</td>
-            <td data-label="Un.">-</td>
+            <td data-label="Un.">${isProduct ? `<span>${escapeHtml(item.unidade || "-")}</span><input type="hidden" data-conferencia-field="unidade" value="${escapeHtml(item.unidade || "")}">` : "-"}</td>
             ${reveal ? '<td data-label="Total" class="text-secondary">0</td><td data-label="Dif." class="text-secondary">-</td><td data-label="Valor" class="text-secondary">-</td>' : ""}
-            <td data-label="Contagem"><input class="form-control form-control-sm conference-count-input" type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Digite"></td>
+            <td data-label="Contagem">${renderConferenciaCountFields(item)}</td>
             <td data-label="Obs.">
               <div class="d-flex gap-1">
                 <input class="form-control form-control-sm conference-note-input" type="text" data-conferencia-field="observacao" value="${escapeHtml(item.observacao || "")}" placeholder="Observacao">
@@ -6259,8 +6504,6 @@
         ? `<tr><td colspan="${reveal ? 9 : 6}" class="text-center py-4 text-secondary">Este mapa esta aberto pela 03114902 e ainda nao recebeu os itens da 030302. Use o botao Adicionar item manual para fazer a contagem mesmo assim.</td></tr>`
         : "";
       const blindPersistedCards = items.map(item => {
-        const integerCount = CONFERENCIA_INTEGER_GROUPS.includes(String(item.grupo_contagem || "").toUpperCase());
-        const countInputAttrs = integerCount ? 'step="1" inputmode="numeric" pattern="[0-9]*"' : 'step="0.001" inputmode="decimal"';
         return `
           <div class="conference-simple-row" data-conferencia-item="${escapeHtml(item.id)}" data-conferencia-row-group="${escapeHtml(String(item.grupo_contagem || "").toUpperCase())}" data-conferencia-row-code="${escapeHtml(item.cod_item || "")}">
             <div>
@@ -6268,7 +6511,7 @@
               <div class="meta">${escapeHtml(item.grupo_contagem || "-")}${item.cod_item ? ` | Cod. ${escapeHtml(item.cod_item)}` : ""}</div>
               <input type="hidden" data-conferencia-field="observacao" value="${escapeHtml(item.observacao || "")}">
             </div>
-            <input class="form-control form-control-sm conference-count-input" type="number" ${countInputAttrs} min="0" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Qtd.">
+            ${renderConferenciaCountFields(item)}
             <span></span>
           </div>
         `;
@@ -6280,9 +6523,10 @@
             <div class="meta">${escapeHtml(item.grupo_contagem || "-")}${item.observacao ? ` | ${escapeHtml(item.observacao)}` : ""}</div>
             <input type="hidden" data-conferencia-field="cod_item" value="${escapeHtml(item.cod_item || "")}">
             <input type="hidden" data-conferencia-field="grupo_contagem" value="${escapeHtml(item.grupo_contagem || "OUTROS MATERIAIS")}">
+            <input type="hidden" data-conferencia-field="unidade" value="${escapeHtml(item.unidade || "")}">
             <input type="hidden" data-conferencia-field="observacao" value="${escapeHtml(item.observacao || "")}">
           </div>
-          <input class="form-control form-control-sm conference-count-input" type="number" step="1" min="0" inputmode="numeric" pattern="[0-9]*" data-conferencia-field="contagem_real" value="${escapeHtml(item.contagem_real || "")}" placeholder="Qtd.">
+          ${renderConferenciaCountFields(item)}
           <button class="btn btn-outline-danger btn-sm" type="button" data-conferencia-remove-manual="${escapeHtml(item.key)}"><i class="bi bi-x-lg"></i></button>
         </div>
       `).join("");
@@ -6370,10 +6614,16 @@
       if (!els.editor) return [];
       const persisted = Array.from(els.editor.querySelectorAll("[data-conferencia-item]")).map(row => {
         const count = row.querySelector("[data-conferencia-field='contagem_real']");
+        const empty = row.querySelector("[data-conferencia-field='contagem_vazia']");
+        const boxes = row.querySelector("[data-conferencia-field='contagem_caixas']");
+        const units = row.querySelector("[data-conferencia-field='contagem_unidades']");
         const obs = row.querySelector("[data-conferencia-field='observacao']");
         return {
           item_id: Number(row.dataset.conferenciaItem || 0),
           contagem_real: count ? count.value : "",
+          contagem_vazia: empty ? empty.value : "",
+          contagem_caixas: boxes ? boxes.value : "",
+          contagem_unidades: units ? units.value : "",
           observacao: obs ? obs.value : ""
         };
       }).filter(item => item.item_id > 0);
@@ -6382,13 +6632,21 @@
         const desc = row.querySelector("[data-conferencia-field='descricao']");
         const group = row.querySelector("[data-conferencia-field='grupo_contagem']");
         const count = row.querySelector("[data-conferencia-field='contagem_real']");
+        const empty = row.querySelector("[data-conferencia-field='contagem_vazia']");
+        const boxes = row.querySelector("[data-conferencia-field='contagem_caixas']");
+        const units = row.querySelector("[data-conferencia-field='contagem_unidades']");
+        const unidade = row.querySelector("[data-conferencia-field='unidade']");
         const obs = row.querySelector("[data-conferencia-field='observacao']");
         return {
           item_id: 0,
           cod_item: code ? code.value : "",
           descricao: desc ? desc.value : "",
           grupo_contagem: group ? group.value : "",
+          unidade: unidade ? unidade.value : "",
           contagem_real: count ? count.value : "",
+          contagem_vazia: empty ? empty.value : "",
+          contagem_caixas: boxes ? boxes.value : "",
+          contagem_unidades: units ? units.value : "",
           observacao: obs ? obs.value : ""
         };
       }).filter(item => String(item.descricao || item.cod_item || "").trim());
@@ -6431,6 +6689,12 @@
     }
 
     const FINANCEIRO_DENOMS = ["200", "100", "50", "20", "10", "5", "2"];
+    const FINANCEIRO_DIRTY_SUPPORTED_FIELDS = [
+      "tipo_bloco", "mapa", "mapa_ref", "motorista", "placa", "ajudante1", "ajudante2",
+      "boletos_rota", "boletos_recebido_qtd", "total_promax", "credito_conta", "dinheiro_promax",
+      "dinheiro", "moedas", "diarista", "diarista_recibo_recebido", "pernoite", "hospedagem",
+      "janta", "almoco", "cafe", "observacao"
+    ];
 
     function financeiroElements() {
       return {
@@ -6470,7 +6734,7 @@
     function financeiroBlankMap(overrides = {}) {
       const els = financeiroElements();
       const data = els.data && els.data.value ? els.data.value : formatDateInputValue(new Date());
-      const filial = els.filial && els.filial.value ? els.filial.value : "";
+      const filial = financeiroSelectedFilial();
       const map = {
         id: "",
         data,
@@ -6500,9 +6764,43 @@
         transferencias: [],
         despesas: [],
         vales: [],
-        observacao: ""
+        observacao: "",
+        dirty_fields: []
       };
       return Object.assign(map, overrides || {});
+    }
+
+    function financeiroNormalizeDirtyFields(fields) {
+      const supported = new Set(FINANCEIRO_DIRTY_SUPPORTED_FIELDS);
+      return Array.from(new Set((Array.isArray(fields) ? fields : [])
+        .map(item => String(item || "").trim())
+        .filter(item => supported.has(item))));
+    }
+
+    function financeiroMarkDraftDirty(field) {
+      const cleanField = String(field || "").trim();
+      if (!cleanField || !FINANCEIRO_DIRTY_SUPPORTED_FIELDS.includes(cleanField)) return;
+      const draft = state.financeiro.draft || financeiroBlankMap();
+      const dirty = new Set(financeiroNormalizeDirtyFields(draft.dirty_fields));
+      dirty.add(cleanField);
+      draft.dirty_fields = Array.from(dirty);
+      state.financeiro.draft = draft;
+    }
+
+    function financeiroNormalizeHospedagemDraft(map, { markDirty = false } = {}) {
+      if (!map || typeof map !== "object") return map;
+      const pernoite = financeiroNumber(map.pernoite);
+      const hospedagem = financeiroNumber(map.hospedagem);
+      if (pernoite <= 0) return map;
+      map.hospedagem = hospedagem + pernoite;
+      map.pernoite = 0;
+      if (markDirty) {
+        const dirty = new Set(financeiroNormalizeDirtyFields(map.dirty_fields));
+        dirty.add("hospedagem");
+        dirty.add("pernoite");
+        map.dirty_fields = Array.from(dirty);
+      }
+      return map;
     }
 
     function financeiroNumber(value) {
@@ -6626,7 +6924,6 @@
                   <tr><td>Despesas</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.despesas_total || 0))}</td></tr>
                   <tr><td>Diaristas</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.diaristas_total || 0))}</td></tr>
                   <tr><td>Alimentacao</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_total || 0))}</td></tr>
-                  <tr><td class="finance-sheet-muted ps-3">Pernoite</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_pernoite_total || 0))}</td></tr>
                   <tr><td class="finance-sheet-muted ps-3">Hospedagem</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_hospedagem_total || 0))}</td></tr>
                   <tr><td class="finance-sheet-muted ps-3">Janta</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_janta_total || 0))}</td></tr>
                   <tr><td class="finance-sheet-muted ps-3">Almoco</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.alimentacao_almoco_total || 0))}</td></tr>
@@ -6730,9 +7027,10 @@
       const root = document.getElementById("financeiroEditor");
       if (!root) return state.financeiro.draft || financeiroBlankMap();
       const map = state.financeiro.draft || financeiroBlankMap();
+      financeiroNormalizeHospedagemDraft(map);
       const get = selector => root.querySelector(selector);
       const dataEl = document.getElementById("financeiroData");
-      const filialEl = document.getElementById("financeiroFilial");
+      const filialEl = document.getElementById("financeiroFilialMapas") || document.getElementById("financeiroFilial");
       map.data = dataEl && dataEl.value ? dataEl.value : map.data;
       map.filial = filialEl && filialEl.value ? filialEl.value : map.filial;
       ["tipo_bloco", "mapa", "mapa_ref", "motorista", "placa", "ajudante1", "ajudante2", "boletos_rota", "boletos_recebido_qtd", "total_promax", "credito_conta", "dinheiro_promax", "moedas", "diarista", "diarista_recibo_recebido", "pernoite", "hospedagem", "janta", "almoco", "cafe", "observacao"].forEach(key => {
@@ -6747,6 +7045,7 @@
       map.despesas = financeiroCollectRows(root, "despesas");
       map.vales = financeiroCollectRows(root, "vales");
       map.diaristas = financeiroCollectRows(root, "diaristas");
+      map.dirty_fields = financeiroNormalizeDirtyFields(map.dirty_fields);
       return map;
     }
 
@@ -6821,7 +7120,7 @@
 
     function financeiroSelectedFilial() {
       const els = financeiroElements();
-      return String((els.filial && els.filial.value) || (els.filialMapas && els.filialMapas.value) || "").trim();
+      return String((els.filialMapas && els.filialMapas.value) || (els.filial && els.filial.value) || "").trim();
     }
 
     function financeiroFilialLabel(filial) {
@@ -6996,7 +7295,9 @@
           const id = button.dataset.financeiroSelect;
           const selected = (state.financeiro.payload.maps || []).find(item => String(item.id) === String(id));
           state.financeiro.selectedId = id;
-          state.financeiro.draft = selected ? JSON.parse(JSON.stringify(selected)) : financeiroBlankMap();
+          state.financeiro.draft = selected
+            ? financeiroNormalizeHospedagemDraft(Object.assign(JSON.parse(JSON.stringify(selected)), { dirty_fields: [] }), { markDirty: true })
+            : financeiroBlankMap();
           const fechamentoMapa = document.getElementById("financeiroFechamentoMapa");
           if (fechamentoMapa && selected && selected.tipo_bloco === "mapa") fechamentoMapa.value = selected.mapa || selected.mapa_key || "";
           financeiroRender();
@@ -7081,12 +7382,10 @@
               </div>
               <div class="finance-editor-grid">
                 ${financeiroInput("moedas", "Moedas", map.moedas, "number")}
-                ${financeiroInput("pernoite", "Pernoite", map.pernoite, "number")}
                 ${financeiroInput("hospedagem", "Hospedagem", map.hospedagem, "number")}
                 ${financeiroInput("janta", "Janta", map.janta, "number")}
                 ${financeiroInput("almoco", "Almoco", map.almoco, "number")}
                 ${financeiroInput("cafe", "Cafe", map.cafe, "number")}
-                <div class="finance-summary-item"><span>Total dinheiro</span><strong>${formatMoneyText(totals.dinheiroPromax || totals.dinheiroTotal)}</strong></div>
                 <div class="finance-summary-item"><span>Dinheiro contado</span><strong>${formatMoneyText(totals.dinheiroTotal)}</strong></div>
               </div>
             </section>
@@ -7103,8 +7402,16 @@
           </div>
         </div>
       `;
-      el.querySelectorAll("input, textarea").forEach(input => input.addEventListener("change", () => {
+      el.querySelectorAll("input, textarea").forEach(input => input.addEventListener("change", event => {
         state.financeiro.draft = financeiroCollectDraft();
+        const target = event.currentTarget;
+        if (target && target.dataset) {
+          if (target.dataset.financeiroField) {
+            financeiroMarkDraftDirty(target.dataset.financeiroField);
+          } else if (target.dataset.financeiroDenom) {
+            financeiroMarkDraftDirty("dinheiro");
+          }
+        }
         financeiroRenderEditor(state.financeiro.draft);
       }));
       el.querySelectorAll("[data-financeiro-add]").forEach(button => button.addEventListener("click", () => financeiroAddRow(button.dataset.financeiroAdd)));
@@ -7403,7 +7710,7 @@
     }
 
     function financeiroRequireFilial() {
-      const filial = document.getElementById("financeiroFilial");
+      const filial = document.getElementById("financeiroFilialMapas") || document.getElementById("financeiroFilial");
       if (filial && String(filial.value || "").trim()) return true;
       addLog("Escolha uma revenda antes de lancar o caixa.", "warn");
       if (filial) filial.focus();
@@ -7525,12 +7832,13 @@
       }
     }
 
-    async function syncFinanceiro({ silent = true } = {}) {
+    async function syncFinanceiro({ silent = true, refreshDraft = false } = {}) {
       const els = financeiroElements();
       if (!els.editor || !(state.panel && state.panel.canFinanceiro)) return;
       if (!els.data.value) els.data.value = formatDateInputValue(new Date());
       const params = new URLSearchParams({ data: els.data.value });
       if (els.filial && els.filial.value) params.set("filial", els.filial.value);
+      if (refreshDraft) state.financeiro.draft = null;
       state.financeiro.loading = true;
       financeiroRender();
       try {
@@ -7547,6 +7855,12 @@
         if (payload.maps && payload.maps.length && !payload.maps.some(item => String(item.id) === String(state.financeiro.selectedId))) {
           state.financeiro.selectedId = payload.maps[0].id;
           state.financeiro.draft = null;
+        }
+        if (refreshDraft && payload.maps && payload.maps.length) {
+          const refreshed = payload.maps.find(item => String(item.id) === String(state.financeiro.selectedId));
+          state.financeiro.draft = refreshed
+            ? financeiroNormalizeHospedagemDraft(Object.assign(JSON.parse(JSON.stringify(refreshed)), { dirty_fields: [] }))
+            : null;
         }
         if (!payload.maps || !payload.maps.length) {
           state.financeiro.selectedId = null;
@@ -7620,6 +7934,8 @@
     }
 
     async function financeiroSaveMap() {
+      const els = financeiroElements();
+      financeiroSyncFilialSelects(els.filialMapas || els.filial);
       state.financeiro.draft = financeiroCollectDraft();
       if (!financeiroRequireFilial()) return;
       if (!String(state.financeiro.draft.mapa || "").trim()) {
@@ -7646,7 +7962,7 @@
         state.financeiro.selectedId = result.map && result.map.id;
         state.financeiro.draft = null;
         addLog("Mapa financeiro salvo.", "ok");
-        await syncFinanceiro({ silent: true });
+        await syncFinanceiro({ silent: true, refreshDraft: true });
       } catch (err) {
         addLog(`Falha ao salvar mapa financeiro: ${err.message}`, "err");
       }

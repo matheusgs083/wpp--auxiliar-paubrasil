@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from services.conferencia_service import _extract_030302_items
+from services.conferencia_service import _aggregate_conferencia_items, _enrich_item, _extract_030302_items
 
 
 def test_extract_030302_items_from_resultado_fisico_metadata_and_groups_by_code():
@@ -76,3 +76,88 @@ def test_extract_030302_items_from_nested_result_metadata_linhas_disponiveis():
     assert rows["188006"].total_sistema == Decimal("12")
     assert rows["198214"].total_sistema == Decimal("5382")
     assert rows["37108"].total_sistema == Decimal("4")
+
+
+def test_extract_030302_items_prefers_single_captura_diferencas_list():
+    item = {"codigo": "863059", "texto": " pc GFE 300ML,PRET ", "faltaUn": "102", "faltaAv": "0"}
+    payload = {
+        "metadata": {
+            "resultado_fisico": {
+                "metadata": {
+                    "captura_diferencas": {
+                        "itens": [item],
+                        "captura_inicial": {"itens": [item]},
+                        "captura_material": {"itens": [item]},
+                    },
+                    "diferencas_corrigidas": {
+                        "material": {"aplicados": [item]},
+                        "aplicados": [item],
+                    },
+                }
+            }
+        }
+    }
+
+    rows = {row.cod_item: row for row in _extract_030302_items(payload)}
+
+    assert rows["863059"].total_sistema == Decimal("102")
+
+
+def test_extract_030302_items_uses_av_when_un_is_zero():
+    payload = {
+        "resultado_fisico": {
+            "metadata": {
+                "captura_diferencas": {
+                    "itens": [
+                        {"codigo": "2353", "texto": " cx GCAD PT2 CX6 ", "faltaUn": 0, "faltaAv": 2},
+                    ]
+                }
+            }
+        }
+    }
+
+    rows = {row.cod_item: row for row in _extract_030302_items(payload)}
+
+    assert rows["2353"].total_sistema == Decimal("2")
+
+
+def test_aggregate_030302_items_consolidates_only_expected_garrafeira_groups():
+    payload = {
+        "resultado_fisico": {
+            "linhasDisponiveis": [
+                {"codigo": "786238", "texto": " un GFA VERDE 600ML ", "vazUn": "288"},
+                {"codigo": "188006", "texto": " un GFA VIDRO 1L ", "vazUn": "36"},
+                {"codigo": "899599", "texto": " pc GFE 1/1 PRETA ", "vazUn": "36"},
+                {"codigo": "900001", "texto": " pc GFE 1/2 PRETA ", "vazUn": "5"},
+                {"codigo": "900002", "texto": " pc GFE 635ML PRETA ", "vazUn": "7"},
+                {"codigo": "900003", "texto": " pc GFE 965ML PRETA ", "vazUn": "9"},
+                {"codigo": "857679", "texto": " un GFE 51 AMARELA ", "vazUn": "2"},
+                {"codigo": "37108", "texto": " pc CHAPATEX ", "vazUn": "12"},
+                {"codigo": "863059", "texto": " pc GFE 300ML,PRET ", "vazUn": "714"},
+                {"codigo": "198214", "texto": " un GFA LITRINHO ", "vazUn": "16146"},
+            ]
+        }
+    }
+
+    extracted = _extract_030302_items(payload)
+    garrafeira_lookup = {
+        "899599": {"descricao": "GARRAFEIRA PLAST,24 GFA 600ML", "tipo_material": "GARRAFEIRA CERVEJA 1/1", "un_venda": "003"},
+        "900001": {"descricao": "GARRAFEIRA PLAST,24 GFA 600ML", "tipo_material": "GARRAFEIRA CERVEJA 1/2", "un_venda": "003"},
+        "900002": {"descricao": "GARRAFEIRA PLAST,24 GFA 635ML", "tipo_material": "GARRAFEIRA CERVEJA 1/1", "un_venda": "003"},
+        "900003": {"descricao": "GARRAFEIRA PLAST,12 GFA 965ML", "tipo_material": "GARRAFEIRA CERVEJA LITRAO", "un_venda": "003"},
+        "857679": {"descricao": "GARRAFEIRA PLAST,12 GFA 965ML", "tipo_material": "", "un_venda": "003"},
+        "863059": {"descricao": "GARRAFEIRA PLAST PRETA 23 GARRAFAS 300ML", "tipo_material": "GARRAFEIRA CERVEJA 1/2", "un_venda": "003"},
+    }
+    enriched = [_enrich_item(row, None, None, garrafeira_lookup.get(row.cod_item)) for row in extracted]
+    rows = {row.cod_item: row for row in _aggregate_conferencia_items(enriched)}
+
+    assert sorted(rows) == ["863059", "899599", "900001", "900002", "900003"]
+    assert rows["899599"].grupo_contagem == "600"
+    assert rows["900001"].grupo_contagem == "300"
+    assert rows["900002"].grupo_contagem == "600"
+    assert rows["900003"].grupo_contagem == "1L"
+    assert rows["863059"].grupo_contagem == "300"
+    assert rows["863059"].total_sistema == Decimal("714")
+    assert rows["863059"].valor_unitario == Decimal("40.80")
+    assert rows["899599"].valor_unitario == Decimal("66.32")
+    assert rows["900003"].valor_unitario == Decimal("54.32")

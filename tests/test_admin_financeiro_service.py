@@ -1,6 +1,10 @@
 from datetime import date
 
-from bot_api.services.admin_financeiro_service import _build_rotas_dia_031120
+from bot_api.services.admin_financeiro_service import (
+    _build_rotas_dia_031120,
+    _financeiro_manual_update_flags,
+    _normalize_financeiro_dirty_fields,
+)
 
 
 def test_build_rotas_dia_031120_groups_route_phases_by_map() -> None:
@@ -47,3 +51,19 @@ def test_build_rotas_dia_031120_flags_entered_route_without_financial_close() ->
     assert result[0]["km_percorrido"] == "107"
     assert result[0]["fechamento_status"] == "Entrada sem fechamento financeiro"
     assert result[0]["fechamento_ok"] is False
+
+
+def test_normalize_financeiro_dirty_fields_ignores_unknown_values() -> None:
+    fields = _normalize_financeiro_dirty_fields(["motorista", "credito_conta", "", "nao_existe", None, "motorista"])
+
+    assert fields == {"motorista", "credito_conta"}
+
+
+def test_financeiro_manual_update_flags_only_enables_dirty_fields() -> None:
+    flags = _financeiro_manual_update_flags({"motorista", "dinheiro", "observacao"})
+
+    assert flags["motorista"] is True
+    assert flags["dinheiro"] is True
+    assert flags["observacao"] is True
+    assert flags["placa"] is False
+    assert flags["total_promax"] is False

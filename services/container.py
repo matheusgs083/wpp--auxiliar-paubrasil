@@ -23,6 +23,7 @@ from bot_api.services.filial_labels import FILIAL_LABELS, set_filial_labels
 from bot_api.services.dclientes_import_service import DClientesImportService
 from bot_api.services.dclientes_query_service import DClientesQueryService
 from bot_api.services.dcondicoes_import_service import DCondicoesImportService
+from bot_api.services.dgarrafeiras_import_service import DGarrafeirasImportService
 from bot_api.services.documentacao_pendente_import_service import DocumentacaoPendenteImportService
 from bot_api.services.documentacao_pendente_query_service import DocumentacaoPendenteQueryService
 from bot_api.services.dmateriais_import_service import DMateriaisImportService
@@ -64,6 +65,7 @@ class AppServices:
     doperacoes_import_service: DOperacoesImportService
     drevendas_import_service: DRevendasImportService
     dcondicoes_import_service: DCondicoesImportService
+    dgarrafeiras_import_service: DGarrafeirasImportService
     dprodutos_import_service: DProdutosImportService
     dmateriais_import_service: DMateriaisImportService
     produto_cestas_import_service: ProdutoCestasImportService
@@ -183,6 +185,11 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
     filial_labels = drevendas_import_service.latest_labels() or dict(FILIAL_LABELS)
     set_filial_labels(filial_labels)
     dcondicoes_import_service = DCondicoesImportService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    dgarrafeiras_import_service = DGarrafeirasImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -366,6 +373,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         doperacoes_import_service=doperacoes_import_service,
         drevendas_import_service=drevendas_import_service,
         dcondicoes_import_service=dcondicoes_import_service,
+        dgarrafeiras_import_service=dgarrafeiras_import_service,
         dprodutos_import_service=dprodutos_import_service,
         dmateriais_import_service=dmateriais_import_service,
         produto_cestas_import_service=produto_cestas_import_service,

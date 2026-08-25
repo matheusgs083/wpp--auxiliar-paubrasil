@@ -100,6 +100,9 @@ class ConferenciaService:
                         CREATE TABLE IF NOT EXISTS {}.conferencia_contagens (
                             item_id BIGINT PRIMARY KEY REFERENCES {}.conferencia_itens(id) ON DELETE CASCADE,
                             contagem_real NUMERIC(14, 3),
+                            contagem_vazia NUMERIC(14, 3),
+                            contagem_caixas NUMERIC(14, 3),
+                            contagem_unidades NUMERIC(14, 3),
                             observacao TEXT NOT NULL DEFAULT '',
                             updated_by TEXT NOT NULL DEFAULT '',
                             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -107,6 +110,13 @@ class ConferenciaService:
                         """
                     ).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
                 )
+                for column_name in ("contagem_vazia", "contagem_caixas", "contagem_unidades"):
+                    cur.execute(
+                        sql.SQL("ALTER TABLE {}.conferencia_contagens ADD COLUMN IF NOT EXISTS {} NUMERIC(14, 3)").format(
+                            sql.Identifier(self.schema),
+                            sql.Identifier(column_name),
+                        )
+                    )
                 cur.execute(
                     sql.SQL("CREATE INDEX IF NOT EXISTS conferencia_mapas_date_filial_idx ON {}.conferencia_mapas (caixa_date DESC, filial, mapa)").format(
                         sql.Identifier(self.schema)
@@ -139,9 +149,22 @@ class ConferenciaService:
         with self._connect() as conn:
             product_lookup = self._load_product_lookup(conn, {item.cod_item for item in item_drafts})
             material_lookup = self._load_material_lookup(conn, {item.cod_item for item in item_drafts})
-            enriched = [_enrich_item(item, product_lookup.get(item.cod_item), material_lookup.get(item.cod_item)) for item in item_drafts]
+            garrafeira_lookup = self._load_garrafeira_lookup(conn, {item.cod_item for item in item_drafts})
+            enriched = [
+                _enrich_item(
+                    item,
+                    product_lookup.get(item.cod_item),
+                    material_lookup.get(item.cod_item),
+                    garrafeira_lookup.get(item.cod_item),
+                )
+                for item in item_drafts
+            ]
             grouped_items = _aggregate_conferencia_items(enriched)
             with conn.cursor(row_factory=dict_row) as cur:
+                dados_030303 = _merge_identity_fallback(
+                    dados_030303,
+                    self._lookup_route_identity(cur, filial=filial, mapa=mapa),
+                )
                 cur.execute(
                     sql.SQL(
                         """
@@ -151,10 +174,10 @@ class ConferenciaService:
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
-                            placa = CASE WHEN current_map.placa = '' THEN EXCLUDED.placa ELSE current_map.placa END,
-                            motorista = CASE WHEN current_map.motorista = '' THEN EXCLUDED.motorista ELSE current_map.motorista END,
-                            ajudante1 = CASE WHEN current_map.ajudante1 = '' THEN EXCLUDED.ajudante1 ELSE current_map.ajudante1 END,
-                            ajudante2 = CASE WHEN current_map.ajudante2 = '' THEN EXCLUDED.ajudante2 ELSE current_map.ajudante2 END,
+                            placa = CASE WHEN EXCLUDED.placa <> '' AND {} THEN EXCLUDED.placa ELSE current_map.placa END,
+                            motorista = CASE WHEN EXCLUDED.motorista <> '' AND {} THEN EXCLUDED.motorista ELSE current_map.motorista END,
+                            ajudante1 = CASE WHEN EXCLUDED.ajudante1 <> '' AND {} THEN EXCLUDED.ajudante1 ELSE current_map.ajudante1 END,
+                            ajudante2 = CASE WHEN EXCLUDED.ajudante2 <> '' AND {} THEN EXCLUDED.ajudante2 ELSE current_map.ajudante2 END,
                             status = 'aberta',
                             source_job_id = EXCLUDED.source_job_id,
                             source_payload = EXCLUDED.source_payload,
@@ -163,6 +186,10 @@ class ConferenciaService:
                         """
                     ).format(
                         sql.Identifier(self.schema),
+                        _sql_blankish_alias("current_map", "placa"),
+                        _sql_blankish_alias("current_map", "motorista"),
+                        _sql_blankish_alias("current_map", "ajudante1"),
+                        _sql_blankish_alias("current_map", "ajudante2"),
                     ),
                     (
                         caixa_date,
@@ -238,6 +265,31 @@ class ConferenciaService:
             "dados_030303_found": any(dados_030303.values()),
         }
 
+    def _lookup_route_identity(self, cur: Any, *, filial: str, mapa: str) -> dict[str, str]:
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT placa, motorista, ajudante1, ajudante2
+                FROM {}.conferencia_mapas
+                WHERE filial = %s
+                  AND mapa = %s
+                  AND source_job_id = '03114902'
+                ORDER BY caixa_date DESC, updated_at DESC
+                LIMIT 1
+                """
+            ).format(sql.Identifier(self.schema)),
+            (_normalize_filial(filial), str(mapa or "").strip()),
+        )
+        row = cur.fetchone()
+        if not row:
+            return {}
+        return {
+            "placa": _clean_select_text(row.get("placa"), keep_code=True),
+            "motorista": _clean_select_text(row.get("motorista")),
+            "ajudante1": _clean_select_text(row.get("ajudante1")),
+            "ajudante2": _clean_select_text(row.get("ajudante2")),
+        }
+
     def list_mapas(
         self,
         *,
@@ -259,7 +311,7 @@ class ConferenciaService:
             allowed_filiais=allowed_filiais,
         )
         clean_search = str(search or "").strip().lower()
-        where = ["m.caixa_date = %s"]
+        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_03114902')"]
         params: list[Any] = [caixa_date]
         if clean_filial:
             where.append("m.filial = %s")
@@ -277,28 +329,192 @@ class ConferenciaService:
                 cur.execute(
                     sql.SQL(
                         """
+                        WITH latest_maps AS (
+                            SELECT DISTINCT ON (m.filial, m.mapa) m.*
+                            FROM {}.conferencia_mapas m
+                            WHERE {}
+                            ORDER BY m.filial, m.mapa, m.caixa_date DESC, m.updated_at DESC, m.id DESC
+                        )
                         SELECT m.*,
                                COUNT(i.id) AS itens,
                                COUNT(c.item_id) AS conferidos,
                                COALESCE(SUM(i.total_sistema), 0) AS total_sistema,
-                               COALESCE(SUM(c.contagem_real), 0) AS contagem_real
-                        FROM {}.conferencia_mapas m
+                               COALESCE(SUM(
+                                   CASE
+                                       WHEN i.grupo_contagem = 'PRODUTO' THEN
+                                           COALESCE(c.contagem_caixas, 0) * COALESCE(NULLIF((i.payload->>'unidades_por_caixa')::numeric, 0), 1)
+                                           + COALESCE(c.contagem_unidades, 0)
+                                       WHEN i.grupo_contagem IN ('300', '600', '1L', '51') THEN
+                                           COALESCE(c.contagem_real, 0) + COALESCE(c.contagem_vazia, 0)
+                                       ELSE COALESCE(c.contagem_real, 0)
+                                   END
+                               ), 0) AS contagem_real
+                        FROM latest_maps m
                         LEFT JOIN {}.conferencia_itens i ON i.conferencia_id = m.id
                         LEFT JOIN {}.conferencia_contagens c ON c.item_id = i.id
-                        WHERE {}
-                        GROUP BY m.id
+                        GROUP BY
+                            m.id, m.caixa_date, m.filial, m.mapa, m.placa, m.motorista,
+                            m.ajudante1, m.ajudante2, m.status, m.source_job_id,
+                            m.source_payload, m.created_at, m.updated_at
                         ORDER BY m.filial, m.mapa
                         """
                     ).format(
                         sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
-                        sql.Identifier(self.schema),
                         sql.SQL(" AND ").join(sql.SQL(part) for part in where),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
                     ),
                     params,
                 )
                 rows = [self._serialize_mapa(row, reveal_totals=reveal_totals) for row in cur.fetchall()]
         return {"ok": True, "data": caixa_date.isoformat(), "filial": clean_filial, "mapas": rows}
+
+    def list_garrafeira_consolidado(
+        self,
+        *,
+        data: Any,
+        filial: str = "",
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self.ensure_schema()
+        caixa_date = _parse_date(data)
+        clean_filial = _normalize_filial(filial)
+        allowed_filiais = _allowed_filiais(context)
+        if clean_filial:
+            _assert_filial_allowed(clean_filial, context)
+        self._sync_open_mapas_from_03114902(
+            caixa_date=caixa_date,
+            filial=clean_filial,
+            allowed_filiais=allowed_filiais,
+        )
+        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_03114902')"]
+        params: list[Any] = [caixa_date]
+        if clean_filial:
+            where.append("m.filial = %s")
+            params.append(clean_filial)
+        elif allowed_filiais is not None:
+            where.append("m.filial = ANY(%s)")
+            params.append(sorted(allowed_filiais))
+
+        groups = ("300", "600", "1L", "51")
+        by_map: dict[int, dict[str, Any]] = {}
+        with self._connect() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        WITH latest_maps AS (
+                            SELECT DISTINCT ON (m.filial, m.mapa) m.*
+                            FROM {}.conferencia_mapas m
+                            WHERE {}
+                            ORDER BY m.filial, m.mapa, m.caixa_date DESC, m.updated_at DESC, m.id DESC
+                        )
+                        SELECT m.id, m.caixa_date, m.filial, m.mapa, m.placa, m.motorista,
+                               i.grupo_contagem,
+                               COALESCE(i.total_sistema, 0) AS total_sistema,
+                               COALESCE(i.valor_unitario, 0) AS valor_unitario,
+                               COALESCE(c.contagem_real, 0) AS contagem_real,
+                               COALESCE(c.contagem_vazia, 0) AS contagem_vazia
+                        FROM latest_maps m
+                        JOIN {}.conferencia_itens i ON i.conferencia_id = m.id
+                        LEFT JOIN {}.conferencia_contagens c ON c.item_id = i.id
+                        WHERE i.grupo_contagem = ANY(%s)
+                        ORDER BY m.filial, m.mapa, i.grupo_contagem
+                        """
+                    ).format(
+                        sql.Identifier(self.schema),
+                        sql.SQL(" AND ").join(sql.SQL(part) for part in where),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                    ),
+                    (*params, list(groups)),
+                )
+                for row in cur.fetchall():
+                    mapa_id = int(row.get("id") or 0)
+                    group = str(row.get("grupo_contagem") or "").upper()
+                    if group not in groups:
+                        continue
+                    entry = by_map.setdefault(
+                        mapa_id,
+                        {
+                            "id": mapa_id,
+                            "data": _date_iso(row.get("caixa_date")),
+                            "filial": str(row.get("filial") or ""),
+                            "filial_label": self.filial_labels.get(str(row.get("filial") or ""), str(row.get("filial") or "")),
+                            "placa": str(row.get("placa") or ""),
+                            "mapa": str(row.get("mapa") or ""),
+                            "motorista": str(row.get("motorista") or ""),
+                            "groups": {
+                                item: {"total": Decimal("0"), "cont": Decimal("0"), "dif": Decimal("0"), "valor": Decimal("0")}
+                                for item in groups
+                            },
+                            "valor_total": Decimal("0"),
+                        },
+                    )
+                    total = _decimal(row.get("total_sistema"))
+                    cont = _decimal(row.get("contagem_real")) + _decimal(row.get("contagem_vazia"))
+                    diff = cont - total
+                    unit_price = _decimal(row.get("valor_unitario")) or _garrafeira_unit_price(group)
+                    missing_value = max(total - cont, Decimal("0")) * unit_price
+                    bucket = entry["groups"][group]
+                    bucket["total"] += total
+                    bucket["cont"] += cont
+                    bucket["dif"] += diff
+                    bucket["valor"] += missing_value
+                    entry["valor_total"] += missing_value
+
+        totals = {
+            item: {"total": Decimal("0"), "cont": Decimal("0"), "dif": Decimal("0"), "valor": Decimal("0")}
+            for item in groups
+        }
+        total_value = Decimal("0")
+        serialized_rows: list[dict[str, Any]] = []
+        for row in sorted(by_map.values(), key=lambda item: (item["filial"], _digits_sort_key(item["mapa"]))):
+            serialized_groups: dict[str, dict[str, str]] = {}
+            for group in groups:
+                bucket = row["groups"][group]
+                totals[group]["total"] += bucket["total"]
+                totals[group]["cont"] += bucket["cont"]
+                totals[group]["dif"] += bucket["dif"]
+                totals[group]["valor"] += bucket["valor"]
+                serialized_groups[group] = {
+                    "total": _count_display_str(bucket["total"], group),
+                    "cont": _count_display_str(bucket["cont"], group),
+                    "dif": _count_display_str(bucket["dif"], group),
+                    "valor": _decimal_str(bucket["valor"]),
+                }
+            total_value += row["valor_total"]
+            serialized_rows.append(
+                {
+                    "id": row["id"],
+                    "data": row["data"],
+                    "filial": row["filial"],
+                    "filial_label": row["filial_label"],
+                    "placa": row["placa"],
+                    "mapa": row["mapa"],
+                    "motorista": row["motorista"],
+                    "groups": serialized_groups,
+                    "valor_total": _decimal_str(row["valor_total"]),
+                }
+            )
+        serialized_totals = {
+            group: {
+                "total": _count_display_str(values["total"], group),
+                "cont": _count_display_str(values["cont"], group),
+                "dif": _count_display_str(values["dif"], group),
+                "valor": _decimal_str(values["valor"]),
+            }
+            for group, values in totals.items()
+        }
+        return {
+            "ok": True,
+            "data": caixa_date.isoformat(),
+            "filial": clean_filial,
+            "groups": list(groups),
+            "rows": serialized_rows,
+            "totals": serialized_totals,
+            "valor_total": _decimal_str(total_value),
+        }
 
     def get_mapa(
         self,
@@ -334,7 +550,14 @@ class ConferenciaService:
                 cur.execute(
                     sql.SQL(
                         """
-                        SELECT i.*, c.contagem_real, c.observacao AS contagem_observacao, c.updated_by, c.updated_at AS contagem_updated_at
+                        SELECT i.*,
+                               c.contagem_real,
+                               c.contagem_vazia,
+                               c.contagem_caixas,
+                               c.contagem_unidades,
+                               c.observacao AS contagem_observacao,
+                               c.updated_by,
+                               c.updated_at AS contagem_updated_at
                         FROM {}.conferencia_itens i
                         LEFT JOIN {}.conferencia_contagens c ON c.item_id = i.id
                         WHERE {}
@@ -362,7 +585,16 @@ class ConferenciaService:
                                COUNT(*) AS itens,
                                COUNT(c.item_id) AS conferidos,
                                COALESCE(SUM(i.total_sistema), 0) AS total_sistema,
-                               COALESCE(SUM(c.contagem_real), 0) AS contagem_real
+                               COALESCE(SUM(
+                                   CASE
+                                       WHEN i.grupo_contagem = 'PRODUTO' THEN
+                                           COALESCE(c.contagem_caixas, 0) * COALESCE(NULLIF((i.payload->>'unidades_por_caixa')::numeric, 0), 1)
+                                           + COALESCE(c.contagem_unidades, 0)
+                                       WHEN i.grupo_contagem IN ('300', '600', '1L', '51') THEN
+                                           COALESCE(c.contagem_real, 0) + COALESCE(c.contagem_vazia, 0)
+                                       ELSE COALESCE(c.contagem_real, 0)
+                                   END
+                               ), 0) AS contagem_real
                         FROM {}.conferencia_itens i
                         LEFT JOIN {}.conferencia_contagens c ON c.item_id = i.id
                         WHERE i.conferencia_id = %s
@@ -397,20 +629,33 @@ class ConferenciaService:
     ) -> dict[str, Any]:
         self.ensure_schema()
         username = str((context or {}).get("username") or "painel").strip() or "painel"
-        clean_counts: list[tuple[int, Decimal | None, str, str, str, str]] = []
+        clean_counts: list[tuple[int, Decimal | None, Decimal | None, Decimal | None, Decimal | None, str, str, str, str, str]] = []
         for item in counts:
             item_id = int(item.get("item_id") or item.get("id") or 0)
             code = _manual_code(item.get("cod_item") or "")
             description = str(item.get("descricao") or "").strip()
             group = str(item.get("grupo_contagem") or "").strip().upper()
+            unidade = str(item.get("unidade") or "").strip()
             if item_id <= 0 and not description and not code:
                 continue
-            value = item.get("contagem_real")
-            count_value = None if value in (None, "") else _decimal(value)
-            if count_value is not None and _requires_integer_count(group):
-                count_value = Decimal(int(count_value))
+            count_value = _optional_decimal(item.get("contagem_real"))
+            empty_value = _optional_decimal(item.get("contagem_vazia"))
+            box_value = _optional_decimal(item.get("contagem_caixas"))
+            unit_value = _optional_decimal(item.get("contagem_unidades"))
+            if group == "PRODUTO":
+                if box_value is not None:
+                    box_value = Decimal(int(box_value))
+                if unit_value is not None:
+                    unit_value = Decimal(int(unit_value))
+                if count_value is None and (box_value is not None or unit_value is not None):
+                    count_value = (box_value or Decimal("0")) + (unit_value or Decimal("0"))
+            elif _requires_integer_count(group):
+                if count_value is not None:
+                    count_value = Decimal(int(count_value))
+                if empty_value is not None:
+                    empty_value = Decimal(int(empty_value))
             obs = str(item.get("observacao") or "").strip()[:500]
-            clean_counts.append((item_id, count_value, obs, code, description, group))
+            clean_counts.append((item_id, count_value, empty_value, box_value, unit_value, obs, code, description, group, unidade))
         with self._connect() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
@@ -422,7 +667,7 @@ class ConferenciaService:
                     raise ValueError("Mapa de conferencia nao encontrado.")
                 _assert_filial_allowed(str(mapa.get("filial") or ""), context)
                 saved = 0
-                for item_id, count_value, obs, code, description, group in clean_counts:
+                for item_id, count_value, empty_value, box_value, unit_value, obs, code, description, group, unidade in clean_counts:
                     if item_id <= 0:
                         item_id = self._upsert_manual_item(
                             cur,
@@ -430,6 +675,7 @@ class ConferenciaService:
                             cod_item=code,
                             descricao=description,
                             grupo_contagem=group,
+                            unidade=unidade,
                         )
                     else:
                         cur.execute(
@@ -443,16 +689,22 @@ class ConferenciaService:
                     cur.execute(
                         sql.SQL(
                             """
-                            INSERT INTO {}.conferencia_contagens (item_id, contagem_real, observacao, updated_by, updated_at)
-                            VALUES (%s, %s, %s, %s, NOW())
+                            INSERT INTO {}.conferencia_contagens (
+                                item_id, contagem_real, contagem_vazia, contagem_caixas, contagem_unidades,
+                                observacao, updated_by, updated_at
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                             ON CONFLICT (item_id) DO UPDATE SET
                                 contagem_real = EXCLUDED.contagem_real,
+                                contagem_vazia = EXCLUDED.contagem_vazia,
+                                contagem_caixas = EXCLUDED.contagem_caixas,
+                                contagem_unidades = EXCLUDED.contagem_unidades,
                                 observacao = EXCLUDED.observacao,
                                 updated_by = EXCLUDED.updated_by,
                                 updated_at = NOW()
                             """
                         ).format(sql.Identifier(self.schema)),
-                        (item_id, count_value, obs, username),
+                        (item_id, count_value, empty_value, box_value, unit_value, obs, username),
                     )
                     saved += 1
             conn.commit()
@@ -528,11 +780,18 @@ class ConferenciaService:
         cod_item: str,
         descricao: str,
         grupo_contagem: str,
+        unidade: str = "",
     ) -> int:
         clean_code = _manual_code(cod_item) or f"MANUAL-{_manual_item_slug(descricao)}"
         clean_description = str(descricao or clean_code).strip()[:240]
         clean_group = _normalize_manual_group(grupo_contagem or _classify_group(clean_description))
+        clean_unidade = str(unidade or "").strip()[:40]
         tipo_item = "produto" if clean_group == "PRODUTO" else "manual"
+        payload = {"source": "manual"}
+        units_per_box = _units_per_box_from_text(clean_unidade)
+        if units_per_box:
+            payload["unidades_por_caixa"] = units_per_box
+        valor_unitario = _garrafeira_unit_price(clean_group)
         cur.execute(
             sql.SQL(
                 """
@@ -540,12 +799,13 @@ class ConferenciaService:
                     conferencia_id, cod_item, descricao, tipo_item, categoria, grupo_contagem,
                     unidade, total_sistema, valor_unitario, payload, updated_at
                 )
-                VALUES (%s, %s, %s, %s, 'Lancamento manual', %s, '', 0, 0, %s, NOW())
+                VALUES (%s, %s, %s, %s, 'Lancamento manual', %s, %s, 0, %s, %s, NOW())
                 ON CONFLICT (conferencia_id, cod_item) DO UPDATE SET
                     descricao = EXCLUDED.descricao,
                     tipo_item = EXCLUDED.tipo_item,
                     categoria = EXCLUDED.categoria,
                     grupo_contagem = EXCLUDED.grupo_contagem,
+                    unidade = EXCLUDED.unidade,
                     payload = EXCLUDED.payload,
                     updated_at = NOW()
                 RETURNING id
@@ -557,7 +817,9 @@ class ConferenciaService:
                 clean_description,
                 tipo_item,
                 clean_group,
-                Jsonb({"source": "manual"}),
+                clean_unidade,
+                valor_unitario,
+                Jsonb(payload),
             ),
         )
         return int(cur.fetchone()["id"])
@@ -592,6 +854,15 @@ class ConferenciaService:
             "dmateriais_latest",
             codes,
             ("codigo", "descricao", "tipo_material", "grupo", "familia", "capacidade", "un_venda"),
+        )
+
+    def _load_garrafeira_lookup(self, conn: psycopg.Connection[Any], codes: set[str]) -> dict[str, dict[str, Any]]:
+        return _load_lookup(
+            conn,
+            self.schema,
+            "dgarrafeiras_latest",
+            codes,
+            ("codigo", "descricao", "tipo_material", "grupo", "familia", "capacidade", "un_venda", "retornavel"),
         )
 
     def _serialize_mapa(self, row: dict[str, Any], *, reveal_totals: bool) -> dict[str, Any]:
@@ -705,6 +976,7 @@ class ConferenciaService:
 
     def _serialize_item(self, row: dict[str, Any], *, reveal_totals: bool) -> dict[str, Any]:
         group = str(row.get("grupo_contagem") or "")
+        effective_count = _effective_count_from_row(row)
         payload = {
             "id": int(row.get("id") or 0),
             "cod_item": _display_item_code(row.get("cod_item")),
@@ -714,18 +986,22 @@ class ConferenciaService:
             "grupo_contagem": group,
             "unidade": str(row.get("unidade") or ""),
             "contagem_real": _count_display_str(row.get("contagem_real"), group),
+            "contagem_vazia": _count_display_str(row.get("contagem_vazia"), group),
+            "contagem_caixas": _count_display_str(row.get("contagem_caixas"), group),
+            "contagem_unidades": _count_display_str(row.get("contagem_unidades"), group),
+            "contagem_efetiva": _count_display_str(effective_count, group),
+            "unidades_por_caixa": _units_per_box_from_payload(row.get("payload")),
             "observacao": str(row.get("contagem_observacao") or ""),
             "updated_by": str(row.get("updated_by") or ""),
             "updated_at": _datetime_iso(row.get("contagem_updated_at")),
         }
         if reveal_totals:
             total = _decimal(row.get("total_sistema"))
-            count = _decimal(row.get("contagem_real"))
             payload.update(
                 {
                     "total_sistema": _count_display_str(total, group),
                     "valor_unitario": _decimal_str(_decimal(row.get("valor_unitario"))),
-                    "diferenca": _count_display_str(count - total, group),
+                    "diferenca": _count_display_str(effective_count - total, group),
                 }
             )
         return payload
@@ -758,6 +1034,18 @@ def _extract_030302_items(source: Any) -> list[ConferenciaItemDraft]:
 
 
 def _candidate_030302_roots(source: Any) -> list[Any]:
+    decisive_paths = (
+        ("metadata", "resultado_fisico", "metadata", "captura_diferencas", "itens"),
+        ("resultado_fisico", "metadata", "captura_diferencas", "itens"),
+        ("result", "metadata", "resultado_fisico", "metadata", "captura_diferencas", "itens"),
+        ("metadata", "resultado_fisico", "metadata", "captura_material", "itens"),
+        ("resultado_fisico", "metadata", "captura_material", "itens"),
+    )
+    for path in decisive_paths:
+        value = _nested_get(source, path)
+        if value:
+            return [value]
+
     paths = (
         ("metadata", "resultado_fisico", "metadata", "dados_030302"),
         ("metadata", "resultado_fisico", "dados_030302"),
@@ -768,16 +1056,13 @@ def _candidate_030302_roots(source: Any) -> list[Any]:
         ("result", "metadata", "resultado_fisico", "metadata", "dados_030302"),
         ("result", "metadata", "dados_030302"),
     )
-    roots = []
     for path in paths:
         value = _nested_get(source, path)
         if value:
-            roots.append(value)
-    if not roots:
-        fisico = _nested_get(source, ("metadata", "resultado_fisico")) or _nested_get(source, ("resultado_fisico",))
-        if fisico:
-            roots.append(fisico)
-    return roots
+            return [value]
+
+    fisico = _nested_get(source, ("metadata", "resultado_fisico")) or _nested_get(source, ("resultado_fisico",))
+    return [fisico] if fisico else []
 
 
 def _iter_item_dicts(value: Any, parent_key: str = "") -> Iterable[tuple[dict[str, Any], str]]:
@@ -825,15 +1110,24 @@ def _draft_from_raw_item(raw: dict[str, Any], parent_key: str) -> ConferenciaIte
     code = _digits_or_text(code)
     if not code:
         return None
-    descricao = _first_text(raw, "descricao", "descrição", "nome", "texto", "descricao_item", "produto_descricao", "material_descricao", "desc")
+    raw_text = _first_text(raw, "texto", "label", "value")
+    parsed = _parse_030302_item_text(raw_text, code)
+    descricao = _first_text(raw, "descricao", "descrição", "nome", "descricao_item", "produto_descricao", "material_descricao", "desc")
+    if not descricao:
+        descricao = parsed.get("descricao") or raw_text
     tipo_item = "material" if "material" in str(parent_key or "").lower() else "produto" if "produto" in str(parent_key or "").lower() else _first_text(raw, "tipo_item", "tipo")
     if not tipo_item:
         tipo_item = "item"
-    total = _first_decimal(raw, "total", "quantidade", "qtd", "qtde", "saldo", "cobrado", "sistema", "diferenca", "faltaUn", "faltaAv", "vazUn", "vazAv", "troUn", "troAv", "devUn", "devAv")
-    unidade = _first_text(raw, "unidade", "un", "embalagem")
+    total = _quantity_from_030302_raw(raw)
+    unidade = _first_text(raw, "unidade", "un", "embalagem") or parsed.get("unidade")
     valor_unit = _first_decimal(raw, "valor_unitario", "valorUnitario", "preco", "valor")
     categoria = _first_text(raw, "categoria", "tipo_material", "grupo", "familia", "tipo")
     grupo = _classify_group(f"{categoria} {descricao} {unidade}")
+    payload = dict(raw)
+    if parsed:
+        payload["texto_parseado_030302"] = parsed
+    if unidade:
+        payload["sistema_unidade"] = str(unidade).strip().lower()
     return ConferenciaItemDraft(
         cod_item=code,
         descricao=descricao or code,
@@ -843,7 +1137,7 @@ def _draft_from_raw_item(raw: dict[str, Any], parent_key: str) -> ConferenciaIte
         unidade=unidade,
         total_sistema=total,
         valor_unitario=valor_unit,
-        payload=dict(raw),
+        payload=payload,
     )
 
 
@@ -851,15 +1145,27 @@ def _enrich_item(
     item: ConferenciaItemDraft,
     product: dict[str, Any] | None,
     material: dict[str, Any] | None,
+    garrafeira: dict[str, Any] | None = None,
 ) -> ConferenciaItemDraft:
-    ref = material or product or {}
-    tipo_item = "material" if material else "produto" if product else item.tipo_item
+    ref = garrafeira or material or product or {}
+    tipo_item = "material" if garrafeira or material else "produto" if product else item.tipo_item
     descricao = item.descricao
-    if not descricao or descricao == item.cod_item:
+    if garrafeira:
+        descricao = str(ref.get("descricao") or item.descricao or item.cod_item)
+    elif product:
+        descricao = str(ref.get("descricao_unitaria") or ref.get("descricao") or item.descricao or item.cod_item)
+    elif not descricao or descricao == item.cod_item:
         descricao = str(ref.get("descricao") or ref.get("descricao_unitaria") or item.cod_item)
-    categoria = item.categoria or str(ref.get("tipo_material") or ref.get("grupo") or ref.get("subtipo") or ref.get("familia") or "")
-    unidade = item.unidade or str(ref.get("un_venda") or ref.get("embalagem") or "")
-    grupo = _classify_group(f"{categoria} {descricao} {unidade}")
+    categoria = str(ref.get("tipo_material") or ref.get("grupo") or ref.get("subtipo") or ref.get("familia") or "") if garrafeira else item.categoria or str(ref.get("tipo_material") or ref.get("grupo") or ref.get("subtipo") or ref.get("familia") or "")
+    unidade = str(ref.get("un_venda") or ref.get("embalagem") or "") if garrafeira else item.unidade or str(ref.get("un_venda") or ref.get("embalagem") or "")
+    grupo = _classify_garrafeira_tipo_material(categoria) if garrafeira else _classify_group(f"{categoria} {descricao} {unidade}")
+    item_payload = {**item.payload, "cadastro_ref": _json_safe(ref), "garrafeira_ref": bool(garrafeira)}
+    units_per_box = _units_per_box_from_text(unidade)
+    if units_per_box:
+        item_payload["unidades_por_caixa"] = units_per_box
+    valor_unitario = item.valor_unitario
+    if garrafeira:
+        valor_unitario = item.valor_unitario or _garrafeira_unit_price(grupo)
     return ConferenciaItemDraft(
         cod_item=item.cod_item,
         descricao=descricao,
@@ -868,58 +1174,105 @@ def _enrich_item(
         grupo_contagem=grupo,
         unidade=unidade,
         total_sistema=item.total_sistema,
-        valor_unitario=item.valor_unitario,
-        payload={**item.payload, "cadastro_ref": _json_safe(ref)},
+        valor_unitario=valor_unitario,
+        payload=item_payload,
     )
 
 
 def _aggregate_conferencia_items(items: list[ConferenciaItemDraft]) -> list[ConferenciaItemDraft]:
-    grouped: dict[str, ConferenciaItemDraft] = {}
-    result: list[ConferenciaItemDraft] = []
+    result: dict[str, ConferenciaItemDraft] = {}
     for item in items:
-        if _is_material_group_item(item):
-            group = _normalize_manual_group(item.grupo_contagem)
-            key = f"GRUPO-{group}"
-            existing = grouped.get(key)
-            payload_part = {
-                "cod_item": item.cod_item,
-                "descricao": item.descricao,
-                "categoria": item.categoria,
-                "unidade": item.unidade,
-                "total_sistema": _decimal_str(item.total_sistema),
-                "payload": _json_safe(item.payload),
-            }
-            if existing:
-                grouped[key] = ConferenciaItemDraft(
-                    cod_item=key,
-                    descricao=_group_description(group),
-                    tipo_item="material",
-                    categoria=_merge_distinct_text(existing.categoria, item.categoria),
-                    grupo_contagem=group,
-                    unidade=existing.unidade or item.unidade,
-                    total_sistema=existing.total_sistema + item.total_sistema,
-                    valor_unitario=existing.valor_unitario or item.valor_unitario,
-                    payload={
-                        "source": "030302_agrupado",
-                        "itens": [*existing.payload.get("itens", []), payload_part],
-                    },
-                )
-            else:
-                grouped[key] = ConferenciaItemDraft(
-                    cod_item=key,
-                    descricao=_group_description(group),
-                    tipo_item="material",
-                    categoria=item.categoria,
-                    grupo_contagem=group,
-                    unidade=item.unidade,
-                    total_sistema=item.total_sistema,
-                    valor_unitario=item.valor_unitario,
-                    payload={"source": "030302_agrupado", "itens": [payload_part]},
-                )
+        is_garrafeira = _is_expected_garrafeira_item(item)
+        is_product = _is_conferencia_product_item(item)
+        if not is_garrafeira and not is_product:
+            continue
+        group = _classify_garrafeira_tipo_material(item.categoria) if is_garrafeira else "PRODUTO"
+        key = item.cod_item
+        existing = result.get(key)
+        if existing:
+            merged_payload = {"partes": [existing.payload, item.payload]}
+            units_per_box = _units_per_box_from_payload(existing.payload) or _units_per_box_from_payload(item.payload)
+            if units_per_box:
+                merged_payload["unidades_por_caixa"] = units_per_box
+            result[key] = ConferenciaItemDraft(
+                cod_item=existing.cod_item,
+                descricao=existing.descricao or item.descricao,
+                tipo_item=existing.tipo_item or item.tipo_item,
+                categoria=_merge_distinct_text(existing.categoria, item.categoria),
+                grupo_contagem=group,
+                unidade=existing.unidade or item.unidade,
+                total_sistema=existing.total_sistema + item.total_sistema,
+                valor_unitario=existing.valor_unitario or item.valor_unitario,
+                payload=merged_payload,
+            )
         else:
-            result.append(item)
-    result.extend(grouped[key] for key in sorted(grouped, key=_group_sort_key))
-    return result
+            result[key] = ConferenciaItemDraft(
+                cod_item=item.cod_item,
+                descricao=item.descricao,
+                tipo_item=item.tipo_item,
+                categoria=item.categoria,
+                grupo_contagem=group,
+                unidade=item.unidade,
+                total_sistema=item.total_sistema,
+                valor_unitario=item.valor_unitario,
+                payload=item.payload,
+            )
+    return sorted(result.values(), key=lambda row: (_group_sort_key(f"GRUPO-{row.grupo_contagem}"), row.descricao, row.cod_item))
+
+
+def _is_expected_garrafeira_item(item: ConferenciaItemDraft) -> bool:
+    if not bool(item.payload.get("garrafeira_ref")):
+        return False
+    return _classify_garrafeira_tipo_material(item.categoria) in {"300", "600", "1L"}
+
+
+def _is_conferencia_product_item(item: ConferenciaItemDraft) -> bool:
+    if bool(item.payload.get("garrafeira_ref")):
+        return False
+    tipo = _strip_accents(item.tipo_item).upper()
+    if tipo == "MATERIAL":
+        return False
+    text = _strip_accents(f"{item.descricao} {item.categoria}").upper()
+    if any(token in text for token in ("GARRAFEIRA", "GFA ", "GFA_", "VASILHAME", "CHAPATEX", "PALLET")):
+        return False
+    return item.total_sistema != 0
+
+
+def _classify_garrafeira_tipo_material(tipo_material: str) -> str:
+    value = _strip_accents(tipo_material).upper()
+    if value == "GARRAFEIRA CERVEJA 1/2":
+        return "300"
+    if value == "GARRAFEIRA CERVEJA 1/1":
+        return "600"
+    if value == "GARRAFEIRA CERVEJA LITRAO":
+        return "1L"
+    return ""
+
+
+def _garrafeira_unit_price(group: str) -> Decimal:
+    prices = {
+        "300": Decimal("40.80"),
+        "600": Decimal("66.32"),
+        "1L": Decimal("54.32"),
+    }
+    return prices.get(str(group or "").strip().upper(), Decimal("0"))
+
+
+def _classify_gfe_group(text: str) -> str:
+    value = _strip_accents(text).upper()
+    if re.search(r"\b51\b", value) or "5/1" in value:
+        return "51"
+    if "965" in value or "LITRAO" in value:
+        return "1L"
+    if "1/2" in value:
+        return "300"
+    if "1/1" in value or "635" in value or "600ML" in value or re.search(r"\b600\b", value):
+        return "600"
+    if "300ML" in value or "330ML" in value or "LITRINHO" in value or re.search(r"\b300\b", value):
+        return "300"
+    if "1000" in value or "1L" in value or "1 L" in value:
+        return "1L"
+    return _classify_group(value)
 
 
 def _classify_group(text: str) -> str:
@@ -938,9 +1291,9 @@ def _classify_group(text: str) -> str:
         return "51"
     if "1000" in value or "1L" in value or "1 L" in value or "1/1" in value:
         return "1L"
-    if re.search(r"\b600\b", value) or "600ML" in value:
+    if re.search(r"\b600\b", value) or "600ML" in value or "630ML" in value or "635ML" in value:
         return "600"
-    if re.search(r"\b300\b", value) or "350" in value or "355" in value or "LATA" in value:
+    if re.search(r"\b300\b", value) or "300ML" in value or "330ML" in value or "350" in value or "355" in value or "LATA" in value or "LITRINHO" in value:
         return "300"
     if "VASILHAME" in value or "GARRAFEIRA" in value:
         return "OUTRAS GARRAFEIRAS"
@@ -1005,9 +1358,13 @@ def _relation_column_exists(conn: psycopg.Connection[Any], schema: str, table: s
 
 def _extract_030303_fields(source: Any) -> dict[str, str]:
     dados = _extract_dados_030303(source)
-    motorista = _clean_select_text(_field_030303_value(dados, "motorista"))
+    motorista = _clean_select_text(_nested_get(dados, ("motorista", "nome")) or _field_030303_value(dados, "motorista"))
     if _is_generic_motorista(motorista):
-        motorista = _clean_select_text(_field_030303_value(dados, "ajudante1")) or motorista
+        motorista = _clean_select_text(_field_030303_value(dados, "ajudante1")) or ""
+    if not motorista:
+        motorista = _clean_select_text(_field_030303_value(dados, "csMotorista"))
+    if not motorista:
+        motorista = _clean_select_text(_field_030303_value(dados, "cdMotorista"))
     return {
         "motorista": motorista,
         "placa": _clean_select_text(_field_030303_value(dados, "placa"), keep_code=True),
@@ -1038,6 +1395,18 @@ def _extract_dados_030303(source: Any) -> dict[str, Any]:
 def _field_030303_value(dados: dict[str, Any], field_name: str) -> Any:
     if not isinstance(dados, dict):
         return ""
+    target = _norm_key(field_name)
+    campos = dados.get("campos")
+    if isinstance(campos, list):
+        for campo in campos:
+            if not isinstance(campo, dict):
+                continue
+            if (
+                _norm_key(campo.get("name")) == target
+                or _norm_key(campo.get("id")) == target
+                or _norm_key(campo.get("label")) == target
+            ):
+                return campo.get("value")
     field = dados.get(field_name)
     if isinstance(field, dict):
         for key in ("texto", "nome", "valor", "value", "label"):
@@ -1048,19 +1417,77 @@ def _field_030303_value(dados: dict[str, Any], field_name: str) -> Any:
 
 
 def _clean_select_text(value: Any, *, keep_code: bool = False) -> str:
-    text = str(value or "").strip()
+    if isinstance(value, dict):
+        text = str(value.get("texto") or value.get("nome") or value.get("label") or value.get("value") or "").strip()
+        raw_code = str(value.get("valor") or "").strip()
+        if raw_code in {"", "00000"} and _is_blank_identity_text(text):
+            return ""
+    else:
+        text = str(value or "").strip()
     if not text:
         return ""
     text = re.sub(r"\s+", " ", text)
+    if _is_blank_identity_text(text):
+        return ""
     if keep_code:
         return text
     text = re.sub(r"^\s*\d+\s*[-|]\s*", "", text).strip()
+    text = text.replace("(*)", "").strip()
+    if _is_blank_identity_text(text):
+        return ""
     return text
 
 
 def _is_generic_motorista(value: str) -> bool:
-    clean = _strip_accents(value).upper()
-    return clean in {"", "PAU BRASIL", "DISTRIBUIDORA PAU BRASIL"}
+    return _is_blank_identity_text(value)
+
+
+def _is_blank_identity_text(value: Any) -> bool:
+    clean = _strip_accents(value).upper().strip()
+    if not clean:
+        return True
+    return clean in {
+        "--SELECIONAR--",
+        "SELECIONAR",
+        "00000",
+        "SEM PLACA",
+        "00001 - (*) PAU BRASIL",
+        "(*) PAU BRASIL",
+        "PAU BRASIL",
+        "DISTRIBUIDORA PAU BRASIL",
+    }
+
+
+def _merge_identity_fallback(primary: dict[str, str], fallback: dict[str, str]) -> dict[str, str]:
+    merged = dict(primary or {})
+    for key in ("motorista", "placa", "ajudante1", "ajudante2"):
+        current = _clean_select_text(merged.get(key), keep_code=(key == "placa"))
+        candidate = _clean_select_text((fallback or {}).get(key), keep_code=(key == "placa"))
+        merged[key] = current or candidate
+    return merged
+
+
+def _sql_blankish_alias(alias: str, column: str) -> sql.SQL:
+    field = sql.SQL("{}.{}").format(sql.Identifier(alias), sql.Identifier(column))
+    numeric_fallback = sql.SQL("")
+    if column != "placa":
+        numeric_fallback = sql.SQL("OR BTRIM({}) ~ '^[0-9]+$'").format(field)
+    return sql.SQL(
+        """(
+            COALESCE(NULLIF(BTRIM({}), ''), '') = ''
+            OR UPPER(BTRIM({})) = ANY(ARRAY[
+                '--SELECIONAR--',
+                'SELECIONAR',
+                '00000',
+                'SEM PLACA',
+                '00001 - (*) PAU BRASIL',
+                '(*) PAU BRASIL',
+                'PAU BRASIL',
+                'DISTRIBUIDORA PAU BRASIL'
+            ])
+            {}
+        )"""
+    ).format(field, field, numeric_fallback)
 
 
 def _nested_get(source: Any, path: tuple[str, ...]) -> Any:
@@ -1093,6 +1520,49 @@ def _first_decimal(raw: dict[str, Any], *keys: str) -> Decimal:
     return Decimal("0")
 
 
+def _quantity_from_030302_raw(raw: dict[str, Any]) -> Decimal:
+    direct = _first_decimal(raw, "total", "quantidade", "qtd", "qtde", "saldo", "cobrado", "sistema", "diferenca")
+    if direct:
+        return direct
+    for left_key, right_key in (
+        ("faltaUn", "faltaAv"),
+        ("vazUn", "vazAv"),
+        ("troUn", "troAv"),
+        ("devUn", "devAv"),
+        ("previsaoUn", "previsaoAv"),
+    ):
+        left = _first_decimal(raw, left_key)
+        right = _first_decimal(raw, right_key)
+        if left:
+            return left
+        if right:
+            return right
+    return Decimal("0")
+
+
+def _parse_030302_item_text(text: Any, code: str) -> dict[str, str]:
+    raw = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not raw:
+        return {}
+    clean_code = re.escape(str(code or "").strip())
+    pattern = rf"^\s*0*{clean_code}\s+([A-Za-z]{{1,4}})\s+(.+?)\s+(?:-?\d+\s*/\s*-?\d+\s*)+$"
+    match = re.match(pattern, raw)
+    if not match:
+        match = re.match(r"^\s*\S+\s+([A-Za-z]{1,4})\s+(.+?)\s+(?:-?\d+\s*/\s*-?\d+\s*)+$", raw)
+    if match:
+        return {
+            "unidade": match.group(1).strip().lower(),
+            "descricao": match.group(2).strip(),
+        }
+    match = re.match(r"^\s*\S+\s+([A-Za-z]{1,4})\s+(.+)$", raw)
+    if match:
+        return {
+            "unidade": match.group(1).strip().lower(),
+            "descricao": match.group(2).strip(),
+        }
+    return {}
+
+
 def _decimal(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
@@ -1118,6 +1588,51 @@ def _decimal_optional_str(value: Any) -> str:
     if value in (None, ""):
         return ""
     return _decimal_str(_decimal(value))
+
+
+def _optional_decimal(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    return _decimal(value)
+
+
+def _units_per_box_from_text(value: Any) -> int:
+    text = _strip_accents(str(value or "")).upper()
+    if not text:
+        return 0
+    match = re.search(r"\bCX\s*0*(\d{1,3})\b", text)
+    if not match:
+        match = re.search(r"\bC\s*/\s*0*(\d{1,3})\b", text)
+    if not match:
+        match = re.search(r"\b(\d{1,3})\s*(UN|UND|UNID|UNIDADE|UNIDADES)\b", text)
+    if not match:
+        return 0
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _units_per_box_from_payload(value: Any) -> int:
+    if not isinstance(value, dict):
+        return 0
+    try:
+        return int(value.get("unidades_por_caixa") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _effective_count_from_row(row: dict[str, Any]) -> Decimal:
+    group = str(row.get("grupo_contagem") or "").strip().upper()
+    if group == "PRODUTO":
+        boxes = _decimal(row.get("contagem_caixas"))
+        units = _decimal(row.get("contagem_unidades"))
+        if boxes or units:
+            factor = _units_per_box_from_payload(row.get("payload")) or _units_per_box_from_text(row.get("unidade")) or 1
+            return boxes * Decimal(factor) + units
+    if group in {"300", "600", "1L", "51"}:
+        return _decimal(row.get("contagem_real")) + _decimal(row.get("contagem_vazia"))
+    return _decimal(row.get("contagem_real"))
 
 
 def _count_display_str(value: Any, group: str) -> str:
@@ -1280,6 +1795,12 @@ def _digits_or_text(value: Any) -> str:
     text = str(value or "").strip()
     digits = re.sub(r"\D+", "", text)
     return digits or text
+
+
+def _digits_sort_key(value: Any) -> tuple[int, str]:
+    text = str(value or "").strip()
+    digits = re.sub(r"\D+", "", text)
+    return (int(digits) if digits else 0, text)
 
 
 def _norm_key(value: Any) -> str:

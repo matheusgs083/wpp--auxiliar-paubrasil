@@ -69,6 +69,7 @@ HEADER_ALIASES = {
     "peso": "peso_bruto",
     "fatorconversor": "fator_conversor",
     "tiporoadshow": "tipo_roadshow",
+    "tproadshow": "tipo_roadshow",
     "contacorrente": "conta_corrente",
     "retornavel": "retornavel",
     "retornável": "retornavel",
@@ -76,6 +77,7 @@ HEADER_ALIASES = {
     "idtpmaterial": "id_tp_material",
     "idtpembalagem": "id_tp_embalagem",
     "tipomaterial": "tipo_material",
+    "tpmaterial": "tipo_material",
     "vasilhameficticio": "vasilhame_ficticio",
     "vasilhamefictício": "vasilhame_ficticio",
     "ncm": "ncm",
@@ -150,6 +152,11 @@ class DMateriaisRow:
 
 
 class DMateriaisImportService:
+    dataset_name = "dmateriais"
+    snapshot_table = "dmateriais_snapshot"
+    latest_view = "dmateriais_latest"
+    dataset_label = "tabela de materiais"
+
     def __init__(self, database_url: str, schema: str, connect_timeout_seconds: float = 3.0) -> None:
         self.database_url = database_url.strip()
         self.schema = _normalize_schema(schema)
@@ -175,7 +182,7 @@ class DMateriaisImportService:
             errors.append("Nao encontrei linhas validas na tabela de materiais.")
 
         return DMateriaisValidationResult(
-            dataset_name="dmateriais",
+            dataset_name=self.dataset_name,
             source_path=str(path),
             ok=not errors,
             total_rows=len(rows),
@@ -215,9 +222,9 @@ class DMateriaisImportService:
             self._ensure_schema(conn)
             batch_id = self._insert_batch(conn, str(path), batch_date, source_hash, len(rows))
             self._insert_snapshot_rows(conn, rows, batch_id)
-            activate_import_batch(conn, self.schema, "dmateriais", batch_id)
+            activate_import_batch(conn, self.schema, self.dataset_name, batch_id)
             self._create_latest_view(conn)
-            prune_import_batches(conn, self.schema, "dmateriais", keep_last=3)
+            prune_import_batches(conn, self.schema, self.dataset_name, keep_last=3)
             conn.commit()
 
         result = summary.to_dict()
@@ -239,14 +246,14 @@ class DMateriaisImportService:
 
         with self._connect() as conn:
             self._ensure_schema(conn)
-            active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "dmateriais", activate_if_missing=True)
+            active_batch_id = resolve_effective_import_batch_id(conn, self.schema, self.dataset_name, activate_if_missing=True)
             self._create_latest_view(conn)
             conn.commit()
 
         return {
             "ok": True,
             "schema": self.schema,
-            "view": f"{self.schema}.dmateriais_latest",
+            "view": f"{self.schema}.{self.latest_view}",
             "active_batch_id": active_batch_id,
         }
 
@@ -271,7 +278,7 @@ class DMateriaisImportService:
             cur.execute(
                 sql.SQL(
                     """
-                    CREATE TABLE IF NOT EXISTS {}.dmateriais_snapshot (
+                    CREATE TABLE IF NOT EXISTS {}.{} (
                         batch_id BIGINT NOT NULL REFERENCES {}.import_batches(id) ON DELETE CASCADE,
                         row_number BIGINT NOT NULL,
                         codigo VARCHAR(32) NOT NULL,
@@ -303,20 +310,25 @@ class DMateriaisImportService:
                         PRIMARY KEY (batch_id, row_number)
                     )
                     """
-                ).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
+                ).format(sql.Identifier(self.schema), sql.Identifier(self.snapshot_table), sql.Identifier(self.schema))
             )
             cur.execute(
-                sql.SQL("CREATE INDEX IF NOT EXISTS dmateriais_snapshot_batch_codigo_idx ON {}.dmateriais_snapshot (batch_id, codigo)").format(
-                    sql.Identifier(self.schema)
+                sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {}.{} (batch_id, codigo)").format(
+                    sql.Identifier(f"{self.snapshot_table}_batch_codigo_idx"),
+                    sql.Identifier(self.schema),
+                    sql.Identifier(self.snapshot_table),
                 )
             )
             cur.execute(
-                sql.SQL("CREATE INDEX IF NOT EXISTS dmateriais_snapshot_batch_tipo_idx ON {}.dmateriais_snapshot (batch_id, tipo_material)").format(
-                    sql.Identifier(self.schema)
+                sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {}.{} (batch_id, tipo_material)").format(
+                    sql.Identifier(f"{self.snapshot_table}_batch_tipo_idx"),
+                    sql.Identifier(self.schema),
+                    sql.Identifier(self.snapshot_table),
                 )
             )
             cur.execute(
-                sql.SQL("CREATE INDEX IF NOT EXISTS import_batches_dmateriais_dataset_idx ON {}.import_batches (dataset_name, imported_at DESC)").format(
+                sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {}.import_batches (dataset_name, imported_at DESC)").format(
+                    sql.Identifier(f"import_batches_{self.dataset_name}_dataset_idx"),
                     sql.Identifier(self.schema)
                 )
             )
@@ -326,19 +338,19 @@ class DMateriaisImportService:
         query = sql.SQL(
             """
             INSERT INTO {}.import_batches (dataset_name, source_file, file_hash, reference_date, total_rows)
-            VALUES ('dmateriais', %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id
             """
         ).format(sql.Identifier(self.schema))
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(query, (source_file, file_hash, reference_date, total_rows))
+            cur.execute(query, (self.dataset_name, source_file, file_hash, reference_date, total_rows))
             row = cur.fetchone()
         return int(row["id"])
 
     def _insert_snapshot_rows(self, conn: psycopg.Connection[Any], rows: list[DMateriaisRow], batch_id: int) -> None:
         query = sql.SQL(
             """
-            INSERT INTO {}.dmateriais_snapshot (
+            INSERT INTO {}.{} (
                 batch_id, row_number, codigo, descricao, tipo_mercadoria, un_venda,
                 tipo_marca, grupo, secao, familia, capacidade, peso_bruto,
                 fator_conversor, tipo_roadshow, conta_corrente, retornavel, ind_meia,
@@ -347,7 +359,7 @@ class DMateriaisImportService:
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-        ).format(sql.Identifier(self.schema))
+        ).format(sql.Identifier(self.schema), sql.Identifier(self.snapshot_table))
         params = [
             (
                 batch_id,
@@ -384,11 +396,11 @@ class DMateriaisImportService:
             cur.executemany(query, params)
 
     def _create_latest_view(self, conn: psycopg.Connection[Any]) -> None:
-        active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "dmateriais", activate_if_missing=True)
+        active_batch_id = resolve_effective_import_batch_id(conn, self.schema, self.dataset_name, activate_if_missing=True)
         where_clause = sql.SQL("s.batch_id = {}").format(sql.Literal(active_batch_id)) if active_batch_id is not None else sql.SQL("FALSE")
         query = sql.SQL(
             """
-            CREATE OR REPLACE VIEW {}.dmateriais_latest AS
+            CREATE OR REPLACE VIEW {}.{} AS
             SELECT
                 s.batch_id,
                 s.row_number,
@@ -422,11 +434,18 @@ class DMateriaisImportService:
                 b.source_file,
                 b.file_hash,
                 b.imported_at AS batch_imported_at
-            FROM {}.dmateriais_snapshot s
+            FROM {}.{} s
             JOIN {}.import_batches b ON b.id = s.batch_id
             WHERE {}
             """
-        ).format(sql.Identifier(self.schema), sql.Identifier(self.schema), sql.Identifier(self.schema), where_clause)
+        ).format(
+            sql.Identifier(self.schema),
+            sql.Identifier(self.latest_view),
+            sql.Identifier(self.schema),
+            sql.Identifier(self.snapshot_table),
+            sql.Identifier(self.schema),
+            where_clause,
+        )
         with conn.cursor() as cur:
             cur.execute(query)
 

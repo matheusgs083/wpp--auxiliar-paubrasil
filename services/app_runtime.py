@@ -348,6 +348,7 @@ def configure_app_runtime(
     conferencia_service = services.conferencia_service
     _sync_conferencia_fechamento_promax = conferencia_service.sync_from_promax
     _list_conferencia_mapas = conferencia_service.list_mapas
+    _list_conferencia_garrafeiras = conferencia_service.list_garrafeira_consolidado
     _get_conferencia_mapa = conferencia_service.get_mapa
     _save_conferencia_counts = conferencia_service.save_counts
     _search_conferencia_products = conferencia_service.search_products
@@ -569,6 +570,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "resolve_financeiro_fechamento_km": runtime["_resolve_financeiro_fechamento_km"],
         "sync_conferencia_fechamento_promax": runtime["_sync_conferencia_fechamento_promax"],
         "list_conferencia_mapas": runtime["_list_conferencia_mapas"],
+        "list_conferencia_garrafeiras": runtime["_list_conferencia_garrafeiras"],
         "get_conferencia_mapa": runtime["_get_conferencia_mapa"],
         "save_conferencia_counts": runtime["_save_conferencia_counts"],
         "search_conferencia_products": runtime["_search_conferencia_products"],
