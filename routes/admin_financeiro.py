@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 import tempfile
 from secrets import compare_digest
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Path, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
@@ -19,6 +20,17 @@ PROMAX_UNIT_BY_FILIAL = {
     "6": "3610006",
     "7": "3610007",
     "8": "3610008",
+}
+
+_FINANCEIRO_LOCAL_TIMEZONE = ZoneInfo("America/Fortaleza")
+_PROMAX_JOB_STATUSES = {
+    "pending",
+    "running",
+    "success",
+    "partial_success",
+    "failed",
+    "cancel_requested",
+    "cancelled",
 }
 
 
@@ -85,8 +97,10 @@ def create_admin_financeiro_router(
     resolve_financeiro_fechamento_km: Callable[..., dict[str, Any]],
     relatorio_031120_import_services: dict[str, Any],
     enqueue_promax_job: Callable[..., Any],
+    list_promax_jobs: Callable[..., list[dict[str, Any]]],
     get_promax_job: Callable[..., Any],
     list_promax_job_logs: Callable[..., list[dict[str, Any]]],
+    cancel_promax_job: Callable[..., Any],
     list_promax_worker_heartbeats: Callable[..., list[dict[str, Any]]],
     delete_financeiro_mapa: Callable[..., dict[str, Any]],
     worker_token: str | None,
@@ -340,7 +354,7 @@ def create_admin_financeiro_router(
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
         )
-        clean_filial = str(payload.filial or "").strip()
+        clean_filial = _require_allowed_financeiro_filial(payload.filial, context)
         clean_mapa = str(payload.mapa or "").strip()
         clean_modo = str(payload.modo or "completo").strip().lower()
         if clean_modo not in {"completo", "fisico", "financeiro"}:
@@ -357,8 +371,9 @@ def create_admin_financeiro_router(
         )
         clean_km_inicial = str(km_resolved.get("km_inicial") or "").strip().replace(".", "").replace(",", "")
         clean_km_prev = str(km_resolved.get("km_prev") or "").strip().replace(".", "").replace(",", "")
+        clean_km_fallback = str(km_resolved.get("km_atual") or "").strip().replace(".", "").replace(",", "")
         if not clean_km_atual:
-            clean_km_atual = str(km_resolved.get("km_atual") or "").strip().replace(".", "").replace(",", "")
+            clean_km_atual = clean_km_fallback
         km_source = km_resolved.get("source") or ""
         if str(payload.km_atual or "").strip():
             km_source = "manual_with_fallback" if clean_km_inicial and clean_km_prev else "manual"
@@ -376,6 +391,7 @@ def create_admin_financeiro_router(
             "km_atual": clean_km_atual,
             "km_inicial": clean_km_inicial,
             "km_prev": clean_km_prev,
+            "km_fallback_atual": clean_km_fallback,
             "km_source": km_source,
             "data": str(payload.data or date.today().isoformat()),
             "start_date": str(payload.data or date.today().isoformat()),
@@ -399,6 +415,103 @@ def create_admin_financeiro_router(
             reason=f"mapa={clean_mapa}; filial={clean_filial}; modo={clean_modo}; worker={clean_target_worker_id or 'auto'}",
         )
         return {"ok": True, "job": job}
+
+    @router.get("/api/admin/financeiro/fechamento-promax/jobs")
+    def api_admin_financeiro_fechamento_promax_jobs(
+        request: Request,
+        status: str | None = Query(default=None, min_length=1, max_length=32),
+        created_from: date | None = Query(default=None),
+        created_to: date | None = Query(default=None),
+        limit: int = Query(default=80, ge=1, le=200),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_financeiro_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        clean_status = str(status or "").strip()
+        if clean_status and clean_status not in _PROMAX_JOB_STATUSES:
+            raise HTTPException(status_code=422, detail="Status de fechamento invalido.")
+        created_from_at, created_before_at = _financeiro_job_created_bounds(created_from, created_to)
+        job_candidates = list_promax_jobs(
+            statuses=[clean_status] if clean_status else None,
+            created_from=created_from_at,
+            created_before=created_before_at,
+            limit=500,
+        )
+        if not clean_status:
+            active_candidates = list_promax_jobs(
+                statuses=["pending", "running", "cancel_requested"],
+                created_from=created_from_at,
+                created_before=created_before_at,
+                limit=500,
+            )
+            seen_ids = {str(job.get("id") or "") for job in job_candidates if isinstance(job, dict)}
+            for job in active_candidates:
+                job_id = str(job.get("id") or "") if isinstance(job, dict) else ""
+                if not job_id or job_id in seen_ids:
+                    continue
+                seen_ids.add(job_id)
+                job_candidates.append(job)
+        allowed_filiais = _allowed_financeiro_filiais(context)
+        filtered: list[dict[str, Any]] = []
+        for job in job_candidates:
+            payload = job.get("payload") if isinstance(job, dict) else {}
+            if not isinstance(payload, dict):
+                payload = {}
+            operation = str(payload.get("operation") or job.get("job_type") or "").strip().lower()
+            if operation not in {"fechamento-mapa", "fechamento_mapa", "mapa_fechamento"}:
+                continue
+            filial = _normalize_admin_filial(payload.get("filial"))
+            if not filial:
+                continue
+            if allowed_filiais is not None and filial not in allowed_filiais:
+                continue
+            result = job.get("result") if isinstance(job.get("result"), dict) else {}
+            filtered.append(
+                {
+                    "id": job.get("id"),
+                    "job_type": job.get("job_type"),
+                    "status": job.get("status"),
+                    "created_at": job.get("created_at"),
+                    "started_at": job.get("started_at"),
+                    "finished_at": job.get("finished_at"),
+                    "leased_by": job.get("leased_by"),
+                    "result": result,
+                    "error": job.get("error") or job.get("failure_reason") or "",
+                    "payload": {
+                        "filial": filial,
+                        "unidade": str(payload.get("unidade") or ""),
+                        "mapa": str(payload.get("mapa") or ""),
+                        "modo": str(payload.get("modo") or ""),
+                        "data": str(payload.get("data") or payload.get("start_date") or ""),
+                        "km_atual": str(payload.get("km_atual") or ""),
+                        "km_inicial": str(payload.get("km_inicial") or ""),
+                        "km_prev": str(payload.get("km_prev") or ""),
+                        "km_fallback_atual": str(payload.get("km_fallback_atual") or ""),
+                        "km_source": str(payload.get("km_source") or ""),
+                    },
+                }
+            )
+        active_statuses = {"running", "pending", "cancel_requested"}
+
+        active = [item for item in filtered if str(item.get("status") or "") in active_statuses]
+        inactive = [item for item in filtered if str(item.get("status") or "") not in active_statuses]
+        active.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("id") or "")), reverse=True)
+        inactive.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("id") or "")), reverse=True)
+        filtered = (active + inactive)[:limit]
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_financeiro_fechamento_jobs",
+            decision="allowed",
+            reason=f"status={clean_status or '*'}; total={len(filtered)}",
+        )
+        return {"ok": True, "jobs": filtered}
 
     @router.get("/api/admin/financeiro/fechamento-promax/{job_id}/logs")
     def api_admin_financeiro_fechamento_promax_logs(
@@ -440,6 +553,35 @@ def create_admin_financeiro_router(
             "logs": logs,
             "phases": _build_fechamento_phase_logs(logs),
         }
+
+    @router.post("/api/admin/financeiro/fechamento-promax/{job_id}/stop")
+    def api_admin_financeiro_fechamento_promax_stop(
+        request: Request,
+        job_id: str = Path(min_length=1, max_length=120),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_financeiro_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        job = _require_financeiro_fechamento_job(job_id, context, get_promax_job)
+        result = cancel_promax_job(
+            job_id,
+            requested_by=str(context.get("username") or context.get("mode") or ""),
+            reason="Fechamento Promax interrompido pelo painel financeiro.",
+        )
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_financeiro_fechamento_stop",
+            decision="allowed",
+            reason=f"job={job_id}; filial={(job.get('payload') or {}).get('filial')}",
+        )
+        return {"ok": True, "job": result}
 
     @router.post("/api/internal/promax/financeiro/fechamento-mapa")
     def api_internal_promax_financeiro_fechamento_mapa(
@@ -528,15 +670,61 @@ def _allowed_financeiro_filiais(context: dict[str, Any] | None) -> set[str] | No
     return {str(int(item)) if item.isdigit() else item for item in raw}
 
 
-def _require_allowed_financeiro_filial(value: Any, context: dict[str, Any] | None) -> str:
+def _normalize_admin_filial(value: Any) -> str:
     clean = str(value or "").strip()
     if not clean:
+        return ""
+    return str(int(clean)) if clean.isdigit() else clean
+
+
+def _require_allowed_financeiro_filial(value: Any, context: dict[str, Any] | None) -> str:
+    clean = _normalize_admin_filial(value)
+    if not clean:
         raise HTTPException(status_code=400, detail="Escolha a revenda antes de continuar.")
-    clean = str(int(clean)) if clean.isdigit() else clean
     allowed = _allowed_financeiro_filiais(context)
     if allowed is not None and clean not in allowed:
         raise HTTPException(status_code=403, detail="Revenda fora do escopo liberado para este usuario.")
     return clean
+
+
+def _financeiro_job_created_bounds(
+    created_from: date | None,
+    created_to: date | None,
+) -> tuple[datetime | None, datetime | None]:
+    if created_from and created_to and created_to < created_from:
+        raise HTTPException(
+            status_code=422,
+            detail="A data final do filtro nao pode ser anterior a data inicial.",
+        )
+    start_at = (
+        datetime.combine(created_from, time.min, _FINANCEIRO_LOCAL_TIMEZONE).astimezone(UTC)
+        if created_from
+        else None
+    )
+    before_at = (
+        datetime.combine(created_to + timedelta(days=1), time.min, _FINANCEIRO_LOCAL_TIMEZONE).astimezone(UTC)
+        if created_to
+        else None
+    )
+    return start_at, before_at
+
+
+def _require_financeiro_fechamento_job(
+    job_id: str,
+    context: dict[str, Any] | None,
+    get_promax_job: Callable[..., Any],
+) -> dict[str, Any]:
+    job = get_promax_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job de fechamento nao encontrado.")
+    payload = job.get("payload") if isinstance(job, dict) else {}
+    if not isinstance(payload, dict):
+        payload = {}
+    operation = str(payload.get("operation") or job.get("job_type") or "").strip().lower()
+    if operation not in {"fechamento-mapa", "fechamento_mapa", "mapa_fechamento"}:
+        raise HTTPException(status_code=404, detail="Job de fechamento nao encontrado.")
+    _require_allowed_financeiro_filial(payload.get("filial"), context)
+    return job
 
 
 def _build_fechamento_phase_logs(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:

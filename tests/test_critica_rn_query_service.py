@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 
 from bot_api.services.critica_rn_query_service import (
     CriticaRnQueryService,
+    CriticaVisitWithoutOrderRecord,
     _annotate_duplicate_client_orders,
     _annotate_client_total_above_average,
     _annotate_duplicate_products_by_price,
@@ -26,11 +27,52 @@ from bot_api.services.critica_rn_query_service import (
     _row_to_record,
     _summary_order_client_markup,
     _summarize_records,
+    _visit_day_token,
+    build_critica_rn_gv_summary_pdf,
 )
 from bot_api.tests.test_support import make_critica_record
 
 
 class CriticaRnQueryServiceRuleTests(unittest.TestCase):
+    def test_visit_day_token_uses_portuguese_weekday_abbreviation(self) -> None:
+        self.assertEqual(_visit_day_token(date(2026, 7, 17)), "SEX")
+        self.assertEqual(_visit_day_token(date(2026, 7, 20)), "SEG")
+
+    def test_gv_summary_pdf_accepts_visits_without_order_grouped_by_sector(self) -> None:
+        records = [
+            make_critica_record(
+                filial="3",
+                pedido="710001",
+                cod_pdv="18008",
+                nome_pdv="POSTO PAIZAO",
+                setor="401",
+                seller_code="3_401",
+                manager_code="3_5",
+                data_pedido=date(2026, 7, 17),
+            )
+        ]
+        summary = _summarize_records(records)
+        pdf_bytes = build_critica_rn_gv_summary_pdf(
+            summary=summary,
+            records=records,
+            visits_without_order=[
+                CriticaVisitWithoutOrderRecord(
+                    filial="3",
+                    cod_pdv="12345",
+                    nome_pdv="MERCADINHO SEM PEDIDO",
+                    setor="401",
+                    filial_setor_key="3_401",
+                    gv="5",
+                    filial_gv_key="3_5",
+                    dia_visita="SEX/",
+                    cidade="PATOS",
+                    bairro="CENTRO",
+                )
+            ],
+        )
+
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+
     def test_current_critica_import_allows_matching_operation_scope_only(self) -> None:
         class FakeCursor:
             def __init__(self) -> None:

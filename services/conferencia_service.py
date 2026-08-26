@@ -311,7 +311,7 @@ class ConferenciaService:
             allowed_filiais=allowed_filiais,
         )
         clean_search = str(search or "").strip().lower()
-        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_03114902')"]
+        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_03114902', 'aberta_manual')"]
         params: list[Any] = [caixa_date]
         if clean_filial:
             where.append("m.filial = %s")
@@ -369,6 +369,63 @@ class ConferenciaService:
                 rows = [self._serialize_mapa(row, reveal_totals=reveal_totals) for row in cur.fetchall()]
         return {"ok": True, "data": caixa_date.isoformat(), "filial": clean_filial, "mapas": rows}
 
+    def create_manual_mapa(
+        self,
+        payload: dict[str, Any],
+        *,
+        context: dict[str, Any] | None = None,
+        reveal_totals: bool = False,
+    ) -> dict[str, Any]:
+        self.ensure_schema()
+        caixa_date = _parse_date(payload.get("data") or payload.get("caixa_date"))
+        filial = _normalize_filial(payload.get("filial"))
+        mapa = _normalize_mapa(payload.get("mapa"))
+        if not filial:
+            raise ValueError("Informe a revenda para criar o mapa.")
+        if not mapa:
+            raise ValueError("Informe o numero do mapa.")
+        _assert_filial_allowed(filial, context)
+        username = str((context or {}).get("username") or "painel").strip() or "painel"
+        source_payload = {
+            "source": "manual",
+            "created_by": username,
+            "created_from": "admin_conferencia",
+        }
+        with self._connect() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        INSERT INTO {}.conferencia_mapas (
+                            caixa_date, filial, mapa, placa, motorista, ajudante1, ajudante2,
+                            status, source_job_id, source_payload, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'aberta_manual', 'manual', %s, NOW())
+                        ON CONFLICT (caixa_date, filial, mapa) DO NOTHING
+                        RETURNING *
+                        """
+                    ).format(sql.Identifier(self.schema)),
+                    (
+                        caixa_date,
+                        filial,
+                        mapa,
+                        str(payload.get("placa") or "").strip()[:80],
+                        str(payload.get("motorista") or "").strip()[:160],
+                        str(payload.get("ajudante1") or "").strip()[:160],
+                        str(payload.get("ajudante2") or "").strip()[:160],
+                        Jsonb(source_payload),
+                    ),
+                )
+                row = dict(cur.fetchone() or {})
+                if not row:
+                    raise ValueError("Mapa ja criado para esta data e revenda.")
+                row["itens"] = 0
+                row["conferidos"] = 0
+                row["total_sistema"] = Decimal("0")
+                row["contagem_real"] = Decimal("0")
+            conn.commit()
+        return {"ok": True, "mapa": self._serialize_mapa(row, reveal_totals=reveal_totals)}
+
     def list_garrafeira_consolidado(
         self,
         *,
@@ -387,7 +444,7 @@ class ConferenciaService:
             filial=clean_filial,
             allowed_filiais=allowed_filiais,
         )
-        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_03114902')"]
+        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_03114902', 'aberta_manual')"]
         params: list[Any] = [caixa_date]
         if clean_filial:
             where.append("m.filial = %s")
@@ -1648,6 +1705,8 @@ def _source_status_label(value: Any) -> str:
     status = str(value or "").strip().lower()
     if status == "aberta_03114902":
         return "Mapa aberto pela 03114902"
+    if status == "aberta_manual":
+        return "Criado manualmente"
     if status == "aberta":
         return "Itens carregados pela 030302"
     return status or "aberta"
@@ -1848,6 +1907,16 @@ def _normalize_filial(value: Any) -> str:
     if len(digits) >= 7:
         return str(int(digits[-4:]))
     return str(int(digits))
+
+
+def _normalize_mapa(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    digits = re.sub(r"\D+", "", text)
+    if digits and not re.search(r"[A-Za-z]", text):
+        return str(int(digits))
+    return text[:80]
 
 
 def _allowed_filiais(context: dict[str, Any] | None) -> set[str] | None:

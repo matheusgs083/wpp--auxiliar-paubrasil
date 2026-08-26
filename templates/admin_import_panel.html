@@ -225,6 +225,11 @@
     .finance-route-status.pending { color: var(--danger); font-weight: 900; white-space: nowrap; }
     .finance-closing-log { margin-top: 0.75rem; padding: 0.65rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
     .finance-closing-log-title { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.45rem; color: var(--ink-700); font-size: 0.72rem; font-weight: 900; text-transform: uppercase; }
+    .finance-closing-log.is-collapsed .finance-closing-log-list { display: none; }
+    .finance-closing-log-title-actions { display: flex; align-items: center; gap: 0.45rem; }
+    .finance-closing-log-toggle { white-space: nowrap; text-transform: none; font-weight: 800; }
+    .finance-closing-log-title .promax-job-filters { text-transform: none; }
+    .finance-closing-log-title .form-select, .finance-closing-log-title .form-control { font-size: 0.78rem; font-weight: 600; }
     .finance-closing-log-list { display: grid; gap: 0.28rem; margin: 0; padding: 0; list-style: none; color: var(--ink-900); font-size: 0.78rem; font-weight: 700; }
     .finance-closing-log-list li { display: flex; gap: 0.45rem; align-items: baseline; }
     .finance-closing-log-list .time { color: var(--ink-500); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.72rem; white-space: nowrap; }
@@ -1933,11 +1938,52 @@
             <div class="finance-closing-log" id="financeiroFechamentoLogBox">
               <div class="finance-closing-log-title">
                 <span>Log do fechamento</span>
-                <span id="financeiroFechamentoLogJob">Sem job ativo</span>
+                <div class="finance-closing-log-title-actions">
+                  <span id="financeiroFechamentoLogJob">Sem job ativo</span>
+                  <button class="btn btn-outline-secondary btn-sm finance-closing-log-toggle" id="financeiroFechamentoLogToggleBtn" type="button" aria-expanded="true" aria-controls="financeiroFechamentoLogList">
+                    <i class="bi bi-eye-slash me-1"></i>Esconder log
+                  </button>
+                </div>
               </div>
               <ul class="finance-closing-log-list" id="financeiroFechamentoLogList">
                 <li><span class="time">--:--</span><span>Aguardando solicitacao.</span></li>
               </ul>
+            </div>
+            <div class="finance-closing-log">
+              <div class="finance-closing-log-title">
+                <span>Execucoes de fechamento</span>
+                <div class="promax-job-filters" aria-label="Filtros das execucoes de fechamento">
+                  <label class="promax-job-filter-field status" for="financeiroFechamentoJobStatusFilter">
+                    <span class="promax-job-filter-label">Status</span>
+                    <select class="form-select form-select-sm" id="financeiroFechamentoJobStatusFilter">
+                      <option value="">Todos os status</option>
+                      <option value="pending">Pendente</option>
+                      <option value="running">Executando</option>
+                      <option value="cancel_requested">Cancelamento solicitado</option>
+                      <option value="success">Concluido</option>
+                      <option value="partial_success">Parcial</option>
+                      <option value="failed">Falhou</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  </label>
+                  <label class="promax-job-filter-field" for="financeiroFechamentoJobFromDate">
+                    <span class="promax-job-filter-label">De</span>
+                    <input class="form-control form-control-sm" id="financeiroFechamentoJobFromDate" type="date">
+                  </label>
+                  <label class="promax-job-filter-field" for="financeiroFechamentoJobToDate">
+                    <span class="promax-job-filter-label">Ate</span>
+                    <input class="form-control form-control-sm" id="financeiroFechamentoJobToDate" type="date">
+                  </label>
+                  <button class="btn btn-outline-secondary btn-sm" id="financeiroFechamentoJobShowHiddenBtn" type="button" hidden><i class="bi bi-eye me-1"></i>Mostrar ocultos</button>
+                  <button class="btn btn-outline-secondary btn-sm" id="financeiroFechamentoJobClearFiltersBtn" type="button" title="Limpar filtros das execucoes de fechamento" aria-label="Limpar filtros das execucoes de fechamento"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="table table-hover table-sm align-middle">
+                  <thead><tr><th>Criado</th><th>Mapa</th><th>Execucao</th><th>Status</th><th>Worker</th><th class="text-end">Acoes</th></tr></thead>
+                  <tbody id="financeiroFechamentoJobsBody"><tr><td colspan="6" class="text-center py-3 text-secondary">Nenhuma execucao carregada.</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
           <div class="finance-entry-block mb-3">
@@ -2609,6 +2655,7 @@
           mapas: "/api/admin/financeiro/mapas",
           fechamentoPromax: "/api/admin/financeiro/fechamento-promax",
           fechamentoPromaxLogs: "/api/admin/financeiro/fechamento-promax",
+          fechamentoPromaxJobs: "/api/admin/financeiro/fechamento-promax/jobs",
           relatorio031120Download: "/api/admin/financeiro/031120/download",
           relatorio031120Upload: "/api/admin/financeiro/031120/upload",
           worker: "/api/admin/financeiro/worker/status"
@@ -2756,7 +2803,7 @@
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
       payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
       payipGenerated: { payload: null, loading: false, error: "", polling: false, lastFilial: "", generating: "" },
-      financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null, fechamentoJobId: "", fechamentoLogTimer: null, fechamentoLogDone: false },
+      financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null, fechamentoJobs: [], fechamentoHiddenJobIds: [], fechamentoJobId: "", fechamentoLogTimer: null, fechamentoJobsTimer: null, fechamentoLogDone: false, fechamentoLogHidden: false },
       conferencia: { payload: null, selectedId: null, detail: null, loading: false, manualRows: [], productResults: [], view: "mapas", garrafeiras: null },
       promax: {
         catalog: null,
@@ -6713,8 +6760,16 @@
         fechamentoKm: document.getElementById("financeiroFechamentoKm"),
         fechamentoWorkerStatus: document.getElementById("financeiroFechamentoWorkerStatus"),
         fechamentoStatus: document.getElementById("financeiroFechamentoStatus"),
+        fechamentoLogBox: document.getElementById("financeiroFechamentoLogBox"),
         fechamentoLogJob: document.getElementById("financeiroFechamentoLogJob"),
+        fechamentoLogToggle: document.getElementById("financeiroFechamentoLogToggleBtn"),
         fechamentoLogList: document.getElementById("financeiroFechamentoLogList"),
+        fechamentoJobsBody: document.getElementById("financeiroFechamentoJobsBody"),
+        fechamentoJobStatusFilter: document.getElementById("financeiroFechamentoJobStatusFilter"),
+        fechamentoJobFromDate: document.getElementById("financeiroFechamentoJobFromDate"),
+        fechamentoJobToDate: document.getElementById("financeiroFechamentoJobToDate"),
+        fechamentoJobShowHidden: document.getElementById("financeiroFechamentoJobShowHiddenBtn"),
+        fechamentoJobClearFilters: document.getElementById("financeiroFechamentoJobClearFiltersBtn"),
         fechamentoBtn: document.getElementById("financeiroFechamentoBtn"),
         fechamentoRefresh: document.getElementById("financeiroFechamentoRefreshBtn"),
         fechamentoSheet: document.getElementById("financeiroFechamentoSheet"),
@@ -7717,6 +7772,24 @@
       return false;
     }
 
+    function financeiroSetFechamentoLogHidden(hidden) {
+      const els = financeiroElements();
+      state.financeiro.fechamentoLogHidden = !!hidden;
+      if (els.fechamentoLogBox) {
+        els.fechamentoLogBox.classList.toggle("is-collapsed", state.financeiro.fechamentoLogHidden);
+      }
+      if (els.fechamentoLogToggle) {
+        els.fechamentoLogToggle.setAttribute("aria-expanded", state.financeiro.fechamentoLogHidden ? "false" : "true");
+        els.fechamentoLogToggle.innerHTML = state.financeiro.fechamentoLogHidden
+          ? '<i class="bi bi-eye me-1"></i>Mostrar log'
+          : '<i class="bi bi-eye-slash me-1"></i>Esconder log';
+      }
+    }
+
+    function financeiroToggleFechamentoLog() {
+      financeiroSetFechamentoLogHidden(!state.financeiro.fechamentoLogHidden);
+    }
+
     function financeiroResetFechamentoLog(message = "Aguardando solicitacao.") {
       const els = financeiroElements();
       if (state.financeiro.fechamentoLogTimer) {
@@ -7752,6 +7825,160 @@
         const marker = level === "error" ? "text-danger" : level === "warning" || level === "warn" ? "text-warning" : "";
         return `<li><span class="time">${escapeHtml(formatDateTime(item.created_at) || "--:--")}</span><span class="${marker}">${escapeHtml(item.label || item.message || "")}</span></li>`;
       }).join("") : '<li><span class="time">--:--</span><span>Job enfileirado. Aguardando worker iniciar.</span></li>';
+    }
+
+    function financeiroFechamentoJobParams() {
+      const els = financeiroElements();
+      const params = new URLSearchParams({ limit: "100" });
+      const status = String(els.fechamentoJobStatusFilter && els.fechamentoJobStatusFilter.value || "").trim();
+      const createdFrom = String(els.fechamentoJobFromDate && els.fechamentoJobFromDate.value || "").trim();
+      const createdTo = String(els.fechamentoJobToDate && els.fechamentoJobToDate.value || "").trim();
+      if (createdFrom && createdTo && createdTo < createdFrom) {
+        throw new Error("A data final do filtro nao pode ser anterior a inicial.");
+      }
+      if (status) params.set("status", status);
+      if (createdFrom) params.set("created_from", createdFrom);
+      if (createdTo) params.set("created_to", createdTo);
+      return params;
+    }
+
+    function financeiroRenderFechamentoJobs() {
+      const els = financeiroElements();
+      if (!els.fechamentoJobsBody) return;
+      const allJobs = Array.isArray(state.financeiro.fechamentoJobs) ? state.financeiro.fechamentoJobs : [];
+      const hiddenIds = new Set(Array.isArray(state.financeiro.fechamentoHiddenJobIds) ? state.financeiro.fechamentoHiddenJobIds.map(String) : []);
+      const jobs = allJobs.filter(job => !hiddenIds.has(String(job && job.id || "")));
+      const hiddenCount = Math.max(allJobs.length - jobs.length, 0);
+      if (els.fechamentoJobShowHidden) {
+        els.fechamentoJobShowHidden.hidden = hiddenCount < 1;
+        els.fechamentoJobShowHidden.innerHTML = `<i class="bi bi-eye me-1"></i>Mostrar ${hiddenCount} oculto(s)`;
+      }
+      els.fechamentoJobsBody.innerHTML = jobs.length ? jobs.map(job => {
+        const payload = job && job.payload && typeof job.payload === "object" ? job.payload : {};
+        const result = job && job.result && typeof job.result === "object" ? job.result : {};
+        const status = String(job.status || "");
+        const running = status === "running" || status === "cancel_requested";
+        const pending = status === "pending";
+        const message = String(result.message || job.error || "").trim();
+        const visibleMessage = message.length > 110 ? `${message.slice(0, 107)}...` : message;
+        const mapa = String(payload.mapa || "-");
+        const filial = String(payload.filial || "-");
+        const modo = String(payload.modo || "-");
+        const data = String(payload.data || "-");
+        const kmFallback = String(payload.km_fallback_atual || "").trim();
+        const kmInfo = kmFallback
+          ? `<div class="small text-secondary">KM fallback: ${escapeHtml(kmFallback)}</div>`
+          : "";
+        const stopAction = (running || pending)
+          ? `<button class="btn btn-outline-danger btn-sm" onclick="financeiroStopFechamentoJob('${escapeHtml(job.id)}')"><i class="bi bi-stop-circle me-1"></i>${running ? "Parar" : "Cancelar"}</button>`
+          : "";
+        const hideAction = `<button class="btn btn-outline-secondary btn-sm" onclick="financeiroHideFechamentoJob('${escapeHtml(job.id)}')"><i class="bi bi-eye-slash me-1"></i>Esconder</button>`;
+        return `<tr>
+          <td><span class="small">${escapeHtml(formatDateTime(job.created_at))}</span><div class="mono small text-secondary">${escapeHtml(String(job.id || "").slice(0, 8))}</div></td>
+          <td><strong>${escapeHtml(mapa)}</strong><div class="small text-secondary">Revenda ${escapeHtml(filial)} | ${escapeHtml(data)}</div></td>
+          <td>${escapeHtml(modo)}${kmInfo}</td>
+          <td><span class="promax-status ${promaxStatusClass(status)}">${escapeHtml(promaxStatusLabel(status))}</span>${visibleMessage ? `<div class="small text-secondary mt-1" title="${escapeHtml(message)}">${escapeHtml(visibleMessage)}</div>` : ""}</td>
+          <td>${escapeHtml(job.leased_by || "-")}</td>
+          <td class="text-end"><div class="d-flex gap-1 justify-content-end">${stopAction}${hideAction}<button class="btn btn-outline-primary btn-sm" onclick="financeiroOpenFechamentoJob('${escapeHtml(job.id)}')"><i class="bi bi-terminal me-1"></i>Logs</button></div></td>
+        </tr>`;
+      }).join("") : `<tr><td colspan="6" class="text-center py-3 text-secondary">${hiddenCount ? "Todas as execucoes carregadas estao escondidas." : "Nenhuma execucao de fechamento encontrada."}</td></tr>`;
+    }
+
+    function financeiroScheduleFechamentoJobsRefresh() {
+      if (state.financeiro.fechamentoJobsTimer) {
+        window.clearTimeout(state.financeiro.fechamentoJobsTimer);
+        state.financeiro.fechamentoJobsTimer = null;
+      }
+      const jobs = Array.isArray(state.financeiro.fechamentoJobs) ? state.financeiro.fechamentoJobs : [];
+      const hasActive = jobs.some(job => ["pending", "running", "cancel_requested"].includes(String(job && job.status || "").toLowerCase()));
+      if (!hasActive) return;
+      state.financeiro.fechamentoJobsTimer = window.setTimeout(() => {
+        state.financeiro.fechamentoJobsTimer = null;
+        financeiroSyncFechamentoJobs({ silent: true });
+      }, 5000);
+    }
+
+    async function financeiroSyncFechamentoJobs({ silent = true } = {}) {
+      const els = financeiroElements();
+      if (!els.fechamentoJobsBody || !(state.panel && state.panel.canFinanceiro)) return false;
+      let params;
+      try {
+        params = financeiroFechamentoJobParams();
+      } catch (err) {
+        if (!silent) addLog(err.message, "warn");
+        return false;
+      }
+      try {
+        const payload = await req(`${CONFIG.endpoints.financeiro.fechamentoPromaxJobs}?${params.toString()}`, { timeoutMs: 20000 });
+        state.financeiro.fechamentoJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
+        financeiroRenderFechamentoJobs();
+        financeiroScheduleFechamentoJobsRefresh();
+        return true;
+      } catch (err) {
+        if (!silent) addLog(`Falha ao carregar execucoes de fechamento: ${err.message}`, "err");
+        return false;
+      }
+    }
+
+    function financeiroOpenFechamentoJob(jobId) {
+      const cleanJobId = String(jobId || "").trim();
+      if (!cleanJobId) return;
+      state.financeiro.fechamentoJobId = cleanJobId;
+      state.financeiro.fechamentoLogDone = false;
+      financeiroSetFechamentoLogHidden(false);
+      const els = financeiroElements();
+      if (els.fechamentoLogJob) els.fechamentoLogJob.textContent = `Job ${cleanJobId.slice(0, 8)}`;
+      if (els.fechamentoLogList) {
+        els.fechamentoLogList.innerHTML = '<li><span class="time">--:--</span><span>Carregando logs do fechamento.</span></li>';
+      }
+      financeiroPollFechamentoLog(cleanJobId);
+    }
+
+    function financeiroHideFechamentoJob(jobId) {
+      const cleanJobId = String(jobId || "").trim();
+      if (!cleanJobId) return;
+      if (!Array.isArray(state.financeiro.fechamentoHiddenJobIds)) {
+        state.financeiro.fechamentoHiddenJobIds = [];
+      }
+      if (!state.financeiro.fechamentoHiddenJobIds.map(String).includes(cleanJobId)) {
+        state.financeiro.fechamentoHiddenJobIds.push(cleanJobId);
+      }
+      financeiroRenderFechamentoJobs();
+    }
+
+    function financeiroShowHiddenFechamentoJobs() {
+      state.financeiro.fechamentoHiddenJobIds = [];
+      financeiroRenderFechamentoJobs();
+    }
+
+    async function financeiroStopFechamentoJob(jobId) {
+      const cleanJobId = String(jobId || "").trim();
+      if (!cleanJobId) return;
+      const confirmed = await askConfirmation("Interromper esta execucao de fechamento?");
+      if (!confirmed) return;
+      try {
+        await req(`${CONFIG.endpoints.financeiro.fechamentoPromaxLogs}/${encodeURIComponent(cleanJobId)}/stop`, {
+          method: "POST",
+          timeoutMs: 15000
+        });
+        addLog("Solicitacao de parada enviada para o fechamento.", "ok");
+        await financeiroSyncFechamentoJobs({ silent: true });
+        financeiroOpenFechamentoJob(cleanJobId);
+      } catch (err) {
+        addLog(`Falha ao parar fechamento: ${err.message}`, "err");
+      }
+    }
+
+    function financeiroApplyFechamentoJobFilters() {
+      financeiroSyncFechamentoJobs({ silent: false });
+    }
+
+    function financeiroClearFechamentoJobFilters() {
+      const els = financeiroElements();
+      if (els.fechamentoJobStatusFilter) els.fechamentoJobStatusFilter.value = "";
+      if (els.fechamentoJobFromDate) els.fechamentoJobFromDate.value = "";
+      if (els.fechamentoJobToDate) els.fechamentoJobToDate.value = "";
+      financeiroSyncFechamentoJobs({ silent: false });
     }
 
     async function financeiroPollFechamentoLog(jobId, attempt = 0) {
@@ -7797,6 +8024,7 @@
         els.fechamentoStatus.textContent = "Enfileirando fechamento";
         els.fechamentoStatus.className = "pill";
       }
+      financeiroSetFechamentoLogHidden(false);
       financeiroResetFechamentoLog("Enfileirando fechamento Promax.");
       try {
         const result = await req(CONFIG.endpoints.financeiro.fechamentoPromax, {
@@ -7819,6 +8047,7 @@
         if (els.fechamentoLogList) {
           els.fechamentoLogList.innerHTML = '<li><span class="time">--:--</span><span>Job enfileirado. Aguardando worker iniciar.</span></li>';
         }
+        await financeiroSyncFechamentoJobs({ silent: true });
         if (job.id) financeiroPollFechamentoLog(String(job.id));
         addLog(`Fechamento Promax solicitado para o mapa ${mapa}.`, "ok");
       } catch (err) {
@@ -7844,7 +8073,8 @@
       try {
         const [caixaResult, workerResult] = await Promise.allSettled([
           req(`${CONFIG.endpoints.financeiro.caixas}?${params.toString()}`, { timeoutMs: 20000 }),
-          req(CONFIG.endpoints.financeiro.worker, { timeoutMs: 12000 })
+          req(CONFIG.endpoints.financeiro.worker, { timeoutMs: 12000 }),
+          financeiroSyncFechamentoJobs({ silent: true })
         ]);
         if (workerResult.status === "fulfilled") {
           state.financeiro.worker = workerResult.value || null;
@@ -8006,6 +8236,12 @@
       if (els.exportPdf) els.exportPdf.addEventListener("click", downloadFinanceiroCaixaPdf);
       if (els.fechamentoBtn) els.fechamentoBtn.addEventListener("click", financeiroSolicitarFechamentoPromax);
       if (els.fechamentoRefresh) els.fechamentoRefresh.addEventListener("click", () => syncFinanceiro({ silent: false }));
+      if (els.fechamentoLogToggle) els.fechamentoLogToggle.addEventListener("click", financeiroToggleFechamentoLog);
+      if (els.fechamentoJobStatusFilter) els.fechamentoJobStatusFilter.addEventListener("change", financeiroApplyFechamentoJobFilters);
+      if (els.fechamentoJobFromDate) els.fechamentoJobFromDate.addEventListener("change", financeiroApplyFechamentoJobFilters);
+      if (els.fechamentoJobToDate) els.fechamentoJobToDate.addEventListener("change", financeiroApplyFechamentoJobFilters);
+      if (els.fechamentoJobShowHidden) els.fechamentoJobShowHidden.addEventListener("click", financeiroShowHiddenFechamentoJobs);
+      if (els.fechamentoJobClearFilters) els.fechamentoJobClearFilters.addEventListener("click", financeiroClearFechamentoJobFilters);
       if (els.rel031120Download) els.rel031120Download.addEventListener("click", financeiroSolicitar031120Download);
       if (els.rel031120Upload) els.rel031120Upload.addEventListener("click", financeiroImportar031120Upload);
       if (els.novo) els.novo.addEventListener("click", () => {

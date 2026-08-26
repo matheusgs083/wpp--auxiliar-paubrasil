@@ -298,6 +298,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "sync_conferencia_fechamento_promax": lambda _payload, **_kwargs: {"ok": True, "itens": 0},
             "list_conferencia_mapas": lambda **_kwargs: {"ok": True, "mapas": []},
             "list_conferencia_garrafeiras": lambda **_kwargs: {"ok": True, "rows": []},
+            "create_conferencia_mapa": lambda _payload, **_kwargs: {"ok": True, "mapa": {"id": 1}},
             "get_conferencia_mapa": lambda _mapa_id, **_kwargs: {"ok": True, "mapa": {"id": 1}, "items": []},
             "save_conferencia_counts": lambda _mapa_id, **_kwargs: {"ok": True, "saved": 0},
             "search_conferencia_products": lambda **_kwargs: {"ok": True, "products": []},

@@ -10,6 +10,16 @@ class ConferenciaCountsRequest(BaseModel):
     counts: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class ConferenciaManualMapaRequest(BaseModel):
+    data: str = ""
+    filial: str = ""
+    mapa: str = ""
+    placa: str = ""
+    motorista: str = ""
+    ajudante1: str = ""
+    ajudante2: str = ""
+
+
 def create_admin_conferencia_router(
     *,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
@@ -17,6 +27,7 @@ def create_admin_conferencia_router(
     panel_context_can_access_feature: Callable[[dict[str, Any] | None, str], bool],
     list_conferencia_mapas: Callable[..., dict[str, Any]],
     list_conferencia_garrafeiras: Callable[..., dict[str, Any]],
+    create_conferencia_mapa: Callable[..., dict[str, Any]],
     get_conferencia_mapa: Callable[..., dict[str, Any]],
     save_conferencia_counts: Callable[..., dict[str, Any]],
     search_conferencia_products: Callable[..., dict[str, Any]],
@@ -78,6 +89,41 @@ def create_admin_conferencia_router(
             reason=f"data={data}; filial={filial or '*'}",
         )
         return payload
+
+    @router.post("/api/admin/conferencia/mapas")
+    def api_admin_conferencia_create_mapa(
+        payload: ConferenciaManualMapaRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_conferencia_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        try:
+            result = create_conferencia_mapa(
+                payload.model_dump(),
+                context=context,
+                reveal_totals=can_reveal_totals(context),
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            message = str(exc)
+            status_code = 409 if "ja criado" in message.lower() else 400
+            raise HTTPException(status_code=status_code, detail=message) from exc
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_conferencia_create_manual",
+            decision="allowed",
+            reason=f"data={payload.data}; filial={payload.filial}; mapa={payload.mapa}",
+        )
+        return result
 
     @router.get("/api/admin/conferencia/garrafeiras")
     def api_admin_conferencia_garrafeiras(

@@ -40,7 +40,7 @@ CRITICA_PDF_CACHE_TABLE = "critica_pdf_cache"
 PDF_SCOPE_SECTOR = "setor"
 PDF_SCOPE_GV = "gv"
 REPORT_SESSION_WORK_MEM = "64MB"
-CRITICA_PDF_CACHE_VERSION = "v27-cash-condition-limit-rule"
+CRITICA_PDF_CACHE_VERSION = "v28-visits-without-orders"
 CRITICA_PDF_CURRENT_IMPORT_MESSAGE = (
     "PDF da critica bloqueado: importe os relatorios de critica de hoje antes de gerar."
 )
@@ -277,6 +277,20 @@ class CriticaRnOrderRecord:
 
 
 @dataclass(frozen=True)
+class CriticaVisitWithoutOrderRecord:
+    filial: str
+    cod_pdv: str
+    nome_pdv: str
+    setor: str
+    filial_setor_key: str
+    gv: str
+    filial_gv_key: str
+    dia_visita: str
+    cidade: str
+    bairro: str
+
+
+@dataclass(frozen=True)
 class CriticaRnReportData:
     summary: CriticaRnSummary
     records: list[CriticaRnRecord]
@@ -288,6 +302,7 @@ class CriticaRnPdfReport:
     records: list[CriticaRnRecord]
     pdf_bytes: bytes
     summary_pdf_bytes: bytes
+    visits_without_order: tuple[CriticaVisitWithoutOrderRecord, ...] = ()
 
 
 class CriticaPdfCurrentImportRequiredError(RuntimeError):
@@ -539,13 +554,33 @@ class CriticaRnQueryService:
                 allowed_gv_vdes=allowed_gv_vdes,
                 limit=normalized_limit,
             )
+            visits_without_order = self.list_visits_without_orders(
+                target_date=target_date,
+                allowed_sectors=allowed_sectors,
+                allowed_gv_vdes=allowed_gv_vdes,
+            )
             if data.summary.row_count <= 0:
-                return CriticaRnPdfReport(summary=data.summary, records=data.records, pdf_bytes=b"", summary_pdf_bytes=b"")
+                return CriticaRnPdfReport(
+                    summary=data.summary,
+                    records=data.records,
+                    pdf_bytes=b"",
+                    summary_pdf_bytes=b"",
+                    visits_without_order=tuple(visits_without_order),
+                )
             report = CriticaRnPdfReport(
                 summary=data.summary,
                 records=data.records,
-                pdf_bytes=build_critica_rn_pdf(summary=data.summary, records=data.records),
-                summary_pdf_bytes=build_critica_rn_summary_pdf(summary=data.summary, records=data.records),
+                pdf_bytes=build_critica_rn_pdf(
+                    summary=data.summary,
+                    records=data.records,
+                    visits_without_order=visits_without_order,
+                ),
+                summary_pdf_bytes=build_critica_rn_summary_pdf(
+                    summary=data.summary,
+                    records=data.records,
+                    visits_without_order=visits_without_order,
+                ),
+                visits_without_order=tuple(visits_without_order),
             )
             self._store_pregenerated_pdf_report(
                 target_date=target_date,
@@ -569,6 +604,7 @@ class CriticaRnQueryService:
             records=list(report.records),
             pdf_bytes=report.pdf_bytes,
             summary_pdf_bytes=report.summary_pdf_bytes,
+            visits_without_order=tuple(report.visits_without_order),
         )
 
     def build_pdf_report_for_records(self, records: list[CriticaRnRecord]) -> CriticaRnPdfReport:
@@ -638,11 +674,21 @@ class CriticaRnQueryService:
             data = CriticaRnReportData(summary=_summarize_records(records), records=records)
         if data.summary.row_count <= 0:
             return CriticaRnPdfReport(summary=data.summary, records=data.records, pdf_bytes=b"", summary_pdf_bytes=b"")
+        visits_without_order = self.list_visits_without_orders(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+        )
         return CriticaRnPdfReport(
             summary=data.summary,
             records=data.records,
-            pdf_bytes=build_critica_rn_gv_summary_pdf(summary=data.summary, records=data.records),
+            pdf_bytes=build_critica_rn_gv_summary_pdf(
+                summary=data.summary,
+                records=data.records,
+                visits_without_order=visits_without_order,
+            ),
             summary_pdf_bytes=b"",
+            visits_without_order=tuple(visits_without_order),
         )
 
     def get_summary(
@@ -724,6 +770,84 @@ class CriticaRnQueryService:
             return [record for record in records if record.possui_problema]
         return records
 
+    def list_visits_without_orders(
+        self,
+        *,
+        target_date: date,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        limit: int = 50000,
+    ) -> list[CriticaVisitWithoutOrderRecord]:
+        day_token = _visit_day_token(target_date)
+        if not day_token:
+            return []
+        normalized_limit = max(1, min(int(limit or 1), 100000))
+        filters: list[sql.Composed] = [
+            sql.SQL("COALESCE(d.status_pdv, '') NOT ILIKE '%%inativ%%'"),
+            sql.SQL("POSITION(%s IN UPPER(BTRIM(COALESCE(d.payload ->> 'Dia de Visita do VDE', '')))) > 0"),
+        ]
+        params: list[Any] = [day_token]
+        self._apply_dclientes_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
+        with self._connect(row_factory=dict_row) as conn:
+            if not self._relation_exists(conn, "dclientes_latest"):
+                return []
+            relation = self._require_source_relation(conn)
+            query = sql.SQL(
+                """
+                SELECT
+                    d.filial,
+                    d.cod_pdv,
+                    COALESCE(NULLIF(d.nome_fantasia, ''), NULLIF(d.razao_social, ''), '-') AS nome_pdv,
+                    COALESCE(d.setor_vde, '') AS setor,
+                    COALESCE(d.filial_setor_key, '') AS filial_setor_key,
+                    COALESCE(d.gv_vde, '') AS gv,
+                    COALESCE(d.filial_gv_key, '') AS filial_gv_key,
+                    COALESCE(d.payload ->> 'Dia de Visita do VDE', '') AS dia_visita,
+                    COALESCE(d.payload ->> 'Cidade', '') AS cidade,
+                    COALESCE(d.payload ->> 'Bairro', '') AS bairro
+                FROM {schema}.dclientes_latest d
+                WHERE {where_clause}
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM {schema}.{relation} c
+                      WHERE c.data_pedido = %s
+                        AND c.filial = d.filial
+                        AND c.cod_pdv = d.cod_pdv
+                  )
+                ORDER BY
+                    d.filial,
+                    NULLIF(REGEXP_REPLACE(COALESCE(d.setor_vde, ''), '\\D+', '', 'g'), '')::int NULLS LAST,
+                    UPPER(COALESCE(d.payload ->> 'Cidade', '')),
+                    UPPER(COALESCE(d.payload ->> 'Bairro', '')),
+                    UPPER(COALESCE(NULLIF(d.nome_fantasia, ''), NULLIF(d.razao_social, ''), '')),
+                    NULLIF(REGEXP_REPLACE(COALESCE(d.cod_pdv, ''), '\\D+', '', 'g'), '')::int NULLS LAST
+                LIMIT %s
+                """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                relation=sql.Identifier(relation),
+                where_clause=sql.SQL(" AND ").join(filters) if filters else sql.SQL("TRUE"),
+            )
+            query_params = [*params, target_date, normalized_limit]
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(query, query_params)
+                rows = cur.fetchall()
+        return [
+            CriticaVisitWithoutOrderRecord(
+                filial=str(row.get("filial") or ""),
+                cod_pdv=str(row.get("cod_pdv") or ""),
+                nome_pdv=str(row.get("nome_pdv") or ""),
+                setor=str(row.get("setor") or ""),
+                filial_setor_key=str(row.get("filial_setor_key") or ""),
+                gv=str(row.get("gv") or ""),
+                filial_gv_key=str(row.get("filial_gv_key") or ""),
+                dia_visita=str(row.get("dia_visita") or ""),
+                cidade=str(row.get("cidade") or ""),
+                bairro=str(row.get("bairro") or ""),
+            )
+            for row in rows
+        ]
+
     def clear_cache(self) -> None:
         with self._cache_lock:
             self._report_cache.clear()
@@ -770,11 +894,27 @@ class CriticaRnQueryService:
                 if summary.row_count <= 0:
                     skipped_empty += 1
                     continue
+                scope_allowed_sectors = [scope_key] if scope_type == PDF_SCOPE_SECTOR else None
+                scope_allowed_gv_vdes = [scope_key] if scope_type == PDF_SCOPE_GV else None
+                visits_without_order = self.list_visits_without_orders(
+                    target_date=effective_date,
+                    allowed_sectors=scope_allowed_sectors,
+                    allowed_gv_vdes=scope_allowed_gv_vdes,
+                )
                 report = CriticaRnPdfReport(
                     summary=summary,
                     records=records,
-                    pdf_bytes=build_critica_rn_pdf(summary=summary, records=records),
-                    summary_pdf_bytes=build_critica_rn_summary_pdf(summary=summary, records=records),
+                    pdf_bytes=build_critica_rn_pdf(
+                        summary=summary,
+                        records=records,
+                        visits_without_order=visits_without_order,
+                    ),
+                    summary_pdf_bytes=build_critica_rn_summary_pdf(
+                        summary=summary,
+                        records=records,
+                        visits_without_order=visits_without_order,
+                    ),
+                    visits_without_order=tuple(visits_without_order),
                 )
                 self._store_pdf_report_for_scope(
                     target_date=effective_date,
@@ -1431,6 +1571,47 @@ class CriticaRnQueryService:
         elif _has_scope_values(allowed_sectors) or _has_scope_values(allowed_gv_vdes):
             filters.append(sql.SQL("FALSE"))
 
+    def _apply_dclientes_access_filter(
+        self,
+        filters: list[sql.Composed],
+        params: list[Any],
+        allowed_sectors: list[str] | None,
+        allowed_gv_vdes: list[str] | None,
+    ) -> None:
+        filial_codes = partition_filial_scopes(allowed_sectors)
+        sector_keys, _legacy_sector_codes = partition_sector_scopes(allowed_sectors)
+        gv_keys, dc_keys, legacy_gv_codes = partition_gv_scopes(allowed_gv_vdes)
+        scope_filters: list[sql.Composed] = []
+        if filial_codes:
+            scope_filters.append(sql.SQL("COALESCE(d.filial, '') = ANY(%s)"))
+            params.append(filial_codes)
+        if sector_keys:
+            scope_filters.append(sql.SQL("COALESCE(d.filial_setor_key, '') = ANY(%s)"))
+            params.append(sector_keys)
+        if gv_keys:
+            scope_filters.append(sql.SQL("COALESCE(d.filial_gv_key, '') = ANY(%s)"))
+            params.append(gv_keys)
+        if legacy_gv_codes:
+            normalized_filial_gv_suffix = sql.SQL(
+                "COALESCE(NULLIF(LTRIM(REGEXP_REPLACE(SPLIT_PART(COALESCE(d.filial_gv_key, ''), '_', 2), '\\D+', '', 'g'), '0'), ''), '0')"
+            )
+            normalized_codigo_gv = _normalized_code_sql(sql.SQL("d.gv_vde"))
+            scope_filters.append(
+                sql.SQL("({codigo_gv} = ANY(%s) OR {filial_gv_suffix} = ANY(%s))").format(
+                    codigo_gv=normalized_codigo_gv,
+                    filial_gv_suffix=normalized_filial_gv_suffix,
+                )
+            )
+            params.extend([legacy_gv_codes, legacy_gv_codes])
+        dc_scope_keys = [value[len("dc:") :] if value.startswith("dc:") else value for value in dc_keys]
+        if dc_scope_keys:
+            scope_filters.append(sql.SQL("COALESCE(d.filial_dc_key, '') = ANY(%s)"))
+            params.append(dc_scope_keys)
+        if scope_filters:
+            filters.append(sql.SQL("(") + sql.SQL(" OR ").join(scope_filters) + sql.SQL(")"))
+        elif _has_scope_values(allowed_sectors) or _has_scope_values(allowed_gv_vdes):
+            filters.append(sql.SQL("FALSE"))
+
     def _ensure_ready(self) -> None:
         status = self.status()
         if not status["ready"]:
@@ -1495,6 +1676,7 @@ def build_critica_rn_pdf(
     *,
     summary: CriticaRnSummary,
     records: list[CriticaRnRecord],
+    visits_without_order: list[CriticaVisitWithoutOrderRecord] | tuple[CriticaVisitWithoutOrderRecord, ...] = (),
     generated_at: datetime | None = None,
 ) -> bytes:
     from reportlab.lib.pagesizes import A4
@@ -1528,6 +1710,7 @@ def build_critica_rn_pdf(
         elements.extend(_detail_report_tables(records, styles))
     else:
         elements.append(Paragraph("Nenhum item encontrado para o filtro informado.", styles["note"]))
+    elements.extend(_visits_without_order_section(visits_without_order, styles, group_by_sector=False))
 
     def draw_page_header(canvas: Any, doc_obj: Any) -> None:
         _draw_report_page_header(
@@ -1548,6 +1731,7 @@ def build_critica_rn_summary_pdf(
     *,
     summary: CriticaRnSummary,
     records: list[CriticaRnRecord],
+    visits_without_order: list[CriticaVisitWithoutOrderRecord] | tuple[CriticaVisitWithoutOrderRecord, ...] = (),
     generated_at: datetime | None = None,
 ) -> bytes:
     from reportlab.lib.pagesizes import A4
@@ -1597,6 +1781,7 @@ def build_critica_rn_summary_pdf(
         elements.append(_detail_order_table(order_records, styles))
     else:
         elements.append(Paragraph("Nenhum pedido encontrado para o filtro informado.", styles["note"]))
+    elements.extend(_visits_without_order_section(visits_without_order, styles, group_by_sector=False))
 
     def draw_page_header(canvas: Any, doc_obj: Any) -> None:
         _draw_report_page_header(
@@ -1617,6 +1802,7 @@ def build_critica_rn_gv_summary_pdf(
     *,
     summary: CriticaRnSummary,
     records: list[CriticaRnRecord],
+    visits_without_order: list[CriticaVisitWithoutOrderRecord] | tuple[CriticaVisitWithoutOrderRecord, ...] = (),
     generated_at: datetime | None = None,
 ) -> bytes:
     from reportlab.lib.pagesizes import A4
@@ -1650,6 +1836,8 @@ def build_critica_rn_gv_summary_pdf(
         Spacer(1, 4),
         Paragraph("PRODUTOS DO RELATORIO", styles["section"]),
         _product_summary_table(records, styles),
+        Spacer(1, 4),
+        *_visits_without_order_section(visits_without_order, styles, group_by_sector=True),
     ]
 
     def draw_page_header(canvas: Any, doc_obj: Any) -> None:
@@ -1974,6 +2162,106 @@ def _gv_city_by_sector_tables(records: list[CriticaRnRecord], styles: dict[str, 
     if not flowables:
         flowables.append(Paragraph("Nenhuma cidade encontrada para o filtro informado.", styles["note"]))
     return flowables
+
+
+def _visits_without_order_section(
+    visits: list[CriticaVisitWithoutOrderRecord] | tuple[CriticaVisitWithoutOrderRecord, ...],
+    styles: dict[str, Any],
+    *,
+    group_by_sector: bool,
+) -> list[Any]:
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Spacer, Table
+
+    flowables: list[Any] = [Spacer(1, 4), Paragraph("PDVS COM VISITA NO DIA SEM PEDIDO", styles["section"])]
+    cleaned = [
+        visit
+        for visit in visits
+        if str(visit.cod_pdv or "").strip() and str(visit.filial or "").strip()
+    ]
+    if not cleaned:
+        flowables.append(Paragraph("Nenhum PDV com visita no dia sem pedido para o filtro informado.", styles["note"]))
+        return flowables
+
+    if not group_by_sector:
+        flowables.append(_visits_without_order_table(cleaned, styles, include_sector=True))
+        return flowables
+
+    grouped: dict[tuple[str, str], list[CriticaVisitWithoutOrderRecord]] = {}
+    for visit in cleaned:
+        sector_key = visit.filial_setor_key or (f"{visit.filial}_{visit.setor}" if visit.setor else visit.filial)
+        sector_label = _format_visit_sector_label(visit)
+        grouped.setdefault((sector_key, sector_label), []).append(visit)
+
+    for _sector_key, sector_label in sorted(grouped, key=lambda item: (_sort_key_numeric_text(item[0][0]), item[0][1])):
+        sector_visits = sorted(
+            grouped[(_sector_key, sector_label)],
+            key=lambda visit: (
+                _normalize_token(visit.cidade),
+                _normalize_token(visit.bairro),
+                _normalize_token(visit.nome_pdv),
+                _sort_key_numeric_text(visit.cod_pdv),
+            ),
+        )
+        flowables.append(
+            Paragraph(
+                _escape(f"{sector_label} | {len(sector_visits)} PDV(s) sem pedido"),
+                styles["section"],
+            )
+        )
+        flowables.append(_visits_without_order_table(sector_visits, styles, include_sector=False))
+        flowables.append(Spacer(1, 3))
+    return flowables
+
+
+def _visits_without_order_table(
+    visits: list[CriticaVisitWithoutOrderRecord],
+    styles: dict[str, Any],
+    *,
+    include_sector: bool,
+) -> Any:
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Table
+
+    headers = ["NB", "Cliente"]
+    widths = [17 * mm, 64 * mm]
+    if include_sector:
+        headers.append("Setor")
+        widths.append(18 * mm)
+    headers.extend(["Cidade", "Bairro", "Visita"])
+    widths.extend([36 * mm, 36 * mm, 21 * mm])
+    rows: list[list[Any]] = [[Paragraph(header, styles["table_header"]) for header in headers]]
+    for visit in visits:
+        row = [
+            Paragraph(_escape(visit.cod_pdv or "-"), styles["table_cell_bold"]),
+            Paragraph(_escape(visit.nome_pdv or "-"), styles["table_cell_bold"]),
+        ]
+        if include_sector:
+            row.append(Paragraph(_escape(_format_visit_sector_label(visit)), styles["table_cell"]))
+        row.extend(
+            [
+                Paragraph(_escape(visit.cidade or "-"), styles["table_cell"]),
+                Paragraph(_escape(visit.bairro or "-"), styles["table_cell"]),
+                Paragraph(_escape(visit.dia_visita or "-"), styles["table_cell"]),
+            ]
+        )
+        rows.append(row)
+    table = Table(rows, repeatRows=1, colWidths=widths, splitByRow=1)
+    table.setStyle(_report_table_style(header_row_indexes=(0,), grid=True))
+    return table
+
+
+def _format_visit_sector_label(visit: CriticaVisitWithoutOrderRecord) -> str:
+    filial = str(visit.filial or "").strip()
+    setor = str(visit.setor or "").strip()
+    if filial and setor:
+        operation = FILIAL_LABELS.get(filial, f"Revenda {filial}")
+        return f"{operation} | Setor {setor}"
+    if setor:
+        return f"Setor {setor}"
+    if filial:
+        return FILIAL_LABELS.get(filial, f"Revenda {filial}")
+    return "Sem setor"
 
 
 def _format_sector_key_for_pdf(sector_key: str, records: list[CriticaRnRecord]) -> str:
@@ -2535,6 +2823,20 @@ def _format_compact_list(values: tuple[str, ...] | list[str], *, fallback: str =
 
 def _date_cache_key(value: date | None) -> str:
     return value.isoformat() if value else ""
+
+
+def _visit_day_token(value: date | None) -> str:
+    if not isinstance(value, date):
+        return ""
+    return {
+        0: "SEG",
+        1: "TER",
+        2: "QUA",
+        3: "QUI",
+        4: "SEX",
+        5: "SAB",
+        6: "DOM",
+    }.get(value.weekday(), "")
 
 
 def _scope_cache_key(values: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
