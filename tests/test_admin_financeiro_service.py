@@ -108,6 +108,42 @@ def test_financeiro_diferenca_usa_dinheiro_promax_e_permite_sobra() -> None:
     assert result["status"] == "DIVERGENTE"
 
 
+def test_financeiro_percentuais_usam_base_dinheiro_mais_deposito() -> None:
+    service = AdminFinanceiroService.__new__(AdminFinanceiroService)
+    records = [
+        {
+            "total_promax": 1000.0,
+            "dinheiro_total": 400.0,
+            "moedas": 100.0,
+            "credito_conta": 300.0,
+            "transferencias_total": 200.0,
+            "boletos_rota": 0,
+            "boletos_recebido_qtd": 0,
+            "boletos_diferenca_qtd": 0,
+            "dinheiro_promax": 1000.0,
+            "despesas_total": 0,
+            "vales_total": 0,
+            "diaristas_total": 0,
+            "alimentacao_pernoite_total": 0,
+            "alimentacao_hospedagem_total": 0,
+            "alimentacao_janta_total": 0,
+            "alimentacao_almoco_total": 0,
+            "alimentacao_cafe_total": 0,
+            "alimentacao_total": 0,
+            "total_apurado": 1000.0,
+            "diferenca": 0,
+            "tipo_bloco": "mapa",
+        }
+    ]
+
+    summary = service._build_summary(records)
+
+    assert summary["numerario_total"] == 500.0
+    assert summary["depositos_total"] == 500.0
+    assert summary["dinheiro_percent"] == 50.0
+    assert summary["deposito_percent"] == 50.0
+
+
 def test_financeiro_diarista_sem_recibo_vira_vale_calculado() -> None:
     service = AdminFinanceiroService.__new__(AdminFinanceiroService)
     service.filial_labels = {"3": "Patos"}

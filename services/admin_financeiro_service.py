@@ -849,11 +849,11 @@ class AdminFinanceiroService:
         summary = {key: _money(sum(_decimal(row.get(key)) for row in records)) for key in keys}
         numerario_total = _decimal(summary.get("dinheiro_total")) + _decimal(summary.get("moedas"))
         depositos_total = _decimal(summary.get("credito_conta")) + _decimal(summary.get("transferencias_total"))
-        total_promax = _decimal(summary.get("total_promax"))
+        base_dinheiro_deposito = numerario_total + depositos_total
         summary["numerario_total"] = _money(numerario_total)
         summary["depositos_total"] = _money(depositos_total)
-        summary["dinheiro_percent"] = _money((numerario_total / total_promax * Decimal("100")) if total_promax else Decimal("0"))
-        summary["deposito_percent"] = _money((depositos_total / total_promax * Decimal("100")) if total_promax else Decimal("0"))
+        summary["dinheiro_percent"] = _money((numerario_total / base_dinheiro_deposito * Decimal("100")) if base_dinheiro_deposito else Decimal("0"))
+        summary["deposito_percent"] = _money((depositos_total / base_dinheiro_deposito * Decimal("100")) if base_dinheiro_deposito else Decimal("0"))
         summary["mapas"] = len([row for row in records if row.get("tipo_bloco") == "mapa"])
         summary["compras"] = len([row for row in records if row.get("tipo_bloco") == "compra"])
         summary["despesas_blocos"] = len([row for row in records if row.get("tipo_bloco") == "despesa"])
@@ -1034,6 +1034,9 @@ def _build_caixa_pdf(payload: dict[str, Any]) -> bytes:
     story.append(Paragraph(f"Data: {_format_date_br(payload.get('data'))} | Revenda: {escape(filial_label)} | Gerado em: {generated_at}", styles["subtitle"]))
     story.append(_pdf_summary_table(summary))
     story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph("Hospedagem e Alimentacao", styles["section"]))
+    story.append(_pdf_alimentacao_table(summary))
+    story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Numerario do Malote", styles["section"]))
     story.append(_pdf_denoms_table(caixa_maps))
     story.append(Spacer(1, 4 * mm))
@@ -1117,11 +1120,6 @@ def _pdf_summary_table(summary: dict[str, Any]) -> Any:
         ("Boletos rota", f"{_fmt_qty(summary.get('boletos_recebido_qtd'))} / {_fmt_qty(summary.get('boletos_rota'))}"),
         ("Despesas", _fmt_money(summary.get("despesas_total"))),
         ("Diaristas", _fmt_money(summary.get("diaristas_total"))),
-        ("Alimentacao", _fmt_money(summary.get("alimentacao_total"))),
-        ("Hospedagem", _fmt_money(summary.get("alimentacao_hospedagem_total"))),
-        ("Janta", _fmt_money(summary.get("alimentacao_janta_total"))),
-        ("Almoco", _fmt_money(summary.get("alimentacao_almoco_total"))),
-        ("Cafe", _fmt_money(summary.get("alimentacao_cafe_total"))),
         ("Vales", _fmt_money(summary.get("vales_total"))),
         ("Status", str(summary.get("status") or "-")),
     ]
@@ -1131,6 +1129,32 @@ def _pdf_summary_table(summary: dict[str, Any]) -> Any:
         data.append([Paragraph(escape(label), label_style) for label, _value in row] + [Paragraph("", label_style)] * (3 - len(row)))
         data.append([Paragraph(escape(value), value_style) for _label, value in row] + [Paragraph("", value_style)] * (3 - len(row)))
     table = Table(data, colWidths=[60 * mm, 60 * mm, 60 * mm])
+    table.setStyle(_pdf_table_style(header_rows=0))
+    return table
+
+
+def _pdf_alimentacao_table(summary: dict[str, Any]) -> Any:
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, Table
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_RIGHT
+    from xml.sax.saxutils import escape
+
+    label_style = ParagraphStyle("PdfAlimentacaoLabel", fontName="Helvetica-Bold", fontSize=7.4, leading=9, textColor=colors.HexColor("#1F2933"))
+    value_style = ParagraphStyle("PdfAlimentacaoValue", fontName="Helvetica", fontSize=7.4, leading=9, textColor=colors.HexColor("#1F2933"), alignment=TA_RIGHT)
+    rows = [
+        ("Hospedagem", _fmt_money(summary.get("alimentacao_hospedagem_total"))),
+        ("Almoco", _fmt_money(summary.get("alimentacao_almoco_total"))),
+        ("Janta", _fmt_money(summary.get("alimentacao_janta_total"))),
+        ("Cafe", _fmt_money(summary.get("alimentacao_cafe_total"))),
+        ("Total", _fmt_money(summary.get("alimentacao_total"))),
+    ]
+    data = [
+        [Paragraph(escape(label), label_style), Paragraph(escape(value), value_style)]
+        for label, value in rows
+    ]
+    table = Table(data, colWidths=[90 * mm, 90 * mm])
     table.setStyle(_pdf_table_style(header_rows=0))
     return table
 
