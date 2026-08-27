@@ -767,7 +767,7 @@ class AdminFinanceiroService:
         total_apurado = dinheiro_total + _decimal(row.get("moedas")) + transferencias_total + despesas_total + vales_total + diaristas_total + alimentacao_total
         dinheiro_promax = _decimal(row.get("dinheiro_promax"))
         total_promax = dinheiro_promax
-        diferenca = dinheiro_promax - total_apurado
+        diferenca = total_apurado - dinheiro_promax
         tipo_bloco = _normalize_tipo_bloco(row.get("tipo_bloco"))
         mapa_key = str(row.get("mapa") or "")
         mapa_ref = str(row.get("mapa_ref") or "") or mapa_key
@@ -1618,8 +1618,6 @@ def _diarista_vale_rows(
     def has_existing_vale_chapa(nome: str, valor: Decimal) -> bool:
         clean_nome = str(nome or "").strip().lower()
         for vale in vales:
-            if not _is_vale_chapa(vale):
-                continue
             if str(vale.get("nome") or "").strip().lower() != clean_nome:
                 continue
             if _decimal(vale.get("valor")) == valor:

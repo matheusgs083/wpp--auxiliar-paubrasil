@@ -6870,23 +6870,35 @@
       return Number.isFinite(parsed) ? parsed : 0;
     }
 
+    function financeiroTextKey(value) {
+      return String(value || "").trim().toLowerCase();
+    }
+
     function financeiroTotals(map) {
       const dinheiroTotal = FINANCEIRO_DENOMS.reduce((total, denom) => {
         return total + financeiroNumber(denom) * Math.max(0, Math.trunc(financeiroNumber(map.dinheiro && map.dinheiro[denom])));
       }, 0);
       const sumRows = rows => (Array.isArray(rows) ? rows : []).reduce((total, row) => total + financeiroNumber(row.valor), 0);
       const valesCalculados = (Array.isArray(map.vales) ? map.vales : []).filter(row => !financeiroIsValeChapa(row));
+      const valesExistentes = Array.isArray(map.vales) ? map.vales : [];
+      const hasValeMesmoNomeValor = (nome, valor) => valesExistentes.some(row => (
+        financeiroTextKey(row.nome) === financeiroTextKey(nome)
+        && Math.abs(financeiroNumber(row.valor) - financeiroNumber(valor)) < 0.01
+      ));
       const diaristaAvulso = financeiroNumber(map.diarista);
       const diaristaAvulsoComRecibo = map.diarista_recibo_recebido !== false;
       const diaristasComRecibo = (Array.isArray(map.diaristas) ? map.diaristas : []).filter(row => row.recibo_recebido !== false);
       const diaristasSemRecibo = (Array.isArray(map.diaristas) ? map.diaristas : []).filter(row => row.recibo_recebido === false);
-      const valesDiaristas = (diaristaAvulsoComRecibo ? 0 : diaristaAvulso) + sumRows(diaristasSemRecibo);
+      const valeAvulsoDiarista = (!diaristaAvulsoComRecibo && !hasValeMesmoNomeValor(map.motorista || "Diarista", diaristaAvulso)) ? diaristaAvulso : 0;
+      const valesDiaristas = valeAvulsoDiarista + diaristasSemRecibo.reduce((total, row) => {
+        return total + (hasValeMesmoNomeValor(row.nome || map.motorista || "Diarista", row.valor) ? 0 : financeiroNumber(row.valor));
+      }, 0);
       const valesTotal = sumRows(valesCalculados) + valesDiaristas;
       const diaristasTotal = (diaristaAvulsoComRecibo ? diaristaAvulso : 0) + sumRows(diaristasComRecibo);
       const alimentacao = financeiroNumber(map.pernoite) + financeiroNumber(map.hospedagem) + financeiroNumber(map.janta) + financeiroNumber(map.almoco) + financeiroNumber(map.cafe);
       const totalApurado = dinheiroTotal + financeiroNumber(map.moedas) + sumRows(map.transferencias) + sumRows(map.despesas) + valesTotal + diaristasTotal + alimentacao;
       const dinheiroPromax = financeiroNumber(map.dinheiro_promax);
-      const diferenca = dinheiroPromax - totalApurado;
+      const diferenca = totalApurado - dinheiroPromax;
       const boletosDiferencaQtd = financeiroNumber(map.boletos_rota) - financeiroNumber(map.boletos_recebido_qtd);
       return { dinheiroTotal, dinheiroPromax, diaristasTotal, valesTotal, alimentacao, totalApurado, diferenca, boletosDiferencaQtd };
     }
@@ -6919,10 +6931,10 @@
       }, {});
       const numerarioMalote = financeiroNumber(summary.numerario_total || (financeiroNumber(summary.dinheiro_total) + financeiroNumber(summary.moedas)));
       const depositos = financeiroNumber(summary.depositos_total || (financeiroNumber(summary.credito_conta) + financeiroNumber(summary.transferencias_total)));
-      const totalPromax = financeiroNumber(summary.dinheiro_promax || summary.total_promax);
+      const baseDinheiroDeposito = numerarioMalote + depositos;
       const diferenca = financeiroNumber(summary.diferenca);
-      const dinheiroPct = financeiroNumber(summary.dinheiro_percent || (totalPromax ? (numerarioMalote / totalPromax) * 100 : 0));
-      const depositoPct = financeiroNumber(summary.deposito_percent || (totalPromax ? (depositos / totalPromax) * 100 : 0));
+      const dinheiroPct = financeiroNumber(summary.dinheiro_percent || (baseDinheiroDeposito ? (numerarioMalote / baseDinheiroDeposito) * 100 : 0));
+      const depositoPct = financeiroNumber(summary.deposito_percent || (baseDinheiroDeposito ? (depositos / baseDinheiroDeposito) * 100 : 0));
       const transfers = financeiroRowsFromMaps(caixaMaps, "transferencias");
       const vales = financeiroRowsFromMaps(maps, "vales_consolidados");
       const despesas = financeiroRowsFromMaps(maps, "despesas");

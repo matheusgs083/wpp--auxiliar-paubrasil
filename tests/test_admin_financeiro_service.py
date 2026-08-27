@@ -104,7 +104,7 @@ def test_financeiro_diferenca_usa_dinheiro_promax_e_permite_sobra() -> None:
     assert result["total_apurado"] == 900.0
     assert result["dinheiro_promax"] == 1000.0
     assert result["total_promax"] == 1000.0
-    assert result["diferenca"] == 100.0
+    assert result["diferenca"] == -100.0
     assert result["status"] == "DIVERGENTE"
 
 
@@ -193,3 +193,45 @@ def test_financeiro_diarista_sem_recibo_vira_vale_calculado() -> None:
             "origem": "diarista_sem_recibo",
         }
     ]
+
+
+def test_financeiro_diarista_sem_recibo_nao_duplica_vale_manual_mesmo_nome_valor() -> None:
+    service = AdminFinanceiroService.__new__(AdminFinanceiroService)
+    service.filial_labels = {"3": "Patos"}
+    row = {
+        "id": 1,
+        "caixa_date": date(2026, 8, 26),
+        "filial": "3",
+        "tipo_bloco": "mapa",
+        "mapa": "93853",
+        "mapa_ref": "93853",
+        "motorista": "DIOGO",
+        "dinheiro_promax": "1725.77",
+        "total_promax": "1725.77",
+        "credito_conta": "0",
+        "dinheiro": {"200": 8, "2": 1},
+        "moedas": "0",
+        "boletos_rota": "0",
+        "boletos_recebido_qtd": "0",
+        "diarista": "0",
+        "diarista_recibo_recebido": True,
+        "pernoite": "0",
+        "hospedagem": "0",
+        "janta": "0",
+        "almoco": "22",
+        "cafe": "0",
+        "observacao": "",
+        "updated_at": datetime(2026, 8, 26, 12, 0),
+    }
+    details = {
+        "transferencias": {},
+        "despesas": {},
+        "vales": {1: [{"nome": "Allan", "valor": "80", "observacao": ""}]},
+        "diaristas": {1: [{"nome": "Allan", "valor": "80", "recibo_recebido": False}]},
+    }
+
+    result = service._serialize_map(row, details)
+
+    assert result["vales_total"] == 80.0
+    assert result["total_apurado"] == 1704.0
+    assert result["diferenca"] == -21.77
