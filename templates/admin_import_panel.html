@@ -6876,13 +6876,19 @@
       }, 0);
       const sumRows = rows => (Array.isArray(rows) ? rows : []).reduce((total, row) => total + financeiroNumber(row.valor), 0);
       const valesCalculados = (Array.isArray(map.vales) ? map.vales : []).filter(row => !financeiroIsValeChapa(row));
-      const diaristasTotal = financeiroNumber(map.diarista) + sumRows(map.diaristas);
+      const diaristaAvulso = financeiroNumber(map.diarista);
+      const diaristaAvulsoComRecibo = map.diarista_recibo_recebido !== false;
+      const diaristasComRecibo = (Array.isArray(map.diaristas) ? map.diaristas : []).filter(row => row.recibo_recebido !== false);
+      const diaristasSemRecibo = (Array.isArray(map.diaristas) ? map.diaristas : []).filter(row => row.recibo_recebido === false);
+      const valesDiaristas = (diaristaAvulsoComRecibo ? 0 : diaristaAvulso) + sumRows(diaristasSemRecibo);
+      const valesTotal = sumRows(valesCalculados) + valesDiaristas;
+      const diaristasTotal = (diaristaAvulsoComRecibo ? diaristaAvulso : 0) + sumRows(diaristasComRecibo);
       const alimentacao = financeiroNumber(map.pernoite) + financeiroNumber(map.hospedagem) + financeiroNumber(map.janta) + financeiroNumber(map.almoco) + financeiroNumber(map.cafe);
-      const totalApurado = dinheiroTotal + financeiroNumber(map.moedas) + sumRows(map.transferencias) + sumRows(map.despesas) + sumRows(valesCalculados) + diaristasTotal + alimentacao;
-      const diferenca = financeiroNumber(map.total_promax) - totalApurado;
-      const boletosDiferencaQtd = financeiroNumber(map.boletos_rota) - financeiroNumber(map.boletos_recebido_qtd);
+      const totalApurado = dinheiroTotal + financeiroNumber(map.moedas) + sumRows(map.transferencias) + sumRows(map.despesas) + valesTotal + diaristasTotal + alimentacao;
       const dinheiroPromax = financeiroNumber(map.dinheiro_promax);
-      return { dinheiroTotal, dinheiroPromax, diaristasTotal, alimentacao, totalApurado, diferenca, boletosDiferencaQtd };
+      const diferenca = dinheiroPromax - totalApurado;
+      const boletosDiferencaQtd = financeiroNumber(map.boletos_rota) - financeiroNumber(map.boletos_recebido_qtd);
+      return { dinheiroTotal, dinheiroPromax, diaristasTotal, valesTotal, alimentacao, totalApurado, diferenca, boletosDiferencaQtd };
     }
 
     function financeiroMapaEntraNoCaixa(map) {
@@ -6913,12 +6919,12 @@
       }, {});
       const numerarioMalote = financeiroNumber(summary.numerario_total || (financeiroNumber(summary.dinheiro_total) + financeiroNumber(summary.moedas)));
       const depositos = financeiroNumber(summary.depositos_total || (financeiroNumber(summary.credito_conta) + financeiroNumber(summary.transferencias_total)));
-      const totalPromax = financeiroNumber(summary.total_promax);
+      const totalPromax = financeiroNumber(summary.dinheiro_promax || summary.total_promax);
       const diferenca = financeiroNumber(summary.diferenca);
       const dinheiroPct = financeiroNumber(summary.dinheiro_percent || (totalPromax ? (numerarioMalote / totalPromax) * 100 : 0));
       const depositoPct = financeiroNumber(summary.deposito_percent || (totalPromax ? (depositos / totalPromax) * 100 : 0));
       const transfers = financeiroRowsFromMaps(caixaMaps, "transferencias");
-      const vales = financeiroRowsFromMaps(maps, "vales");
+      const vales = financeiroRowsFromMaps(maps, "vales_consolidados");
       const despesas = financeiroRowsFromMaps(maps, "despesas");
       const despesasBody = despesas.length ? despesas.slice(0, 12).map(({ map, row }) => `
         <tr>
@@ -6973,7 +6979,7 @@
               <div class="finance-sheet-box-title"><span>Resumo</span><strong>${escapeHtml(summary.status || "-")}</strong></div>
               <table class="finance-sheet-table">
                 <tbody>
-                  <tr><td>Total Promax</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.total_promax || 0))}</td></tr>
+                  <tr><td>Dinheiro Promax</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.dinheiro_promax || summary.total_promax || 0))}</td></tr>
                   <tr><td>Numerario do Malote</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(numerarioMalote))}</td></tr>
                   <tr><td>Boletos rota</td><td class="finance-sheet-value">${escapeHtml(String(financeiroNumber(summary.boletos_recebido_qtd || 0)))} / ${escapeHtml(String(financeiroNumber(summary.boletos_rota || 0)))}</td></tr>
                   <tr><td>Despesas</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.despesas_total || 0))}</td></tr>
@@ -7100,6 +7106,7 @@
       map.despesas = financeiroCollectRows(root, "despesas");
       map.vales = financeiroCollectRows(root, "vales");
       map.diaristas = financeiroCollectRows(root, "diaristas");
+      map.total_promax = map.dinheiro_promax;
       map.dirty_fields = financeiroNormalizeDirtyFields(map.dirty_fields);
       return map;
     }
@@ -7117,6 +7124,41 @@
         }
         return Object.values(item).some(value => typeof value === "boolean" ? value : String(value || "").trim());
       });
+    }
+
+    function financeiroRefreshEditorComputedValues(map) {
+      const root = document.getElementById("financeiroEditor");
+      if (!root || !map) return;
+      const totals = financeiroTotals(map);
+      const dinheiroEl = root.querySelector('[data-financeiro-summary="dinheiro_contado"]');
+      if (dinheiroEl) dinheiroEl.textContent = formatMoneyText(totals.dinheiroTotal);
+      const totalEl = root.querySelector('[data-financeiro-summary="total_apurado"]');
+      if (totalEl) totalEl.textContent = formatMoneyText(totals.totalApurado);
+      const boletosEl = root.querySelector('[data-financeiro-summary="boletos"]');
+      if (boletosEl) {
+        boletosEl.textContent = `${financeiroNumber(map.boletos_recebido_qtd)} / ${financeiroNumber(map.boletos_rota)}`;
+        boletosEl.classList.toggle("text-success", Math.abs(totals.boletosDiferencaQtd) < 0.01);
+        boletosEl.classList.toggle("text-danger", Math.abs(totals.boletosDiferencaQtd) >= 0.01);
+      }
+      const diferencaEl = root.querySelector('[data-financeiro-summary="diferenca"]');
+      if (diferencaEl) {
+        diferencaEl.textContent = formatMoneyText(totals.diferenca);
+        diferencaEl.classList.toggle("text-success", Math.abs(totals.diferenca) < 0.01);
+        diferencaEl.classList.toggle("text-danger", Math.abs(totals.diferenca) >= 0.01);
+      }
+    }
+
+    function financeiroTrackEditorInput(event) {
+      state.financeiro.draft = financeiroCollectDraft();
+      const target = event.currentTarget;
+      if (target && target.dataset) {
+        if (target.dataset.financeiroField) {
+          financeiroMarkDraftDirty(target.dataset.financeiroField);
+        } else if (target.dataset.financeiroDenom) {
+          financeiroMarkDraftDirty("dinheiro");
+        }
+      }
+      financeiroRefreshEditorComputedValues(state.financeiro.draft);
     }
 
     function financeiroRender() {
@@ -7424,7 +7466,6 @@
               ${isLancamento || isCompra ? "" : financeiroInput("ajudante2", "Ajudante 2", map.ajudante2)}
               ${isLancamento ? "" : financeiroInput("boletos_rota", "Boletos rota (qtd.)", map.boletos_rota, "number", "1")}
               ${isLancamento ? "" : financeiroInput("boletos_recebido_qtd", "Boletos que voltaram (qtd.)", map.boletos_recebido_qtd, "number", "1")}
-              ${isLancamento ? "" : financeiroInput("total_promax", "Total Promax", map.total_promax, "number")}
               ${isLancamento ? "" : financeiroInput("credito_conta", "Credito em conta", map.credito_conta, "number")}
               ${isLancamento ? "" : financeiroInput("dinheiro_promax", "Dinheiro Promax", map.dinheiro_promax, "number")}
             </div>
@@ -7441,34 +7482,26 @@
                 ${financeiroInput("janta", "Janta", map.janta, "number")}
                 ${financeiroInput("almoco", "Almoco", map.almoco, "number")}
                 ${financeiroInput("cafe", "Cafe", map.cafe, "number")}
-                <div class="finance-summary-item"><span>Dinheiro contado</span><strong>${formatMoneyText(totals.dinheiroTotal)}</strong></div>
+                <div class="finance-summary-item"><span>Dinheiro contado</span><strong data-financeiro-summary="dinheiro_contado">${formatMoneyText(totals.dinheiroTotal)}</strong></div>
               </div>
             </section>
           `}
           <section class="finance-detail-grid">${visibleBlocks.join("")}</section>
           <label class="form-label small fw-semibold w-100">Observacao<textarea class="form-control mt-1" rows="2" data-financeiro-field="observacao">${escapeHtml(map.observacao || "")}</textarea></label>
           <div class="finance-summary-strip">
-            <div class="finance-summary-item"><span>Total apurado</span><strong>${formatMoneyText(totals.totalApurado)}</strong></div>
-            ${isLancamento ? "" : `<div class="finance-summary-item"><span>Conferencia boletos</span><strong class="${Math.abs(totals.boletosDiferencaQtd) < 0.01 ? "text-success" : "text-danger"}">${financeiroNumber(map.boletos_recebido_qtd)} / ${financeiroNumber(map.boletos_rota)}</strong></div>`}
-            ${isLancamento ? "" : `<div class="finance-summary-item"><span>Diferenca</span><strong class="${Math.abs(totals.diferenca) < 0.01 ? "text-success" : "text-danger"}">${formatMoneyText(totals.diferenca)}</strong></div>`}
+            <div class="finance-summary-item"><span>Total apurado</span><strong data-financeiro-summary="total_apurado">${formatMoneyText(totals.totalApurado)}</strong></div>
+            ${isLancamento ? "" : `<div class="finance-summary-item"><span>Conferencia boletos</span><strong data-financeiro-summary="boletos" class="${Math.abs(totals.boletosDiferencaQtd) < 0.01 ? "text-success" : "text-danger"}">${financeiroNumber(map.boletos_recebido_qtd)} / ${financeiroNumber(map.boletos_rota)}</strong></div>`}
+            ${isLancamento ? "" : `<div class="finance-summary-item"><span>Diferenca</span><strong data-financeiro-summary="diferenca" class="${Math.abs(totals.diferenca) < 0.01 ? "text-success" : "text-danger"}">${formatMoneyText(totals.diferenca)}</strong></div>`}
           </div>
           <div class="finance-editor-footer">
             <button type="button" class="btn btn-primary btn-sm" id="financeiroSaveMapBottomBtn"><i class="bi bi-check2-circle me-1"></i>Salvar mapa</button>
           </div>
         </div>
       `;
-      el.querySelectorAll("input, textarea").forEach(input => input.addEventListener("change", event => {
-        state.financeiro.draft = financeiroCollectDraft();
-        const target = event.currentTarget;
-        if (target && target.dataset) {
-          if (target.dataset.financeiroField) {
-            financeiroMarkDraftDirty(target.dataset.financeiroField);
-          } else if (target.dataset.financeiroDenom) {
-            financeiroMarkDraftDirty("dinheiro");
-          }
-        }
-        financeiroRenderEditor(state.financeiro.draft);
-      }));
+      el.querySelectorAll("input, textarea, select").forEach(input => {
+        input.addEventListener("input", financeiroTrackEditorInput);
+        input.addEventListener("change", financeiroTrackEditorInput);
+      });
       el.querySelectorAll("[data-financeiro-add]").forEach(button => button.addEventListener("click", () => financeiroAddRow(button.dataset.financeiroAdd)));
       el.querySelectorAll("[data-financeiro-remove]").forEach(button => button.addEventListener("click", () => financeiroRemoveRow(button.dataset.financeiroRemove, Number(button.dataset.index))));
       const gerarValesDiarista = document.getElementById("financeiroGerarValesDiaristaBtn");

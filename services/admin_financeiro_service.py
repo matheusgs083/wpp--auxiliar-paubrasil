@@ -241,6 +241,8 @@ class AdminFinanceiroService:
         dinheiro = _normalize_dinheiro(payload.get("dinheiro") or {})
         dirty_fields = _normalize_financeiro_dirty_fields(payload.get("dirty_fields"))
         dirty_flags = _financeiro_manual_update_flags(dirty_fields)
+        dinheiro_promax_payload = _decimal(payload.get("dinheiro_promax"))
+        total_promax_payload = dinheiro_promax_payload
         username = str((context or {}).get("username") or (context or {}).get("mode") or "")
         with self._connect() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
@@ -313,9 +315,9 @@ class AdminFinanceiroService:
                         ajudante2,
                         _decimal(payload.get("boletos_rota")),
                         _decimal(payload.get("boletos_recebido_qtd")),
-                        _decimal(payload.get("total_promax")),
+                        total_promax_payload,
                         _decimal(payload.get("credito_conta")),
-                        _decimal(payload.get("dinheiro_promax")),
+                        dinheiro_promax_payload,
                         Jsonb(dinheiro),
                         _decimal(payload.get("moedas")),
                         diarista,
@@ -335,7 +337,7 @@ class AdminFinanceiroService:
                         dirty_flags["ajudante2"],
                         dirty_flags["boletos_rota"],
                         dirty_flags["boletos_recebido_qtd"],
-                        dirty_flags["total_promax"],
+                        dirty_flags["total_promax"] or dirty_flags["dinheiro_promax"],
                         dirty_flags["credito_conta"],
                         dirty_flags["dinheiro_promax"],
                         dirty_flags["dinheiro"],
@@ -739,8 +741,20 @@ class AdminFinanceiroService:
         dinheiro_total = sum(Decimal(denom) * Decimal(qtd) for denom, qtd in dinheiro.items())
         transferencias_total = _sum_detail(details["transferencias"].get(mapa_id, []))
         despesas_total = _sum_detail(details["despesas"].get(mapa_id, []))
-        vales_total = _sum_detail([row for row in details["vales"].get(mapa_id, []) if not _is_vale_chapa(row)])
-        diaristas_total = _decimal(row.get("diarista")) + _sum_detail(details["diaristas"].get(mapa_id, []))
+        vales = details["vales"].get(mapa_id, [])
+        diaristas = details["diaristas"].get(mapa_id, [])
+        diarista_avulso = _decimal(row.get("diarista"))
+        diarista_avulso_com_recibo = _bool(row.get("diarista_recibo_recebido"), default=True)
+        diaristas_com_recibo = [item for item in diaristas if _bool(item.get("recibo_recebido"), default=True)]
+        vales_diaristas = _diarista_vale_rows(
+            motorista=str(row.get("motorista") or ""),
+            diarista=diarista_avulso,
+            diarista_recibo_recebido=diarista_avulso_com_recibo,
+            diaristas=diaristas,
+            vales=vales,
+        )
+        vales_total = _sum_detail([item for item in vales if not _is_vale_chapa(item)]) + _sum_detail(vales_diaristas)
+        diaristas_total = (diarista_avulso if diarista_avulso_com_recibo else Decimal("0")) + _sum_detail(diaristas_com_recibo)
         alimentacao_total = (
             hospedagem_total
             + _decimal(row.get("janta"))
@@ -751,8 +765,9 @@ class AdminFinanceiroService:
         boletos_recebido_qtd = _decimal(row.get("boletos_recebido_qtd"))
         boletos_diferenca_qtd = boletos_rota - boletos_recebido_qtd
         total_apurado = dinheiro_total + _decimal(row.get("moedas")) + transferencias_total + despesas_total + vales_total + diaristas_total + alimentacao_total
-        total_promax = _decimal(row.get("total_promax"))
-        diferenca = total_promax - total_apurado
+        dinheiro_promax = _decimal(row.get("dinheiro_promax"))
+        total_promax = dinheiro_promax
+        diferenca = dinheiro_promax - total_apurado
         tipo_bloco = _normalize_tipo_bloco(row.get("tipo_bloco"))
         mapa_key = str(row.get("mapa") or "")
         mapa_ref = str(row.get("mapa_ref") or "") or mapa_key
@@ -775,7 +790,7 @@ class AdminFinanceiroService:
             "boletos_diferenca_qtd": _money(boletos_diferenca_qtd),
             "total_promax": _money(total_promax),
             "credito_conta": _money(row.get("credito_conta")),
-            "dinheiro_promax": _money(row.get("dinheiro_promax")),
+            "dinheiro_promax": _money(dinheiro_promax),
             "dinheiro": dinheiro,
             "dinheiro_total": _money(dinheiro_total),
             "moedas": _money(row.get("moedas")),
@@ -788,8 +803,9 @@ class AdminFinanceiroService:
             "cafe": _money(row.get("cafe")),
             "transferencias": details["transferencias"].get(mapa_id, []),
             "despesas": details["despesas"].get(mapa_id, []),
-            "vales": details["vales"].get(mapa_id, []),
-            "diaristas": details["diaristas"].get(mapa_id, []),
+            "vales": vales,
+            "vales_consolidados": vales + vales_diaristas,
+            "diaristas": diaristas,
             "transferencias_total": _money(transferencias_total),
             "despesas_total": _money(despesas_total),
             "vales_total": _money(vales_total),
@@ -1047,7 +1063,7 @@ def _build_caixa_pdf(payload: dict[str, Any]) -> bytes:
             ("Diaristas", "diaristas", ["Nome", "Valor", "Recibo"]),
         )
         for title, key, headers in detail_blocks:
-            rows = item.get(key) or []
+            rows = (item.get("vales_consolidados") if key == "vales" else item.get(key)) or []
             if rows:
                 story.append(Spacer(1, 1.5 * mm))
                 story.append(_pdf_map_detail_table(title, key, rows, headers, styles, p))
@@ -1102,6 +1118,10 @@ def _pdf_summary_table(summary: dict[str, Any]) -> Any:
         ("Despesas", _fmt_money(summary.get("despesas_total"))),
         ("Diaristas", _fmt_money(summary.get("diaristas_total"))),
         ("Alimentacao", _fmt_money(summary.get("alimentacao_total"))),
+        ("Hospedagem", _fmt_money(summary.get("alimentacao_hospedagem_total"))),
+        ("Janta", _fmt_money(summary.get("alimentacao_janta_total"))),
+        ("Almoco", _fmt_money(summary.get("alimentacao_almoco_total"))),
+        ("Cafe", _fmt_money(summary.get("alimentacao_cafe_total"))),
         ("Vales", _fmt_money(summary.get("vales_total"))),
         ("Status", str(summary.get("status") or "-")),
     ]
@@ -1228,6 +1248,8 @@ def _pdf_map_table(item: dict[str, Any], styles: dict[str, Any], p: Any) -> Any:
         [p("Boletos rota"), p(f"{_fmt_qty(item.get('boletos_recebido_qtd'))} / {_fmt_qty(item.get('boletos_rota'))}"), p("Dinheiro"), p(_fmt_money(item.get("dinheiro_total")), "value")],
         [p("Moedas"), p(_fmt_money(item.get("moedas")), "value"), p("Diaristas"), p(_fmt_money(item.get("diaristas_total")), "value")],
         [p("Alimentacao"), p(_fmt_money(item.get("alimentacao_total")), "value"), p("Hospedagem"), p(_fmt_money(item.get("alimentacao_hospedagem_total")), "value")],
+        [p("Janta"), p(_fmt_money(item.get("alimentacao_janta_total")), "value"), p("Almoco"), p(_fmt_money(item.get("alimentacao_almoco_total")), "value")],
+        [p("Cafe"), p(_fmt_money(item.get("alimentacao_cafe_total")), "value"), p("Vales"), p(_fmt_money(item.get("vales_total")), "value")],
     ]
     if item.get("observacao"):
         data.append([p("Observacao"), p(item.get("observacao")), "", ""])
@@ -1264,7 +1286,8 @@ def _pdf_map_detail_table(title: str, key: str, rows: list[dict[str, Any]], head
 def _flatten_detail_rows(maps: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in maps:
-        for detail in item.get(key) or []:
+        details = item.get("vales_consolidados") if key == "vales" else item.get(key)
+        for detail in details or []:
             merged = dict(detail)
             merged["mapa"] = item.get("mapa") or ""
             merged["motorista"] = item.get("motorista") or ""
@@ -1556,6 +1579,52 @@ def _sum_detail(rows: list[dict[str, Any]]) -> Decimal:
 
 def _is_vale_chapa(row: dict[str, Any]) -> bool:
     return str(row.get("observacao") or "").strip().lower() == "vale de chapa"
+
+
+def _diarista_vale_rows(
+    *,
+    motorista: str,
+    diarista: Decimal,
+    diarista_recibo_recebido: bool,
+    diaristas: list[dict[str, Any]],
+    vales: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    def has_existing_vale_chapa(nome: str, valor: Decimal) -> bool:
+        clean_nome = str(nome or "").strip().lower()
+        for vale in vales:
+            if not _is_vale_chapa(vale):
+                continue
+            if str(vale.get("nome") or "").strip().lower() != clean_nome:
+                continue
+            if _decimal(vale.get("valor")) == valor:
+                return True
+        return False
+
+    def add_row(nome: str, valor: Decimal) -> None:
+        if valor <= 0:
+            return
+        clean_nome = str(nome or "").strip() or motorista or "Diarista"
+        if has_existing_vale_chapa(clean_nome, valor):
+            return
+        rows.append(
+            {
+                "nome": clean_nome,
+                "valor": _money(valor),
+                "observacao": "vale de chapa",
+                "assinado": False,
+                "origem": "diarista_sem_recibo",
+            }
+        )
+
+    if diarista > 0 and not diarista_recibo_recebido:
+        add_row(motorista, diarista)
+    for item in diaristas:
+        if _bool(item.get("recibo_recebido"), default=True):
+            continue
+        add_row(str(item.get("nome") or motorista or ""), _decimal(item.get("valor")))
+    return rows
 
 
 def _nested_get(source: Any, path: tuple[str, ...]) -> Any:
