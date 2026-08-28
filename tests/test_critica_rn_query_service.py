@@ -1,5 +1,6 @@
 import sys
 import unittest
+import io
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -31,6 +32,13 @@ from bot_api.services.critica_rn_query_service import (
     build_critica_rn_gv_summary_pdf,
 )
 from bot_api.tests.test_support import make_critica_record
+
+
+def _pdf_text(pdf_bytes: bytes) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
 
 
 class CriticaRnQueryServiceRuleTests(unittest.TestCase):
@@ -72,6 +80,37 @@ class CriticaRnQueryServiceRuleTests(unittest.TestCase):
         )
 
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+
+    def test_gv_summary_pdf_separates_sections_by_filial(self) -> None:
+        records = [
+            make_critica_record(
+                filial="3",
+                pedido="710001",
+                cod_pdv="18008",
+                nome_pdv="POSTO PAIZAO",
+                setor="401",
+                seller_code="3_401",
+                manager_code="3_5",
+                data_pedido=date(2026, 7, 17),
+            ),
+            make_critica_record(
+                filial="4",
+                pedido="720001",
+                cod_pdv="11922",
+                nome_pdv="LOS BURGUERS SB",
+                setor="504",
+                seller_code="4_504",
+                manager_code="4_5",
+                data_pedido=date(2026, 7, 17),
+            ),
+        ]
+        summary = _summarize_records(records)
+        pdf_bytes = build_critica_rn_gv_summary_pdf(summary=summary, records=records)
+        text = _pdf_text(pdf_bytes)
+
+        self.assertIn("FILIAL 3 - Patos", text)
+        self.assertIn("FILIAL 4 - Sume", text)
+        self.assertLess(text.index("FILIAL 3 - Patos"), text.index("FILIAL 4 - Sume"))
 
     def test_current_critica_import_allows_matching_operation_scope_only(self) -> None:
         class FakeCursor:

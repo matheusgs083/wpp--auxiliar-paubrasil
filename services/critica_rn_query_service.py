@@ -1828,17 +1828,8 @@ def build_critica_rn_gv_summary_pdf(
         Paragraph("INDICADORES DE PROBLEMA", styles["section"]),
         _problem_table(summary, styles["table_header"], styles["table_cell"]),
         Spacer(1, 4),
-        Paragraph("RESUMO POR SETOR", styles["section"]),
-        _gv_sector_summary_table(records, styles),
-        Spacer(1, 4),
-        Paragraph("CIDADES POR SETOR", styles["section"]),
-        *_gv_city_by_sector_tables(records, styles),
-        Spacer(1, 4),
-        Paragraph("PRODUTOS DO RELATORIO", styles["section"]),
-        _product_summary_table(records, styles),
-        Spacer(1, 4),
-        *_visits_without_order_section(visits_without_order, styles, group_by_sector=True),
     ]
+    elements.extend(_gv_summary_sections_by_filial(records, visits_without_order, styles))
 
     def draw_page_header(canvas: Any, doc_obj: Any) -> None:
         _draw_report_page_header(
@@ -1853,6 +1844,78 @@ def build_critica_rn_gv_summary_pdf(
 
     doc.build(elements, onFirstPage=draw_page_header, onLaterPages=_draw_report_page_background)
     return buffer.getvalue()
+
+
+def _gv_summary_sections_by_filial(
+    records: list[CriticaRnRecord],
+    visits_without_order: list[CriticaVisitWithoutOrderRecord] | tuple[CriticaVisitWithoutOrderRecord, ...],
+    styles: dict[str, Any],
+) -> list[Any]:
+    from reportlab.platypus import Paragraph, Spacer
+
+    record_groups: dict[str, list[CriticaRnRecord]] = {}
+    visit_groups: dict[str, list[CriticaVisitWithoutOrderRecord]] = {}
+    for record in records:
+        filial = str(record.filial or "").strip() or "-"
+        record_groups.setdefault(filial, []).append(record)
+    for visit in visits_without_order:
+        filial = str(visit.filial or "").strip() or "-"
+        visit_groups.setdefault(filial, []).append(visit)
+
+    filiais = sorted(set(record_groups) | set(visit_groups), key=_sort_key_numeric_text)
+    if not filiais:
+        return [
+            Paragraph("RESUMO POR SETOR", styles["section"]),
+            _gv_sector_summary_table(records, styles),
+            Spacer(1, 4),
+            Paragraph("CIDADES POR SETOR", styles["section"]),
+            *_gv_city_by_sector_tables(records, styles),
+            Spacer(1, 4),
+            Paragraph("PRODUTOS DO RELATORIO", styles["section"]),
+            _product_summary_table(records, styles),
+            Spacer(1, 4),
+            *_visits_without_order_section(visits_without_order, styles, group_by_sector=True),
+        ]
+
+    flowables: list[Any] = []
+    for filial in filiais:
+        filial_records = record_groups.get(filial, [])
+        filial_visits = visit_groups.get(filial, [])
+        filial_summary = _summarize_records(filial_records)
+        title = _format_filial_section_title(filial, filial_summary, filial_visits)
+        flowables.extend(
+            [
+                Spacer(1, 6),
+                Paragraph(_escape(title), styles["section"]),
+                Paragraph("RESUMO POR SETOR", styles["section"]),
+                _gv_sector_summary_table(filial_records, styles),
+                Spacer(1, 4),
+                Paragraph("CIDADES POR SETOR", styles["section"]),
+                *_gv_city_by_sector_tables(filial_records, styles),
+                Spacer(1, 4),
+                Paragraph("PRODUTOS DO RELATORIO", styles["section"]),
+                _product_summary_table(filial_records, styles),
+                Spacer(1, 4),
+                *_visits_without_order_section(filial_visits, styles, group_by_sector=True),
+            ]
+        )
+    return flowables
+
+
+def _format_filial_section_title(
+    filial: str,
+    summary: CriticaRnSummary,
+    visits: list[CriticaVisitWithoutOrderRecord],
+) -> str:
+    filial_code = str(filial or "").strip()
+    filial_name = FILIAL_LABELS.get(filial_code, f"Revenda {filial_code}" if filial_code and filial_code != "-" else "Sem filial")
+    return (
+        f"FILIAL {filial_code} - {filial_name} | "
+        f"{summary.pedido_count} pedidos | "
+        f"{summary.client_count} clientes | "
+        f"{summary.problem_pedido_count} pedidos com problema | "
+        f"{len(visits)} PDV(s) sem pedido"
+    )
 
 
 def _summary_table(summary: CriticaRnSummary, records: list[CriticaRnRecord], header_style: Any, value_style: Any) -> Any:
