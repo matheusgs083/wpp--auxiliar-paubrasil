@@ -3,9 +3,11 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+import io
 import re
 from typing import Any
 import unicodedata
+import zipfile
 
 from fastapi import HTTPException, Response
 
@@ -725,6 +727,43 @@ def _normalize_admin_critica_sector(value: Any) -> str:
     return normalized
 
 
+def _build_admin_critica_reports_zip(
+    *,
+    reports: list[Any],
+    target_date: date,
+    summary_only: bool,
+) -> Response:
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for report in reports:
+            if not getattr(report, "records", None):
+                continue
+            first = report.records[0]
+            filial = str(getattr(first, "filial", "") or "").strip() or "base"
+            pdf_bytes = getattr(report, "summary_pdf_bytes", b"") if summary_only else getattr(report, "pdf_bytes", b"")
+            if not pdf_bytes:
+                continue
+            filename = (
+                f"critica-rn-resumo-{filial}-{target_date.isoformat()}.pdf"
+                if summary_only
+                else f"critica-rn-{filial}-{target_date.isoformat()}.pdf"
+            )
+            archive.writestr(filename, pdf_bytes)
+    payload = zip_buffer.getvalue()
+    if not payload:
+        raise HTTPException(status_code=404, detail="Nao encontrei PDFs de critica para o escopo selecionado.")
+    zip_name = (
+        f"critica-rn-resumo-filiais-{target_date.isoformat()}.zip"
+        if summary_only
+        else f"critica-rn-filiais-{target_date.isoformat()}.zip"
+    )
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
+    )
+
+
 def _build_admin_critica_sector_pdf_response(
     context: dict[str, Any] | None,
     *,
@@ -733,25 +772,36 @@ def _build_admin_critica_sector_pdf_response(
     target_date: date | None,
     summary_only: bool,
 ) -> Response:
-    normalized_operation = _normalize_admin_critica_operation(operation)
+    raw_operation = str(operation or "").strip()
     raw_sector = str(sector or "").strip()
     normalized_sector = _normalize_admin_critica_sector(raw_sector) if raw_sector else ""
     allowed_filiais, _allowed_gv_vdes = _panel_context_allowed_report_scopes(context)
-    if allowed_filiais is not None and normalized_operation not in set(allowed_filiais):
-        raise HTTPException(status_code=403, detail="Operacao fora do escopo liberado para este painel.")
+    allowed_filiais_set = {str(item).strip() for item in (allowed_filiais or []) if str(item).strip()}
+
+    if raw_operation:
+        normalized_operation = _normalize_admin_critica_operation(raw_operation)
+        if allowed_filiais is not None and normalized_operation not in allowed_filiais_set:
+            raise HTTPException(status_code=403, detail="Operacao fora do escopo liberado para este painel.")
+    else:
+        normalized_operation = ""
+        if raw_sector:
+            raise HTTPException(status_code=400, detail="Operacao da critica obrigatoria para gerar PDF por setor.")
 
     is_sector_scope = bool(normalized_sector)
-    allowed_sector_scopes = (
-        [normalize_stored_scope_value(f"{normalized_operation}_{normalized_sector}")]
-        if is_sector_scope
-        else [normalize_filial_scope_input(normalized_operation)]
-    )
+    if is_sector_scope:
+        allowed_sector_scopes = [normalize_stored_scope_value(f"{normalized_operation}_{normalized_sector}")]
+    elif normalized_operation:
+        allowed_sector_scopes = [normalize_filial_scope_input(normalized_operation)]
+    elif allowed_filiais_set:
+        allowed_sector_scopes = [normalize_filial_scope_input(filial) for filial in sorted(allowed_filiais_set, key=int)]
+    else:
+        raise HTTPException(status_code=400, detail="Operacao da critica obrigatoria.")
     effective_date = target_date or critica_rn_query_service.latest_date(allowed_sectors=allowed_sector_scopes)
     if effective_date is None:
         scope_label = (
             f"operacao {normalized_operation} e setor {normalized_sector}"
             if is_sector_scope
-            else f"operacao {normalized_operation}"
+            else (f"operacao {normalized_operation}" if normalized_operation else "escopo selecionado")
         )
         raise HTTPException(
             status_code=404,
@@ -759,6 +809,18 @@ def _build_admin_critica_sector_pdf_response(
         )
 
     try:
+        if not is_sector_scope and not normalized_operation and len(allowed_sector_scopes) > 1:
+            reports = critica_rn_query_service.get_pdf_reports_grouped_by_filial(
+                target_date=effective_date,
+                allowed_sectors=allowed_sector_scopes,
+                allowed_gv_vdes=None,
+                limit=50000,
+            )
+            return _build_admin_critica_reports_zip(
+                reports=reports,
+                target_date=effective_date,
+                summary_only=summary_only,
+            )
         report = critica_rn_query_service.get_pdf_report(
             target_date=effective_date,
             allowed_sectors=allowed_sector_scopes,

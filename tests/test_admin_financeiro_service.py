@@ -138,10 +138,10 @@ def test_financeiro_percentuais_usam_base_dinheiro_mais_deposito() -> None:
 
     summary = service._build_summary(records)
 
-    assert summary["numerario_total"] == 500.0
+    assert summary["numerario_total"] == 400.0
     assert summary["depositos_total"] == 500.0
-    assert summary["dinheiro_percent"] == 50.0
-    assert summary["deposito_percent"] == 50.0
+    assert summary["dinheiro_percent"] == 44.44
+    assert summary["deposito_percent"] == 55.56
 
 
 def test_financeiro_diarista_sem_recibo_vira_vale_calculado() -> None:

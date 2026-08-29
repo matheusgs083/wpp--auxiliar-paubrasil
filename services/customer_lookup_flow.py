@@ -3688,6 +3688,14 @@ def _build_critica_pdf_media_response(
                 media_filename=summary_filename,
             )
         )
+    return _build_media_response_from_attachments(text=text, attachments=attachments)
+
+
+def _build_media_response_from_attachments(
+    *,
+    text: str,
+    attachments: list[MediaAttachment],
+) -> OutgoingMessage:
     attachments = [attachment for attachment in attachments if attachment.media_url]
     if not attachments:
         return OutgoingMessage(text=text)

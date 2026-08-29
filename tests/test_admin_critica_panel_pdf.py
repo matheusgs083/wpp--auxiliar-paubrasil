@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import sys
 import unittest
+import zipfile
 from datetime import date
 from pathlib import Path
 
@@ -12,7 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bot_api.services import admin_critica_dashboard_service
-from tests.test_support import StubCriticaRnService
+from tests.test_support import StubCriticaRnService, make_critica_record
 
 
 def _panel_context_allowed_report_scopes(context: dict[str, object] | None) -> tuple[list[str] | None, None]:
@@ -90,6 +92,38 @@ class AdminCriticaPanelPdfTests(unittest.TestCase):
         self.assertEqual(service.pdf_report_calls[-1]["allowed_sectors"], ["filial:3"])
         self.assertEqual(service.pdf_report_calls[-1]["target_date"], date(2026, 6, 11))
         self.assertEqual(service.pdf_report_calls[-1]["limit"], 50000)
+
+    def test_build_operation_pdf_response_returns_zip_when_scope_has_multiple_filiais(self) -> None:
+        service = StubCriticaRnService(
+            latest=date(2026, 6, 11),
+            records=[
+                make_critica_record(filial="3", pedido="710001", cod_pdv="18008"),
+                make_critica_record(filial="4", pedido="720001", cod_pdv="11922"),
+            ],
+        )
+        self.configure_service(service)
+
+        response = admin_critica_dashboard_service._build_admin_critica_sector_pdf_response(
+            {"is_admin": False, "filiais": ["3", "4"]},
+            operation="",
+            sector="",
+            target_date=None,
+            summary_only=False,
+        )
+
+        self.assertEqual(response.media_type, "application/zip")
+        self.assertIn('filename="critica-rn-filiais-2026-06-11.zip"', response.headers.get("content-disposition", ""))
+        archive = zipfile.ZipFile(io.BytesIO(response.body))
+        self.assertEqual(
+            sorted(archive.namelist()),
+            [
+                "critica-rn-3-2026-06-11.pdf",
+                "critica-rn-4-2026-06-11.pdf",
+            ],
+        )
+        self.assertEqual(service.latest_calls[-1]["allowed_sectors"], ["filial:3", "filial:4"])
+        self.assertEqual(len(service.pdf_reports_grouped_by_filial_calls), 1)
+        self.assertEqual(service.pdf_reports_grouped_by_filial_calls[-1]["allowed_sectors"], ["filial:3", "filial:4"])
 
     def test_build_sector_pdf_response_blocks_without_today_upload(self) -> None:
         service = StubCriticaRnService(latest=date(2026, 6, 10), current_import_available=False)

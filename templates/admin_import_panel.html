@@ -11123,8 +11123,8 @@
     function resolveCriticaOperationExportScope() {
       const params = currentCriticaDashboardParams();
       const operations = Array.isArray(params.operation) ? params.operation.filter(Boolean) : [];
-      if (operations.length !== 1) throw new Error("Selecione uma unica revenda para gerar o PDF.");
-      return { operation: operations[0], date: params.date || "" };
+      if (operations.length > 1) throw new Error("Selecione no maximo uma revenda para gerar o PDF.");
+      return { operation: operations[0] || "", date: params.date || "" };
     }
 
     async function exportCriticaOperationPdf({ summaryOnly = false } = {}) {
@@ -11157,7 +11157,7 @@
 
       try {
         const query = new URLSearchParams();
-        query.set("operation", scope.operation);
+        if (scope.operation) query.set("operation", scope.operation);
         if (scope.date) query.set("date", scope.date);
         if (summaryOnly) query.set("summary_only", "1");
         const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.critica.pdf}?${query.toString()}`, {
@@ -11172,9 +11172,14 @@
         const blob = await response.blob();
         const disposition = response.headers.get("content-disposition") || "";
         const matchedName = disposition.match(/filename=\"([^\"]+)\"/i);
+        const fallbackExtension = response.headers.get("content-type") && response.headers.get("content-type").includes("zip")
+          ? "zip"
+          : "pdf";
         const filename = matchedName && matchedName[1]
           ? matchedName[1]
-          : `critica-rn-operacao-${scope.operation}${summaryOnly ? "-resumo" : ""}.pdf`;
+          : scope.operation
+            ? `critica-rn-operacao-${scope.operation}${summaryOnly ? "-resumo" : ""}.${fallbackExtension}`
+            : `critica-rn-filiais${summaryOnly ? "-resumo" : ""}.${fallbackExtension}`;
         const blobUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = blobUrl;
@@ -11183,7 +11188,12 @@
         anchor.click();
         anchor.remove();
         URL.revokeObjectURL(blobUrl);
-        addLog(`${summaryOnly ? "Resumo" : "PDF"} da critica exportado para revenda ${scope.operation}.`, "ok");
+        addLog(
+          scope.operation
+            ? `${summaryOnly ? "Resumo" : "PDF"} da critica exportado para revenda ${scope.operation}.`
+            : `${summaryOnly ? "Resumo" : "PDF"} da critica exportado para o escopo liberado do painel.`,
+          "ok"
+        );
       } catch (err) {
         addLog(`Falha ao exportar critica da revenda: ${err.message}`, "err");
       } finally {

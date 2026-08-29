@@ -618,6 +618,71 @@ class CriticaRnQueryService:
             summary_pdf_bytes=build_critica_rn_summary_pdf(summary=summary, records=records),
         )
 
+    def get_pdf_reports_grouped_by_filial(
+        self,
+        *,
+        target_date: date,
+        allowed_sectors: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
+        limit: int = 5000,
+    ) -> list[CriticaRnPdfReport]:
+        self._ensure_current_critica_import_for_pdf(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+        )
+        data = self.get_report_data(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+            limit=limit,
+        )
+        if data.summary.row_count <= 0:
+            return []
+
+        visits_without_order = self.list_visits_without_orders(
+            target_date=target_date,
+            allowed_sectors=allowed_sectors,
+            allowed_gv_vdes=allowed_gv_vdes,
+        )
+        grouped_records: dict[str, list[CriticaRnRecord]] = {}
+        for record in data.records:
+            grouped_records.setdefault(record.filial or "", []).append(record)
+
+        grouped_visits: dict[str, list[CriticaVisitWithoutOrderRecord]] = {}
+        for visit in visits_without_order:
+            grouped_visits.setdefault(visit.filial or "", []).append(visit)
+
+        reports: list[CriticaRnPdfReport] = []
+        ordered_filiais = sorted(
+            set(grouped_records) | set(grouped_visits),
+            key=lambda filial: (0, int(filial)) if str(filial).isdigit() else (1, str(filial)),
+        )
+        for filial in ordered_filiais:
+            filial_records = list(grouped_records.get(filial, ()))
+            filial_visits = list(grouped_visits.get(filial, ()))
+            summary = _summarize_records(filial_records)
+            if summary.row_count <= 0:
+                continue
+            reports.append(
+                CriticaRnPdfReport(
+                    summary=summary,
+                    records=filial_records,
+                    pdf_bytes=build_critica_rn_pdf(
+                        summary=summary,
+                        records=filial_records,
+                        visits_without_order=filial_visits,
+                    ),
+                    summary_pdf_bytes=build_critica_rn_summary_pdf(
+                        summary=summary,
+                        records=filial_records,
+                        visits_without_order=filial_visits,
+                    ),
+                    visits_without_order=tuple(filial_visits),
+                )
+            )
+        return reports
+
     def get_pdf_report_by_registration(
         self,
         *,

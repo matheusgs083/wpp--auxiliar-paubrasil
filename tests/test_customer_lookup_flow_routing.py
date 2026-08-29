@@ -42,6 +42,7 @@ from tests.test_support import (
     StubPayipPaymentsService,
     StubPrazoLimiteService,
     StubQueryService,
+    make_critica_record,
     make_decision,
     make_flow,
 )
@@ -521,11 +522,35 @@ class CustomerLookupFlowRoutingTests(unittest.TestCase):
         self.assertEqual(response.kind, "media")
         self.assertTrue(response.media_url.startswith("data:application/pdf;base64,"))
         self.assertEqual(response.media_type, "document")
-        self.assertEqual(response.media_filename, "critica-rn-2026-06-03.pdf")
+        self.assertEqual(response.media_filename, "critica-rn-3-2026-06-03.pdf")
         self.assertEqual(len(response.extra_media), 1)
-        self.assertEqual(response.extra_media[0].media_filename, "critica-rn-resumo-2026-06-03.pdf")
-        self.assertEqual(len(self.critica_service.pdf_report_calls), 1)
-        self.assertEqual(self.critica_service.pdf_report_calls[0]["limit"], 5000)
+        self.assertEqual(response.extra_media[0].media_filename, "critica-rn-resumo-3-2026-06-03.pdf")
+        self.assertEqual(len(self.critica_service.pdf_reports_grouped_by_filial_calls), 1)
+        self.assertEqual(self.critica_service.pdf_reports_grouped_by_filial_calls[0]["limit"], 5000)
+
+    def test_handle_critica_pdf_for_gv_sends_reports_separated_by_filial(self) -> None:
+        self.critica_service.records = [
+            make_critica_record(filial="3", pedido="710001", cod_pdv="18008", manager_code="3_5"),
+            make_critica_record(filial="4", pedido="720001", cod_pdv="11922", manager_code="4_5"),
+        ]
+
+        response = self.flow.handle(
+            IncomingMessage(sender="5511", text="critica pdf 03/06/2026"),
+            make_decision(allowed=True, roles=("gerente_vendas",), gv_vdes=("3_5", "4_5")),
+        )
+
+        self.assertEqual(response.kind, "media")
+        self.assertEqual(response.media_filename, "critica-rn-3-2026-06-03.pdf")
+        self.assertEqual(len(response.extra_media), 3)
+        self.assertEqual(
+            [attachment.media_filename for attachment in response.extra_media],
+            [
+                "critica-rn-resumo-3-2026-06-03.pdf",
+                "critica-rn-4-2026-06-03.pdf",
+                "critica-rn-resumo-4-2026-06-03.pdf",
+            ],
+        )
+        self.assertIn("Filiais enviadas: 2", response.text)
 
     def test_handle_critica_pdf_blocks_without_today_upload(self) -> None:
         self.critica_service.current_import_available = False

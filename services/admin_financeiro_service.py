@@ -847,7 +847,7 @@ class AdminFinanceiroService:
             "credito_conta",
         )
         summary = {key: _money(sum(_decimal(row.get(key)) for row in records)) for key in keys}
-        numerario_total = _decimal(summary.get("dinheiro_total")) + _decimal(summary.get("moedas"))
+        numerario_total = _decimal(summary.get("dinheiro_total"))
         depositos_total = _decimal(summary.get("credito_conta")) + _decimal(summary.get("transferencias_total"))
         base_dinheiro_deposito = numerario_total + depositos_total
         summary["numerario_total"] = _money(numerario_total)
@@ -1032,9 +1032,10 @@ def _build_caixa_pdf(payload: dict[str, Any]) -> bytes:
 
     story.append(Paragraph("Caixa Financeiro", styles["title"]))
     story.append(Paragraph(f"Data: {_format_date_br(payload.get('data'))} | Revenda: {escape(filial_label)} | Gerado em: {generated_at}", styles["subtitle"]))
+    story.append(Paragraph(f"Resumo - {escape(str(summary.get('status') or '-'))}", styles["section"]))
     story.append(_pdf_summary_table(summary))
     story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Hospedagem e Alimentacao", styles["section"]))
+    story.append(Paragraph("Alimentacao por categoria", styles["section"]))
     story.append(_pdf_alimentacao_table(summary))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Numerario do Malote", styles["section"]))
@@ -1060,9 +1061,9 @@ def _build_caixa_pdf(payload: dict[str, Any]) -> bytes:
         story.append(Paragraph(f"Mapa {item.get('mapa') or '-'} - {item.get('motorista') or '-'}", styles["section"]))
         story.append(_pdf_map_table(item, styles, p))
         detail_blocks = (
-            ("Transferencias", "transferencias", ["Data", "Banco", "NB", "NF", "Valor"]),
-            ("Despesas", "despesas", ["Despesa", "Obs.", "Valor"]),
-            ("Vales", "vales", ["Nome", "Obs.", "Valor", "Ass."]),
+            ("Transferencias parciais", "transferencias", ["Data", "Banco", "NB", "NF", "Valor"]),
+            ("Despesas do mapa", "despesas", ["Despesa", "Obs.", "Valor"]),
+            ("Vales do mapa", "vales", ["Nome", "Obs.", "Valor", "Ass."]),
             ("Diaristas", "diaristas", ["Nome", "Valor", "Recibo"]),
         )
         for title, key, headers in detail_blocks:
@@ -1109,26 +1110,22 @@ def _pdf_summary_table(summary: dict[str, Any]) -> Any:
     label_style = ParagraphStyle("PdfSummaryLabel", fontName="Helvetica-Bold", fontSize=7.4, leading=9, textColor=colors.HexColor("#1F2933"))
     value_style = ParagraphStyle("PdfSummaryValue", fontName="Helvetica", fontSize=7.4, leading=9, textColor=colors.HexColor("#1F2933"), alignment=TA_RIGHT)
     rows = [
-        ("Total Promax", _fmt_money(summary.get("total_promax"))),
-        ("Total Apurado", _fmt_money(summary.get("total_apurado"))),
-        ("Diferenca", _fmt_money(summary.get("diferenca"))),
-        ("Numerario", _fmt_money(summary.get("numerario_total"))),
-        ("Credito em conta", _fmt_money(summary.get("credito_conta"))),
-        ("Depositos", _fmt_money(summary.get("depositos_total"))),
-        ("% Deposito", f"{_fmt_qty(summary.get('deposito_percent'))}%"),
-        ("Transferencias", _fmt_money(summary.get("transferencias_total"))),
+        ("Dinheiro Promax", _fmt_money(summary.get("dinheiro_promax") or summary.get("total_promax"))),
+        ("Numerario do Malote", _fmt_money(summary.get("numerario_total"))),
         ("Boletos rota", f"{_fmt_qty(summary.get('boletos_recebido_qtd'))} / {_fmt_qty(summary.get('boletos_rota'))}"),
         ("Despesas", _fmt_money(summary.get("despesas_total"))),
         ("Diaristas", _fmt_money(summary.get("diaristas_total"))),
+        ("Alimentacao", _fmt_money(summary.get("alimentacao_total"))),
+        ("Depositos", _fmt_money(summary.get("depositos_total"))),
         ("Vales", _fmt_money(summary.get("vales_total"))),
-        ("Status", str(summary.get("status") or "-")),
+        ("Moedas", _fmt_money(summary.get("moedas"))),
+        ("Diferenca", _fmt_money(summary.get("diferenca"))),
     ]
-    data = []
-    for idx in range(0, len(rows), 3):
-        row = rows[idx : idx + 3]
-        data.append([Paragraph(escape(label), label_style) for label, _value in row] + [Paragraph("", label_style)] * (3 - len(row)))
-        data.append([Paragraph(escape(value), value_style) for _label, value in row] + [Paragraph("", value_style)] * (3 - len(row)))
-    table = Table(data, colWidths=[60 * mm, 60 * mm, 60 * mm])
+    data = [
+        [Paragraph(escape(label), label_style), Paragraph(escape(value), value_style)]
+        for label, value in rows
+    ]
+    table = Table(data, colWidths=[90 * mm, 90 * mm])
     table.setStyle(_pdf_table_style(header_rows=0))
     return table
 
@@ -1262,18 +1259,25 @@ def _pdf_map_table(item: dict[str, Any], styles: dict[str, Any], p: Any) -> Any:
     from reportlab.lib.units import mm
     from reportlab.platypus import Table
 
+    boletos_text = f"{_fmt_qty(item.get('boletos_recebido_qtd'))} / {_fmt_qty(item.get('boletos_rota'))}"
     data = [
-        [p("Campo", "cell_bold"), p("Valor", "cell_bold"), p("Campo", "cell_bold"), p("Valor", "cell_bold")],
+        [p("Identificacao", "cell_bold"), p("", "cell_bold"), p("", "cell_bold"), p("", "cell_bold")],
+        [p("Numero do mapa"), p(item.get("mapa") or "-"), p("Motorista"), p(item.get("motorista") or "-")],
         [p("Placa"), p(item.get("placa") or "-"), p("Ajudante 1"), p(item.get("ajudante1") or "-")],
-        [p("Motorista"), p(item.get("motorista") or "-"), p("Ajudante 2"), p(item.get("ajudante2") or "-")],
-        [p("Tipo"), p(_tipo_bloco_label(item.get("tipo_bloco"))), p("Status"), p(item.get("status"))],
-        [p("Total Promax"), p(_fmt_money(item.get("total_promax")), "value"), p("Total Apurado"), p(_fmt_money(item.get("total_apurado")), "value")],
-        [p("Diferenca"), p(_fmt_money(item.get("diferenca")), "value"), p("Credito em conta"), p(_fmt_money(item.get("credito_conta")), "value")],
-        [p("Boletos rota"), p(f"{_fmt_qty(item.get('boletos_recebido_qtd'))} / {_fmt_qty(item.get('boletos_rota'))}"), p("Dinheiro"), p(_fmt_money(item.get("dinheiro_total")), "value")],
-        [p("Moedas"), p(_fmt_money(item.get("moedas")), "value"), p("Diaristas"), p(_fmt_money(item.get("diaristas_total")), "value")],
-        [p("Alimentacao"), p(_fmt_money(item.get("alimentacao_total")), "value"), p("Hospedagem"), p(_fmt_money(item.get("alimentacao_hospedagem_total")), "value")],
-        [p("Janta"), p(_fmt_money(item.get("alimentacao_janta_total")), "value"), p("Almoco"), p(_fmt_money(item.get("alimentacao_almoco_total")), "value")],
-        [p("Cafe"), p(_fmt_money(item.get("alimentacao_cafe_total")), "value"), p("Vales"), p(_fmt_money(item.get("vales_total")), "value")],
+        [p("Ajudante 2"), p(item.get("ajudante2") or "-"), p("Tipo"), p(_tipo_bloco_label(item.get("tipo_bloco")))],
+        [p("Boletos rota (qtd.)"), p(_fmt_qty(item.get("boletos_rota"))), p("Boletos que voltaram (qtd.)"), p(_fmt_qty(item.get("boletos_recebido_qtd")))],
+        [p("Credito em conta"), p(_fmt_money(item.get("credito_conta")), "value"), p("Dinheiro Promax"), p(_fmt_money(item.get("dinheiro_promax")), "value")],
+        [p("Total Apurado"), p(_fmt_money(item.get("total_apurado")), "value"), p("Diferenca"), p(_fmt_money(item.get("diferenca")), "value")],
+        [p("Status"), p(item.get("status") or "-"), p("Conferencia boletos"), p(boletos_text)],
+        [p("Dinheiro e alimentacao", "cell_bold"), p("", "cell_bold"), p("", "cell_bold"), p("", "cell_bold")],
+        [p("R$ 200"), p(str(int(_decimal((item.get("dinheiro") or {}).get("200"))))), p("R$ 100"), p(str(int(_decimal((item.get("dinheiro") or {}).get("100")))))],
+        [p("R$ 50"), p(str(int(_decimal((item.get("dinheiro") or {}).get("50"))))), p("R$ 20"), p(str(int(_decimal((item.get("dinheiro") or {}).get("20")))))],
+        [p("R$ 10"), p(str(int(_decimal((item.get("dinheiro") or {}).get("10"))))), p("R$ 5"), p(str(int(_decimal((item.get("dinheiro") or {}).get("5")))))],
+        [p("R$ 2"), p(str(int(_decimal((item.get("dinheiro") or {}).get("2"))))), p("Moedas"), p(_fmt_money(item.get("moedas")), "value")],
+        [p("Hospedagem"), p(_fmt_money(item.get("alimentacao_hospedagem_total")), "value"), p("Janta"), p(_fmt_money(item.get("alimentacao_janta_total")), "value")],
+        [p("Almoco"), p(_fmt_money(item.get("alimentacao_almoco_total")), "value"), p("Cafe"), p(_fmt_money(item.get("alimentacao_cafe_total")), "value")],
+        [p("Diaristas"), p(_fmt_money(item.get("diaristas_total")), "value"), p("Vales"), p(_fmt_money(item.get("vales_total")), "value")],
+        [p("Dinheiro contado"), p(_fmt_money(item.get("dinheiro_total")), "value"), p("Alimentacao"), p(_fmt_money(item.get("alimentacao_total")), "value")],
     ]
     if item.get("observacao"):
         data.append([p("Observacao"), p(item.get("observacao")), "", ""])

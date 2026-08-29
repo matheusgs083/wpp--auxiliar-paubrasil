@@ -379,6 +379,7 @@ class StubCriticaRnService(StubStatusService):
         self.registration_calls: list[dict[str, Any]] = []
         self.report_calls: list[dict[str, Any]] = []
         self.pdf_report_calls: list[dict[str, Any]] = []
+        self.pdf_reports_grouped_by_filial_calls: list[dict[str, Any]] = []
         self.gv_summary_pdf_calls: list[dict[str, Any]] = []
         self.registration_pdf_calls: list[dict[str, Any]] = []
         self.latest_calls: list[dict[str, Any]] = []
@@ -414,6 +415,33 @@ class StubCriticaRnService(StubStatusService):
             pdf_bytes=b"%PDF-critica-detalhe",
             summary_pdf_bytes=b"%PDF-critica-resumo",
         )
+
+    def get_pdf_reports_grouped_by_filial(self, **kwargs: Any) -> list[Any]:
+        self._raise_if_current_import_missing()
+        self.pdf_reports_grouped_by_filial_calls.append(kwargs)
+        grouped: dict[str, list[CriticaRnRecord]] = {}
+        for record in self.records:
+            grouped.setdefault(record.filial, []).append(record)
+        reports: list[Any] = []
+        for filial in sorted(grouped, key=lambda value: int(value) if value.isdigit() else value):
+            filial_records = grouped[filial]
+            summary = replace(
+                self.summary,
+                row_count=len(filial_records),
+                pedido_count=len({(record.filial, record.pedido) for record in filial_records}),
+                client_count=len({(record.filial, record.cod_pdv) for record in filial_records}),
+                problem_row_count=sum(1 for record in filial_records if record.possui_problema),
+                problem_pedido_count=len({(record.filial, record.pedido) for record in filial_records if record.possui_problema}),
+            )
+            reports.append(
+                SimpleNamespace(
+                    summary=summary,
+                    records=list(filial_records),
+                    pdf_bytes=f"%PDF-critica-detalhe-{filial}".encode(),
+                    summary_pdf_bytes=f"%PDF-critica-resumo-{filial}".encode(),
+                )
+            )
+        return reports
 
     def get_pdf_report_by_registration(self, **kwargs: Any) -> Any:
         self._raise_if_current_import_missing()

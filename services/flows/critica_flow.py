@@ -418,6 +418,58 @@ class CriticaFlow:
         flow = _customer_flow_module()
         assert self.critica_rn_service is not None
         try:
+            if self._is_gerente_vendas(decision):
+                reports = self.critica_rn_service.get_pdf_reports_grouped_by_filial(
+                    target_date=target_date,
+                    allowed_sectors=self._allowed_sectors(decision),
+                    allowed_gv_vdes=self._allowed_gv_vdes(decision),
+                    limit=5000,
+                )
+                if not reports:
+                    return self._build_empty_critica_response(target_date=target_date, decision=decision)
+                summary = self.critica_rn_service.get_summary(
+                    target_date=target_date,
+                    allowed_sectors=self._allowed_sectors(decision),
+                    allowed_gv_vdes=self._allowed_gv_vdes(decision),
+                )
+                attachments: list[Any] = []
+                for report in reports:
+                    if not report.records:
+                        continue
+                    filial = str(report.records[0].filial or "").strip()
+                    filial_slug = filial or "base"
+                    filial_label = flow._format_filial_label(filial) if filial else "Base"
+                    if report.pdf_bytes:
+                        attachments.append(
+                            flow.MediaAttachment(
+                                media_url=flow._build_pdf_data_url(report.pdf_bytes),
+                                media_type="document",
+                                media_caption=f"Critica RN {filial_label}",
+                                media_filename=f"critica-rn-{filial_slug}-{target_date.isoformat()}.pdf",
+                            )
+                        )
+                    if report.summary_pdf_bytes:
+                        attachments.append(
+                            flow.MediaAttachment(
+                                media_url=flow._build_pdf_data_url(report.summary_pdf_bytes),
+                                media_type="document",
+                                media_caption=f"Critica RN Resumo {filial_label}",
+                                media_filename=f"critica-rn-resumo-{filial_slug}-{target_date.isoformat()}.pdf",
+                            )
+                        )
+                if not attachments:
+                    return self._build_empty_critica_response(target_date=target_date, decision=decision)
+                text = (
+                    "Critica RN | PDF\n\n"
+                    f"Data: {flow._format_display_date(target_date.isoformat())}\n"
+                    f"Atualizado em: {flow._format_display_date(getattr(summary, 'planilha_atualizada_em', '-'))}\n"
+                    f"Pedidos: {summary.pedido_count} | Itens: {summary.row_count} | Pedidos com problema: {summary.problem_pedido_count}\n"
+                    f"Filiais enviadas: {len(reports)}\n"
+                    "Enviei os PDFs separados por filial, com os respectivos resumos.\n\n"
+                    f"{flow._result_hint_text(allow_back=True)}"
+                )
+                return flow._build_media_response_from_attachments(text=text, attachments=attachments)
+
             report = self.critica_rn_service.get_pdf_report(
                 target_date=target_date,
                 allowed_sectors=self._allowed_sectors(decision),
