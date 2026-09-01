@@ -168,17 +168,22 @@ class PromaxRunner:
                 command.extend(["--job-id", job_id])
             return command
 
-        clean_profile = str(
-            payload.get("profile")
-            or payload.get("perfil")
-            or payload.get("category")
-            or job.get("job_type")
-            or ""
-        ).strip()
+        is_fechamento_reports_job = _is_botzapfechamento_job(payload, job_type, operation)
+        clean_profile = (
+            "botzapfechamento"
+            if is_fechamento_reports_job
+            else str(
+                payload.get("profile")
+                or payload.get("perfil")
+                or payload.get("category")
+                or job.get("job_type")
+                or ""
+            ).strip()
+        )
         if not _IDENTIFIER_PATTERN.fullmatch(clean_profile):
             raise ValueError(f"Invalid Promax profile identifier: {clean_profile!r}.")
 
-        entrypoint_command = "fechamento" if clean_profile == "botzapfechamento" else "relatorios"
+        entrypoint_command = "fechamento" if is_fechamento_reports_job else "relatorios"
         command = [
             str(self.config.python_executable),
             str(self.config.cli_path),
@@ -417,6 +422,27 @@ def _parse_job_result_event(line: str) -> dict[str, Any] | None:
 
 def _normalize_job_kind(value: object) -> str:
     return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _is_botzapfechamento_job(payload: Mapping[str, Any], job_type: object, operation: object) -> bool:
+    direct_values = (
+        job_type,
+        operation,
+        payload.get("category"),
+        payload.get("profile"),
+        payload.get("perfil"),
+    )
+    if any(str(value or "").strip().lower() == "botzapfechamento" for value in direct_values):
+        return True
+
+    groups = payload.get("groups")
+    if not isinstance(groups, Sequence) or isinstance(groups, (str, bytes, bytearray)):
+        return False
+    return any(
+        isinstance(group, Mapping)
+        and str(group.get("category") or "").strip().lower() == "botzapfechamento"
+        for group in groups
+    )
 
 
 def _identifier_list(value: object, *, field_name: str) -> list[str]:

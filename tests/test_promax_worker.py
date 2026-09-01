@@ -1436,6 +1436,30 @@ class PromaxRunnerTests(unittest.TestCase):
         self.assertEqual(command[command.index("--rotinas") + 1], "150501")
         self.assertEqual(command[command.index("--unidade") + 1], "2210003")
 
+    def test_runner_prioritizes_botzapfechamento_category_over_stale_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-botzapfechamento-stale-profile",
+                    "job_type": "relatorios",
+                    "payload": {
+                        "profile": "relatorios",
+                        "category": "botzapfechamento",
+                        "groups": [{"category": "botzapfechamento", "routines": ["0513"]}],
+                        "units": ["0640001"],
+                        "publish": True,
+                    },
+                }
+            )
+
+        self.assertIn("fechamento", command)
+        self.assertNotIn("relatorios", command)
+        self.assertEqual(command[command.index("--perfil") + 1], "botzapfechamento")
+        self.assertEqual(command[command.index("--rotinas") + 1], "0513")
+
     def test_runner_uses_group_routines_for_current_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._config(Path(temp_dir))
