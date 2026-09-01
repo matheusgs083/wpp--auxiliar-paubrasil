@@ -44,6 +44,13 @@ do formato:
 PROMAX_PYTHON cli.py relatorios --perfil <grupo>
 ```
 
+O grupo `botzapfechamento` e uma excecao intencional: ele usa o main dedicado de
+fechamento do `promax-web-driver`:
+
+```text
+PROMAX_PYTHON cli.py fechamento --perfil botzapfechamento
+```
+
 Unidades, rotinas, publicacao e `job_id` sao acrescentados somente apos
 validacao contra o catalogo anunciado e contra identificadores seguros. As
 datas so sao enviadas quando `send_dates=true`; no painel, isso corresponde ao
