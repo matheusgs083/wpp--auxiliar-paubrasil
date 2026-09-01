@@ -235,6 +235,7 @@ class PromaxRunner:
         stop_requested: ControlCallback | None = None,
     ) -> PromaxRunResult:
         command = self.build_command(job)
+        on_line("stdout", f"Comando Promax: {subprocess.list2cmdline(command)}")
         process = self._popen_factory(
             command,
             cwd=str(self.config.driver_dir),
