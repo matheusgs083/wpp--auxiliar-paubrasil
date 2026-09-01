@@ -178,10 +178,11 @@ class PromaxRunner:
         if not _IDENTIFIER_PATTERN.fullmatch(clean_profile):
             raise ValueError(f"Invalid Promax profile identifier: {clean_profile!r}.")
 
+        entrypoint_command = "fechamento" if clean_profile == "botzapfechamento" else "relatorios"
         command = [
             str(self.config.python_executable),
             str(self.config.cli_path),
-            "relatorios",
+            entrypoint_command,
             "--perfil",
             clean_profile,
         ]

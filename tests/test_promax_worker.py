@@ -1223,6 +1223,52 @@ class PromaxClientTests(unittest.TestCase):
         client.import_critica_csvs.assert_called_once()
         self.assertEqual(next(iter(client.import_critica_csvs.call_args.kwargs["files"])), "030111 bot - nomeUnidade030111_2210003.csv")
 
+    def test_030111_bot_skips_unit_marked_as_no_content_even_if_old_csv_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            stale_csv = source_dir / "030111 bot - nomeUnidade030111_2210003.csv"
+            stale_csv.write_bytes(b"Filial Origem;Valor\n3;10\n")
+            client = Mock()
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_030111_critica_if_needed(
+                {
+                    "payload": {
+                        "routines": ["030111_BOT"],
+                        "units": ["2210003"],
+                        "end_date": "2026-08-29",
+                    }
+                },
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="partial_success",
+                    return_code=10,
+                    child_pid=123,
+                    details={
+                        "no_content_units": ["2210003"],
+                        "metadata": {
+                            "publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}
+                        },
+                    },
+                ),
+            )
+
+        client.import_critica_csvs.assert_not_called()
+
 
 class PromaxRunnerTests(unittest.TestCase):
     def _config(self, root: Path) -> PromaxRunnerConfig:
@@ -1365,6 +1411,30 @@ class PromaxRunnerTests(unittest.TestCase):
         self.assertEqual(command[command.index("--perfil") + 1], "obz")
         routines_index = command.index("--rotinas")
         self.assertEqual(command[routines_index + 1 : routines_index + 3], ["0512", "150501"])
+
+    def test_runner_uses_dedicated_fechamento_entrypoint_for_botzapfechamento(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-botzapfechamento",
+                    "job_type": "botzapfechamento",
+                    "payload": {
+                        "category": "botzapfechamento",
+                        "routines": ["150501"],
+                        "units": ["2210003"],
+                        "publish": True,
+                    },
+                }
+            )
+
+        self.assertIn("fechamento", command)
+        self.assertNotIn("relatorios", command)
+        self.assertEqual(command[command.index("--perfil") + 1], "botzapfechamento")
+        self.assertEqual(command[command.index("--rotinas") + 1], "150501")
+        self.assertEqual(command[command.index("--unidade") + 1], "2210003")
 
     def test_runner_uses_group_routines_for_current_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

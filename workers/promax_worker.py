@@ -1199,13 +1199,18 @@ class PromaxWorker:
             unit_filial_map=unit_filial_map,
             suffix=".csv",
         )
+        no_content_units = _promax_no_content_units(result.details)
 
         imported = 0
         missing: list[str] = []
         failed: list[str] = []
+        skipped_no_content: list[str] = []
         for unit in units:
             filial = unit_filial_map.get(unit)
             if not filial:
+                continue
+            if unit in no_content_units:
+                skipped_no_content.append(unit)
                 continue
             csv_path = _find_promax_csv_by_unit(
                 source_dir,
@@ -1258,6 +1263,15 @@ class PromaxWorker:
                 "warning",
                 {"event": "promax_030111_auto_import_missing_files", "units": missing},
             )
+        if skipped_no_content:
+            self._send_log(
+                job_id,
+                lease_token,
+                "Importacao automatica 030111_BOT ignorada por falta de conteudo na execucao atual: "
+                + ", ".join(skipped_no_content),
+                "info",
+                {"event": "promax_030111_auto_import_no_content", "units": skipped_no_content},
+            )
         self._send_log(
             job_id,
             lease_token,
@@ -1268,6 +1282,7 @@ class PromaxWorker:
                 "imported": imported,
                 "failed_units": failed,
                 "missing_units": missing,
+                "no_content_units": skipped_no_content,
             },
         )
 
@@ -1679,6 +1694,19 @@ def _promax_filename_score(name: str, *, preferred_tokens: Sequence[str] = ()) -
     if any(token and token in normalized for token in preferred_tokens):
         return 3
     return 1
+
+
+def _promax_no_content_units(result_details: Mapping[str, Any] | None) -> set[str]:
+    if not isinstance(result_details, Mapping):
+        return set()
+    raw_units = result_details.get("no_content_units")
+    units: set[str] = set()
+    if isinstance(raw_units, Sequence) and not isinstance(raw_units, (str, bytes, bytearray)):
+        for item in raw_units:
+            unit = str(item or "").strip()
+            if unit:
+                units.add(unit)
+    return units
 
 
 def _promax_publication_dir(result_details: Mapping[str, Any] | None, folder_name: str) -> Path | None:
