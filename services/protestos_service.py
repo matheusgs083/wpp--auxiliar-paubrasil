@@ -53,6 +53,7 @@ class ProtestosService:
                             titulo_key VARCHAR(64) NOT NULL UNIQUE,
                             filial VARCHAR(16) NOT NULL,
                             nb VARCHAR(32) NOT NULL,
+                            titulo_numero TEXT NOT NULL DEFAULT '',
                             nota_fiscal TEXT NOT NULL DEFAULT '',
                             cliente_nome TEXT NOT NULL DEFAULT '',
                             data_emissao TEXT NOT NULL DEFAULT '',
@@ -82,6 +83,11 @@ class ProtestosService:
                     sql.SQL(
                         "CREATE INDEX IF NOT EXISTS protestos_titulos_filial_nb_idx ON {}.protestos_titulos (filial, nb)"
                     ).format(sql.Identifier(self.schema))
+                )
+                cur.execute(
+                    sql.SQL("ALTER TABLE {}.protestos_titulos ADD COLUMN IF NOT EXISTS titulo_numero TEXT NOT NULL DEFAULT ''").format(
+                        sql.Identifier(self.schema)
+                    )
                 )
             conn.commit()
         return True
@@ -327,9 +333,9 @@ class ProtestosService:
             filters.append(sql.SQL("i.unb = ANY(%s)"))
             params.append(sorted(allowed_filiais))
         if search:
-            filters.append(sql.SQL("(i.cliente ILIKE %s OR i.nome ILIKE %s OR {} ILIKE %s)").format(_nota_fiscal_sql("i.payload")))
+            filters.append(sql.SQL("(i.cliente ILIKE %s OR i.nome ILIKE %s OR {} ILIKE %s OR {} ILIKE %s)").format(_nota_fiscal_sql("i.payload"), _titulo_sql("i.payload")))
             like = f"%{search}%"
-            params.extend([like, like, like])
+            params.extend([like, like, like, like])
         if status:
             filters.append(sql.SQL("COALESCE(p.status, 'em_aberto') = %s"))
             params.append(status)
@@ -353,6 +359,7 @@ class ProtestosService:
                 {title_key} AS titulo_key,
                 i.unb AS filial,
                 i.cliente AS nb,
+                {titulo_numero} AS titulo_numero,
                 COALESCE(i.nome, '') AS cliente_nome,
                 {nota_fiscal} AS nota_fiscal,
                 COALESCE(i.data_emissao, '') AS data_emissao,
@@ -376,6 +383,7 @@ class ProtestosService:
         ).format(
             schema=sql.Identifier(self.schema),
             title_key=_title_key_sql("i"),
+            titulo_numero=_titulo_sql("i.payload"),
             nota_fiscal=_nota_fiscal_sql("i.payload"),
             where=where,
         )
@@ -439,9 +447,9 @@ class ProtestosService:
             filters.append(sql.SQL("p.filial = ANY(%s)"))
             params.append(sorted(allowed_filiais))
         if search:
-            filters.append(sql.SQL("(p.nb ILIKE %s OR p.cliente_nome ILIKE %s OR p.nota_fiscal ILIKE %s)"))
+            filters.append(sql.SQL("(p.nb ILIKE %s OR p.cliente_nome ILIKE %s OR p.nota_fiscal ILIKE %s OR p.titulo_numero ILIKE %s)"))
             like = f"%{search}%"
-            params.extend([like, like, like])
+            params.extend([like, like, like, like])
         if status:
             filters.append(sql.SQL("p.status = %s"))
             params.append(status)
@@ -495,9 +503,9 @@ class ProtestosService:
             filters.append(sql.SQL("p.filial = ANY(%s)"))
             params.append(sorted(allowed_filiais))
         if search:
-            filters.append(sql.SQL("(p.nb ILIKE %s OR p.cliente_nome ILIKE %s OR p.nota_fiscal ILIKE %s)"))
+            filters.append(sql.SQL("(p.nb ILIKE %s OR p.cliente_nome ILIKE %s OR p.nota_fiscal ILIKE %s OR p.titulo_numero ILIKE %s)"))
             like = f"%{search}%"
-            params.extend([like, like, like])
+            params.extend([like, like, like, like])
         params.append(limit)
         query = sql.SQL(
             """
@@ -607,11 +615,11 @@ class ProtestosService:
                 sql.SQL(
                     """
                     INSERT INTO {schema}.protestos_titulos (
-                        titulo_key, filial, nb, nota_fiscal, cliente_nome, data_emissao,
+                        titulo_key, filial, nb, titulo_numero, nota_fiscal, cliente_nome, data_emissao,
                         data_vencimento, valor_pendente, last_seen_120601_at
                     )
                     SELECT
-                        {title_key}, i.unb, i.cliente, {nota_fiscal}, COALESCE(i.nome, ''),
+                        {title_key}, i.unb, i.cliente, {titulo_numero}, {nota_fiscal}, COALESCE(i.nome, ''),
                         COALESCE(i.data_emissao, ''), COALESCE(i.data_vencimento, ''),
                         COALESCE(i.valor_pendente, ''), NOW()
                     FROM {schema}.inadimplencia_latest i
@@ -619,6 +627,7 @@ class ProtestosService:
                     ON CONFLICT (titulo_key) DO UPDATE
                        SET filial = EXCLUDED.filial,
                            nb = EXCLUDED.nb,
+                           titulo_numero = EXCLUDED.titulo_numero,
                            nota_fiscal = EXCLUDED.nota_fiscal,
                            cliente_nome = EXCLUDED.cliente_nome,
                            data_emissao = EXCLUDED.data_emissao,
@@ -631,6 +640,7 @@ class ProtestosService:
                 ).format(
                     schema=sql.Identifier(self.schema),
                     title_key=_title_key_sql("i"),
+                    titulo_numero=_titulo_sql("i.payload"),
                     nota_fiscal=_nota_fiscal_sql("i.payload"),
                 ),
                 (titulo_key,),
@@ -711,13 +721,30 @@ def _title_key_sql(alias: str) -> sql.Composed:
         md5(concat_ws('|',
             {a}.unb,
             {a}.cliente,
+            COALESCE({titulo}, ''),
             COALESCE({nf}, ''),
             COALESCE({a}.data_emissao, ''),
             COALESCE({a}.data_vencimento, ''),
             COALESCE({a}.valor_pendente, '')
         ))
         """
-    ).format(a=prefix, nf=_nota_fiscal_sql(f"{alias}.payload"))
+    ).format(a=prefix, titulo=_titulo_sql(f"{alias}.payload"), nf=_nota_fiscal_sql(f"{alias}.payload"))
+
+
+def _titulo_sql(payload_expr: str) -> sql.Composed:
+    payload = sql.SQL(payload_expr)
+    return sql.SQL(
+        """
+        COALESCE(
+            NULLIF({payload}->>'Titulo', ''),
+            NULLIF({payload}->>'Título', ''),
+            NULLIF({payload}->>'titulo', ''),
+            NULLIF({payload}->>'Nr. Titulo', ''),
+            NULLIF({payload}->>'Nr Titulo', ''),
+            ''
+        )
+        """
+    ).format(payload=payload)
 
 
 def _nota_fiscal_sql(payload_expr: str) -> sql.Composed:

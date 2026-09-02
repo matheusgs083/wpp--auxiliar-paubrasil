@@ -2078,7 +2078,7 @@
             </div>
             <div class="col-lg-6 col-md-8">
               <label class="form-label small fw-semibold mb-1" for="protestosSearch">Buscar</label>
-              <input class="form-control form-control-sm" id="protestosSearch" type="search" placeholder="NB, cliente ou nota fiscal">
+              <input class="form-control form-control-sm" id="protestosSearch" type="search" placeholder="Titulo, NB, cliente ou nota fiscal">
             </div>
             <div class="col-lg-2 col-md-4">
               <button class="btn btn-primary btn-sm w-100" id="protestosApplyBtn" type="button"><i class="bi bi-search me-1"></i>Filtrar</button>
@@ -10560,6 +10560,14 @@
       return "";
     }
 
+    function formatProtestoTitulo(value) {
+      const text = String(value || "").trim();
+      if (!text) return "-";
+      const numeric = text.replace(/\D/g, "");
+      if (numeric) return String(Number.parseInt(numeric, 10));
+      return text;
+    }
+
     function renderProtestos() {
       const payload = state.protestos && state.protestos.payload ? state.protestos.payload : null;
       const loading = Boolean(state.protestos && state.protestos.loading);
@@ -10660,8 +10668,9 @@
         return `
           <tr data-protesto-key="${escapeHtml(key)}">
             <td>
-              <strong>${escapeHtml(item.filial || "")} / ${escapeHtml(item.nb || "")}</strong>
-              <div class="small text-secondary">${escapeHtml(item.filial_nome || "")}</div>
+              <strong>Titulo ${escapeHtml(formatProtestoTitulo(item.titulo_numero))}</strong>
+              <div class="small text-secondary">Revenda ${escapeHtml(item.filial || "")} - ${escapeHtml(item.filial_nome || "")}</div>
+              <div class="small text-secondary">NB ${escapeHtml(item.nb || "-")}</div>
               <div class="small mono">NF ${escapeHtml(item.nota_fiscal || "-")}</div>
             </td>
             <td class="min-w-220">
