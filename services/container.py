@@ -10,6 +10,7 @@ from bot_api.integrations.meta_cloud_client import MetaCloudClient, MetaCloudCon
 from bot_api.security.access_control import AccessControl
 from bot_api.security.security_monitor import SecurityMonitor
 from bot_api.services.admin_import_job_service import AdminImportJobService
+from bot_api.services.admin_panel_audit_service import AdminPanelAuditService
 from bot_api.services.boletos_pdf_import_service import BoletosPdfImportService
 from bot_api.services.boletos_query_service import BoletosQueryService
 from bot_api.services.comodatos_import_service import ComodatosImportService
@@ -42,6 +43,7 @@ from bot_api.services.prazo_limite_import_service import PrazoLimiteImportServic
 from bot_api.services.prazo_limite_query_service import PrazoLimiteQueryService
 from bot_api.services.produto_cestas_import_service import ProdutoCestasImportService
 from bot_api.services.promax_jobs_service import PromaxJobsService
+from bot_api.services.protestos_service import ProtestosService
 from bot_api.services.recolha_request_service import RecolhaRequestService
 from bot_api.services.relatorio_031120_import_service import Relatorio031120ImportService
 
@@ -74,6 +76,7 @@ class AppServices:
     estoque_020304_import_services: dict[str, Estoque020304ImportService]
     relatorio_031120_import_services: dict[str, Relatorio031120ImportService]
     relatorio_03114902_import_service: Relatorio031120ImportService
+    admin_panel_audit_service: AdminPanelAuditService
     dclientes_import_service: DClientesImportService
     inadimplencia_import_service: InadimplenciaImportService
     comodatos_import_service: ComodatosImportService
@@ -85,6 +88,7 @@ class AppServices:
     prazo_limite_import_service: PrazoLimiteImportService
     recolha_request_service: RecolhaRequestService
     conferencia_service: ConferenciaService
+    protestos_service: ProtestosService
     evolution_client: EvolutionClient
     meta_cloud_client: MetaCloudClient
     access_control: AccessControl
@@ -109,6 +113,13 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
     conferencia_service = ConferenciaService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+        filial_labels=FILIAL_LABELS,
+    )
+    protestos_service = ProtestosService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        storage_root=project_root / "exports" / "protestos",
         connect_timeout_seconds=settings.access_database_timeout_seconds,
         filial_labels=FILIAL_LABELS,
     )
@@ -340,6 +351,12 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         default_cooldown_minutes=settings.denied_reply_cooldown_minutes,
         unregistered_cooldown_minutes=settings.denied_unregistered_reply_cooldown_minutes,
     )
+    admin_panel_audit_service = AdminPanelAuditService(
+        database_url=settings.access_database_url,
+        bootstrap_database_url=settings.reports_database_url,
+        schema=settings.access_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
     payip_payments_service = _build_payip_payments_service(settings, logger=logger)
     lookup_flow = CustomerLookupFlow(
         query_service=dclientes_query_service,
@@ -382,6 +399,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         estoque_020304_import_services=estoque_020304_import_services,
         relatorio_031120_import_services=relatorio_031120_import_services,
         relatorio_03114902_import_service=relatorio_03114902_import_service,
+        admin_panel_audit_service=admin_panel_audit_service,
         dclientes_import_service=dclientes_import_service,
         inadimplencia_import_service=inadimplencia_import_service,
         comodatos_import_service=comodatos_import_service,
@@ -393,6 +411,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         prazo_limite_import_service=prazo_limite_import_service,
         recolha_request_service=recolha_request_service,
         conferencia_service=conferencia_service,
+        protestos_service=protestos_service,
         evolution_client=evolution_client,
         meta_cloud_client=meta_cloud_client,
         access_control=access_control,

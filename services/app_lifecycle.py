@@ -17,8 +17,10 @@ def register_app_lifecycle(
     stop_daily_route_broadcast_scheduler: Any,
     admin_imports_runtime: Any,
     admin_panel_user_service: Any,
+    admin_panel_audit_service: Any,
     admin_financeiro_service: Any,
     conferencia_service: Any,
+    protestos_service: Any,
     critica_pdf_prebuild_executor: Any,
     admin_broadcast_executor: Any,
     admin_payip_batch_service: Any,
@@ -42,6 +44,10 @@ def register_app_lifecycle(
         except Exception as exc:
             logger.warning("Usuarios do painel indisponiveis no startup: %s", exc)
         try:
+            admin_panel_audit_service.ensure_schema()
+        except Exception as exc:
+            logger.warning("Auditoria do painel indisponivel no startup: %s", exc)
+        try:
             admin_financeiro_service.ensure_schema()
         except Exception as exc:
             logger.warning("Fechamento financeiro indisponivel no startup: %s", exc)
@@ -49,6 +55,10 @@ def register_app_lifecycle(
             conferencia_service.ensure_schema()
         except Exception as exc:
             logger.warning("Conferencia indisponivel no startup: %s", exc)
+        try:
+            protestos_service.ensure_schema()
+        except Exception as exc:
+            logger.warning("Protestos indisponiveis no startup: %s", exc)
         maintenance_result = run_admin_import_maintenance(force_stale=True)
         if not maintenance_result.get("ok"):
             logger.warning("Manutencao de imports indisponivel no startup: %s", maintenance_result.get("error"))

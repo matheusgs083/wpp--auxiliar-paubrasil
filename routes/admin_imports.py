@@ -26,6 +26,7 @@ def create_admin_imports_router(
     queue_admin_import: Callable[..., dict[str, Any]],
     store_admin_import_uploads: Callable[..., dict[str, Any]],
     record_security_event: Callable[..., None],
+    record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -41,6 +42,26 @@ def create_admin_imports_router(
             authorization=authorization,
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
+        )
+
+    def record_panel_action(
+        request: Request,
+        context: dict[str, Any] | None,
+        *,
+        action: str,
+        target_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if record_admin_panel_action is None:
+            return
+        record_admin_panel_action(
+            request=request,
+            context=context,
+            module="relatorios",
+            action=action,
+            target_type="dataset",
+            target_id=target_id,
+            metadata=metadata or {},
         )
 
     @router.get("/api/admin/imports/status")
@@ -105,6 +126,7 @@ def create_admin_imports_router(
             decision="allowed",
             reason=result.get("dataset"),
         )
+        record_panel_action(request, context, action="validar", target_id=str(result.get("dataset") or normalized_dataset))
         return {"ok": True, **result}
 
     @router.post("/api/admin/imports/run", status_code=202)
@@ -129,6 +151,13 @@ def create_admin_imports_router(
             event_type="admin_import_run",
             decision="allowed",
             reason=result.get("dataset"),
+        )
+        record_panel_action(
+            request,
+            context,
+            action="importar",
+            target_id=str(result.get("dataset") or normalized_dataset),
+            metadata={"reference_date": payload.reference_date, "job_id": result.get("job_id")},
         )
         return {"ok": True, "queued": True, **result}
 
@@ -155,6 +184,13 @@ def create_admin_imports_router(
             event_type="admin_import_upload",
             decision="allowed",
             reason=result.get("dataset"),
+        )
+        record_panel_action(
+            request,
+            context,
+            action="upload",
+            target_id=str(result.get("dataset") or normalized_dataset),
+            metadata={"files": len(files), "reference_date": result.get("reference_date")},
         )
         return {"ok": True, **result}
 

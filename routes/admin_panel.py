@@ -36,6 +36,14 @@ class AdminPanelUserUpdateRequest(BaseModel):
     features: list[str] = Field(default_factory=list)
 
 
+class AdminPanelClientActionRequest(BaseModel):
+    module: str = Field(min_length=1, max_length=80)
+    action: str = Field(min_length=1, max_length=120)
+    target_type: str = Field(default="", max_length=80)
+    target_id: str = Field(default="", max_length=180)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 def create_admin_panel_router(
     *,
     admin_panel_context_from_session_cookie: Callable[[Request], dict[str, Any] | None],
@@ -53,6 +61,7 @@ def create_admin_panel_router(
     panel_context_can_access_feature: Callable[[dict[str, Any] | None, str], bool],
     admin_panel_user_service: Any,
     record_security_event: Callable[..., None],
+    record_admin_panel_action: Callable[..., None] | None = None,
     session_cookie_name: str,
     session_ttl_seconds: int,
 ) -> APIRouter:
@@ -91,6 +100,62 @@ def create_admin_panel_router(
                 "Expires": "0",
             },
         )
+
+    def record_panel_action(
+        request: Request,
+        context: dict[str, Any] | None,
+        *,
+        module: str,
+        action: str,
+        target_type: str = "",
+        target_id: str = "",
+        status: str = "success",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if record_admin_panel_action is None:
+            return
+        record_admin_panel_action(
+            request=request,
+            context=context,
+            module=module,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            status=status,
+            metadata=metadata or {},
+        )
+
+    @router.post("/api/admin/panel/actions")
+    def api_admin_panel_record_client_action(
+        request: Request,
+        payload: AdminPanelClientActionRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_admin_panel_auth(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        module = payload.module.strip().lower()
+        action = payload.action.strip().lower()
+        allowed_actions = {
+            ("giro", "exportar_rotas_recolha_csv"),
+        }
+        if (module, action) not in allowed_actions:
+            raise HTTPException(status_code=400, detail="Acao de painel nao permitida para registro client-side.")
+        record_panel_action(
+            request,
+            context,
+            module=module,
+            action=action,
+            target_type=payload.target_type,
+            target_id=payload.target_id,
+            metadata=payload.metadata,
+        )
+        return {"ok": True}
 
     @router.get("/admin/login", response_class=HTMLResponse)
     def admin_login(request: Request) -> Response:
@@ -142,6 +207,7 @@ def create_admin_panel_router(
             decision="allowed",
             reason="panel_user" if context.get("auth_type") == "user" else str(context.get("mode") or "admin"),
         )
+        record_panel_action(request, context, module="auth", action="login")
         return {
             "ok": True,
             "mode": str(context.get("mode") or "admin"),
@@ -184,6 +250,7 @@ def create_admin_panel_router(
             decision="allowed",
             reason=str(updated_context.get("username") or updated_context.get("user_id") or ""),
         )
+        record_panel_action(request, updated_context, module="auth", action="change_password")
         return {"ok": True, "requires_password_change": False}
 
     @router.post("/api/admin/panel/logout")
@@ -197,6 +264,7 @@ def create_admin_panel_router(
             decision="allowed" if context else "ignored",
             reason=str((context or {}).get("username") or (context or {}).get("mode") or "anonymous"),
         )
+        record_panel_action(request, context, module="auth", action="logout", status="success" if context else "ignored")
         return {"ok": True}
 
     @router.get("/admin", response_class=HTMLResponse)
@@ -211,6 +279,7 @@ def create_admin_panel_router(
     @router.get("/admin/recolhas", response_class=HTMLResponse)
     @router.get("/admin/financeiro", response_class=HTMLResponse)
     @router.get("/admin/conferencia", response_class=HTMLResponse)
+    @router.get("/admin/protestos", response_class=HTMLResponse)
     @router.get("/admin/giro-recolha", response_class=HTMLResponse)
     @router.get("/admin/usage", response_class=HTMLResponse)
     def admin_import_panel(request: Request) -> Response:
@@ -262,6 +331,7 @@ def create_admin_panel_router(
             "can_manage_recolhas": is_admin or is_finance or panel_context_can_access_feature(context, "recolhas"),
             "can_financeiro": is_admin or is_finance or panel_context_can_access_feature(context, "financeiro"),
             "can_conferencia": is_admin or is_finance or panel_context_can_access_feature(context, "conferencia"),
+            "can_protestos": is_admin or is_finance or panel_context_can_access_feature(context, "protestos"),
             "can_armazem": is_admin or panel_context_can_access_feature(context, "armazem"),
             "can_payip": is_admin or is_finance or panel_context_can_access_feature(context, "payip"),
             "can_view_giro": is_admin or is_finance or panel_context_can_access_feature(context, "giro"),
@@ -293,7 +363,7 @@ def create_admin_panel_router(
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
-        require_panel_admin(
+        context = require_panel_admin(
             request=request,
             authorization=authorization,
             x_api_token=x_api_token,
@@ -311,7 +381,7 @@ def create_admin_panel_router(
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
-        require_panel_admin(
+        context = require_panel_admin(
             request=request,
             authorization=authorization,
             x_api_token=x_api_token,
@@ -334,6 +404,15 @@ def create_admin_panel_router(
             event_type="admin_panel_create_user",
             decision="allowed",
             reason=result["user"].get("username"),
+        )
+        record_panel_action(
+            request,
+            context,
+            module="usuarios",
+            action="criar",
+            target_type="usuario",
+            target_id=str(result["user"].get("username") or result["user"].get("id") or ""),
+            metadata={"is_admin": result["user"].get("is_admin"), "features": result["user"].get("features"), "filiais": result["user"].get("filiais")},
         )
         return {"ok": True, **result}
 
@@ -372,6 +451,15 @@ def create_admin_panel_router(
             decision="allowed",
             reason=user.get("username"),
         )
+        record_panel_action(
+            request,
+            context,
+            module="usuarios",
+            action="editar",
+            target_type="usuario",
+            target_id=str(user.get("username") or user_id),
+            metadata={"is_admin": user.get("is_admin"), "is_active": user.get("is_active"), "features": user.get("features"), "filiais": user.get("filiais")},
+        )
         return {"ok": True, "user": user}
 
     @router.post("/api/admin/panel/users/{user_id}/reset-password")
@@ -401,6 +489,14 @@ def create_admin_panel_router(
             decision="allowed",
             reason=result["user"].get("username"),
         )
+        record_panel_action(
+            request,
+            context,
+            module="usuarios",
+            action="resetar_senha",
+            target_type="usuario",
+            target_id=str(result["user"].get("username") or user_id),
+        )
         return {"ok": True, **result}
 
     @router.delete("/api/admin/panel/users/{user_id}")
@@ -429,6 +525,14 @@ def create_admin_panel_router(
             event_type="admin_panel_delete_user",
             decision="allowed",
             reason=user.get("username"),
+        )
+        record_panel_action(
+            request,
+            context,
+            module="usuarios",
+            action="apagar",
+            target_type="usuario",
+            target_id=str(user.get("username") or user_id),
         )
         return {"ok": True, "user": user}
 

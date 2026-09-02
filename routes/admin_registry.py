@@ -15,6 +15,7 @@ from bot_api.routes.admin_imports import create_admin_imports_router
 from bot_api.routes.admin_panel import create_admin_panel_router
 from bot_api.routes.admin_payip import create_admin_payip_router
 from bot_api.routes.admin_promax import create_admin_promax_router
+from bot_api.routes.admin_protestos import create_admin_protestos_router
 from bot_api.routes.admin_recolhas import create_admin_recolhas_router
 from bot_api.routes.admin_usage import create_admin_usage_router
 
@@ -31,6 +32,7 @@ def build_admin_route_registrars(deps: dict[str, Any]) -> tuple[RouteRegistrar, 
         lambda app: _register_admin_recolha_routes(app, deps=deps),
         lambda app: _register_admin_financeiro_routes(app, deps=deps),
         lambda app: _register_admin_conferencia_routes(app, deps=deps),
+        lambda app: _register_admin_protestos_routes(app, deps=deps),
         lambda app: _register_admin_payip_routes(app, deps=deps),
         lambda app: _register_admin_usage_routes(app, deps=deps),
         lambda app: _register_admin_broadcast_routes(app, deps=deps),
@@ -64,6 +66,7 @@ def _register_admin_import_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             queue_admin_import=deps["queue_admin_import"],
             store_admin_import_uploads=deps["store_admin_import_uploads"],
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )
 
@@ -90,6 +93,7 @@ def _register_admin_critica_routes(app: FastAPI, *, deps: dict[str, Any]) -> Non
             build_admin_critica_dashboard=deps["build_admin_critica_dashboard"],
             build_admin_critica_sector_pdf_response=deps["build_admin_critica_sector_pdf_response"],
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )
 
@@ -112,6 +116,7 @@ def _register_admin_panel_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             panel_context_can_access_feature=deps["panel_context_can_access_feature"],
             admin_panel_user_service=deps["admin_panel_user_service"],
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
             session_cookie_name=deps["admin_panel_session_cookie"],
             session_ttl_seconds=deps["admin_panel_session_ttl_seconds"],
         )
@@ -130,6 +135,7 @@ def _register_admin_recolha_routes(app: FastAPI, *, deps: dict[str, Any]) -> Non
             update_admin_recolha=deps["update_admin_recolha"],
             delete_admin_recolha=deps["delete_admin_recolha"],
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )
 
@@ -155,6 +161,7 @@ def _register_admin_financeiro_routes(app: FastAPI, *, deps: dict[str, Any]) -> 
             delete_financeiro_mapa=deps["delete_financeiro_mapa"],
             worker_token=deps["settings"].promax_worker_token,
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )
 
@@ -172,6 +179,22 @@ def _register_admin_conferencia_routes(app: FastAPI, *, deps: dict[str, Any]) ->
             save_conferencia_counts=deps["save_conferencia_counts"],
             search_conferencia_products=deps["search_conferencia_products"],
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
+        )
+    )
+
+
+def _register_admin_protestos_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    app.include_router(
+        create_admin_protestos_router(
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
+            list_admin_protestos=deps["list_admin_protestos"],
+            update_admin_protesto=deps["update_admin_protesto"],
+            upload_admin_protesto_document=deps["upload_admin_protesto_document"],
+            download_admin_protesto_document=deps["download_admin_protesto_document"],
+            record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )
 
@@ -193,6 +216,7 @@ def _register_admin_payip_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             payip_generated_batch_process=deps["payip_generated_batch_process"],
             payip_generated_batch_file_bytes=deps["payip_generated_batch_file_bytes"],
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )
 
@@ -205,7 +229,10 @@ def _register_admin_usage_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             list_admin_evolution_usage=deps["list_admin_evolution_usage"],
             build_evolution_usage_avg_report_csv=deps["build_evolution_usage_avg_report_csv"],
             build_evolution_function_usage_report_csv=deps["build_evolution_function_usage_report_csv"],
+            list_admin_panel_audit_actions=deps["list_admin_panel_audit_actions"],
+            build_admin_panel_audit_report_csv=deps["build_admin_panel_audit_report_csv"],
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )
 
@@ -244,5 +271,6 @@ def _register_admin_promax_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             require_admin_panel_auth=deps["require_admin_panel_auth"],
             require_admin_panel_feature=deps["require_admin_panel_feature"],
             record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )

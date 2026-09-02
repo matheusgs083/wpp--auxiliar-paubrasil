@@ -276,6 +276,7 @@ class AdminPanelSessionService:
             "recolhas": {"recolhas"},
             "financeiro": {"financeiro"},
             "conferencia": {"conferencia"},
+            "protestos": {"protestos"},
             "armazem": {"armazem"},
             "estoque": {"armazem"},
             "giro": {"giro"},

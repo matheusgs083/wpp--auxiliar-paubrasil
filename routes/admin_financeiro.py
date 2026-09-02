@@ -105,6 +105,7 @@ def create_admin_financeiro_router(
     delete_financeiro_mapa: Callable[..., dict[str, Any]],
     worker_token: str | None,
     record_security_event: Callable[..., None],
+    record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
     expected_worker_token = worker_token.strip() if isinstance(worker_token, str) else ""
@@ -147,6 +148,27 @@ def create_admin_financeiro_router(
                 reason="invalid_worker_token",
             )
             raise HTTPException(status_code=401, detail="Worker Promax nao autorizado.")
+
+    def record_panel_action(
+        request: Request,
+        context: dict[str, Any] | None,
+        *,
+        action: str,
+        target_type: str = "",
+        target_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if record_admin_panel_action is None:
+            return
+        record_admin_panel_action(
+            request=request,
+            context=context,
+            module="financeiro",
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            metadata=metadata or {},
+        )
 
     @router.get("/api/admin/financeiro/caixas")
     def api_admin_financeiro_caixa(
@@ -246,6 +268,14 @@ def create_admin_financeiro_router(
             decision="allowed",
             reason=f"filial={clean_filial}; unit={promax_unit}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="baixar_relatorio_031120",
+            target_type="filial",
+            target_id=clean_filial,
+            metadata={"data": data_value, "unit": promax_unit},
+        )
         return {"ok": True, "job": job, "filial": clean_filial, "unit": promax_unit}
 
     @router.post("/api/admin/financeiro/031120/upload")
@@ -285,6 +315,14 @@ def create_admin_financeiro_router(
             decision="allowed",
             reason=f"filial={clean_filial}; filename={filename}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="upload_relatorio_031120",
+            target_type="filial",
+            target_id=clean_filial,
+            metadata={"filename": filename, "linhas": result.get("rows_imported") if isinstance(result, dict) else None},
+        )
         return {"ok": True, "filial": clean_filial, "result": result}
 
     @router.get("/api/admin/financeiro/caixa/pdf")
@@ -309,6 +347,14 @@ def create_admin_financeiro_router(
             event_type="admin_financeiro_pdf",
             decision="allowed",
             reason=f"data={data}; filial={filial}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="exportar_caixa_pdf",
+            target_type="filial",
+            target_id=filial,
+            metadata={"data": data, "filename": filename},
         )
         return Response(
             content=pdf_bytes,
@@ -337,6 +383,14 @@ def create_admin_financeiro_router(
             event_type="admin_financeiro_save",
             decision="allowed",
             reason=f"mapa={payload.mapa}; filial={payload.filial}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="salvar_mapa",
+            target_type="mapa",
+            target_id=payload.mapa,
+            metadata={"data": payload.data, "filial": payload.filial, "tipo_bloco": payload.tipo_bloco},
         )
         return result
 
@@ -413,6 +467,14 @@ def create_admin_financeiro_router(
             event_type="admin_financeiro_fechamento_promax",
             decision="allowed",
             reason=f"mapa={clean_mapa}; filial={clean_filial}; modo={clean_modo}; worker={clean_target_worker_id or 'auto'}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="solicitar_fechamento_promax",
+            target_type="mapa",
+            target_id=clean_mapa,
+            metadata={"filial": clean_filial, "modo": clean_modo, "worker": clean_target_worker_id or "auto", "km_source": km_source},
         )
         return {"ok": True, "job": job}
 
@@ -581,6 +643,14 @@ def create_admin_financeiro_router(
             decision="allowed",
             reason=f"job={job_id}; filial={(job.get('payload') or {}).get('filial')}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="parar_fechamento_promax",
+            target_type="job",
+            target_id=job_id,
+            metadata={"filial": (job.get("payload") or {}).get("filial"), "mapa": (job.get("payload") or {}).get("mapa")},
+        )
         return {"ok": True, "job": result}
 
     @router.post("/api/internal/promax/financeiro/fechamento-mapa")
@@ -644,6 +714,7 @@ def create_admin_financeiro_router(
             decision="allowed",
             reason=str(mapa_id),
         )
+        record_panel_action(request, context, action="apagar_mapa", target_type="mapa_id", target_id=str(mapa_id))
         return result
 
     return router

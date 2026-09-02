@@ -15,8 +15,30 @@ def create_admin_critica_router(
     build_admin_critica_dashboard: Callable[..., dict[str, Any]],
     build_admin_critica_sector_pdf_response: Callable[..., Response],
     record_security_event: Callable[..., None],
+    record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
+
+    def record_panel_action(
+        request: Request,
+        context: dict[str, Any] | None,
+        *,
+        action: str,
+        target_type: str = "",
+        target_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if record_admin_panel_action is None:
+            return
+        record_admin_panel_action(
+            request=request,
+            context=context,
+            module="critica",
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            metadata=metadata or {},
+        )
 
     def require_critica_context(
         *,
@@ -116,6 +138,14 @@ def create_admin_critica_router(
             event_type="admin_critica_pdf",
             decision="allowed",
             reason=f"{operation}/{sector}|summary={int(bool(summary_only))}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="exportar_pdf",
+            target_type="critica",
+            target_id=f"{operation}/{sector}".strip("/"),
+            metadata={"date": date_value, "summary_only": summary_only},
         )
         return response
 

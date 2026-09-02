@@ -829,6 +829,7 @@ def create_admin_promax_router(
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     record_security_event: Callable[..., None],
+    record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
     expected_worker_token = worker_token.strip() if isinstance(worker_token, str) else ""
@@ -901,6 +902,27 @@ def create_admin_promax_router(
             event_type=event_type,
             decision="allowed",
             reason=reason,
+        )
+
+    def record_panel_action(
+        request: Request,
+        context: dict[str, Any] | None,
+        *,
+        action: str,
+        target_type: str = "",
+        target_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if record_admin_panel_action is None:
+            return
+        record_admin_panel_action(
+            request=request,
+            context=context,
+            module="promax",
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            metadata=metadata or {},
         )
 
     def resolve_catalog() -> Any:
@@ -1072,6 +1094,12 @@ def create_admin_promax_router(
             "admin_promax_worker_assignments_replace",
             reason=f"assignments={len(payload.assignments)}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="configurar_workers",
+            metadata={"assignments": len(payload.assignments)},
+        )
         return _mapping_or_value(assignments, key="assignments")
 
     @router.post("/api/admin/promax/jobs", status_code=202)
@@ -1093,6 +1121,14 @@ def create_admin_promax_router(
             created_by=context_actor(context),
         )
         record_admin_event(request, "admin_promax_job_create")
+        record_panel_action(
+            request,
+            context,
+            action="executar_agora",
+            target_type="job",
+            target_id=str(job.get("id") if isinstance(job, Mapping) else ""),
+            metadata={"category": payload.category, "routines": payload.routines, "units": payload.units},
+        )
         return _item_response(job, key="job")
 
     @router.post("/api/admin/promax/jobs/batch", status_code=202)
@@ -1136,6 +1172,12 @@ def create_admin_promax_router(
             "admin_promax_job_batch_create",
             reason=f"groups={','.join(group.category for group in payload.groups)}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="executar_grupos",
+            metadata={"groups": [group.category for group in payload.groups], "units": payload.units},
+        )
         return _mapping_or_value(jobs, key="jobs")
 
     @router.post("/api/admin/promax/publications/reprocess", status_code=202)
@@ -1168,6 +1210,7 @@ def create_admin_promax_router(
             created_by=context_actor(context),
         )
         record_admin_event(request, "admin_promax_publication_reprocess")
+        record_panel_action(request, context, action="reprocessar_publicacoes", target_type="job", target_id=str(job.get("id") if isinstance(job, Mapping) else ""))
         return _item_response(job, key="job")
 
     @router.get("/api/admin/promax/jobs")
@@ -1254,6 +1297,14 @@ def create_admin_promax_router(
             created_by=context_actor(context),
         )
         record_admin_event(request, "admin_promax_job_retry", reason=f"job_id={job_id}")
+        record_panel_action(
+            request,
+            context,
+            action="retry_job",
+            target_type="job",
+            target_id=job_id,
+            metadata={"retry_mode": retry_mode, "retry_units": retry_units},
+        )
         return {
             "ok": True,
             "job": job,
@@ -1290,6 +1341,7 @@ def create_admin_promax_router(
             reason="Pending job cancelled by admin.",
         )
         record_admin_event(request, "admin_promax_job_cancel", reason=f"job_id={job_id}")
+        record_panel_action(request, context, action="cancelar_job", target_type="job", target_id=job_id)
         return _mapping_or_value(result, key="job")
 
     @router.post("/api/admin/promax/jobs/{job_id}/stop")
@@ -1304,6 +1356,7 @@ def create_admin_promax_router(
             reason="Running job stop requested by admin.",
         )
         record_admin_event(request, "admin_promax_job_stop", reason=f"job_id={job_id}")
+        record_panel_action(request, context, action="parar_job", target_type="job", target_id=job_id)
         return _mapping_or_value(result, key="job")
 
     @router.post("/api/admin/promax/queue/pause")
@@ -1316,6 +1369,7 @@ def create_admin_promax_router(
             reason="Paused by admin.",
         )
         record_admin_event(request, "admin_promax_queue_pause")
+        record_panel_action(request, context, action="pausar_fila")
         return _mapping_or_value(result, key="queue")
 
     @router.post("/api/admin/promax/queue/resume")
@@ -1325,6 +1379,7 @@ def create_admin_promax_router(
     ) -> dict[str, Any]:
         result = service.resume_queue(resumed_by=context_actor(context))
         record_admin_event(request, "admin_promax_queue_resume")
+        record_panel_action(request, context, action="retomar_fila")
         return _mapping_or_value(result, key="queue")
 
     @router.delete("/api/admin/promax/queue/pending")
@@ -1337,6 +1392,7 @@ def create_admin_promax_router(
             reason="Pending queue cleared by admin.",
         )
         record_admin_event(request, "admin_promax_queue_clear_pending")
+        record_panel_action(request, context, action="limpar_fila_pendente")
         return _mapping_or_value(result, key="queue")
 
     @router.get("/api/admin/promax/worker/status")
@@ -1399,6 +1455,14 @@ def create_admin_promax_router(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         record_admin_event(request, "admin_promax_schedule_create")
+        record_panel_action(
+            request,
+            context,
+            action="criar_agenda",
+            target_type="agenda",
+            target_id=str(schedule.get("id") if isinstance(schedule, Mapping) else ""),
+            metadata={"name": payload.name, "category": payload.category, "routines": payload.routines, "units": payload.units},
+        )
         return _item_response(schedule, key="schedule")
 
     @router.post("/api/admin/promax/schedule-chains", status_code=201)
@@ -1459,6 +1523,12 @@ def create_admin_promax_router(
             "admin_promax_schedule_chain_create",
             reason=f"groups={','.join(group.category for group in payload.groups)}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="criar_agenda_em_cadeia",
+            metadata={"name": payload.name, "groups": [group.category for group in payload.groups], "units": payload.units},
+        )
         return _mapping_or_value(schedules, key="schedules")
 
     @router.get("/api/admin/promax/schedules")
@@ -1505,6 +1575,7 @@ def create_admin_promax_router(
         if job is None:
             raise HTTPException(status_code=404, detail="Agenda Promax nao encontrada.")
         record_admin_event(request, "admin_promax_schedule_run_now", reason=f"schedule_id={schedule_id}")
+        record_panel_action(request, context, action="executar_agenda", target_type="agenda", target_id=schedule_id)
         return _item_response(job, key="job")
 
     @router.patch("/api/admin/promax/schedules/{schedule_id}")
@@ -1558,6 +1629,14 @@ def create_admin_promax_router(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         record_admin_event(request, "admin_promax_schedule_update", reason=f"schedule_id={schedule_id}")
+        record_panel_action(
+            request,
+            context,
+            action="editar_agenda",
+            target_type="agenda",
+            target_id=schedule_id,
+            metadata={"fields": sorted(update_values.keys())},
+        )
         return _item_response(schedule, key="schedule")
 
     @router.delete("/api/admin/promax/schedules/{schedule_id}")
@@ -1571,6 +1650,7 @@ def create_admin_promax_router(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         record_admin_event(request, "admin_promax_schedule_delete", reason=f"schedule_id={schedule_id}")
+        record_panel_action(request, context, action="apagar_agenda", target_type="agenda", target_id=schedule_id)
         return _mapping_or_value(result, key="schedule")
 
     @router.post("/api/internal/promax/next-job/claim")

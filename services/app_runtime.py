@@ -89,6 +89,7 @@ def configure_app_runtime(
     access_control = services.access_control
     security_monitor = services.security_monitor
     payip_payments_service = services.payip_payments_service
+    protestos_service = services.protestos_service
     lookup_flow = services.lookup_flow
     webhook_executor = ThreadPoolExecutor(
         max_workers=settings.webhook_worker_threads,
@@ -353,6 +354,10 @@ def configure_app_runtime(
     _get_conferencia_mapa = conferencia_service.get_mapa
     _save_conferencia_counts = conferencia_service.save_counts
     _search_conferencia_products = conferencia_service.search_products
+    _list_admin_protestos = protestos_service.list_dashboard
+    _update_admin_protesto = protestos_service.update_title
+    _upload_admin_protesto_document = protestos_service.upload_document
+    _download_admin_protesto_document = protestos_service.download_document
 
 
     def _panel_context_allowed_report_scopes(context: dict[str, Any] | None) -> tuple[list[str] | None, list[str] | None]:
@@ -382,6 +387,17 @@ def configure_app_runtime(
     _list_admin_evolution_usage = admin_usage_service._list_admin_evolution_usage
     _build_evolution_usage_avg_report_csv = admin_usage_service._build_evolution_usage_avg_report_csv
     _build_evolution_function_usage_report_csv = admin_usage_service._build_evolution_function_usage_report_csv
+
+    admin_panel_audit_service = services.admin_panel_audit_service
+
+    def _record_admin_panel_action(**kwargs: Any) -> None:
+        try:
+            admin_panel_audit_service.record(**kwargs)
+        except Exception as exc:
+            logger.warning("Falha ao registrar auditoria do painel: %s", exc)
+
+    _list_admin_panel_audit_actions = admin_panel_audit_service.list_actions
+    _build_admin_panel_audit_report_csv = admin_panel_audit_service.build_csv
 
 
     admin_broadcast_service.configure(
@@ -452,8 +468,10 @@ def configure_app_runtime(
         stop_daily_route_broadcast_scheduler=_stop_daily_route_broadcast_scheduler,
         admin_imports_runtime=admin_imports_runtime,
         admin_panel_user_service=admin_panel_user_service,
+        admin_panel_audit_service=admin_panel_audit_service,
         admin_financeiro_service=admin_financeiro_service,
         conferencia_service=conferencia_service,
+        protestos_service=protestos_service,
         critica_pdf_prebuild_executor=critica_pdf_prebuild_executor,
         admin_broadcast_executor=admin_broadcast_executor,
         admin_payip_batch_service=admin_payip_batch_service,
@@ -535,6 +553,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "admin_panel_context_from_credentials": runtime["_admin_panel_context_from_credentials"],
         "panel_context_can_access_feature": runtime["_panel_context_can_access_feature"],
         "admin_panel_user_service": runtime["admin_panel_user_service"],
+        "record_admin_panel_action": runtime["_record_admin_panel_action"],
         "check_admin_panel_login_rate_limit": runtime["_check_admin_panel_login_rate_limit"],
         "record_admin_panel_login_failure": runtime["_record_admin_panel_login_failure"],
         "clear_admin_panel_login_failures": runtime["_clear_admin_panel_login_failures"],
@@ -576,6 +595,10 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "get_conferencia_mapa": runtime["_get_conferencia_mapa"],
         "save_conferencia_counts": runtime["_save_conferencia_counts"],
         "search_conferencia_products": runtime["_search_conferencia_products"],
+        "list_admin_protestos": runtime["_list_admin_protestos"],
+        "update_admin_protesto": runtime["_update_admin_protesto"],
+        "upload_admin_protesto_document": runtime["_upload_admin_protesto_document"],
+        "download_admin_protesto_document": runtime["_download_admin_protesto_document"],
         "enqueue_promax_job": runtime["promax_jobs_service"].enqueue_job,
         "delete_financeiro_mapa": runtime["_delete_financeiro_mapa"],
         "preview_payip_batch": runtime["_preview_payip_batch"],
@@ -592,6 +615,8 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "list_admin_evolution_usage": runtime["_list_admin_evolution_usage"],
         "build_evolution_usage_avg_report_csv": runtime["_build_evolution_usage_avg_report_csv"],
         "build_evolution_function_usage_report_csv": runtime["_build_evolution_function_usage_report_csv"],
+        "list_admin_panel_audit_actions": runtime["_list_admin_panel_audit_actions"],
+        "build_admin_panel_audit_report_csv": runtime["_build_admin_panel_audit_report_csv"],
         "list_admin_broadcast_options": runtime["_list_admin_broadcast_options"],
         "snapshot_admin_broadcast_state": runtime["_snapshot_admin_broadcast_state"],
         "build_admin_broadcast_payload": runtime["_build_admin_broadcast_payload"],

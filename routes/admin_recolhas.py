@@ -31,8 +31,30 @@ def create_admin_recolhas_router(
     update_admin_recolha: Callable[[str, AdminRecolhaUpdateRequest, dict[str, Any] | None], dict[str, Any]],
     delete_admin_recolha: Callable[[str, dict[str, Any] | None], dict[str, Any]],
     record_security_event: Callable[..., None],
+    record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
+
+    def record_panel_action(
+        request: Request,
+        context: dict[str, Any] | None,
+        *,
+        action: str,
+        target_type: str = "",
+        target_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if record_admin_panel_action is None:
+            return
+        record_admin_panel_action(
+            request=request,
+            context=context,
+            module="recolhas",
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            metadata=metadata or {},
+        )
 
     def require_recolhas_context(
         *,
@@ -147,6 +169,14 @@ def create_admin_recolhas_router(
             event_type="admin_recolha_export",
             decision="allowed",
             reason=f"total={total}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="exportar_relatorio_csv",
+            target_type="periodo",
+            target_id=f"{start_date or ''}..{end_date or ''}",
+            metadata={"total": total, "filename": filename},
         )
         return Response(
             content=csv_bytes,

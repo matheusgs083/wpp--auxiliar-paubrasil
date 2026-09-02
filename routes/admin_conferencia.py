@@ -32,6 +32,7 @@ def create_admin_conferencia_router(
     save_conferencia_counts: Callable[..., dict[str, Any]],
     search_conferencia_products: Callable[..., dict[str, Any]],
     record_security_event: Callable[..., None],
+    record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -54,6 +55,27 @@ def create_admin_conferencia_router(
     def can_reveal_totals(context: dict[str, Any] | None) -> bool:
         mode = str((context or {}).get("mode") or "").strip().lower()
         return bool((context or {}).get("is_admin")) or mode == "financeiro"
+
+    def record_panel_action(
+        request: Request,
+        context: dict[str, Any] | None,
+        *,
+        action: str,
+        target_type: str = "",
+        target_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if record_admin_panel_action is None:
+            return
+        record_admin_panel_action(
+            request=request,
+            context=context,
+            module="conferencia",
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            metadata=metadata or {},
+        )
 
     @router.get("/api/admin/conferencia/mapas")
     def api_admin_conferencia_mapas(
@@ -122,6 +144,14 @@ def create_admin_conferencia_router(
             event_type="admin_conferencia_create_manual",
             decision="allowed",
             reason=f"data={payload.data}; filial={payload.filial}; mapa={payload.mapa}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="criar_mapa_manual",
+            target_type="mapa",
+            target_id=payload.mapa,
+            metadata={"data": payload.data, "filial": payload.filial, "placa": payload.placa},
         )
         return result
 
@@ -248,6 +278,14 @@ def create_admin_conferencia_router(
             event_type="admin_conferencia_save",
             decision="allowed",
             reason=f"mapa_id={mapa_id}; rows={len(payload.counts)}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="salvar_contagem",
+            target_type="mapa_id",
+            target_id=str(mapa_id),
+            metadata={"linhas": len(payload.counts)},
         )
         return result
 

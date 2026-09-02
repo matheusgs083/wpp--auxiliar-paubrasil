@@ -396,6 +396,14 @@
     .recolha-table .form-control, .recolha-table .form-select { min-width: 105px; font-size: 0.82rem; }
     .recolha-table .recolha-motivo { min-width: 170px; }
     .recolha-partial-detail { margin-top: 0.35rem; min-width: 210px; }
+    .min-w-180 { min-width: 180px; }
+    .min-w-220 { min-width: 220px; }
+    .min-w-240 { min-width: 240px; }
+    .protesto-date-value { display: grid; gap: 0.12rem; min-width: 150px; }
+    .protesto-date-line { display: flex; align-items: baseline; gap: 0.35rem; line-height: 1.25; }
+    .protesto-date-line .label { min-width: 48px; color: var(--ink-500); font-size: 0.78rem; font-weight: 700; }
+    .protesto-date-line .value { color: var(--ink-900); font-size: 0.86rem; font-weight: 700; }
+    .protesto-money { margin-top: 0.24rem; color: var(--ink-900); font-size: 0.96rem; font-weight: 800; white-space: nowrap; }
     .recolha-partial-detail.d-none { display: none !important; }
     .recolha-partial-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 0.15rem rgba(185, 28, 28, 0.14); }
     .recolha-insights { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem; }
@@ -683,6 +691,10 @@
           <span class="flow-icon"><i class="bi bi-truck"></i></span>
           <span><span class="flow-title">Recolhas</span><span class="flow-desc">CSV financeiro, baixas e status por filial.</span><span class="flow-meta">Financeiro</span></span>
         </a>
+        <a href="/admin/protestos" class="flow-path" data-flow-target="protestosTab" data-flow-label="Protestos" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-shield-exclamation"></i></span>
+          <span><span class="flow-title">Protestos</span><span class="flow-desc">Titulos da 120601, provas em PDF e alerta de retirada do SPC.</span><span class="flow-meta">Cobranca</span></span>
+        </a>
         <a href="/admin/financeiro" class="flow-path" data-flow-target="financeiroTab" data-flow-label="Fechamento financeiro" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-cash-coin"></i></span>
           <span><span class="flow-title">Financeiro</span><span class="flow-desc">Caixa diario, mapas, despesas, vales e consolidado.</span><span class="flow-meta">Caixa</span></span>
@@ -732,6 +744,11 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link" id="recolhasTab" href="/admin/recolhas" data-admin-page-link="true" data-bs-target="#recolhasPane" role="tab" aria-controls="recolhasPane" aria-selected="false">
             <i class="bi bi-truck me-1"></i>Recolhas
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="protestosTab" href="/admin/protestos" data-admin-page-link="true" data-bs-target="#protestosPane" role="tab" aria-controls="protestosPane" aria-selected="false">
+            <i class="bi bi-shield-exclamation me-1"></i>Protestos
           </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -2028,6 +2045,90 @@
         </section>
       </div>
 
+      <div class="tab-pane fade" id="protestosPane" role="tabpanel" aria-labelledby="protestosTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-shield-exclamation me-2 text-primary"></i>Protestos</h2>
+              <div class="form-text">Acompanhamento de titulos da 120601 com boleto assinado, comprovante de protesto e alerta para retirada do SPC.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="protestosStatus">Aguardando dados</span>
+              <button class="btn btn-outline-primary btn-sm" id="protestosRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-lg-2 col-md-4">
+              <label class="form-label small fw-semibold mb-1" for="protestosFilial">Revenda</label>
+              <select class="form-select form-select-sm" id="protestosFilial">
+                <option value="">Todas liberadas</option>
+              </select>
+            </div>
+            <div class="col-lg-2 col-md-4">
+              <label class="form-label small fw-semibold mb-1" for="protestosStatusFilter">Status</label>
+              <select class="form-select form-select-sm" id="protestosStatusFilter">
+                <option value="">Todos</option>
+                <option value="em_aberto">Aberto na 120601</option>
+                <option value="em_acompanhamento">Em acompanhamento</option>
+                <option value="protestado">Protestado</option>
+                <option value="pago_retirar_spc">Pago / retirar SPC</option>
+                <option value="baixado">Baixado</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div class="col-lg-6 col-md-8">
+              <label class="form-label small fw-semibold mb-1" for="protestosSearch">Buscar</label>
+              <input class="form-control form-control-sm" id="protestosSearch" type="search" placeholder="NB, cliente ou nota fiscal">
+            </div>
+            <div class="col-lg-2 col-md-4">
+              <button class="btn btn-primary btn-sm w-100" id="protestosApplyBtn" type="button"><i class="bi bi-search me-1"></i>Filtrar</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label small fw-semibold mb-1" for="protestosTitleDateFrom">Vencimento do titulo - de</label>
+              <input class="form-control form-control-sm" id="protestosTitleDateFrom" type="date">
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label small fw-semibold mb-1" for="protestosTitleDateTo">Vencimento do titulo - ate</label>
+              <input class="form-control form-control-sm" id="protestosTitleDateTo" type="date">
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label small fw-semibold mb-1" for="protestosActionDateFrom">Data do protesto/acomp. - de</label>
+              <input class="form-control form-control-sm" id="protestosActionDateFrom" type="date">
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label small fw-semibold mb-1" for="protestosActionDateTo">Data do protesto/acomp. - ate</label>
+              <input class="form-control form-control-sm" id="protestosActionDateTo" type="date">
+            </div>
+          </div>
+          <div class="row g-2 mb-3" id="protestosSummary">
+            <div class="col-md-3"><div class="metric-card"><span>Titulos abertos</span><strong>0</strong></div></div>
+            <div class="col-md-3"><div class="metric-card"><span>Acompanhados</span><strong>0</strong></div></div>
+            <div class="col-md-3"><div class="metric-card"><span>Protestados</span><strong>0</strong></div></div>
+            <div class="col-md-3"><div class="metric-card"><span>Retirar SPC</span><strong class="text-danger">0</strong></div></div>
+          </div>
+          <div class="alert alert-danger py-2 small d-none" id="protestosPaidAlert"></div>
+          <div class="table-scroll">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th scope="col">Titulo</th>
+                  <th scope="col">Cliente</th>
+                  <th scope="col">Datas / valor</th>
+                  <th scope="col">Situacao</th>
+                  <th scope="col">Documentos</th>
+                  <th scope="col">Acompanhamento</th>
+                </tr>
+              </thead>
+              <tbody id="protestosBody">
+                <tr><td colspan="6" class="text-center py-4 text-secondary">Abra a aba para carregar os titulos.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
       <div class="tab-pane fade" id="conferenciaPane" role="tabpanel" aria-labelledby="conferenciaTab" tabindex="0">
         <section class="panel-card p-3 mb-3">
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
@@ -2467,6 +2568,69 @@
               </div>
             </div>
           </div>
+
+          <div class="border rounded-3 p-3 mt-3">
+            <div class="d-flex flex-wrap gap-2 align-items-end justify-content-between mb-2">
+              <div>
+                <h3 class="h6 fw-bold mb-1"><i class="bi bi-shield-check me-2 text-primary"></i>Acoes do painel</h3>
+                <div class="form-text">Auditoria operacional: usuario, modulo, acao executada e origem do acesso.</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div>
+                  <label class="form-label small fw-semibold mb-1" for="panelAuditDateFrom">De</label>
+                  <input id="panelAuditDateFrom" type="date" class="form-control form-control-sm">
+                </div>
+                <div>
+                  <label class="form-label small fw-semibold mb-1" for="panelAuditDateTo">Ate</label>
+                  <input id="panelAuditDateTo" type="date" class="form-control form-control-sm">
+                </div>
+                <div>
+                  <label class="form-label small fw-semibold mb-1" for="panelAuditUser">Usuario</label>
+                  <input id="panelAuditUser" type="search" class="form-control form-control-sm" placeholder="Ex: matheus">
+                </div>
+                <div>
+                  <label class="form-label small fw-semibold mb-1" for="panelAuditModule">Modulo</label>
+                  <select id="panelAuditModule" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="auth">Login</option>
+                    <option value="usuarios">Usuarios</option>
+                    <option value="relatorios">Relatorios</option>
+                    <option value="payip">PayIP</option>
+                    <option value="promax">Promax</option>
+                    <option value="financeiro">Financeiro</option>
+                    <option value="conferencia">Conferencia</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label small fw-semibold mb-1" for="panelAuditAction">Acao</label>
+                  <input id="panelAuditAction" type="search" class="form-control form-control-sm" placeholder="Ex: salvar">
+                </div>
+                <button class="btn btn-outline-primary btn-sm" id="panelAuditRefreshBtn"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
+                <button class="btn btn-outline-success btn-sm" id="panelAuditExportBtn"><i class="bi bi-download me-1"></i>Exportar CSV</button>
+              </div>
+            </div>
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="pill" id="panelAuditCount">Aguardando dados</span>
+            </div>
+            <div class="table-scroll" style="max-height: 320px;">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead>
+                  <tr class="text-uppercase small text-secondary">
+                    <th scope="col">Horario</th>
+                    <th scope="col">Usuario</th>
+                    <th scope="col">Modulo</th>
+                    <th scope="col">Acao</th>
+                    <th scope="col">Alvo</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">IP</th>
+                  </tr>
+                </thead>
+                <tbody id="panelAuditBody">
+                  <tr><td colspan="7" class="text-center py-3 text-secondary">Carregando...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
       </div>
     </div>
@@ -2599,7 +2763,8 @@
         panel: {
           session: "/api/admin/panel/session",
           logout: "/api/admin/panel/logout",
-          users: "/api/admin/panel/users"
+          users: "/api/admin/panel/users",
+          actions: "/api/admin/panel/actions"
         },
         access: {
           list: "/api/admin/access/users",
@@ -2617,7 +2782,9 @@
         usage: {
           evolution: "/api/admin/usage/evolution",
           evolutionReport: "/api/admin/usage/evolution/report",
-          evolutionFunctionsReport: "/api/admin/usage/evolution/functions/report"
+          evolutionFunctionsReport: "/api/admin/usage/evolution/functions/report",
+          panelActions: "/api/admin/usage/panel-actions",
+          panelActionsReport: "/api/admin/usage/panel-actions/report"
         },
         broadcast: {
           options: "/api/admin/broadcast/options",
@@ -2665,6 +2832,11 @@
           garrafeiras: "/api/admin/conferencia/garrafeiras",
           produtos: "/api/admin/conferencia/produtos"
         },
+        protestos: {
+          list: "/api/admin/protestos",
+          update: "/api/admin/protestos",
+          upload: "/api/admin/protestos"
+        },
         giroRecolha: {
           dashboard: "/api/admin/giro/recolha-dashboard",
           options: "/api/admin/giro/recolha-filter-options",
@@ -2707,6 +2879,7 @@
       { id: "critica", label: "Critica", icon: "bi-clipboard-data", description: "Importacao, dashboard e PDFs." },
       { id: "recolhas", label: "Recolhas", icon: "bi-box-arrow-in-down", description: "Solicitacoes e acompanhamento." },
       { id: "financeiro", label: "Financeiro", icon: "bi-cash-coin", description: "Fechamento de caixa por dia e mapa." },
+      { id: "protestos", label: "Protestos", icon: "bi-shield-exclamation", description: "Titulos da inadimplencia, provas em PDF e retirada de SPC." },
       { id: "conferencia", label: "Conferência", icon: "bi-clipboard-check", description: "Contagem cega de materiais e produtos por mapa." },
       { id: "armazem", label: "Armazem", icon: "bi-box-seam", description: "Consultas basicas de cliente e estoque." },
       { id: "giro", label: "Giro", icon: "bi-arrow-repeat", description: "Giro e oportunidades da carteira." },
@@ -2788,6 +2961,7 @@
         canManageRecolhas: true,
         canFinanceiro: true,
         canConferencia: true,
+        canProtestos: true,
         canArmazem: true,
         canPayip: true,
         canOperations: true,
@@ -2799,12 +2973,14 @@
       },
       accessUsers: [], accessEditing: null, panelUsers: [], panelUserEditingId: "", panelUserFilter: "", panelUserTemporaryCredentials: null, lastSyncAt: null,
       evolutionUsage: null,
+      panelAudit: null,
       broadcast: { actions: [], days: [], targetModes: [], targetAudiences: [], filiais: [], preview: null, status: null, polling: false },
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
       payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
       payipGenerated: { payload: null, loading: false, error: "", polling: false, lastFilial: "", generating: "" },
       financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null, fechamentoJobs: [], fechamentoHiddenJobIds: [], fechamentoJobId: "", fechamentoLogTimer: null, fechamentoJobsTimer: null, fechamentoLogDone: false, fechamentoLogHidden: false },
       conferencia: { payload: null, selectedId: null, detail: null, loading: false, manualRows: [], productResults: [], view: "mapas", garrafeiras: null },
+      protestos: { payload: null, loading: false, error: "" },
       promax: {
         catalog: null,
         jobs: [],
@@ -3153,6 +3329,15 @@
       usageMetricFeatureUsers: document.getElementById("usageMetricFeatureUsers"),
       usageMetricFeatureCount: document.getElementById("usageMetricFeatureCount"),
       usageMetricFeatureTop: document.getElementById("usageMetricFeatureTop"),
+      panelAuditDateFrom: document.getElementById("panelAuditDateFrom"),
+      panelAuditDateTo: document.getElementById("panelAuditDateTo"),
+      panelAuditUser: document.getElementById("panelAuditUser"),
+      panelAuditModule: document.getElementById("panelAuditModule"),
+      panelAuditAction: document.getElementById("panelAuditAction"),
+      panelAuditRefreshBtn: document.getElementById("panelAuditRefreshBtn"),
+      panelAuditExportBtn: document.getElementById("panelAuditExportBtn"),
+      panelAuditCount: document.getElementById("panelAuditCount"),
+      panelAuditBody: document.getElementById("panelAuditBody"),
       accessEditorCard: document.getElementById("accessEditorCard"),
       allowedUsersCard: document.getElementById("allowedUsersCard"),
       allowedUsersContainer: document.getElementById("allowedUsersContainer"),
@@ -3228,6 +3413,20 @@
       payipBatchStatusBtn: document.getElementById("payipBatchStatusBtn"),
       payipBatchExportBtn: document.getElementById("payipBatchExportBtn"),
       payipBatchBody: document.getElementById("payipBatchBody"),
+      protestosTab: document.getElementById("protestosTab"),
+      protestosStatus: document.getElementById("protestosStatus"),
+      protestosRefreshBtn: document.getElementById("protestosRefreshBtn"),
+      protestosFilial: document.getElementById("protestosFilial"),
+      protestosStatusFilter: document.getElementById("protestosStatusFilter"),
+      protestosSearch: document.getElementById("protestosSearch"),
+      protestosTitleDateFrom: document.getElementById("protestosTitleDateFrom"),
+      protestosTitleDateTo: document.getElementById("protestosTitleDateTo"),
+      protestosActionDateFrom: document.getElementById("protestosActionDateFrom"),
+      protestosActionDateTo: document.getElementById("protestosActionDateTo"),
+      protestosApplyBtn: document.getElementById("protestosApplyBtn"),
+      protestosSummary: document.getElementById("protestosSummary"),
+      protestosPaidAlert: document.getElementById("protestosPaidAlert"),
+      protestosBody: document.getElementById("protestosBody"),
       recolhasContainer: document.getElementById("recolhasContainer"),
       recolhasCount: document.getElementById("recolhasCount"),
       recolhasExportBtn: document.getElementById("recolhasExportBtn"),
@@ -3480,6 +3679,7 @@
       "/admin/power-bi": "reportsTab",
       "/admin/critica": "criticaTab",
       "/admin/recolhas": "recolhasTab",
+      "/admin/protestos": "protestosTab",
       "/admin/financeiro": "financeiroTab",
       "/admin/conferencia": "conferenciaTab",
       "/admin/giro-recolha": "giroRecolhaTab",
@@ -3492,6 +3692,7 @@
       promaxTab: "/admin/promax",
       criticaTab: "/admin/critica",
       recolhasTab: "/admin/recolhas",
+      protestosTab: "/admin/protestos",
       financeiroTab: "/admin/financeiro",
       conferenciaTab: "/admin/conferencia",
       giroRecolhaTab: "/admin/giro-recolha",
@@ -8362,6 +8563,7 @@
       renderCriticaDashboard();
       renderRecolhas();
       renderPayipBatch();
+      renderProtestos();
       financeiroRender();
       renderPanelUserFeatureChecks();
       setupAllowedUsersCardSizing();
@@ -8457,6 +8659,20 @@
       if (E.usageFunctionExportBtn) {
         E.usageFunctionExportBtn.addEventListener("click", exportEvolutionFunctionUsageReport);
       }
+      if (E.panelAuditRefreshBtn) {
+        E.panelAuditRefreshBtn.addEventListener("click", () => syncPanelAuditActions({ silent: false }));
+      }
+      if (E.panelAuditExportBtn) {
+        E.panelAuditExportBtn.addEventListener("click", exportPanelAuditActionsReport);
+      }
+      [E.panelAuditDateFrom, E.panelAuditDateTo, E.panelAuditModule]
+        .forEach(element => {
+          if (element) element.addEventListener("change", () => syncPanelAuditActions({ silent: false }));
+        });
+      [E.panelAuditUser, E.panelAuditAction]
+        .forEach(element => {
+          if (element) element.addEventListener("input", debounce(() => syncPanelAuditActions({ silent: true }), 250));
+        });
       if (E.usageFunctionFilter) {
         E.usageFunctionFilter.addEventListener("change", () => renderEvolutionFunctionUsage(state.evolutionUsage));
       }
@@ -8474,6 +8690,12 @@
       if (E.payipBatchRunBtn) E.payipBatchRunBtn.addEventListener("click", runPayipBatch);
       if (E.payipBatchStatusBtn) E.payipBatchStatusBtn.addEventListener("click", () => syncPayipBatchStatus({ silent: false }));
       if (E.payipBatchExportBtn) E.payipBatchExportBtn.addEventListener("click", exportPayipBatchCsv);
+      if (E.protestosRefreshBtn) E.protestosRefreshBtn.addEventListener("click", () => syncProtestos({ silent: false }));
+      if (E.protestosApplyBtn) E.protestosApplyBtn.addEventListener("click", () => syncProtestos({ silent: false }));
+      [E.protestosFilial, E.protestosStatusFilter, E.protestosTitleDateFrom, E.protestosTitleDateTo, E.protestosActionDateFrom, E.protestosActionDateTo].forEach(element => {
+        if (element) element.addEventListener("change", () => syncProtestos({ silent: true }));
+      });
+      if (E.protestosSearch) E.protestosSearch.addEventListener("input", debounce(() => syncProtestos({ silent: true }), 300));
       if (E.payipGeneratedRefreshBtn) E.payipGeneratedRefreshBtn.addEventListener("click", () => syncPayipGeneratedBatches({ silent: false }));
       if (E.payipGeneratedFilial) {
         E.payipGeneratedFilial.addEventListener("change", () => {
@@ -8717,12 +8939,15 @@
       } else if (activeTabId === "usageEvolutionTab") {
         if (state.panel && state.panel.isAdmin) tasks.push(syncEvolutionUsage({ silent }));
         else renderEvolutionUsage();
+        if (state.panel && state.panel.canViewUsage) tasks.push(syncPanelAuditActions({ silent }));
       } else if (activeTabId === "recolhasTab") {
         if (state.panel && state.panel.canManageRecolhas) tasks.push(syncRecolhas({ silent }));
       } else if (activeTabId === "financeiroTab") {
         if (state.panel && state.panel.canFinanceiro) tasks.push(syncFinanceiro({ silent }));
       } else if (activeTabId === "conferenciaTab") {
         if (state.panel && state.panel.canConferencia) tasks.push(syncConferencia({ silent }));
+      } else if (activeTabId === "protestosTab") {
+        if (state.panel && state.panel.canProtestos) tasks.push(syncProtestos({ silent }));
       } else if (activeTabId === "giroRecolhaTab") {
         if (state.panel && state.panel.canViewGiro) tasks.push(syncGiroRecolha({ silent }));
       } else if (activeTabId === "criticaTab") {
@@ -8771,6 +8996,7 @@
         E.giroRecolhaRoutesContainer.innerHTML = '<div class="py-2"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line"></div></div>';
       }
       if (isPaneActive("usageEvolutionPane")) renderEvolutionUsageLoading();
+      if (isPaneActive("usageEvolutionPane")) renderPanelAuditLoading();
     }
 
     function updateMetrics() {
@@ -9007,6 +9233,9 @@
         canConferencia: payload && Object.prototype.hasOwnProperty.call(payload, "can_conferencia")
           ? Boolean(payload.can_conferencia)
           : Boolean(payload && payload.is_admin),
+        canProtestos: payload && Object.prototype.hasOwnProperty.call(payload, "can_protestos")
+          ? Boolean(payload.can_protestos)
+          : Boolean(payload && payload.is_admin),
         canArmazem: payload && Object.prototype.hasOwnProperty.call(payload, "can_armazem")
           ? Boolean(payload.can_armazem)
           : true,
@@ -9051,6 +9280,7 @@
         "canViewCritica",
         "canManageRecolhas",
         "canFinanceiro",
+        "canProtestos",
         "canViewGiro",
         "canViewUsage",
         "canArmazem"
@@ -9108,6 +9338,7 @@
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
       setPanelTabVisible("financeiroTab", Boolean(state.panel && state.panel.canFinanceiro) && !isCritica);
       setPanelTabVisible("conferenciaTab", Boolean(state.panel && state.panel.canConferencia) && !isCritica);
+      setPanelTabVisible("protestosTab", Boolean(state.panel && state.panel.canProtestos) && !isCritica);
       setPanelTabVisible("giroRecolhaTab", Boolean(state.panel && state.panel.canViewGiro));
       applySimplePanelMode();
       updateFlowNavigation(document.querySelector("#adminTabs .nav-link.active")?.id || "operationsTab");
@@ -9220,6 +9451,36 @@
       const dt = new Date(value);
       if (Number.isNaN(dt.getTime())) return "-";
       return dt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function formatProtestoDate(value) {
+      const text = String(value || "").trim();
+      if (!text) return "-";
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) return text;
+      if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+        const [year, month, day] = text.slice(0, 10).split("-");
+        return `${day}/${month}/${year}`;
+      }
+      const dt = new Date(text);
+      if (Number.isNaN(dt.getTime())) return text;
+      return dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+
+    function formatProtestoMoney(value) {
+      let text = String(value || "").trim();
+      if (!text) return "-";
+      const negative = /-/.test(text);
+      text = text.replace(/[^\d,.-]/g, "");
+      if (!text) return "-";
+      let normalized;
+      if (text.includes(",")) {
+        normalized = text.replace(/\./g, "").replace(",", ".");
+      } else {
+        normalized = text;
+      }
+      const amount = Number(normalized);
+      if (!Number.isFinite(amount)) return String(value || "-");
+      return `${negative ? "- " : ""}${Math.abs(amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`;
     }
 
     function setUsageMetric(element, value) {
@@ -9726,6 +9987,166 @@
       }
     }
 
+    function ensurePanelAuditDateRange() {
+      const today = new Date();
+      const defaultFrom = new Date(today);
+      defaultFrom.setDate(today.getDate() - 6);
+      if (E.panelAuditDateFrom && !E.panelAuditDateFrom.value) {
+        E.panelAuditDateFrom.value = formatDateInputValue(defaultFrom);
+      }
+      if (E.panelAuditDateTo && !E.panelAuditDateTo.value) {
+        E.panelAuditDateTo.value = formatDateInputValue(today);
+      }
+    }
+
+    function getPanelAuditParams() {
+      ensurePanelAuditDateRange();
+      const params = new URLSearchParams();
+      const dateFrom = E.panelAuditDateFrom ? String(E.panelAuditDateFrom.value || "").trim() : "";
+      const dateTo = E.panelAuditDateTo ? String(E.panelAuditDateTo.value || "").trim() : "";
+      if (!dateFrom || !dateTo) throw new Error("Informe data inicial e final das acoes do painel.");
+      if (dateFrom > dateTo) throw new Error("Data inicial nao pode ser maior que a final.");
+      params.set("date_from", dateFrom);
+      params.set("date_to", dateTo);
+      params.set("limit", "500");
+      const username = E.panelAuditUser ? String(E.panelAuditUser.value || "").trim() : "";
+      const moduleName = E.panelAuditModule ? String(E.panelAuditModule.value || "").trim() : "";
+      const action = E.panelAuditAction ? String(E.panelAuditAction.value || "").trim() : "";
+      if (username) params.set("username", username);
+      if (moduleName) params.set("module", moduleName);
+      if (action) params.set("action", action);
+      return params;
+    }
+
+    function renderPanelAuditLoading() {
+      if (E.panelAuditCount) E.panelAuditCount.textContent = "Carregando acoes";
+      if (E.panelAuditBody) {
+        E.panelAuditBody.innerHTML = '<tr><td colspan="7" class="py-3"><div class="skeleton skeleton-line"></div></td></tr>';
+      }
+    }
+
+    function renderPanelAuditActions() {
+      const payload = state.panelAudit && typeof state.panelAudit === "object" ? state.panelAudit : null;
+      const actions = payload && Array.isArray(payload.actions) ? payload.actions : [];
+      if (E.panelAuditCount) {
+        E.panelAuditCount.textContent = payload ? `${formatNumber(payload.total)} acao(oes)` : "Sem dados";
+      }
+      if (!E.panelAuditBody) return;
+      if (!actions.length) {
+        E.panelAuditBody.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-secondary">Sem acoes no periodo selecionado</td></tr>';
+        return;
+      }
+      E.panelAuditBody.innerHTML = actions.map(item => {
+        const target = [item.target_type, item.target_id].filter(Boolean).join(" ");
+        const statusClass = String(item.status || "") === "success" ? "text-success" : "text-warning";
+        return `
+          <tr>
+            <td>${escapeHtml(item.created_at_local || formatDateTime(item.created_at))}</td>
+            <td>
+              <strong>${escapeHtml(item.username || "-")}</strong>
+              ${item.display_name ? `<div class="small text-secondary">${escapeHtml(item.display_name)}</div>` : ""}
+            </td>
+            <td><span class="mono">${escapeHtml(item.module || "-")}</span></td>
+            <td>${escapeHtml(item.action || "-")}</td>
+            <td>${escapeHtml(target || "-")}</td>
+            <td><strong class="${statusClass}">${escapeHtml(item.status || "-")}</strong></td>
+            <td><span class="mono">${escapeHtml(item.ip_address || "-")}</span></td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function syncPanelAuditActions({ silent = true } = {}) {
+      if (!hasPanelAuth()) {
+        if (!silent) addLog("Sessao do painel nao validada.", "warn");
+        return false;
+      }
+      let params;
+      try {
+        params = getPanelAuditParams();
+      } catch (err) {
+        if (!silent) addLog(err.message, "warn");
+        return false;
+      }
+      const btn = E.panelAuditRefreshBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn && !silent) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Atualizando';
+      }
+      try {
+        const payload = await req(`${CONFIG.endpoints.usage.panelActions}?${params.toString()}`, { timeoutMs: 30000 });
+        state.panelAudit = payload && typeof payload === "object" ? payload : null;
+        renderPanelAuditActions();
+        if (!silent) addLog("Acoes do painel atualizadas.", "ok");
+        return true;
+      } catch (err) {
+        if (state.panelAudit === null) renderPanelAuditActions();
+        if (!silent) addLog(`Falha ao consultar acoes do painel: ${err.message}`, "warn");
+        return false;
+      } finally {
+        if (btn && !silent) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
+    async function exportPanelAuditActionsReport() {
+      updateTokens();
+      if (!hasPanelAuth()) {
+        addLog("Sessao do painel nao validada.", "warn");
+        return;
+      }
+      let params;
+      try {
+        params = getPanelAuditParams();
+      } catch (err) {
+        addLog(err.message, "warn");
+        return;
+      }
+      params.set("limit", "5000");
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+      const btn = E.panelAuditExportBtn;
+      const previousLabel = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exportando';
+      }
+      try {
+        const response = await fetch(
+          `${CONFIG.api}${CONFIG.endpoints.usage.panelActionsReport}?${params.toString()}`,
+          { method: "GET", headers, credentials: "same-origin" }
+        );
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = matchedName && matchedName[1] ? matchedName[1] : "acoes_painel.csv";
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog("Acoes do painel exportadas com sucesso.", "ok");
+      } catch (err) {
+        addLog(`Falha ao exportar acoes do painel: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previousLabel;
+        }
+      }
+    }
+
     function resetBroadcastPreview() {
       state.broadcast.preview = null;
       if (E.broadcastRunBtn) E.broadcastRunBtn.disabled = true;
@@ -10117,6 +10538,318 @@
         </div>
         ${progress}
       `;
+    }
+
+    function protestoStatusLabel(status) {
+      const labels = {
+        em_aberto: "Aberto na 120601",
+        em_acompanhamento: "Em acompanhamento",
+        protestado: "Protestado",
+        pago_retirar_spc: "Pago / retirar SPC",
+        baixado: "Baixado",
+        cancelado: "Cancelado"
+      };
+      return labels[String(status || "").trim()] || "Aberto na 120601";
+    }
+
+    function protestoStatusClass(status) {
+      if (status === "pago_retirar_spc") return "text-danger";
+      if (status === "protestado") return "text-warning";
+      if (status === "baixado") return "text-success";
+      if (status === "cancelado") return "text-secondary";
+      return "";
+    }
+
+    function renderProtestos() {
+      const payload = state.protestos && state.protestos.payload ? state.protestos.payload : null;
+      const loading = Boolean(state.protestos && state.protestos.loading);
+      const error = state.protestos && state.protestos.error ? String(state.protestos.error) : "";
+      if (E.protestosStatus) {
+        if (loading) {
+          E.protestosStatus.textContent = "Carregando...";
+          E.protestosStatus.className = "pill warn";
+        } else if (error) {
+          E.protestosStatus.textContent = "Falha";
+          E.protestosStatus.className = "pill warn";
+        } else if (payload) {
+          E.protestosStatus.textContent = `${formatNumber((payload.titles || []).length)} titulo(s)`;
+          E.protestosStatus.className = "pill ok";
+        } else {
+          E.protestosStatus.textContent = "Aguardando dados";
+          E.protestosStatus.className = "pill";
+        }
+      }
+      if (E.protestosRefreshBtn) E.protestosRefreshBtn.disabled = loading;
+      if (E.protestosApplyBtn) E.protestosApplyBtn.disabled = loading;
+      renderProtestosFiliais(payload);
+      renderProtestosSummary(payload ? payload.summary : null);
+      renderProtestosPaidAlert(payload ? payload.paid_alerts : []);
+      renderProtestosRows(payload, error, loading);
+    }
+
+    function renderProtestosFiliais(payload) {
+      if (!E.protestosFilial || !payload || !Array.isArray(payload.filiais)) return;
+      const selected = E.protestosFilial.value;
+      const options = ['<option value="">Todas liberadas</option>']
+        .concat(payload.filiais.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.id)} - ${escapeHtml(item.name || item.id)}</option>`));
+      E.protestosFilial.innerHTML = options.join("");
+      if ([...E.protestosFilial.options].some(option => option.value === selected)) E.protestosFilial.value = selected;
+    }
+
+    function renderProtestosSummary(summary) {
+      if (!E.protestosSummary) return;
+      const data = summary || {};
+      const cards = [
+        ["Titulos abertos", data.titulos_abertos || 0, ""],
+        ["Clientes abertos", data.clientes_abertos || 0, ""],
+        ["Acompanhados", data.acompanhados || 0, ""],
+        ["Protestados", data.protestados || 0, ""],
+        ["Retirar SPC", data.retirar_spc || 0, "text-danger"],
+        ["Atualizacao 120601", data.updated_at ? formatDateTime(data.updated_at) : "-", ""]
+      ];
+      E.protestosSummary.innerHTML = cards.map(([label, value, cls]) => `
+        <div class="col-md-2 col-sm-4">
+          <div class="metric-card h-100">
+            <span>${escapeHtml(label)}</span>
+            <strong class="${escapeHtml(cls)}">${escapeHtml(String(value))}</strong>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function renderProtestosPaidAlert(alerts) {
+      if (!E.protestosPaidAlert) return;
+      const rows = Array.isArray(alerts) ? alerts : [];
+      if (!rows.length) {
+        E.protestosPaidAlert.classList.add("d-none");
+        E.protestosPaidAlert.innerHTML = "";
+        return;
+      }
+      E.protestosPaidAlert.classList.remove("d-none");
+      E.protestosPaidAlert.innerHTML = `
+        <strong>Alerta para retirada do SPC:</strong>
+        ${rows.slice(0, 8).map(item => `${escapeHtml(item.filial || "")}/${escapeHtml(item.nb || "")} - NF ${escapeHtml(item.nota_fiscal || "-")}`).join("; ")}
+        ${rows.length > 8 ? ` e mais ${formatNumber(rows.length - 8)}.` : ""}
+      `;
+    }
+
+    function renderProtestosRows(payload, error, loading) {
+      if (!E.protestosBody) return;
+      if (loading && !payload) {
+        E.protestosBody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-secondary"><span class="spinner-border spinner-border-sm me-1"></span>Carregando titulos...</td></tr>';
+        return;
+      }
+      if (error) {
+        E.protestosBody.innerHTML = `<tr><td colspan="6" class="text-danger"><strong>Falha:</strong> ${escapeHtml(error)}</td></tr>`;
+        return;
+      }
+      const rows = payload && Array.isArray(payload.titles) ? payload.titles : [];
+      if (!rows.length) {
+        E.protestosBody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-secondary">Nenhum titulo encontrado nos filtros atuais.</td></tr>';
+        return;
+      }
+      E.protestosBody.innerHTML = rows.map(item => {
+        const key = item.titulo_key || "";
+        const status = item.status || "em_aberto";
+        const boletoDownload = item.boleto_assinado_name
+          ? `<button class="btn btn-outline-success btn-sm protesto-download-btn" type="button" data-kind="boleto_assinado"><i class="bi bi-download me-1"></i>Baixar</button>`
+          : "";
+        const comprovanteDownload = item.comprovante_protesto_name
+          ? `<button class="btn btn-outline-success btn-sm protesto-download-btn" type="button" data-kind="comprovante_protesto"><i class="bi bi-download me-1"></i>Baixar</button>`
+          : "";
+        return `
+          <tr data-protesto-key="${escapeHtml(key)}">
+            <td>
+              <strong>${escapeHtml(item.filial || "")} / ${escapeHtml(item.nb || "")}</strong>
+              <div class="small text-secondary">${escapeHtml(item.filial_nome || "")}</div>
+              <div class="small mono">NF ${escapeHtml(item.nota_fiscal || "-")}</div>
+            </td>
+            <td class="min-w-220">
+              <strong>${escapeHtml(item.cliente_nome || "-")}</strong>
+            </td>
+            <td>
+              <div class="protesto-date-value">
+                <div class="protesto-date-line"><span class="label">Venc.</span><span class="value">${escapeHtml(formatProtestoDate(item.data_vencimento))}</span></div>
+                <div class="protesto-date-line"><span class="label">Emissao</span><span class="value">${escapeHtml(formatProtestoDate(item.data_emissao))}</span></div>
+                <div class="protesto-money">${escapeHtml(formatProtestoMoney(item.valor_pendente))}</div>
+              </div>
+            </td>
+            <td class="min-w-180">
+              <select class="form-select form-select-sm protesto-status-select ${escapeHtml(protestoStatusClass(status))}">
+                ${["em_acompanhamento", "protestado", "pago_retirar_spc", "baixado", "cancelado"].map(value => `<option value="${value}" ${status === value ? "selected" : ""}>${escapeHtml(protestoStatusLabel(value))}</option>`).join("")}
+              </select>
+              <div class="small text-secondary mt-1">Atualizado: ${escapeHtml(item.updated_at ? formatDateTime(item.updated_at) : "-")}</div>
+            </td>
+            <td class="min-w-220">
+              <div class="d-flex flex-column gap-1 small">
+                <div class="d-flex gap-1 align-items-center justify-content-between">
+                  <span class="${item.boleto_assinado_name ? "text-success" : "text-secondary"}">Boleto: ${escapeHtml(item.boleto_assinado_name || "nao enviado")}</span>
+                  ${boletoDownload}
+                </div>
+                <label class="btn btn-outline-secondary btn-sm mb-1"><i class="bi bi-upload me-1"></i>Enviar boleto<input class="d-none protesto-upload" type="file" accept="application/pdf,.pdf" data-kind="boleto_assinado"></label>
+                <div class="d-flex gap-1 align-items-center justify-content-between">
+                  <span class="${item.comprovante_protesto_name ? "text-success" : "text-secondary"}">Comprovante: ${escapeHtml(item.comprovante_protesto_name || "nao enviado")}</span>
+                  ${comprovanteDownload}
+                </div>
+                <label class="btn btn-outline-secondary btn-sm mb-0"><i class="bi bi-upload me-1"></i>Enviar comprovante<input class="d-none protesto-upload" type="file" accept="application/pdf,.pdf" data-kind="comprovante_protesto"></label>
+              </div>
+            </td>
+            <td class="min-w-240">
+              <textarea class="form-control form-control-sm protesto-obs mb-2" rows="2" placeholder="Observacao">${escapeHtml(item.observacao || "")}</textarea>
+              <button class="btn btn-primary btn-sm w-100 protesto-save-btn" type="button"><i class="bi bi-check2-circle me-1"></i>Salvar acompanhamento</button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+      E.protestosBody.querySelectorAll(".protesto-save-btn").forEach(button => {
+        button.addEventListener("click", () => saveProtestoRow(button.closest("tr")));
+      });
+      E.protestosBody.querySelectorAll(".protesto-upload").forEach(input => {
+        input.addEventListener("change", () => uploadProtestoDocument(input.closest("tr"), input));
+      });
+      E.protestosBody.querySelectorAll(".protesto-download-btn").forEach(button => {
+        button.addEventListener("click", () => downloadProtestoDocument(button.closest("tr"), button.getAttribute("data-kind") || ""));
+      });
+    }
+
+    function protestosQueryString() {
+      const params = new URLSearchParams();
+      const filial = E.protestosFilial ? String(E.protestosFilial.value || "").trim() : "";
+      const status = E.protestosStatusFilter ? String(E.protestosStatusFilter.value || "").trim() : "";
+      const search = E.protestosSearch ? String(E.protestosSearch.value || "").trim() : "";
+      const titleFrom = E.protestosTitleDateFrom ? String(E.protestosTitleDateFrom.value || "").trim() : "";
+      const titleTo = E.protestosTitleDateTo ? String(E.protestosTitleDateTo.value || "").trim() : "";
+      const protestFrom = E.protestosActionDateFrom ? String(E.protestosActionDateFrom.value || "").trim() : "";
+      const protestTo = E.protestosActionDateTo ? String(E.protestosActionDateTo.value || "").trim() : "";
+      if (filial) params.set("filial", filial);
+      if (status) params.set("status", status);
+      if (search) params.set("search", search);
+      if (titleFrom) params.set("title_date_from", titleFrom);
+      if (titleTo) params.set("title_date_to", titleTo);
+      if (protestFrom) params.set("protest_date_from", protestFrom);
+      if (protestTo) params.set("protest_date_to", protestTo);
+      params.set("limit", "300");
+      return `?${params.toString()}`;
+    }
+
+    async function syncProtestos({ silent = true } = {}) {
+      if (!hasPanelAuth()) return false;
+      state.protestos.loading = true;
+      state.protestos.error = "";
+      renderProtestos();
+      try {
+        const payload = await req(`${CONFIG.endpoints.protestos.list}${protestosQueryString()}`, { timeoutMs: 45000 });
+        state.protestos.payload = payload;
+        state.protestos.error = "";
+        if (!silent) addLog(`Protestos atualizados: ${formatNumber((payload.titles || []).length)} titulo(s).`, "ok");
+        return true;
+      } catch (err) {
+        state.protestos.error = err.message || "Falha ao carregar protestos.";
+        if (!silent) addLog(`Falha ao carregar protestos: ${err.message}`, "err");
+        return false;
+      } finally {
+        state.protestos.loading = false;
+        renderProtestos();
+      }
+    }
+
+    async function saveProtestoRow(row) {
+      if (!row) return;
+      const key = row.getAttribute("data-protesto-key") || "";
+      const status = row.querySelector(".protesto-status-select")?.value || "em_acompanhamento";
+      const observacao = row.querySelector(".protesto-obs")?.value || "";
+      const btn = row.querySelector(".protesto-save-btn");
+      const previous = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvando';
+      }
+      try {
+        await req(`${CONFIG.endpoints.protestos.update}/${encodeURIComponent(key)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, observacao }),
+          timeoutMs: 30000
+        });
+        addLog("Titulo de protesto atualizado.", "ok");
+        await syncProtestos({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao salvar protesto: ${err.message}`, "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = previous;
+        }
+      }
+    }
+
+    async function uploadProtestoDocument(row, input) {
+      if (!row || !input || !input.files || !input.files[0]) return;
+      const key = row.getAttribute("data-protesto-key") || "";
+      const kind = input.getAttribute("data-kind") || "";
+      const formData = new FormData();
+      formData.append("file", input.files[0]);
+      input.disabled = true;
+      try {
+        await req(`${CONFIG.endpoints.protestos.upload}/${encodeURIComponent(key)}/documentos/${encodeURIComponent(kind)}`, {
+          method: "POST",
+          body: formData,
+          timeoutMs: 90000
+        });
+        addLog("Documento do protesto enviado.", "ok");
+        await syncProtestos({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao enviar documento: ${err.message}`, "err");
+      } finally {
+        input.disabled = false;
+        input.value = "";
+      }
+    }
+
+    async function downloadProtestoDocument(row, kind) {
+      updateTokens();
+      if (!row || !kind || !hasPanelAuth()) return;
+      const key = row.getAttribute("data-protesto-key") || "";
+      const button = row.querySelector(`.protesto-download-btn[data-kind="${CSS.escape(kind)}"]`);
+      const previous = button ? button.innerHTML : "";
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Baixando';
+      }
+      try {
+        const headers = {};
+        if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+        if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.protestos.upload}/${encodeURIComponent(key)}/documentos/${encodeURIComponent(kind)}`, {
+          method: "GET",
+          headers,
+          credentials: "same-origin"
+        });
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => null);
+          throw new Error(errPayload && errPayload.detail ? errPayload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"([^\"]+)\"/i);
+        const filename = matchedName && matchedName[1] ? matchedName[1] : `${kind}.pdf`;
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog("Documento do protesto baixado.", "ok");
+      } catch (err) {
+        addLog(`Falha ao baixar documento: ${err.message}`, "err");
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = previous;
+        }
+      }
     }
 
     function renderPayipGeneratedBatches() {
@@ -12758,6 +13491,18 @@
       return filterGiroRecolhaRoutes(payload.routes);
     }
 
+    async function recordClientPanelAction(payload) {
+      try {
+        await req(CONFIG.endpoints.panel.actions, {
+          method: "POST",
+          body: JSON.stringify(payload || {}),
+          timeoutMs: 10000
+        });
+      } catch (err) {
+        console.warn("Falha ao registrar acao do painel", err);
+      }
+    }
+
     function exportGiroRecolhaRoutesCsv() {
       const routes = currentVisibleGiroRecolhaRoutes();
       if (!routes.length) {
@@ -12828,6 +13573,13 @@
       anchor.remove();
       URL.revokeObjectURL(blobUrl);
       addLog(`CSV de rotas exportado: ${formatNumber(routes.length)} rota(s).`, "ok");
+      void recordClientPanelAction({
+        module: "giro",
+        action: "exportar_rotas_recolha_csv",
+        target_type: "rotas",
+        target_id: String(routes.length),
+        metadata: { routes: routes.length }
+      });
     }
 
     function normalizeRecolhaStatus(value) {

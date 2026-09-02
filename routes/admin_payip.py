@@ -49,6 +49,7 @@ def create_admin_payip_router(
     payip_generated_batch_process: Callable[..., dict[str, Any]],
     payip_generated_batch_file_bytes: Callable[..., tuple[bytes, str, str]],
     record_security_event: Callable[..., None],
+    record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -67,6 +68,27 @@ def create_admin_payip_router(
         )
         require_admin_panel_feature(context, "payip")
         return context
+
+    def record_panel_action(
+        request: Request,
+        context: dict[str, Any] | None,
+        *,
+        action: str,
+        target_type: str = "",
+        target_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if record_admin_panel_action is None:
+            return
+        record_admin_panel_action(
+            request=request,
+            context=context,
+            module="payip",
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            metadata=metadata or {},
+        )
 
     @router.get("/api/admin/payip/batch/status")
     def api_admin_payip_batch_status(
@@ -116,6 +138,7 @@ def create_admin_payip_router(
             decision="allowed",
             reason=f"filial={filial};items={payload.get('items_count')}",
         )
+        record_panel_action(request, context, action="listar_lotes", target_type="filial", target_id=filial, metadata={"items": payload.get("items_count")})
         return {"ok": True, **payload}
 
     @router.post("/api/admin/payip/generated-batches/{batch_id}/process")
@@ -149,6 +172,14 @@ def create_admin_payip_router(
             event_type="admin_payip_generated_batch_process",
             decision="allowed",
             reason=f"filial={filial};batch={batch_id};kind={kind}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="gerar_arquivo_lote",
+            target_type="lote",
+            target_id=batch_id,
+            metadata={"filial": filial, "kind": kind},
         )
         return {"ok": True, **payload}
 
@@ -184,6 +215,14 @@ def create_admin_payip_router(
             decision="allowed",
             reason=f"filial={filial};batch={batch_id};kind={kind}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="baixar_arquivo_lote",
+            target_type="lote",
+            target_id=batch_id,
+            metadata={"filial": filial, "kind": kind, "filename": filename},
+        )
         return Response(
             content=file_bytes,
             media_type=media_type or "application/zip",
@@ -212,6 +251,7 @@ def create_admin_payip_router(
             decision="allowed",
             reason=f"total={result.get('total')}",
         )
+        record_panel_action(request, context, action="validar_lote_manual", metadata={"total": result.get("total"), "items": result.get("items_count")})
         return {"ok": True, **result}
 
     @router.post("/api/admin/payip/batch/run", status_code=202)
@@ -237,6 +277,13 @@ def create_admin_payip_router(
             decision="allowed",
             reason=f"job_id={job.get('job_id') if isinstance(job, dict) else ''}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="gerar_cobrancas_lote_manual",
+            target_type="job",
+            target_id=str(job.get("job_id") if isinstance(job, dict) else ""),
+        )
         return {"ok": True, "queued": True, **result}
 
     @router.post("/api/admin/payip/import/validate")
@@ -260,6 +307,14 @@ def create_admin_payip_router(
             event_type="admin_payip_import_validate",
             decision="allowed",
             reason=f"filial={payload.filial};items={result.get('items_count')};missing={len(result.get('missing_client_codes') or [])}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="validar_importacao_automatica",
+            target_type="filial",
+            target_id=payload.filial,
+            metadata={"start_date": payload.start_date, "end_date": payload.end_date, "items": result.get("items_count"), "missing": len(result.get("missing_client_codes") or [])},
         )
         return {"ok": True, **result}
 
@@ -286,6 +341,14 @@ def create_admin_payip_router(
             decision="allowed",
             reason=f"filial={payload.filial};created={len((creation or {}).get('created') or [])};failed={len((creation or {}).get('failed') or [])}",
         )
+        record_panel_action(
+            request,
+            context,
+            action="criar_clientes_faltantes",
+            target_type="filial",
+            target_id=payload.filial,
+            metadata={"start_date": payload.start_date, "end_date": payload.end_date, "requested": len(payload.missing_client_codes), "created": len((creation or {}).get("created") or []), "failed": len((creation or {}).get("failed") or [])},
+        )
         return {"ok": True, **result}
 
     @router.post("/api/admin/payip/import/run")
@@ -309,6 +372,14 @@ def create_admin_payip_router(
             event_type="admin_payip_import_run",
             decision="allowed",
             reason=f"filial={payload.filial};items={result.get('items_count')};created={len((result.get('client_creation') or {}).get('created') or [])}",
+        )
+        record_panel_action(
+            request,
+            context,
+            action="confirmar_importacao_automatica",
+            target_type="filial",
+            target_id=payload.filial,
+            metadata={"start_date": payload.start_date, "end_date": payload.end_date, "items": result.get("items_count")},
         )
         return {"ok": True, **result}
 
@@ -339,7 +410,7 @@ def create_admin_payip_router(
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> Response:
-        require_payip_context(
+        context = require_payip_context(
             request=request,
             authorization=authorization,
             x_api_token=x_api_token,
@@ -347,6 +418,7 @@ def create_admin_payip_router(
         )
         pdf_bytes, filename = payip_batch_pdf_bytes(item_id, job_id=job_id)
         record_security_event(request, channel="api", event_type="admin_payip_batch_pdf", decision="allowed", reason=item_id)
+        record_panel_action(request, context, action="baixar_pdf_cobranca", target_type="item", target_id=item_id, metadata={"job_id": job_id, "filename": filename})
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -361,7 +433,7 @@ def create_admin_payip_router(
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> Response:
-        require_payip_context(
+        context = require_payip_context(
             request=request,
             authorization=authorization,
             x_api_token=x_api_token,
@@ -369,6 +441,7 @@ def create_admin_payip_router(
         )
         csv_bytes, filename = export_payip_batch_csv(job_id=job_id)
         record_security_event(request, channel="api", event_type="admin_payip_batch_export", decision="allowed")
+        record_panel_action(request, context, action="exportar_lote_manual_csv", target_type="job", target_id=str(job_id or ""), metadata={"filename": filename})
         return Response(
             content=csv_bytes,
             media_type="text/csv; charset=utf-8",
