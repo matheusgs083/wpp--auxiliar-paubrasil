@@ -166,8 +166,8 @@ class PromaxRunner:
                 command.extend(["--unidade", unidade])
             modo = str(payload.get("modo") or payload.get("mode") or "").strip().lower()
             if modo:
-                if modo not in {"completo", "fisico", "financeiro"}:
-                    raise ValueError("Promax fechamento-mapa modo must be completo, fisico or financeiro.")
+                if modo not in {"completo", "fisico", "financeiro", "prestacao", "030322"}:
+                    raise ValueError("Promax fechamento-mapa modo must be completo, fisico, financeiro or prestacao.")
                 command.extend(["--modo", modo])
             if payload.get("save") is False or payload.get("salvar") is False:
                 command.append("--nao-salvar")

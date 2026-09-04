@@ -443,7 +443,7 @@ def create_admin_financeiro_router(
         clean_filial = _require_allowed_financeiro_filial(payload.filial, context)
         clean_mapa = str(payload.mapa or "").strip()
         clean_modo = str(payload.modo or "completo").strip().lower()
-        if clean_modo not in {"completo", "fisico", "financeiro"}:
+        if clean_modo not in {"completo", "fisico", "financeiro", "prestacao", "030322"}:
             raise HTTPException(status_code=400, detail="Modo de fechamento invalido.")
         clean_km_atual = str(payload.km_atual or "").strip()
         if clean_km_atual:
