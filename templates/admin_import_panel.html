@@ -8482,8 +8482,10 @@
       const dataRotina = els.fechamentoData && els.fechamentoData.value
         ? els.fechamentoData.value
         : (els.data && els.data.value ? els.data.value : formatDateInputValue(new Date()));
+      const caixaData = els.data && els.data.value ? els.data.value : formatDateInputValue(new Date());
       const payload = {
-        data: dataRotina,
+        data: caixaData,
+        data_rotina: dataRotina,
         filial: els.filial && els.filial.value ? els.filial.value : "",
         mapa,
         modo: els.fechamentoModo && els.fechamentoModo.value ? els.fechamentoModo.value : "completo",

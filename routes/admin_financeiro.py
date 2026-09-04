@@ -68,6 +68,7 @@ class AdminFinanceiroMapaRequest(BaseModel):
 
 class AdminFinanceiroFechamentoRequest(BaseModel):
     data: str
+    data_rotina: str = ""
     filial: str
     mapa: str = Field(min_length=1, max_length=40)
     modo: str = "completo"
@@ -446,6 +447,10 @@ def create_admin_financeiro_router(
         clean_modo = str(payload.modo or "completo").strip().lower()
         if clean_modo not in {"completo", "fisico", "financeiro", "prestacao", "030322"}:
             raise HTTPException(status_code=400, detail="Modo de fechamento invalido.")
+        caixa_date = _parse_admin_financeiro_date(payload.data)
+        data_rotina = str(payload.data_rotina or "").strip()
+        if data_rotina:
+            _parse_admin_financeiro_date(data_rotina)
         clean_km_atual = str(payload.km_atual or "").strip()
         if clean_km_atual:
             clean_km_atual = clean_km_atual.replace(".", "").replace(",", "")
@@ -454,7 +459,7 @@ def create_admin_financeiro_router(
         km_resolved = resolve_financeiro_fechamento_km(
             filial=clean_filial,
             mapa=clean_mapa,
-            caixa_date=_parse_admin_financeiro_date(payload.data),
+            caixa_date=caixa_date,
         )
         clean_km_inicial = str(km_resolved.get("km_inicial") or "").strip().replace(".", "").replace(",", "")
         clean_km_prev = str(km_resolved.get("km_prev") or "").strip().replace(".", "").replace(",", "")
@@ -480,9 +485,10 @@ def create_admin_financeiro_router(
             "km_prev": clean_km_prev,
             "km_fallback_atual": clean_km_fallback,
             "km_source": km_source,
-            "data": str(payload.data or date.today().isoformat()),
-            "start_date": str(payload.data or date.today().isoformat()),
-            "end_date": str(payload.data or date.today().isoformat()),
+            "data": caixa_date.isoformat(),
+            "data_rotina": data_rotina or caixa_date.isoformat(),
+            "start_date": caixa_date.isoformat(),
+            "end_date": caixa_date.isoformat(),
             "send_dates": False,
             "publish": False,
         }

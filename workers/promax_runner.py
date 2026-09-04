@@ -149,7 +149,10 @@ class PromaxRunner:
             if km_prev:
                 command.extend(["--km-prev", km_prev])
             data_fechamento = str(
-                payload.get("data")
+                payload.get("data_rotina")
+                or payload.get("dataRotina")
+                or payload.get("promax_date")
+                or payload.get("data")
                 or payload.get("caixa_date")
                 or payload.get("caixaDate")
                 or payload.get("start_date")

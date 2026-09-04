@@ -1412,6 +1412,28 @@ class PromaxRunnerTests(unittest.TestCase):
 
         self.assertEqual(command[command.index("--data") + 1], "2026-09-04")
 
+    def test_runner_uses_routine_date_for_fechamento_mapa_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-fechamento",
+                    "job_type": "fechamento_mapa",
+                    "payload": {
+                        "operation": "fechamento-mapa",
+                        "mapa": "94041",
+                        "unidade": "2210003",
+                        "modo": "prestacao",
+                        "data": "2026-09-04",
+                        "data_rotina": "2026-09-01",
+                    },
+                }
+            )
+
+        self.assertEqual(command[command.index("--data") + 1], "2026-09-01")
+
     def test_runner_allows_prestacao_030322_only(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._config(Path(temp_dir))
