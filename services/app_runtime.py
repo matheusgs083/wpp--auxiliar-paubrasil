@@ -342,6 +342,7 @@ def configure_app_runtime(
     )
     _list_financeiro_caixa = admin_financeiro_service.list_caixa
     _upsert_financeiro_mapa = admin_financeiro_service.upsert_mapa
+    _get_financeiro_mapa_prestacao_contas = admin_financeiro_service.get_mapa_prestacao_contas
     _export_financeiro_caixa_pdf = admin_financeiro_service.export_caixa_pdf
     _sync_financeiro_fechamento_promax = admin_financeiro_service.sync_fechamento_promax
     _resolve_financeiro_fechamento_km = admin_financeiro_service.resolve_fechamento_km
@@ -585,6 +586,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "delete_admin_recolha": runtime["_delete_admin_recolha"],
         "list_financeiro_caixa": runtime["_list_financeiro_caixa"],
         "upsert_financeiro_mapa": runtime["_upsert_financeiro_mapa"],
+        "get_financeiro_mapa_prestacao_contas": runtime["_get_financeiro_mapa_prestacao_contas"],
         "export_financeiro_caixa_pdf": runtime["_export_financeiro_caixa_pdf"],
         "sync_financeiro_fechamento_promax": runtime["_sync_financeiro_fechamento_promax"],
         "resolve_financeiro_fechamento_km": runtime["_resolve_financeiro_fechamento_km"],

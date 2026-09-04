@@ -91,6 +91,7 @@ def create_admin_financeiro_router(
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     list_financeiro_caixa: Callable[..., dict[str, Any]],
     upsert_financeiro_mapa: Callable[..., dict[str, Any]],
+    get_financeiro_mapa_prestacao_contas: Callable[..., dict[str, Any]],
     export_financeiro_caixa_pdf: Callable[..., tuple[bytes, str]],
     sync_financeiro_fechamento_promax: Callable[..., dict[str, Any]],
     sync_conferencia_fechamento_promax: Callable[..., dict[str, Any]] | None,
@@ -192,6 +193,37 @@ def create_admin_financeiro_router(
             event_type="admin_financeiro_list",
             decision="allowed",
             reason=f"data={data}; filial={filial}",
+        )
+        return payload
+
+    @router.get("/api/admin/financeiro/mapas/{mapa_id}/prestacao-contas")
+    def api_admin_financeiro_mapa_prestacao_contas(
+        mapa_id: int,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_financeiro_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        payload = get_financeiro_mapa_prestacao_contas(mapa_id=mapa_id, context=context)
+        record_panel_action(
+            request,
+            context,
+            action="abrir_prestacao_030322",
+            target_type="financeiro_mapa",
+            target_id=str(mapa_id),
+        )
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_financeiro_prestacao_030322",
+            decision="allowed",
+            reason=f"mapa_id={mapa_id}",
         )
         return payload
 

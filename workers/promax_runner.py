@@ -147,6 +147,17 @@ class PromaxRunner:
             km_prev = str(payload.get("km_prev") or payload.get("kmPrev") or payload.get("km_previsto") or payload.get("kmPrevisto") or "").strip()
             if km_prev:
                 command.extend(["--km-prev", km_prev])
+            data_fechamento = str(
+                payload.get("data")
+                or payload.get("caixa_date")
+                or payload.get("caixaDate")
+                or payload.get("start_date")
+                or payload.get("startDate")
+                or ""
+            ).strip()
+            if data_fechamento:
+                date.fromisoformat(data_fechamento)
+                command.extend(["--data", data_fechamento])
             unidade = str(payload.get("unit") or payload.get("unidade") or "").strip()
             units = _identifier_list(payload.get("units"), field_name="units")
             if not unidade and units:
@@ -281,6 +292,10 @@ class PromaxRunner:
                     termination_requested = True
                     stopped = should_stop
                     cancelled = should_cancel and not should_stop
+                    on_line(
+                        "stderr",
+                        "Cancelamento detectado; encerrando processo Promax em execucao.",
+                    )
                     terminate_process_tree(
                         child_pid,
                         platform=self._platform,
@@ -327,7 +342,11 @@ class PromaxRunner:
 
         for reader in readers:
             reader.join(timeout=1)
-        return_code = int(process.wait())
+        polled_return_code = process.poll()
+        if polled_return_code is None and termination_requested:
+            return_code = 1
+        else:
+            return_code = int(process.wait())
         if stopped:
             status = "stopped"
         elif cancelled:

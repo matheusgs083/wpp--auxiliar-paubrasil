@@ -140,6 +140,30 @@ class AdminFinanceiroService:
                         ).format(sql.Identifier(self.schema), sql.Identifier(f"financeiro_caixa_{table}"), sql.Identifier(self.schema))
                     )
                 cur.execute(
+                    sql.SQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS {}.financeiro_mapa_prestacao_contas (
+                            mapa_id BIGINT PRIMARY KEY REFERENCES {}.financeiro_caixa_mapas(id) ON DELETE CASCADE,
+                            rotina TEXT NOT NULL DEFAULT '030322',
+                            payload JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                            notas_count INTEGER NOT NULL DEFAULT 0,
+                            devolucoes_count INTEGER NOT NULL DEFAULT 0,
+                            vasilhames_count INTEGER NOT NULL DEFAULT 0,
+                            valor_notas NUMERIC(14,2) NOT NULL DEFAULT 0,
+                            valor_devolucao NUMERIC(14,2) NOT NULL DEFAULT 0,
+                            valor_liquido NUMERIC(14,2) NOT NULL DEFAULT 0,
+                            updated_by TEXT NOT NULL DEFAULT '',
+                            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        )
+                        """
+                    ).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
+                )
+                cur.execute(
+                    sql.SQL(
+                        "CREATE INDEX IF NOT EXISTS financeiro_mapa_prestacao_updated_idx ON {}.financeiro_mapa_prestacao_contas (updated_at)"
+                    ).format(sql.Identifier(self.schema))
+                )
+                cur.execute(
                     sql.SQL("ALTER TABLE {}.financeiro_caixa_vales ADD COLUMN IF NOT EXISTS assinado BOOLEAN NOT NULL DEFAULT FALSE").format(
                         sql.Identifier(self.schema)
                     )
@@ -378,6 +402,7 @@ class AdminFinanceiroService:
 
         result_payload = payload.get("result") if isinstance(payload.get("result"), dict) else payload
         dados_fechamento = _extract_dados_fechamento_03030702(result_payload)
+        dados_030322 = _extract_dados_030322(result_payload)
         dados_030303 = _extract_030303_fields(result_payload)
         metrics = _financeiro_metrics_from_fechamento(dados_fechamento)
         username = str((context or {}).get("username") or (context or {}).get("worker_id") or "promax-worker")
@@ -481,6 +506,8 @@ class AdminFinanceiroService:
                 )
                 row = dict(cur.fetchone() or {})
                 mapa_id = int(row["id"])
+                if dados_030322:
+                    self._upsert_prestacao_contas(cur, mapa_id=mapa_id, payload=dados_030322, username=username)
                 details = self._load_details(cur, [mapa_id])
             conn.commit()
         return {
@@ -493,7 +520,93 @@ class AdminFinanceiroService:
                 "dinheiro_promax": _money(metrics["dinheiro_promax"]),
             },
             "dados_fechamento_found": bool(dados_fechamento),
+            "dados_030322_found": bool(dados_030322),
         }
+
+    def get_mapa_prestacao_contas(self, *, mapa_id: int, context: dict[str, Any] | None = None) -> dict[str, Any]:
+        self.ensure_schema()
+        allowed_filiais = _allowed_filiais(context)
+        with self._connect() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        SELECT m.id, m.caixa_date, m.filial, m.mapa, m.motorista, m.placa,
+                               p.payload, p.notas_count, p.devolucoes_count, p.vasilhames_count,
+                               p.valor_notas, p.valor_devolucao, p.valor_liquido, p.updated_at
+                        FROM {}.financeiro_caixa_mapas m
+                        LEFT JOIN {}.financeiro_mapa_prestacao_contas p ON p.mapa_id = m.id
+                        WHERE m.id = %s
+                        """
+                    ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
+                    (int(mapa_id),),
+                )
+                row = dict(cur.fetchone() or {})
+        if not row:
+            raise HTTPException(status_code=404, detail="Mapa nao encontrado.")
+        filial = str(row.get("filial") or "")
+        if allowed_filiais is not None and filial not in allowed_filiais:
+            raise HTTPException(status_code=403, detail="Filial fora do acesso do usuario.")
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        summary = {
+            "available": bool(payload),
+            "notas_count": int(row.get("notas_count") or 0),
+            "devolucoes_count": int(row.get("devolucoes_count") or 0),
+            "vasilhames_count": int(row.get("vasilhames_count") or 0),
+            "valor_notas": _money(row.get("valor_notas")),
+            "valor_devolucao": _money(row.get("valor_devolucao")),
+            "valor_liquido": _money(row.get("valor_liquido")),
+            "updated_at": row["updated_at"].isoformat() if hasattr(row.get("updated_at"), "isoformat") else str(row.get("updated_at") or ""),
+        }
+        return {
+            "ok": True,
+            "mapa": {
+                "id": int(row["id"]),
+                "data": row["caixa_date"].isoformat() if hasattr(row.get("caixa_date"), "isoformat") else str(row.get("caixa_date") or ""),
+                "filial": filial,
+                "filial_nome": self.filial_labels.get(filial, ""),
+                "mapa": str(row.get("mapa") or ""),
+                "motorista": str(row.get("motorista") or ""),
+                "placa": str(row.get("placa") or ""),
+            },
+            "summary": summary,
+            "prestacao_contas": payload,
+        }
+
+    def _upsert_prestacao_contas(self, cur: Any, *, mapa_id: int, payload: dict[str, Any], username: str) -> None:
+        summary = _prestacao_030322_summary(payload)
+        cur.execute(
+            sql.SQL(
+                """
+                INSERT INTO {}.financeiro_mapa_prestacao_contas (
+                    mapa_id, rotina, payload, notas_count, devolucoes_count, vasilhames_count,
+                    valor_notas, valor_devolucao, valor_liquido, updated_by
+                )
+                VALUES (%s, '030322', %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (mapa_id) DO UPDATE SET
+                    payload = EXCLUDED.payload,
+                    notas_count = EXCLUDED.notas_count,
+                    devolucoes_count = EXCLUDED.devolucoes_count,
+                    vasilhames_count = EXCLUDED.vasilhames_count,
+                    valor_notas = EXCLUDED.valor_notas,
+                    valor_devolucao = EXCLUDED.valor_devolucao,
+                    valor_liquido = EXCLUDED.valor_liquido,
+                    updated_by = EXCLUDED.updated_by,
+                    updated_at = NOW()
+                """
+            ).format(sql.Identifier(self.schema)),
+            (
+                int(mapa_id),
+                Jsonb(payload),
+                int(summary["notas_count"]),
+                int(summary["devolucoes_count"]),
+                int(summary["vasilhames_count"]),
+                summary["valor_notas"],
+                summary["valor_devolucao"],
+                summary["valor_liquido"],
+                str(username or ""),
+            ),
+        )
 
     def _lookup_conferencia_route_identity(self, cur: Any, *, filial: str, mapa: str) -> dict[str, str]:
         if not _relation_exists_cur(cur, self.schema, "conferencia_mapas"):
@@ -655,11 +768,13 @@ class AdminFinanceiroService:
         safe_filial = str(payload.get("filial") or "revenda").strip() or "revenda"
         return pdf_bytes, f"caixa-financeiro-{safe_filial}-{safe_date}.pdf"
 
-    def _load_details(self, cur: Any, ids: list[int]) -> dict[str, dict[int, list[dict[str, Any]]]]:
-        output = {key: {item: [] for item in ids} for key in ("transferencias", "despesas", "vales", "diaristas")}
+    def _load_details(self, cur: Any, ids: list[int]) -> dict[str, dict[int, Any]]:
+        detail_keys = ("transferencias", "despesas", "vales", "diaristas")
+        output: dict[str, dict[int, Any]] = {key: {item: [] for item in ids} for key in detail_keys}
+        output["prestacao_contas"] = {item: None for item in ids}
         if not ids:
             return output
-        for key in output:
+        for key in detail_keys:
             extra_cols = sql.SQL(", assinado") if key == "vales" else sql.SQL("")
             if key == "diaristas":
                 extra_cols = sql.SQL(", recibo_recebido")
@@ -679,6 +794,26 @@ class AdminFinanceiroService:
                 mapa_id = int(item.pop("mapa_id"))
                 item["valor"] = _money(item.get("valor"))
                 output[key].setdefault(mapa_id, []).append(item)
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT mapa_id, notas_count, devolucoes_count, vasilhames_count,
+                       valor_notas, valor_devolucao, valor_liquido, updated_at
+                FROM {}.financeiro_mapa_prestacao_contas
+                WHERE mapa_id = ANY(%s)
+                """
+            ).format(sql.Identifier(self.schema)),
+            (ids,),
+        )
+        for row in cur.fetchall():
+            item = dict(row)
+            mapa_id = int(item.pop("mapa_id"))
+            item["valor_notas"] = _money(item.get("valor_notas"))
+            item["valor_devolucao"] = _money(item.get("valor_devolucao"))
+            item["valor_liquido"] = _money(item.get("valor_liquido"))
+            item["updated_at"] = item["updated_at"].isoformat() if hasattr(item.get("updated_at"), "isoformat") else str(item.get("updated_at") or "")
+            item["available"] = True
+            output["prestacao_contas"][mapa_id] = item
         return output
 
     def _replace_details(self, cur: Any, mapa_id: int, key: str, rows: list[dict[str, Any]]) -> None:
@@ -771,6 +906,7 @@ class AdminFinanceiroService:
         tipo_bloco = _normalize_tipo_bloco(row.get("tipo_bloco"))
         mapa_key = str(row.get("mapa") or "")
         mapa_ref = str(row.get("mapa_ref") or "") or mapa_key
+        prestacao_summary = (details.get("prestacao_contas") or {}).get(mapa_id)
         return {
             "id": mapa_id,
             "data": row["caixa_date"].isoformat() if hasattr(row.get("caixa_date"), "isoformat") else str(row.get("caixa_date") or ""),
@@ -821,9 +957,11 @@ class AdminFinanceiroService:
             "status": "LANCAMENTO" if tipo_bloco in {"despesa", "vale"} else ("OK" if abs(diferenca) < Decimal("0.01") else "DIVERGENTE"),
             "observacao": str(row.get("observacao") or ""),
             "updated_at": row["updated_at"].isoformat() if hasattr(row.get("updated_at"), "isoformat") else str(row.get("updated_at") or ""),
+            "prestacao_contas": prestacao_summary or {"available": False},
         }
 
     def _build_summary(self, records: list[dict[str, Any]]) -> dict[str, Any]:
+        mapa_records = [row for row in records if row.get("tipo_bloco") == "mapa"]
         keys = (
             "total_promax",
             "boletos_rota",
@@ -847,6 +985,7 @@ class AdminFinanceiroService:
             "credito_conta",
         )
         summary = {key: _money(sum(_decimal(row.get(key)) for row in records)) for key in keys}
+        summary["diferenca"] = _money(sum(_decimal(row.get("diferenca")) for row in mapa_records))
         numerario_total = _decimal(summary.get("dinheiro_total"))
         depositos_total = _decimal(summary.get("credito_conta")) + _decimal(summary.get("transferencias_total"))
         base_dinheiro_deposito = numerario_total + depositos_total
@@ -1680,6 +1819,49 @@ def _extract_dados_fechamento_03030702(source: Any) -> dict[str, Any]:
     if isinstance(metadata, dict):
         return _extract_dados_fechamento_03030702(metadata)
     return {}
+
+
+def _extract_dados_030322(source: Any) -> dict[str, Any]:
+    if not isinstance(source, dict):
+        return {}
+    candidates = (
+        ("metadata", "dados_030322"),
+        ("dados_030322",),
+        ("resultado_030322", "dados_030322"),
+        ("resultado_030322", "metadata", "dados_030322"),
+        ("result", "metadata", "dados_030322"),
+        ("metadata", "resultado_030322", "dados_030322"),
+        ("metadata", "resultado_030322", "metadata", "dados_030322"),
+        ("metadata", "prestacao_contas"),
+        ("prestacao_contas",),
+    )
+    for path in candidates:
+        value = _nested_get(source, path)
+        if isinstance(value, dict) and value:
+            return value
+    metadata = source.get("metadata")
+    if isinstance(metadata, dict) and metadata is not source:
+        return _extract_dados_030322(metadata)
+    return {}
+
+
+def _prestacao_030322_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    resumo = payload.get("resumo") if isinstance(payload.get("resumo"), dict) else {}
+    notas = payload.get("notas") if isinstance(payload.get("notas"), list) else []
+    vasilhames = payload.get("vasilhames") if isinstance(payload.get("vasilhames"), list) else []
+    devolucoes = [
+        item for item in notas
+        if str((item or {}).get("situacao") or "").strip().upper() == "DEV"
+        or _decimal((item or {}).get("valor_devolucao")) != 0
+    ]
+    return {
+        "notas_count": int(resumo.get("notas") or len(notas)),
+        "devolucoes_count": int(resumo.get("devolucoes") or len(devolucoes)),
+        "vasilhames_count": int(resumo.get("vasilhames") or len(vasilhames)),
+        "valor_notas": _decimal(resumo.get("valor_notas")),
+        "valor_devolucao": _decimal(resumo.get("valor_devolucao")),
+        "valor_liquido": _decimal(resumo.get("valor_liquido")),
+    }
 
 
 def _extract_motorista_030303(source: Any) -> str:

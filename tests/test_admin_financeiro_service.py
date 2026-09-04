@@ -144,6 +144,45 @@ def test_financeiro_percentuais_usam_base_dinheiro_mais_deposito() -> None:
     assert summary["deposito_percent"] == 55.56
 
 
+def test_financeiro_summary_diferenca_soma_apenas_diferencas_dos_mapas() -> None:
+    service = AdminFinanceiroService.__new__(AdminFinanceiroService)
+    records = [
+        {
+            "tipo_bloco": "mapa",
+            "diferenca": -80.03,
+            "total_promax": 1000,
+            "dinheiro_promax": 1000,
+            "total_apurado": 919.97,
+        },
+        {
+            "tipo_bloco": "mapa",
+            "diferenca": 25,
+            "total_promax": 500,
+            "dinheiro_promax": 500,
+            "total_apurado": 525,
+        },
+        {
+            "tipo_bloco": "despesa",
+            "diferenca": 120,
+            "total_apurado": 120,
+        },
+        {
+            "tipo_bloco": "vale",
+            "diferenca": 50,
+            "total_apurado": 50,
+        },
+        {
+            "tipo_bloco": "compra",
+            "diferenca": 300,
+            "total_apurado": 300,
+        },
+    ]
+
+    summary = service._build_summary(records)
+
+    assert summary["diferenca"] == -55.03
+
+
 def test_financeiro_diarista_sem_recibo_vira_vale_calculado() -> None:
     service = AdminFinanceiroService.__new__(AdminFinanceiroService)
     service.filial_labels = {"3": "Patos"}

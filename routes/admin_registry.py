@@ -147,6 +147,7 @@ def _register_admin_financeiro_routes(app: FastAPI, *, deps: dict[str, Any]) -> 
             require_admin_panel_feature=deps["require_admin_panel_feature"],
             list_financeiro_caixa=deps["list_financeiro_caixa"],
             upsert_financeiro_mapa=deps["upsert_financeiro_mapa"],
+            get_financeiro_mapa_prestacao_contas=deps["get_financeiro_mapa_prestacao_contas"],
             export_financeiro_caixa_pdf=deps["export_financeiro_caixa_pdf"],
             sync_financeiro_fechamento_promax=deps["sync_financeiro_fechamento_promax"],
             sync_conferencia_fechamento_promax=deps["sync_conferencia_fechamento_promax"],

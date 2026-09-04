@@ -143,6 +143,8 @@
     .form-label { color: var(--ink-900); font-weight: 700 !important; }
     .form-text { color: var(--ink-500); font-size: 0.79rem; line-height: 1.4; }
     .form-control, .form-select { min-height: 38px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--ink-900); background-color: var(--surface); box-shadow: none; }
+    input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+    input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
     .form-control-sm, .form-select-sm { min-height: 32px; }
     .form-control::placeholder { color: var(--ink-500); opacity: 0.78; }
     .form-control:focus, .form-select:focus { border-color: var(--brand-600); box-shadow: 0 0 0 0.2rem var(--focus); }
@@ -1419,71 +1421,6 @@
             <div class="empty-state py-2">Nenhum worker verificado.</div>
           </div>
           <div class="form-text mt-2">A fila aceita varios jobs e executa um por vez, na ordem de prioridade e inclusao.</div>
-          <div class="mt-3 pt-3 border-top">
-            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
-              <div>
-                <h3 class="h6 fw-bold mb-1">Configuracao dos workers</h3>
-                <div class="form-text">Defina qual worker deve executar cada grupo. Deixe automatico para manter a fila livre.</div>
-              </div>
-              <button class="btn btn-outline-primary btn-sm" id="promaxSaveWorkerAssignmentsBtn" type="button">
-                <i class="bi bi-check2-circle me-1"></i>Salvar configuracao
-              </button>
-            </div>
-            <div class="table-responsive">
-              <table class="table table-sm align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th>Grupo</th>
-                    <th>Rotinas</th>
-                    <th>Worker</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody id="promaxWorkerAssignmentsBody">
-                  <tr><td colspan="4" class="text-secondary">Carregando configuracao.</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel-card p-3 mb-3">
-          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
-            <div>
-              <h2 class="h6 fw-bold mb-1"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Impacto operacional</h2>
-              <div class="form-text">Estimativa baseada nas execucoes carregadas: 12 min por rotina x revenda, menos o tempo real do worker.</div>
-            </div>
-            <span class="pill" id="promaxImpactPeriod">Sem historico</span>
-          </div>
-          <div class="promax-impact-grid mb-3">
-            <div class="promax-impact-kpi">
-              <span class="promax-impact-label">Tempo economizado</span>
-              <strong id="promaxImpactSaved">--</strong>
-              <small id="promaxImpactManual">Manual estimado: --</small>
-            </div>
-            <div class="promax-impact-kpi">
-              <span class="promax-impact-label">Execucoes concluidas</span>
-              <strong id="promaxImpactDone">--</strong>
-              <small id="promaxImpactSuccessRate">Taxa de sucesso: --</small>
-            </div>
-            <div class="promax-impact-kpi">
-              <span class="promax-impact-label">Tempo medio do worker</span>
-              <strong id="promaxImpactAvgRuntime">--</strong>
-              <small id="promaxImpactRuns">Automacoes analisadas: --</small>
-            </div>
-            <div class="promax-impact-kpi">
-              <span class="promax-impact-label">Rotinas x revendas</span>
-              <strong id="promaxImpactWorkUnits">--</strong>
-              <small>Base do calculo do ganho</small>
-            </div>
-          </div>
-          <div class="promax-impact-chart-wrap">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="small fw-bold text-secondary">Ganho estimado por dia</span>
-              <span class="small text-secondary">Ultimos dias carregados</span>
-            </div>
-            <div id="promaxImpactChart" class="promax-impact-chart" aria-label="Grafico de ganho de tempo do Promax"></div>
-          </div>
         </section>
 
         <section class="panel-card p-3 mb-3">
@@ -1797,6 +1734,72 @@
           </div>
           <pre class="promax-log" id="promaxLogOutput">Selecione "Logs" em uma execucao para acompanhar a saida.</pre>
         </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-sliders me-2 text-primary"></i>Configuracao dos workers</h2>
+              <div class="form-text">Defina qual worker deve executar cada grupo. Deixe automatico para manter a fila livre.</div>
+            </div>
+            <button class="btn btn-outline-primary btn-sm" id="promaxSaveWorkerAssignmentsBtn" type="button">
+              <i class="bi bi-check2-circle me-1"></i>Salvar configuracao
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Grupo</th>
+                  <th>Rotinas</th>
+                  <th>Worker</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="promaxWorkerAssignmentsBody">
+                <tr><td colspan="4" class="text-secondary">Carregando configuracao.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Impacto operacional</h2>
+              <div class="form-text">Estimativa baseada nas execucoes carregadas: 12 min por rotina x revenda, menos o tempo real do worker.</div>
+            </div>
+            <span class="pill" id="promaxImpactPeriod">Sem historico</span>
+          </div>
+          <div class="promax-impact-grid mb-3">
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Tempo economizado</span>
+              <strong id="promaxImpactSaved">--</strong>
+              <small id="promaxImpactManual">Manual estimado: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Execucoes concluidas</span>
+              <strong id="promaxImpactDone">--</strong>
+              <small id="promaxImpactSuccessRate">Taxa de sucesso: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Tempo medio do worker</span>
+              <strong id="promaxImpactAvgRuntime">--</strong>
+              <small id="promaxImpactRuns">Automacoes analisadas: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Rotinas x revendas</span>
+              <strong id="promaxImpactWorkUnits">--</strong>
+              <small>Base do calculo do ganho</small>
+            </div>
+          </div>
+          <div class="promax-impact-chart-wrap">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="small fw-bold text-secondary">Ganho estimado por dia</span>
+              <span class="small text-secondary">Ultimos dias carregados</span>
+            </div>
+            <div id="promaxImpactChart" class="promax-impact-chart" aria-label="Grafico de ganho de tempo do Promax"></div>
+          </div>
+        </section>
       </div>
 
       <div class="tab-pane fade" id="criticaPane" role="tabpanel" aria-labelledby="criticaTab" tabindex="0">
@@ -1946,6 +1949,9 @@
               </label>
               <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoKm">KM atual
                 <input type="number" class="form-control form-control-sm" id="financeiroFechamentoKm" min="0" step="1" inputmode="numeric" placeholder="Opcional">
+              </label>
+              <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoData">Data rotina
+                <input type="date" class="form-control form-control-sm" id="financeiroFechamentoData">
               </label>
               <div class="finance-step-actions">
                 <button class="btn btn-primary btn-sm finance-primary-action" id="financeiroFechamentoBtn" type="button"><i class="bi bi-play-fill me-1"></i>Solicitar fechamento</button>
@@ -2687,6 +2693,69 @@
     </div>
   </div>
 
+  <div class="modal fade" id="financeiroPrestacaoModal" tabindex="-1" aria-labelledby="financeiroPrestacaoModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="financeiroPrestacaoModalTitle">Prestacao de contas do mapa</h5>
+            <div class="form-text" id="financeiroPrestacaoModalSubtitle">Dados capturados pela rotina 030322.</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="finance-summary-strip mb-3" id="financeiroPrestacaoSummary"></div>
+          <h6 class="fw-bold mb-2">Notas</h6>
+          <div class="table-scroll border rounded mb-3" style="max-height: 360px;">
+            <table class="table table-sm table-hover align-middle mb-0 promax-unit-modal-table">
+              <thead>
+                <tr>
+                  <th>NB</th>
+                  <th>Cliente</th>
+                  <th>NF</th>
+                  <th>Serie</th>
+                  <th>Sit.</th>
+                  <th>Op</th>
+                  <th>Condicao</th>
+                  <th class="text-end">Valor</th>
+                  <th class="text-end">Devolucao</th>
+                  <th class="text-end">Liquido</th>
+                </tr>
+              </thead>
+              <tbody id="financeiroPrestacaoNotasBody">
+                <tr><td colspan="10" class="text-center py-3 text-secondary">Abra um mapa para validar.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h6 class="fw-bold mb-2">Vasilhame e materiais</h6>
+          <div class="table-scroll border rounded mb-3" style="max-height: 300px;">
+            <table class="table table-sm table-hover align-middle mb-0 promax-unit-modal-table">
+              <thead>
+                <tr>
+                  <th>Cod.</th>
+                  <th>Un.</th>
+                  <th>Descricao</th>
+                  <th class="text-end">Preco</th>
+                  <th class="text-end">Saida</th>
+                  <th class="text-end">Retorno</th>
+                  <th class="text-end">Diferenca</th>
+                </tr>
+              </thead>
+              <tbody id="financeiroPrestacaoVasilhamesBody">
+                <tr><td colspan="7" class="text-center py-3 text-secondary">Sem dados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h6 class="fw-bold mb-2">Resumo financeiro</h6>
+          <pre class="panel-log mb-0" id="financeiroPrestacaoResumoRaw">Sem resumo carregado.</pre>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="promaxUnitsModal" tabindex="-1" aria-labelledby="promaxUnitsModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
       <div class="modal-content panel-card">
@@ -2820,6 +2889,7 @@
           caixas: "/api/admin/financeiro/caixas",
           caixaPdf: "/api/admin/financeiro/caixa/pdf",
           mapas: "/api/admin/financeiro/mapas",
+          prestacaoContas: "/api/admin/financeiro/mapas",
           fechamentoPromax: "/api/admin/financeiro/fechamento-promax",
           fechamentoPromaxLogs: "/api/admin/financeiro/fechamento-promax",
           fechamentoPromaxJobs: "/api/admin/financeiro/fechamento-promax/jobs",
@@ -6959,6 +7029,7 @@
         fechamentoMapa: document.getElementById("financeiroFechamentoMapa"),
         fechamentoModo: document.getElementById("financeiroFechamentoModo"),
         fechamentoKm: document.getElementById("financeiroFechamentoKm"),
+        fechamentoData: document.getElementById("financeiroFechamentoData"),
         fechamentoWorkerStatus: document.getElementById("financeiroFechamentoWorkerStatus"),
         fechamentoStatus: document.getElementById("financeiroFechamentoStatus"),
         fechamentoLogBox: document.getElementById("financeiroFechamentoLogBox"),
@@ -7075,6 +7146,10 @@
       return String(value || "").trim().toLowerCase();
     }
 
+    function financeiroDifferenceClass(value) {
+      return financeiroNumber(value) < -0.009 ? "text-danger" : "text-success";
+    }
+
     function financeiroTotals(map) {
       const dinheiroTotal = FINANCEIRO_DENOMS.reduce((total, denom) => {
         return total + financeiroNumber(denom) * Math.max(0, Math.trunc(financeiroNumber(map.dinheiro && map.dinheiro[denom])));
@@ -7109,6 +7184,16 @@
       return !["despesa", "vale", "vale_conferencia", "despesa_conferencia"].includes(tipo);
     }
 
+    function financeiroMapaContaDiferenca(map) {
+      return String(map && map.tipo_bloco || "mapa") === "mapa";
+    }
+
+    function financeiroDiferencaMapas(maps, fallback) {
+      const onlyMaps = (Array.isArray(maps) ? maps : []).filter(financeiroMapaContaDiferenca);
+      if (!onlyMaps.length) return financeiroNumber(fallback || 0);
+      return onlyMaps.reduce((total, map) => total + financeiroNumber(map && map.diferenca), 0);
+    }
+
     function financeiroRowsFromMaps(maps, key) {
       const rows = [];
       (Array.isArray(maps) ? maps : []).forEach(map => {
@@ -7133,7 +7218,7 @@
       const numerarioMalote = financeiroNumber(summary.numerario_total || (financeiroNumber(summary.dinheiro_total) + financeiroNumber(summary.moedas)));
       const depositos = financeiroNumber(summary.depositos_total || (financeiroNumber(summary.credito_conta) + financeiroNumber(summary.transferencias_total)));
       const baseDinheiroDeposito = numerarioMalote + depositos;
-      const diferenca = financeiroNumber(summary.diferenca);
+      const diferenca = financeiroDiferencaMapas(maps, summary.diferenca);
       const dinheiroPct = financeiroNumber(summary.dinheiro_percent || (baseDinheiroDeposito ? (numerarioMalote / baseDinheiroDeposito) * 100 : 0));
       const depositoPct = financeiroNumber(summary.deposito_percent || (baseDinheiroDeposito ? (depositos / baseDinheiroDeposito) * 100 : 0));
       const transfers = financeiroRowsFromMaps(caixaMaps, "transferencias");
@@ -7205,7 +7290,7 @@
                   <tr><td>Depositos</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(depositos))}</td></tr>
                   <tr><td>Vales</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.vales_total || 0))}</td></tr>
                   <tr><td>Moedas</td><td class="finance-sheet-value">${escapeHtml(formatMoneyText(summary.moedas || 0))}</td></tr>
-                  <tr><td><strong>Diferenca</strong></td><td class="finance-sheet-value ${Math.abs(diferenca) < 0.01 ? "text-success" : "text-danger"}">${escapeHtml(formatMoneyText(diferenca))}</td></tr>
+                  <tr><td><strong>Diferenca</strong></td><td class="finance-sheet-value ${financeiroDifferenceClass(diferenca)}">${escapeHtml(formatMoneyText(diferenca))}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -7356,8 +7441,8 @@
       const diferencaEl = root.querySelector('[data-financeiro-summary="diferenca"]');
       if (diferencaEl) {
         diferencaEl.textContent = formatMoneyText(totals.diferenca);
-        diferencaEl.classList.toggle("text-success", Math.abs(totals.diferenca) < 0.01);
-        diferencaEl.classList.toggle("text-danger", Math.abs(totals.diferenca) >= 0.01);
+        diferencaEl.classList.toggle("text-success", financeiroDifferenceClass(totals.diferenca) === "text-success");
+        diferencaEl.classList.toggle("text-danger", financeiroDifferenceClass(totals.diferenca) === "text-danger");
       }
     }
 
@@ -7570,6 +7655,8 @@
     function financeiroRenderSummary(summary) {
       const el = document.getElementById("financeiroSummaryCards");
       if (!el) return;
+      const maps = Array.isArray(state.financeiro.payload && state.financeiro.payload.maps) ? state.financeiro.payload.maps : [];
+      const diferenca = financeiroDiferencaMapas(maps, summary && summary.diferenca);
       const items = [
         ["Mapas", summary.mapas || 0],
         ["Compra", summary.compras || 0],
@@ -7580,9 +7667,12 @@
         ["Boletos rota", `${financeiroNumber(summary.boletos_recebido_qtd || 0)} / ${financeiroNumber(summary.boletos_rota || 0)}`],
         ["Transferencias", formatMoneyText(summary.transferencias_total || 0)],
         ["Diaristas", formatMoneyText(summary.diaristas_total || 0)],
-        ["Diferenca", formatMoneyText(summary.diferenca || 0)]
+        ["Diferenca", formatMoneyText(diferenca)]
       ];
-      el.innerHTML = items.map(([label, value]) => `<div class="finance-summary-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join("");
+      el.innerHTML = items.map(([label, value]) => {
+        const valueClass = label === "Diferenca" ? ` class="${financeiroDifferenceClass(diferenca)}"` : "";
+        return `<div class="finance-summary-item"><span>${escapeHtml(label)}</span><strong${valueClass}>${escapeHtml(String(value))}</strong></div>`;
+      }).join("");
     }
 
     function financeiroRenderMapList(maps) {
@@ -7594,10 +7684,11 @@
       }
       el.innerHTML = maps.map(map => {
         const active = String(map.id) === String(state.financeiro.selectedId) ? " is-active" : "";
+        const diferencaClass = financeiroDifferenceClass(map.diferenca || 0);
         return `<button type="button" class="finance-map-btn${active}" data-financeiro-select="${escapeHtml(map.id)}">
           <strong>${escapeHtml(financeiroTipoLabel(map.tipo_bloco))} ${escapeHtml(map.mapa || "-")}</strong>
           <span class="meta">${escapeHtml(map.motorista || "Sem motorista")}${map.placa ? ` | ${escapeHtml(map.placa)}` : ""} | ${escapeHtml(map.filial_nome || map.filial || "-")}</span>
-          <span class="status-line ${map.status === "OK" ? "text-success" : "text-danger"}">${escapeHtml(map.status || "-")} | Dif. ${escapeHtml(formatMoneyText(map.diferenca || 0))}</span>
+          <span class="status-line ${diferencaClass}">${escapeHtml(map.status || "-")} | Dif. ${escapeHtml(formatMoneyText(map.diferenca || 0))}</span>
         </button>`;
       }).join("");
       el.querySelectorAll("[data-financeiro-select]").forEach(button => {
@@ -7645,6 +7736,10 @@
       const isDespesa = tipo === "despesa";
       const isVale = tipo === "vale";
       const isLancamento = isDespesa || isVale;
+      const prestacao = map && map.prestacao_contas ? map.prestacao_contas : {};
+      const prestacaoButton = !isLancamento && !isCompra && map && map.id
+        ? `<button type="button" class="btn btn-outline-primary btn-sm" id="financeiroPrestacaoBtn"><i class="bi bi-table me-1"></i>${prestacao.available ? "Validar 030322" : "Sem 030322"}</button>`
+        : "";
       const visibleBlocks = [];
       if (!isLancamento) {
         visibleBlocks.push(financeiroRowsBlock("transferencias", "Transferencias parciais", map.transferencias || []));
@@ -7662,6 +7757,7 @@
             <div class="form-text">${isLancamento ? "Lancamento separado do caixa, vinculado ao mapa e motorista informados." : (isCompra ? "Bloco especial que pertence ao caixa do dia e entra no consolidado." : "Preencha o mapa e detalhe transferencias parciais.")}</div>
           </div>
           <div class="d-flex flex-wrap gap-2">
+            ${prestacaoButton}
             ${map && map.id ? '<button type="button" class="btn btn-outline-danger btn-sm" id="financeiroDeleteMapBtn"><i class="bi bi-trash me-1"></i>Excluir</button>' : ""}
             <button type="button" class="btn btn-primary btn-sm" id="financeiroSaveMapBtn"><i class="bi bi-check2-circle me-1"></i>Salvar mapa</button>
           </div>
@@ -7704,7 +7800,7 @@
           <div class="finance-summary-strip">
             <div class="finance-summary-item"><span>Total apurado</span><strong data-financeiro-summary="total_apurado">${formatMoneyText(totals.totalApurado)}</strong></div>
             ${isLancamento ? "" : `<div class="finance-summary-item"><span>Conferencia boletos</span><strong data-financeiro-summary="boletos" class="${Math.abs(totals.boletosDiferencaQtd) < 0.01 ? "text-success" : "text-danger"}">${financeiroNumber(map.boletos_recebido_qtd)} / ${financeiroNumber(map.boletos_rota)}</strong></div>`}
-            ${isLancamento ? "" : `<div class="finance-summary-item"><span>Diferenca</span><strong data-financeiro-summary="diferenca" class="${Math.abs(totals.diferenca) < 0.01 ? "text-success" : "text-danger"}">${formatMoneyText(totals.diferenca)}</strong></div>`}
+            ${isLancamento ? "" : `<div class="finance-summary-item"><span>Diferenca</span><strong data-financeiro-summary="diferenca" class="${financeiroDifferenceClass(totals.diferenca)}">${formatMoneyText(totals.diferenca)}</strong></div>`}
           </div>
           <div class="finance-editor-footer">
             <button type="button" class="btn btn-primary btn-sm" id="financeiroSaveMapBottomBtn"><i class="bi bi-check2-circle me-1"></i>Salvar mapa</button>
@@ -7719,12 +7815,136 @@
       el.querySelectorAll("[data-financeiro-remove]").forEach(button => button.addEventListener("click", () => financeiroRemoveRow(button.dataset.financeiroRemove, Number(button.dataset.index))));
       const gerarValesDiarista = document.getElementById("financeiroGerarValesDiaristaBtn");
       if (gerarValesDiarista) gerarValesDiarista.addEventListener("click", financeiroGerarValesDiaristas);
+      const prestacaoBtn = document.getElementById("financeiroPrestacaoBtn");
+      if (prestacaoBtn) prestacaoBtn.addEventListener("click", () => financeiroOpenPrestacaoModal(map.id));
       const save = document.getElementById("financeiroSaveMapBtn");
       const saveBottom = document.getElementById("financeiroSaveMapBottomBtn");
       const del = document.getElementById("financeiroDeleteMapBtn");
       if (save) save.addEventListener("click", financeiroSaveMap);
       if (saveBottom) saveBottom.addEventListener("click", financeiroSaveMap);
       if (del) del.addEventListener("click", financeiroDeleteMap);
+    }
+
+    async function financeiroOpenPrestacaoModal(mapaId) {
+      const modalEl = document.getElementById("financeiroPrestacaoModal");
+      if (!modalEl || !mapaId) return;
+      financeiroRenderPrestacaoModalLoading();
+      if (window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      try {
+        const payload = await req(`${CONFIG.endpoints.financeiro.prestacaoContas}/${encodeURIComponent(mapaId)}/prestacao-contas`, {
+          timeoutMs: 45000
+        });
+        financeiroRenderPrestacaoModal(payload || {});
+      } catch (err) {
+        financeiroRenderPrestacaoModalError(err.message);
+      }
+    }
+
+    function financeiroRenderPrestacaoModalLoading() {
+      const title = document.getElementById("financeiroPrestacaoModalTitle");
+      const subtitle = document.getElementById("financeiroPrestacaoModalSubtitle");
+      const summary = document.getElementById("financeiroPrestacaoSummary");
+      const notas = document.getElementById("financeiroPrestacaoNotasBody");
+      const vasilhames = document.getElementById("financeiroPrestacaoVasilhamesBody");
+      const resumo = document.getElementById("financeiroPrestacaoResumoRaw");
+      if (title) title.textContent = "Prestacao de contas do mapa";
+      if (subtitle) subtitle.textContent = "Carregando dados da 030322...";
+      if (summary) summary.innerHTML = '<div class="finance-summary-item"><span>Status</span><strong>Carregando</strong></div>';
+      if (notas) notas.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-secondary">Carregando notas...</td></tr>';
+      if (vasilhames) vasilhames.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-secondary">Carregando vasilhames...</td></tr>';
+      if (resumo) resumo.textContent = "Carregando...";
+    }
+
+    function financeiroRenderPrestacaoModalError(message) {
+      const subtitle = document.getElementById("financeiroPrestacaoModalSubtitle");
+      const summary = document.getElementById("financeiroPrestacaoSummary");
+      const notas = document.getElementById("financeiroPrestacaoNotasBody");
+      const vasilhames = document.getElementById("financeiroPrestacaoVasilhamesBody");
+      const resumo = document.getElementById("financeiroPrestacaoResumoRaw");
+      if (subtitle) subtitle.textContent = "Nao foi possivel carregar a prestacao.";
+      if (summary) summary.innerHTML = `<div class="finance-summary-item"><span>Erro</span><strong class="text-danger">${escapeHtml(message || "Falha ao carregar")}</strong></div>`;
+      if (notas) notas.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-secondary">Sem dados.</td></tr>';
+      if (vasilhames) vasilhames.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-secondary">Sem dados.</td></tr>';
+      if (resumo) resumo.textContent = message || "Falha ao carregar.";
+    }
+
+    function financeiroRenderPrestacaoModal(payload) {
+      const mapa = payload.mapa || {};
+      const prestacao = payload.prestacao_contas || {};
+      const summary = payload.summary || prestacao.resumo || {};
+      const title = document.getElementById("financeiroPrestacaoModalTitle");
+      const subtitle = document.getElementById("financeiroPrestacaoModalSubtitle");
+      if (title) title.textContent = `Prestacao 030322 - Mapa ${mapa.mapa || "-"}`;
+      if (subtitle) {
+        subtitle.textContent = `${mapa.filial_nome || mapa.filial || "-"} | ${mapa.placa || "sem placa"} | ${mapa.motorista || "sem motorista"}`;
+      }
+      const summaryEl = document.getElementById("financeiroPrestacaoSummary");
+      if (summaryEl) {
+        const items = [
+          ["Notas", summary.notas_count ?? summary.notas ?? 0],
+          ["Devolucoes", summary.devolucoes_count ?? summary.devolucoes ?? 0],
+          ["Vasilhames", summary.vasilhames_count ?? summary.vasilhames ?? 0],
+          ["Valor notas", formatMoneyText(summary.valor_notas || 0)],
+          ["Devolucao", formatMoneyText(summary.valor_devolucao || 0)],
+          ["Liquido", formatMoneyText(summary.valor_liquido || 0)],
+          ["Atualizado", summary.updated_at ? formatDateTime(summary.updated_at) : "-"]
+        ];
+        summaryEl.innerHTML = items.map(([label, value]) => `<div class="finance-summary-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join("");
+      }
+      financeiroRenderPrestacaoNotas(prestacao.notas || []);
+      financeiroRenderPrestacaoVasilhames(prestacao.vasilhames || []);
+      const resumo = document.getElementById("financeiroPrestacaoResumoRaw");
+      const linhasResumo = prestacao.resumo_financeiro && Array.isArray(prestacao.resumo_financeiro.linhas)
+        ? prestacao.resumo_financeiro.linhas
+        : [];
+      if (resumo) resumo.textContent = linhasResumo.length ? linhasResumo.join("\n") : "Sem resumo financeiro capturado.";
+    }
+
+    function financeiroRenderPrestacaoNotas(rows) {
+      const body = document.getElementById("financeiroPrestacaoNotasBody");
+      if (!body) return;
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-secondary">Nenhuma nota capturada pela 030322.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map(row => {
+        const devolucao = financeiroNumber(row.valor_devolucao || 0);
+        const statusClass = String(row.situacao || "").toUpperCase() === "DEV" || Math.abs(devolucao) > 0.001 ? "text-danger fw-bold" : "";
+        return `<tr>
+          <td class="mono fw-bold">${escapeHtml(row.nb || "-")}</td>
+          <td>${escapeHtml(row.cliente || "-")}</td>
+          <td class="mono">${escapeHtml(row.nota || "-")}</td>
+          <td>${escapeHtml(row.serie || "-")}</td>
+          <td class="${statusClass}">${escapeHtml(row.situacao || "-")}</td>
+          <td>${escapeHtml(row.operacao || "-")}</td>
+          <td>${escapeHtml(row.condicao_pagamento || "-")}</td>
+          <td class="text-end">${escapeHtml(formatMoneyText(row.valor_nota || 0))}</td>
+          <td class="text-end ${statusClass}">${escapeHtml(formatMoneyText(row.valor_devolucao || 0))}</td>
+          <td class="text-end fw-bold">${escapeHtml(formatMoneyText(row.valor_liquido || 0))}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    function financeiroRenderPrestacaoVasilhames(rows) {
+      const body = document.getElementById("financeiroPrestacaoVasilhamesBody");
+      if (!body) return;
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-secondary">Nenhum vasilhame capturado pela 030322.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map(row => {
+        const diff = financeiroNumber(row.diferenca_valor || 0);
+        const diffClass = Math.abs(diff) > 0.001 ? "text-danger fw-bold" : "";
+        return `<tr>
+          <td class="mono fw-bold">${escapeHtml(row.codigo || "-")}</td>
+          <td>${escapeHtml(row.unidade || "-")}</td>
+          <td>${escapeHtml(row.denominacao || "-")}</td>
+          <td class="text-end">${escapeHtml(formatMoneyText(row.preco || 0))}</td>
+          <td class="text-end">${escapeHtml(`${row.saida_qtd || "-"} | ${formatMoneyText(row.saida_valor || 0)}`)}</td>
+          <td class="text-end">${escapeHtml(`${row.retorno_qtd || "-"} | ${formatMoneyText(row.retorno_valor || 0)}`)}</td>
+          <td class="text-end ${diffClass}">${escapeHtml(`${row.diferenca_qtd || "-"} | ${formatMoneyText(row.diferenca_valor || 0)}`)}</td>
+        </tr>`;
+      }).join("");
     }
 
     function financeiroValeRows() {
@@ -8258,8 +8478,11 @@
         if (els.fechamentoMapa) els.fechamentoMapa.focus();
         return;
       }
+      const dataRotina = els.fechamentoData && els.fechamentoData.value
+        ? els.fechamentoData.value
+        : (els.data && els.data.value ? els.data.value : formatDateInputValue(new Date()));
       const payload = {
-        data: els.data && els.data.value ? els.data.value : formatDateInputValue(new Date()),
+        data: dataRotina,
         filial: els.filial && els.filial.value ? els.filial.value : "",
         mapa,
         modo: els.fechamentoModo && els.fechamentoModo.value ? els.fechamentoModo.value : "completo",
@@ -8311,6 +8534,7 @@
       const els = financeiroElements();
       if (!els.editor || !(state.panel && state.panel.canFinanceiro)) return;
       if (!els.data.value) els.data.value = formatDateInputValue(new Date());
+      if (els.fechamentoData && !els.fechamentoData.value) els.fechamentoData.value = els.data.value;
       const params = new URLSearchParams({ data: els.data.value });
       if (els.filial && els.filial.value) params.set("filial", els.filial.value);
       if (refreshDraft) state.financeiro.draft = null;
@@ -8474,6 +8698,7 @@
       const els = financeiroElements();
       if (!els.editor) return;
       if (!els.data.value) els.data.value = formatDateInputValue(new Date());
+      if (els.fechamentoData && !els.fechamentoData.value) els.fechamentoData.value = els.data.value;
       document.querySelectorAll("[data-financeiro-subtab]").forEach(button => {
         button.addEventListener("click", () => financeiroSetSubtab(button.dataset.financeiroSubtab));
       });
@@ -8521,6 +8746,7 @@
         financeiroSetSubtab("mapas");
       });
       if (els.data) els.data.addEventListener("change", () => {
+        if (els.fechamentoData) els.fechamentoData.value = els.data.value || formatDateInputValue(new Date());
         state.financeiro.selectedId = null;
         state.financeiro.draft = null;
         syncFinanceiro({ silent: false });

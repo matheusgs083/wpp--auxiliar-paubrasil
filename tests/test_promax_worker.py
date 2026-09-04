@@ -1391,6 +1391,27 @@ class PromaxRunnerTests(unittest.TestCase):
 
         self.assertNotIn("--ponto-apoio", command)
 
+    def test_runner_passes_data_to_fechamento_mapa(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-fechamento",
+                    "job_type": "fechamento_mapa",
+                    "payload": {
+                        "operation": "fechamento-mapa",
+                        "mapa": "94041",
+                        "unidade": "2210003",
+                        "modo": "financeiro",
+                        "data": "2026-09-04",
+                    },
+                }
+            )
+
+        self.assertEqual(command[command.index("--data") + 1], "2026-09-04")
+
     def test_runner_accepts_dynamic_profile_with_safe_identifiers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._config(Path(temp_dir))
@@ -1648,6 +1669,59 @@ class PromaxRunnerTests(unittest.TestCase):
             taskkill.call_args.args[0],
             ["taskkill", "/PID", "2468", "/T", "/F"],
         )
+        self.assertEqual(result.status, "cancelled")
+
+    def test_cancel_requested_does_not_block_when_child_ignores_kill(self) -> None:
+        class StubbornProcess(_FakeProcess):
+            def __init__(self) -> None:
+                super().__init__(pid=1357, return_code=1)
+                self.wait_without_timeout_called = False
+
+            def poll(self) -> int | None:
+                return None
+
+            def kill(self) -> None:
+                return None
+
+            def wait(self, timeout: float | None = None) -> int:
+                if timeout is None:
+                    self.wait_without_timeout_called = True
+                    raise AssertionError("cancelamento nao deve aguardar indefinidamente")
+                raise subprocess.TimeoutExpired(cmd="promax", timeout=timeout)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            process = StubbornProcess()
+            taskkill = Mock(return_value=subprocess.CompletedProcess([], 0))
+            runner = PromaxRunner(
+                config,
+                popen_factory=Mock(return_value=process),
+                monotonic=lambda: 0.0,
+                taskkill_runner=taskkill,
+                platform="nt",
+            )
+
+            result = runner.run(
+                {
+                    "id": "job-3",
+                    "job_type": "fluxo_caixa",
+                    "payload": {
+                        "category": "fluxo_caixa",
+                        "routines": ["140506"],
+                        "units": ["030117"],
+                        "publish": True,
+                    },
+                },
+                on_line=lambda _stream, _line: None,
+                heartbeat=lambda: None,
+                cancel_requested=lambda: True,
+            )
+
+        self.assertEqual(
+            taskkill.call_args.args[0],
+            ["taskkill", "/PID", "1357", "/T", "/F"],
+        )
+        self.assertFalse(process.wait_without_timeout_called)
         self.assertEqual(result.status, "cancelled")
 
 
