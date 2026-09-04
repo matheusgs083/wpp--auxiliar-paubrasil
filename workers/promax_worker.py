@@ -308,6 +308,7 @@ class PromaxWorker:
                     "error" if stream == "stderr" else "info",
                     {"stream": stream},
                 ),
+                on_event=lambda event: self._handle_partial_result_event(job, job_id, lease_token, event),
                 heartbeat=lambda: self._heartbeat_active_job(job_id, lease_token),
                 cancel_requested=lambda: self._control_requested(job_id, "cancel_requested"),
                 stop_requested=lambda: self.stop_event.is_set(),
@@ -1292,8 +1293,12 @@ class PromaxWorker:
         job_id: str,
         lease_token: str,
         result: PromaxRunResult,
+        *,
+        sync_scope: str = "all",
+        allow_failed_with_payload: bool = False,
     ) -> None:
-        if normalize_status(result.status) not in {"success", "partial_success"}:
+        normalized_result_status = normalize_status(result.status)
+        if normalized_result_status not in {"success", "partial_success"} and not allow_failed_with_payload:
             return
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
@@ -1332,27 +1337,44 @@ class PromaxWorker:
                     "return_code": result.return_code,
                     "child_pid": result.child_pid or None,
                 },
+                sync_scope=sync_scope,
             )
             self._heartbeat_active_job(job_id, lease_token)
             metrics = response.get("metrics") if isinstance(response, Mapping) else {}
-            self._send_log(
-                job_id,
-                lease_token,
-                (
-                    f"Mapa financeiro {mapa} sincronizado pelo fechamento Promax. "
-                    f"Total Promax: {metrics.get('total_promax', 0) if isinstance(metrics, Mapping) else 0}; "
-                    f"Credito em conta: {metrics.get('credito_conta', 0) if isinstance(metrics, Mapping) else 0}; "
-                    f"Boletos rota: {metrics.get('boletos_rota', 0) if isinstance(metrics, Mapping) else 0}."
-                ),
-                "info",
-                {
-                    "event": "promax_financeiro_fechamento_sync_done",
-                    "mapa": mapa,
-                    "filial": filial,
-                    "data": data,
-                    "response": dict(response) if isinstance(response, Mapping) else {},
-                },
-            )
+            if sync_scope in {"all", "financeiro", "03030702"}:
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    (
+                        f"Mapa financeiro {mapa} sincronizado pelo fechamento Promax. "
+                        f"Total Promax: {metrics.get('total_promax', 0) if isinstance(metrics, Mapping) else 0}; "
+                        f"Credito em conta: {metrics.get('credito_conta', 0) if isinstance(metrics, Mapping) else 0}; "
+                        f"Boletos rota: {metrics.get('boletos_rota', 0) if isinstance(metrics, Mapping) else 0}."
+                    ),
+                    "info",
+                    {
+                        "event": "promax_financeiro_fechamento_sync_done",
+                        "mapa": mapa,
+                        "filial": filial,
+                        "data": data,
+                        "sync_scope": sync_scope,
+                        "response": dict(response) if isinstance(response, Mapping) else {},
+                    },
+                )
+            elif sync_scope in {"prestacao", "030322"}:
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Prestacao 030322 do mapa {mapa} sincronizada com o caixa financeiro.",
+                    "info",
+                    {
+                        "event": "promax_financeiro_prestacao_sync_done",
+                        "mapa": mapa,
+                        "filial": filial,
+                        "data": data,
+                        "sync_scope": sync_scope,
+                    },
+                )
             if isinstance(response, Mapping):
                 conferencia = response.get("conferencia")
                 conferencia_error = str(response.get("conferencia_error") or "").strip()
@@ -1414,6 +1436,54 @@ class PromaxWorker:
                 "error",
                 {"event": "promax_financeiro_fechamento_sync_failed", "mapa": mapa, "filial": filial},
             )
+
+    def _handle_partial_result_event(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        event: Mapping[str, Any],
+    ) -> None:
+        event_name = str(event.get("event") or "").strip()
+        if event_name != "promax_partial_result":
+            return
+        scope = str(event.get("sync_scope") or event.get("routine") or "").strip().lower()
+        scope_aliases = {
+            "030302": "030302",
+            "fisico": "030302",
+            "conferencia": "030302",
+            "03030702": "03030702",
+            "financeiro": "03030702",
+            "030322": "030322",
+            "prestacao": "030322",
+        }
+        sync_scope = scope_aliases.get(scope, scope or "all")
+        partial_result = PromaxRunResult(
+            status="partial_success",
+            return_code=0,
+            child_pid=0,
+            message=str(event.get("message") or "Resultado parcial Promax recebido."),
+            details={
+                key: value
+                for key, value in dict(event).items()
+                if key not in {"event", "sync_scope"}
+            },
+        )
+        self._send_log(
+            job_id,
+            lease_token,
+            f"Sincronizando resultado parcial do fechamento Promax: {sync_scope}.",
+            "info",
+            {"event": "promax_financeiro_partial_sync_started", "sync_scope": sync_scope},
+        )
+        self._sync_financeiro_fechamento_if_needed(
+            job,
+            job_id,
+            lease_token,
+            partial_result,
+            sync_scope=sync_scope,
+            allow_failed_with_payload=True,
+        )
 
     def _import_csv_folder_if_needed(
         self,

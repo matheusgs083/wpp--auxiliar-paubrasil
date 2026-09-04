@@ -83,6 +83,7 @@ class InternalFinanceiroFechamentoSyncRequest(BaseModel):
     filial: str
     mapa: str = Field(min_length=1, max_length=40)
     result: dict[str, Any] = Field(default_factory=dict)
+    sync_scope: str = "all"
 
 
 def create_admin_financeiro_router(
@@ -691,26 +692,29 @@ def create_admin_financeiro_router(
         request: Request,
         _worker_auth: None = Depends(require_worker_auth),
     ) -> dict[str, Any]:
-        result = sync_financeiro_fechamento_promax(
-            {
-                "job_id": payload.job_id,
-                "data": payload.data,
-                "filial": payload.filial,
-                "mapa": payload.mapa,
-                "result": payload.result,
-            },
-            context={"worker_id": payload.worker_id, "is_admin": True},
-        )
-        if sync_conferencia_fechamento_promax is not None:
+        scope = str(payload.sync_scope or "all").strip().lower()
+        if scope not in {"all", "financeiro", "conferencia", "prestacao", "030302", "03030702", "030322"}:
+            scope = "all"
+        sync_payload = {
+            "job_id": payload.job_id,
+            "data": payload.data,
+            "filial": payload.filial,
+            "mapa": payload.mapa,
+            "result": payload.result,
+            "sync_scope": scope,
+        }
+        result: dict[str, Any] = {"ok": True, "sync_scope": scope}
+        if scope in {"all", "financeiro", "prestacao", "03030702", "030322"}:
+            result.update(
+                sync_financeiro_fechamento_promax(
+                    sync_payload,
+                    context={"worker_id": payload.worker_id, "is_admin": True},
+                )
+            )
+        if scope in {"all", "conferencia", "030302"} and sync_conferencia_fechamento_promax is not None:
             try:
                 result["conferencia"] = sync_conferencia_fechamento_promax(
-                    {
-                        "job_id": payload.job_id,
-                        "data": payload.data,
-                        "filial": payload.filial,
-                        "mapa": payload.mapa,
-                        "result": payload.result,
-                    },
+                    sync_payload,
                     context={"worker_id": payload.worker_id, "is_admin": True},
                 )
             except Exception as exc:

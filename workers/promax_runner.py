@@ -18,6 +18,7 @@ from .promax_client import normalize_status
 
 
 LineCallback = Callable[[str, str], None]
+EventCallback = Callable[[Mapping[str, Any]], None]
 TickCallback = Callable[[], None]
 ControlCallback = Callable[[], bool]
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -241,6 +242,7 @@ class PromaxRunner:
         job: Mapping[str, Any],
         *,
         on_line: LineCallback,
+        on_event: EventCallback | None = None,
         heartbeat: TickCallback,
         cancel_requested: ControlCallback,
         stop_requested: ControlCallback | None = None,
@@ -327,8 +329,12 @@ class PromaxRunner:
                 continue
             if stream == "stderr":
                 last_stderr = line
-            result_event = _parse_job_result_event(line) if stream == "stdout" else None
+            result_event = _parse_job_event(line) if stream == "stdout" else None
             if result_event is not None:
+                if result_event.get("event") == "promax_partial_result":
+                    if on_event is not None:
+                        on_event(result_event)
+                    continue
                 result_message = str(result_event.get("message") or "").strip()
                 result_details = {
                     key: value
@@ -427,7 +433,7 @@ def _start_reader(
     return thread
 
 
-def _parse_job_result_event(line: str) -> dict[str, Any] | None:
+def _parse_job_event(line: str) -> dict[str, Any] | None:
     clean_line = str(line or "").strip()
     if not clean_line.startswith("{"):
         return None
@@ -435,7 +441,7 @@ def _parse_job_result_event(line: str) -> dict[str, Any] | None:
         payload = json.loads(clean_line)
     except (json.JSONDecodeError, TypeError):
         return None
-    if not isinstance(payload, dict) or payload.get("event") != "promax_job_result":
+    if not isinstance(payload, dict) or payload.get("event") not in {"promax_job_result", "promax_partial_result"}:
         return None
     return payload
 

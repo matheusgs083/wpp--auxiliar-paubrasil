@@ -465,6 +465,7 @@ class PromaxClient:
         filial: str,
         mapa: str,
         result: Mapping[str, Any],
+        sync_scope: str = "all",
     ) -> dict[str, Any]:
         del lease_token
         return self._request(
@@ -477,6 +478,7 @@ class PromaxClient:
                 "filial": str(filial or "").strip(),
                 "mapa": str(mapa or "").strip(),
                 "result": dict(result or {}),
+                "sync_scope": str(sync_scope or "all").strip(),
             },
             timeout_seconds=self.boleto_import_timeout_seconds,
         )

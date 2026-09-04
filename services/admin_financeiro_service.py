@@ -405,6 +405,7 @@ class AdminFinanceiroService:
         dados_030322 = _extract_dados_030322(result_payload)
         dados_030303 = _extract_030303_fields(result_payload)
         metrics = _financeiro_metrics_from_fechamento(dados_fechamento)
+        has_financeiro_data = bool(dados_fechamento)
         username = str((context or {}).get("username") or (context or {}).get("worker_id") or "promax-worker")
         obs_parts = [
             "Mapa criado/atualizado automaticamente pelo fechamento Promax.",
@@ -457,10 +458,10 @@ class AdminFinanceiroService:
                                  AND {} THEN EXCLUDED.ajudante2
                                 ELSE {}.financeiro_caixa_mapas.ajudante2
                             END,
-                            boletos_rota = EXCLUDED.boletos_rota,
-                            total_promax = EXCLUDED.total_promax,
-                            credito_conta = EXCLUDED.credito_conta,
-                            dinheiro_promax = EXCLUDED.dinheiro_promax,
+                            boletos_rota = CASE WHEN %s THEN EXCLUDED.boletos_rota ELSE {}.financeiro_caixa_mapas.boletos_rota END,
+                            total_promax = CASE WHEN %s THEN EXCLUDED.total_promax ELSE {}.financeiro_caixa_mapas.total_promax END,
+                            credito_conta = CASE WHEN %s THEN EXCLUDED.credito_conta ELSE {}.financeiro_caixa_mapas.credito_conta END,
+                            dinheiro_promax = CASE WHEN %s THEN EXCLUDED.dinheiro_promax ELSE {}.financeiro_caixa_mapas.dinheiro_promax END,
                             observacao = CASE
                                 WHEN {}.financeiro_caixa_mapas.observacao = '' THEN EXCLUDED.observacao
                                 WHEN {}.financeiro_caixa_mapas.observacao LIKE %s THEN EXCLUDED.observacao
@@ -484,6 +485,10 @@ class AdminFinanceiroService:
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
                         sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
                     ),
                     (
                         caixa_date,
@@ -501,6 +506,10 @@ class AdminFinanceiroService:
                         "\n".join(obs_parts),
                         username,
                         username,
+                        has_financeiro_data,
+                        has_financeiro_data,
+                        has_financeiro_data,
+                        has_financeiro_data,
                         "Mapa criado/atualizado automaticamente pelo fechamento Promax.%",
                     ),
                 )
