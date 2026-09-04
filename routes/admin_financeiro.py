@@ -717,7 +717,7 @@ def create_admin_financeiro_router(
                     context={"worker_id": payload.worker_id, "is_admin": True},
                 )
             )
-        if scope in {"all", "conferencia", "030302"} and sync_conferencia_fechamento_promax is not None:
+        if scope in {"all", "conferencia", "financeiro", "030302", "03030702"} and sync_conferencia_fechamento_promax is not None:
             try:
                 result["conferencia"] = sync_conferencia_fechamento_promax(
                     sync_payload,

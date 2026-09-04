@@ -1380,6 +1380,7 @@ class PromaxWorker:
                 conferencia_error = str(response.get("conferencia_error") or "").strip()
                 if isinstance(conferencia, Mapping):
                     itens = int(conferencia.get("itens") or 0)
+                    gravados = int(conferencia.get("itens_gravados") or 0)
                     extraidos = int(conferencia.get("itens_extraidos_030302") or 0)
                     conferidos = int(conferencia.get("conferidos") or 0)
                     level = "info" if itens > 0 else "warning"
@@ -1388,7 +1389,8 @@ class PromaxWorker:
                         lease_token,
                         (
                             f"Conferencia do mapa {mapa} sincronizada: "
-                            f"{itens} item(ns) esperado(s) gravado(s), "
+                            f"{itens} item(ns) esperado(s) no banco, "
+                            f"{gravados} item(ns) gravado(s) nesta sincronizacao, "
                             f"{extraidos} item(ns) extraido(s) da 030302, "
                             f"{conferidos} ja conferido(s)."
                         ),

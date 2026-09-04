@@ -3049,7 +3049,7 @@
       payipBatch: { preview: null, previewPayload: null, job: null, state: null, polling: false },
       payipImport: { validation: null, validationPayload: null, loading: false, error: "" },
       payipGenerated: { payload: null, loading: false, error: "", polling: false, lastFilial: "", generating: "" },
-      financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null, fechamentoJobs: [], fechamentoHiddenJobIds: [], fechamentoJobId: "", fechamentoLogTimer: null, fechamentoJobsTimer: null, fechamentoLogDone: false, fechamentoLogHidden: false },
+      financeiro: { payload: null, selectedId: null, draft: null, loading: false, worker: null, fechamentoJobs: [], fechamentoHiddenJobIds: [], fechamentoJobId: "", fechamentoLogTimer: null, fechamentoJobsTimer: null, fechamentoLogDone: false, fechamentoLogHidden: false, fechamentoDataManual: false },
       conferencia: { payload: null, selectedId: null, detail: null, loading: false, manualRows: [], productResults: [], view: "mapas", garrafeiras: null },
       protestos: { payload: null, loading: false, error: "" },
       promax: {
@@ -8702,6 +8702,14 @@
       if (!els.editor) return;
       if (!els.data.value) els.data.value = formatDateInputValue(new Date());
       if (els.fechamentoData && !els.fechamentoData.value) els.fechamentoData.value = els.data.value;
+      if (els.fechamentoData) {
+        els.fechamentoData.addEventListener("input", () => {
+          state.financeiro.fechamentoDataManual = true;
+        });
+        els.fechamentoData.addEventListener("change", () => {
+          state.financeiro.fechamentoDataManual = Boolean(els.fechamentoData.value);
+        });
+      }
       document.querySelectorAll("[data-financeiro-subtab]").forEach(button => {
         button.addEventListener("click", () => financeiroSetSubtab(button.dataset.financeiroSubtab));
       });
@@ -8749,7 +8757,10 @@
         financeiroSetSubtab("mapas");
       });
       if (els.data) els.data.addEventListener("change", () => {
-        if (els.fechamentoData) els.fechamentoData.value = els.data.value || formatDateInputValue(new Date());
+        if (els.fechamentoData && (!state.financeiro.fechamentoDataManual || !els.fechamentoData.value)) {
+          els.fechamentoData.value = els.data.value || formatDateInputValue(new Date());
+          state.financeiro.fechamentoDataManual = false;
+        }
         state.financeiro.selectedId = null;
         state.financeiro.draft = null;
         syncFinanceiro({ silent: false });

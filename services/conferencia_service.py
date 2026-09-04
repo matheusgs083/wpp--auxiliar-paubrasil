@@ -252,13 +252,15 @@ class ConferenciaService:
                 )
                 stats = dict(cur.fetchone() or {})
             conn.commit()
+        total_items = int(stats.get("total") or 0)
         return {
             "ok": True,
             "conferencia_id": conferencia_id,
             "filial": filial,
             "mapa": mapa,
             "created_by": username,
-            "itens": len(grouped_items),
+            "itens": total_items,
+            "itens_gravados": len(grouped_items),
             "itens_extraidos_030302": len(item_drafts),
             "conferidos": int(stats.get("conferidos") or 0),
             "dados_030302_found": bool(item_drafts),
@@ -1095,8 +1097,17 @@ def _candidate_030302_roots(source: Any) -> list[Any]:
         ("metadata", "resultado_fisico", "metadata", "captura_diferencas", "itens"),
         ("resultado_fisico", "metadata", "captura_diferencas", "itens"),
         ("result", "metadata", "resultado_fisico", "metadata", "captura_diferencas", "itens"),
+        ("metadata", "captura_diferencas", "itens"),
+        ("captura_diferencas", "itens"),
+        ("result", "metadata", "captura_diferencas", "itens"),
         ("metadata", "resultado_fisico", "metadata", "captura_material", "itens"),
         ("resultado_fisico", "metadata", "captura_material", "itens"),
+        ("metadata", "captura_material", "itens"),
+        ("captura_material", "itens"),
+        ("result", "metadata", "captura_material", "itens"),
+        ("metadata", "linhasDisponiveis"),
+        ("linhasDisponiveis",),
+        ("result", "metadata", "linhasDisponiveis"),
     )
     for path in decisive_paths:
         value = _nested_get(source, path)
@@ -1112,6 +1123,8 @@ def _candidate_030302_roots(source: Any) -> list[Any]:
         ("dados_030302",),
         ("result", "metadata", "resultado_fisico", "metadata", "dados_030302"),
         ("result", "metadata", "dados_030302"),
+        ("metadata",),
+        ("result", "metadata"),
     )
     for path in paths:
         value = _nested_get(source, path)
