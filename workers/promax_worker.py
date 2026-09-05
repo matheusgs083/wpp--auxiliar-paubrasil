@@ -391,7 +391,7 @@ class PromaxWorker:
         message: str,
         level: str,
         data: Mapping[str, Any],
-    ) -> PromaxRunResult:
+    ) -> None:
         clean_message = redact_log_message(str(message or "").rstrip("\r\n")) or " "
         for offset in range(0, len(clean_message), 8000):
             self._send_log_entry(
@@ -444,7 +444,7 @@ class PromaxWorker:
         job_id: str,
         lease_token: str,
         result: PromaxRunResult,
-    ) -> None:
+    ) -> PromaxRunResult:
         backoff = self.config.backoff_initial_seconds
         post_import_attempted = False
         sync_completed = False
@@ -494,7 +494,7 @@ class PromaxWorker:
             except (PromaxClientError, ValueError) as exc:
                 self.logger.error("Sincronizacao/finalizacao rejeitada para job %s: %s", job_id, exc)
                 if sync_completed:
-                    return
+                    return final_result
                 original_status = normalize_status(result.status)
                 final_status = "partial_success" if original_status == "success" else original_status
                 final_result = PromaxRunResult(
