@@ -34,6 +34,7 @@ class PromaxRunnerConfig:
     python_executable: Path
     heartbeat_interval_seconds: float = 15.0
     control_interval_seconds: float = 5.0
+    max_runtime_seconds: float = 900.0
 
     @classmethod
     def from_values(
@@ -43,6 +44,7 @@ class PromaxRunnerConfig:
         python_executable: str | os.PathLike[str],
         heartbeat_interval_seconds: float = 15.0,
         control_interval_seconds: float = 5.0,
+        max_runtime_seconds: float = 900.0,
     ) -> PromaxRunnerConfig:
         driver_path = Path(driver_dir).expanduser().resolve()
         python_path = Path(python_executable).expanduser().resolve()
@@ -51,6 +53,7 @@ class PromaxRunnerConfig:
             python_executable=python_path,
             heartbeat_interval_seconds=float(heartbeat_interval_seconds),
             control_interval_seconds=float(control_interval_seconds),
+            max_runtime_seconds=float(max_runtime_seconds),
         )
         config.validate()
         return config
@@ -74,6 +77,8 @@ class PromaxRunnerConfig:
             raise PromaxRunnerConfigurationError("Heartbeat interval must be positive.")
         if self.control_interval_seconds <= 0:
             raise PromaxRunnerConfigurationError("Control interval must be positive.")
+        if self.max_runtime_seconds <= 0:
+            raise PromaxRunnerConfigurationError("Maximum runtime must be positive.")
 
 
 @dataclass(frozen=True)
@@ -277,15 +282,44 @@ class PromaxRunner:
         cancelled = False
         stopped = False
         termination_requested = False
+        timed_out = False
         last_stderr = ""
         result_message = ""
         result_details: dict[str, Any] = {}
         now = self._monotonic()
+        deadline = now + self.config.max_runtime_seconds
         next_heartbeat = now
         next_control = now
 
         while process.poll() is None or open_streams:
             now = self._monotonic()
+            if process.poll() is None and now >= deadline and not termination_requested:
+                termination_requested = True
+                timed_out = True
+                on_line(
+                    "stderr",
+                    f"Tempo limite de {int(self.config.max_runtime_seconds)}s excedido; encerrando processo Promax.",
+                )
+                terminate_process_tree(
+                    child_pid,
+                    platform=self._platform,
+                    run=self._taskkill_runner,
+                )
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    try:
+                        process.kill()
+                    except Exception:
+                        pass
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        on_line(
+                            "stderr",
+                            "Subprocesso Promax nao encerrou apos o timeout; o job sera finalizado como falha.",
+                        )
+                        break
             if process.poll() is None and now >= next_heartbeat:
                 heartbeat()
                 next_heartbeat = now + self.config.heartbeat_interval_seconds
@@ -356,7 +390,9 @@ class PromaxRunner:
             return_code = 1
         else:
             return_code = int(process.wait())
-        if stopped:
+        if timed_out:
+            status = "failed"
+        elif stopped:
             status = "stopped"
         elif cancelled:
             status = "cancelled"
@@ -369,7 +405,8 @@ class PromaxRunner:
         error = None
         if status == "failed":
             error = (
-                last_stderr
+                (f"Execucao Promax excedeu o tempo limite de {int(self.config.max_runtime_seconds)} segundos." if timed_out else "")
+                or last_stderr
                 or result_message
                 or f"Promax process exited with code {return_code}."
             )

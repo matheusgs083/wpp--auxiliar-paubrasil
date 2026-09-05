@@ -1,10 +1,24 @@
 from decimal import Decimal
 
 from services.admin_financeiro_service import (
+    _extract_dados_030322,
+    _extract_dados_fechamento_03030702,
     _extract_030303_fields,
     _extract_motorista_030303,
     _financeiro_metrics_from_fechamento,
 )
+
+
+def test_extractors_ignore_error_payloads_instead_of_zeroing_saved_values():
+    payload = {
+        "metadata": {
+            "dados_fechamento_03030702": {"rotina": "03030702", "erro": "timeout"},
+            "dados_030322": {"rotina": "030322", "erro": "sem mapas"},
+        }
+    }
+
+    assert _extract_dados_fechamento_03030702(payload) == {}
+    assert _extract_dados_030322(payload) == {}
 
 
 def test_extract_motorista_030303_from_worker_result_metadata():

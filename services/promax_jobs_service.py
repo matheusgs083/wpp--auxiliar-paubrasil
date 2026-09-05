@@ -709,6 +709,10 @@ class PromaxJobsService:
                             leased_by = NULL,
                             lease_expires_at = NULL,
                             heartbeat_at = NULL,
+                            idempotency_key = CASE
+                                WHEN job_type = 'fechamento_mapa' THEN NULL
+                                ELSE idempotency_key
+                            END,
                             updated_at = NOW()
                         WHERE id = %s
                           AND lease_token = %s
@@ -882,6 +886,10 @@ class PromaxJobsService:
                                 cancel_requested_by = %s,
                                 cancel_reason = %s,
                                 finished_at = NOW(),
+                                idempotency_key = CASE
+                                    WHEN job_type = 'fechamento_mapa' THEN NULL
+                                    ELSE idempotency_key
+                                END,
                                 updated_at = NOW()
                             WHERE id = %s
                             RETURNING *
@@ -947,6 +955,10 @@ class PromaxJobsService:
                         cancel_requested_by = %s,
                         cancel_reason = %s,
                         finished_at = NOW(),
+                        idempotency_key = CASE
+                            WHEN job_type = 'fechamento_mapa' THEN NULL
+                            ELSE idempotency_key
+                        END,
                         updated_at = NOW()
                     WHERE status = 'pending'
                     """
@@ -1911,6 +1923,10 @@ class PromaxJobsService:
                             leased_by = NULL,
                             lease_expires_at = NULL,
                             heartbeat_at = NULL,
+                            idempotency_key = CASE
+                                WHEN j.job_type = 'fechamento_mapa' THEN NULL
+                                ELSE j.idempotency_key
+                            END,
                             updated_at = NOW()
                         FROM expired
                         WHERE j.id = expired.id

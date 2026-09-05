@@ -405,7 +405,7 @@ class AdminFinanceiroService:
         dados_030322 = _extract_dados_030322(result_payload)
         dados_030303 = _extract_030303_fields(result_payload)
         metrics = _financeiro_metrics_from_fechamento(dados_fechamento)
-        has_financeiro_data = bool(dados_fechamento)
+        has_financeiro_data = _dados_fechamento_03030702_validos(dados_fechamento)
         username = str((context or {}).get("username") or (context or {}).get("worker_id") or "promax-worker")
         obs_parts = [
             "Mapa criado/atualizado automaticamente pelo fechamento Promax.",
@@ -1822,12 +1822,22 @@ def _extract_dados_fechamento_03030702(source: Any) -> dict[str, Any]:
     )
     for path in candidates:
         value = _nested_get(source, path)
-        if isinstance(value, dict) and value:
+        if _dados_fechamento_03030702_validos(value):
             return value
     metadata = source.get("metadata")
     if isinstance(metadata, dict):
         return _extract_dados_fechamento_03030702(metadata)
     return {}
+
+
+def _dados_fechamento_03030702_validos(value: Any) -> bool:
+    if not isinstance(value, dict) or not value or value.get("erro"):
+        return False
+    for key in ("saida", "retorno"):
+        bloco = value.get(key)
+        if isinstance(bloco, dict) and isinstance(bloco.get("itens"), list):
+            return True
+    return isinstance(value.get("resumo"), dict) or isinstance(value.get("diferencas"), dict)
 
 
 def _extract_dados_030322(source: Any) -> dict[str, Any]:
@@ -1846,12 +1856,18 @@ def _extract_dados_030322(source: Any) -> dict[str, Any]:
     )
     for path in candidates:
         value = _nested_get(source, path)
-        if isinstance(value, dict) and value:
+        if _dados_030322_validos(value):
             return value
     metadata = source.get("metadata")
     if isinstance(metadata, dict) and metadata is not source:
         return _extract_dados_030322(metadata)
     return {}
+
+
+def _dados_030322_validos(value: Any) -> bool:
+    if not isinstance(value, dict) or not value or value.get("erro"):
+        return False
+    return any(key in value for key in ("notas", "vasilhames", "produtos", "resumo", "paginas"))
 
 
 def _prestacao_030322_summary(payload: dict[str, Any]) -> dict[str, Any]:

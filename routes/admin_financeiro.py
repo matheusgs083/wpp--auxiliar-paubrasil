@@ -444,6 +444,8 @@ def create_admin_financeiro_router(
         )
         clean_filial = _require_allowed_financeiro_filial(payload.filial, context)
         clean_mapa = str(payload.mapa or "").strip()
+        if not clean_mapa.isdigit():
+            raise HTTPException(status_code=400, detail="Mapa deve conter apenas numeros.")
         clean_modo = str(payload.modo or "completo").strip().lower()
         if clean_modo not in {"completo", "fisico", "financeiro", "prestacao", "030322"}:
             raise HTTPException(status_code=400, detail="Modo de fechamento invalido.")
@@ -451,6 +453,31 @@ def create_admin_financeiro_router(
         data_rotina = str(payload.data_rotina or "").strip()
         if data_rotina:
             _parse_admin_financeiro_date(data_rotina)
+        clean_ponto_apoio = str(payload.ponto_apoio or "").strip()
+        if clean_ponto_apoio and not clean_ponto_apoio.isdigit():
+            raise HTTPException(status_code=400, detail="Ponto de apoio deve conter apenas numeros.")
+        for active_job in list_promax_jobs(
+            statuses=["pending", "running", "cancel_requested"],
+            limit=500,
+        ):
+            active_payload = active_job.get("payload") if isinstance(active_job, dict) else {}
+            if not isinstance(active_payload, dict):
+                continue
+            active_operation = str(
+                active_payload.get("operation") or active_job.get("job_type") or ""
+            ).strip().lower().replace("-", "_")
+            if active_operation not in {"fechamento_mapa", "mapa_fechamento"}:
+                continue
+            active_date = str(active_payload.get("data") or active_payload.get("start_date") or "").strip()
+            if (
+                _normalize_admin_filial(active_payload.get("filial")) == clean_filial
+                and str(active_payload.get("mapa") or "").strip() == clean_mapa
+                and active_date == caixa_date.isoformat()
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ja existe um fechamento em andamento para o mapa {clean_mapa} nesta data.",
+                )
         clean_km_atual = str(payload.km_atual or "").strip()
         if clean_km_atual:
             clean_km_atual = clean_km_atual.replace(".", "").replace(",", "")
@@ -480,6 +507,7 @@ def create_admin_financeiro_router(
             "unidade": promax_unit,
             "units": [promax_unit],
             "modo": clean_modo,
+            "ponto_apoio": clean_ponto_apoio,
             "km_atual": clean_km_atual,
             "km_inicial": clean_km_inicial,
             "km_prev": clean_km_prev,
@@ -491,6 +519,7 @@ def create_admin_financeiro_router(
             "end_date": caixa_date.isoformat(),
             "send_dates": False,
             "publish": False,
+            "fechar_ao_falhar": True,
         }
         if clean_target_worker_id:
             job_payload["target_worker_id"] = clean_target_worker_id
@@ -498,6 +527,9 @@ def create_admin_financeiro_router(
             job_type="fechamento_mapa",
             payload=job_payload,
             priority=80,
+            idempotency_key=(
+                f"fechamento-mapa:{clean_filial}:{caixa_date.isoformat()}:{clean_mapa}"
+            ),
             created_by=str(context.get("username") or context.get("mode") or ""),
         )
         record_security_event(
@@ -699,8 +731,8 @@ def create_admin_financeiro_router(
         _worker_auth: None = Depends(require_worker_auth),
     ) -> dict[str, Any]:
         scope = str(payload.sync_scope or "all").strip().lower()
-        if scope not in {"all", "financeiro", "conferencia", "prestacao", "030302", "03030702", "030322"}:
-            scope = "all"
+        if scope not in {"all", "financeiro", "conferencia", "prestacao", "030302", "030303", "03030702", "030322"}:
+            raise HTTPException(status_code=422, detail="Escopo de sincronizacao invalido.")
         sync_payload = {
             "job_id": payload.job_id,
             "data": payload.data,
@@ -710,14 +742,14 @@ def create_admin_financeiro_router(
             "sync_scope": scope,
         }
         result: dict[str, Any] = {"ok": True, "sync_scope": scope}
-        if scope in {"all", "financeiro", "prestacao", "03030702", "030322"}:
+        if scope in {"all", "financeiro", "prestacao", "030303", "03030702", "030322"}:
             result.update(
                 sync_financeiro_fechamento_promax(
                     sync_payload,
                     context={"worker_id": payload.worker_id, "is_admin": True},
                 )
             )
-        if scope in {"all", "conferencia", "financeiro", "030302", "03030702"} and sync_conferencia_fechamento_promax is not None:
+        if scope in {"all", "conferencia", "financeiro", "prestacao", "030302", "03030702", "030322"} and sync_conferencia_fechamento_promax is not None:
             try:
                 result["conferencia"] = sync_conferencia_fechamento_promax(
                     sync_payload,

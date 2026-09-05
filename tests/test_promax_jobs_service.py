@@ -299,9 +299,14 @@ class PromaxSqlContractTests(unittest.TestCase):
         )
 
         self.assertEqual([job["job_type"] for job in jobs], ["adf", "obz"])
-        self.assertEqual(len(cursor.executions), 2)
-        first_params = cursor.executions[0][1]
-        second_params = cursor.executions[1][1]
+        inserts = [
+            (query, params)
+            for query, params in cursor.executions
+            if 'INSERT INTO "promax"."jobs"' in query_text(query)
+        ]
+        self.assertEqual(len(inserts), 2)
+        first_params = inserts[0][1]
+        second_params = inserts[1][1]
         self.assertEqual(first_params[1], "adf")
         self.assertEqual(second_params[1], "obz")
         self.assertLess(first_params[8], second_params[8])
@@ -351,11 +356,15 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIsNotNone(job)
         self.assertEqual(job["source_schedule_id"], schedule_id)
         select_statement = query_text(cursor.executions[0][0])
-        insert_statement = query_text(cursor.executions[1][0])
+        insert_query, insert_params = next(
+            (query, params)
+            for query, params in cursor.executions
+            if 'INSERT INTO "promax"."jobs"' in query_text(query)
+        )
+        insert_statement = query_text(insert_query)
         self.assertIn("FROM \"promax\".\"schedules\" WHERE id = %s", select_statement)
         self.assertIn("INSERT INTO \"promax\".\"jobs\"", insert_statement)
         self.assertNotIn("UPDATE \"promax\".\"schedules\"", insert_statement)
-        insert_params = cursor.executions[1][1]
         self.assertEqual(insert_params[1], "bot_zap")
         self.assertEqual(insert_params[3], 20)
         self.assertTrue(str(insert_params[5]).startswith(f"manual-schedule:{schedule_id}:"))
@@ -401,7 +410,7 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("SELECT COUNT(*)", statement)
         self.assertIn(") < %s", statement)
         self.assertEqual(cursor.executions[0][1][0], "promax")
-        self.assertEqual(cursor.executions[0][1][1], 1)
+        self.assertEqual(cursor.executions[0][1][3], 1)
         self.assertEqual(cursor.executions[0][1][-1], 45)
 
     def test_claim_respects_configured_max_concurrent_jobs(self) -> None:
@@ -422,7 +431,7 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("SELECT COUNT(*)", statement)
         self.assertIn(") < %s", statement)
         self.assertEqual(cursor.executions[0][1][0], "promax")
-        self.assertEqual(cursor.executions[0][1][1], 2)
+        self.assertEqual(cursor.executions[0][1][3], 2)
         self.assertEqual(cursor.executions[0][1][-1], 60)
 
     def test_heartbeat_fences_wrong_or_expired_lease(self) -> None:
@@ -481,6 +490,7 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("needs_review = TRUE", statement)
         self.assertIn("failure_reason = 'lease_expired'", statement)
         self.assertIn("nao sera reexecutado automaticamente", statement)
+        self.assertIn("WHEN j.job_type = 'fechamento_mapa' THEN NULL", statement)
         self.assertNotIn("status = 'pending'", statement)
 
 

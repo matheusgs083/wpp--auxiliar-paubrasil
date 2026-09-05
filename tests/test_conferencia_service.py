@@ -1,6 +1,11 @@
 from decimal import Decimal
 
-from services.conferencia_service import _aggregate_conferencia_items, _enrich_item, _extract_030302_items
+from services.conferencia_service import (
+    _aggregate_conferencia_items,
+    _enrich_item,
+    _extract_030302_items,
+    _extract_030322_items,
+)
 
 
 def test_extract_030302_items_from_resultado_fisico_metadata_and_groups_by_code():
@@ -101,6 +106,61 @@ def test_extract_030302_items_prefers_single_captura_diferencas_list():
     rows = {row.cod_item: row for row in _extract_030302_items(payload)}
 
     assert rows["863059"].total_sistema == Decimal("102")
+
+
+def test_extract_030302_items_from_flat_independent_metadata_capture():
+    payload = {
+        "metadata": {
+            "captura_diferencas": {
+                "itens": [
+                    {"codigo": "863059", "texto": " pc GFE 300ML,PRET ", "faltaUn": "102", "faltaAv": "0"},
+                    {"codigo": "899599", "texto": " pc GFE 1/1 PRETA ", "faltaUn": "70", "faltaAv": "0"},
+                ]
+            }
+        }
+    }
+
+    rows = {row.cod_item: row for row in _extract_030302_items(payload)}
+
+    assert rows["863059"].total_sistema == Decimal("102")
+    assert rows["899599"].total_sistema == Decimal("70")
+
+
+def test_extract_030322_items_from_prestacao_vasilhames_payload():
+    payload = {
+        "metadata": {
+            "dados_030322": {
+                "vasilhames": [
+                    {
+                        "codigo": "863059",
+                        "unidade": "pc",
+                        "denominacao": "GFE 300ML,PRET",
+                        "preco": 40.8,
+                        "saida_qtd": "102/00",
+                        "retorno_qtd": "/00",
+                        "diferenca_qtd": "102/00",
+                    },
+                    {
+                        "codigo": "899599",
+                        "unidade": "pc",
+                        "denominacao": "GFE 1/1 PRETA",
+                        "preco": "66,32",
+                        "saida_qtd": "70/00",
+                        "retorno_qtd": "/00",
+                        "diferenca_qtd": "70/00",
+                    },
+                ]
+            }
+        }
+    }
+
+    rows = {row.cod_item: row for row in _extract_030322_items(payload)}
+
+    assert rows["863059"].descricao == "GFE 300ML,PRET"
+    assert rows["863059"].total_sistema == Decimal("102.000")
+    assert rows["863059"].valor_unitario == Decimal("40.800")
+    assert rows["899599"].total_sistema == Decimal("70.000")
+    assert rows["899599"].payload["fonte_conferencia"] == "030322"
 
 
 def test_extract_030302_items_uses_av_when_un_is_zero():

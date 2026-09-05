@@ -143,10 +143,41 @@ class ConferenciaService:
 
         result_payload = payload.get("result") if isinstance(payload.get("result"), dict) else payload
         dados_030303 = _extract_030303_fields(result_payload)
-        item_drafts = _extract_030302_items(result_payload)
+        items_030302 = _extract_030302_items(result_payload)
+        items_030322: list[ConferenciaItemDraft] = []
+        item_source = "030302" if items_030302 else ""
+        if items_030302:
+            item_drafts = items_030302
+        else:
+            items_030322 = _extract_030322_items(result_payload)
+            item_drafts = items_030322
+            item_source = "030322" if items_030322 else ""
         username = str((context or {}).get("username") or (context or {}).get("worker_id") or "promax-worker")
 
         with self._connect() as conn:
+            if items_030322 and not items_030302:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            SELECT EXISTS (
+                                SELECT 1
+                                FROM {}.conferencia_mapas m
+                                JOIN {}.conferencia_itens i ON i.conferencia_id = m.id
+                                WHERE m.caixa_date = %s
+                                  AND m.filial = %s
+                                  AND m.mapa = %s
+                                  AND COALESCE(i.payload->>'fonte_conferencia', '') = '030302'
+                            ) AS found
+                            """
+                        ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
+                        (caixa_date, filial, mapa),
+                    )
+                    existing_030302 = bool((cur.fetchone() or {}).get("found"))
+                if existing_030302:
+                    item_drafts = []
+                    items_030322 = []
+                    item_source = "030302_existente"
             product_lookup = self._load_product_lookup(conn, {item.cod_item for item in item_drafts})
             material_lookup = self._load_material_lookup(conn, {item.cod_item for item in item_drafts})
             garrafeira_lookup = self._load_garrafeira_lookup(conn, {item.cod_item for item in item_drafts})
@@ -261,9 +292,12 @@ class ConferenciaService:
             "created_by": username,
             "itens": total_items,
             "itens_gravados": len(grouped_items),
-            "itens_extraidos_030302": len(item_drafts),
+            "itens_extraidos_030302": len(items_030302),
+            "itens_extraidos_030322": len(items_030322),
+            "fonte_itens": item_source,
             "conferidos": int(stats.get("conferidos") or 0),
-            "dados_030302_found": bool(item_drafts),
+            "dados_030302_found": bool(items_030302),
+            "dados_030322_found": bool(items_030322),
             "dados_030303_found": any(dados_030303.values()),
         }
 
@@ -1074,6 +1108,17 @@ def _extract_030302_items(source: Any) -> list[ConferenciaItemDraft]:
             draft = _draft_from_raw_item(raw, parent_key)
             if not draft:
                 continue
+            draft = ConferenciaItemDraft(
+                cod_item=draft.cod_item,
+                descricao=draft.descricao,
+                tipo_item=draft.tipo_item,
+                categoria=draft.categoria,
+                grupo_contagem=draft.grupo_contagem,
+                unidade=draft.unidade,
+                total_sistema=draft.total_sistema,
+                valor_unitario=draft.valor_unitario,
+                payload={**draft.payload, "fonte_conferencia": "030302"},
+            )
             existing = merged.get(draft.cod_item)
             if existing:
                 merged[draft.cod_item] = ConferenciaItemDraft(
@@ -1085,11 +1130,157 @@ def _extract_030302_items(source: Any) -> list[ConferenciaItemDraft]:
                     unidade=existing.unidade or draft.unidade,
                     total_sistema=existing.total_sistema + draft.total_sistema,
                     valor_unitario=existing.valor_unitario or draft.valor_unitario,
-                    payload={"partes": [existing.payload, draft.payload]},
+                    payload={"partes": [existing.payload, draft.payload], "fonte_conferencia": "030302"},
                 )
             else:
                 merged[draft.cod_item] = draft
     return list(merged.values())
+
+
+def _extract_030322_items(source: Any) -> list[ConferenciaItemDraft]:
+    dados = _extract_dados_030322_for_conferencia(source)
+    if not dados:
+        return []
+    merged: dict[str, ConferenciaItemDraft] = {}
+    for raw, parent_key in _iter_030322_item_dicts(dados):
+        draft = _draft_from_raw_item(_normalize_030322_item(raw), parent_key)
+        if not draft:
+            continue
+        payload = {**draft.payload, "fonte_conferencia": "030322"}
+        draft = ConferenciaItemDraft(
+            cod_item=draft.cod_item,
+            descricao=draft.descricao,
+            tipo_item=draft.tipo_item,
+            categoria=draft.categoria,
+            grupo_contagem=draft.grupo_contagem,
+            unidade=draft.unidade,
+            total_sistema=draft.total_sistema,
+            valor_unitario=draft.valor_unitario,
+            payload=payload,
+        )
+        existing = merged.get(draft.cod_item)
+        if existing:
+            merged[draft.cod_item] = ConferenciaItemDraft(
+                cod_item=existing.cod_item,
+                descricao=existing.descricao or draft.descricao,
+                tipo_item=existing.tipo_item or draft.tipo_item,
+                categoria=existing.categoria or draft.categoria,
+                grupo_contagem=existing.grupo_contagem or draft.grupo_contagem,
+                unidade=existing.unidade or draft.unidade,
+                total_sistema=existing.total_sistema + draft.total_sistema,
+                valor_unitario=existing.valor_unitario or draft.valor_unitario,
+                payload={"partes": [existing.payload, draft.payload], "fonte_conferencia": "030322"},
+            )
+        else:
+            merged[draft.cod_item] = draft
+    return list(merged.values())
+
+
+def _extract_dados_030322_for_conferencia(source: Any) -> dict[str, Any]:
+    paths = (
+        ("metadata", "dados_030322"),
+        ("dados_030322",),
+        ("resultado_030322", "dados_030322"),
+        ("resultado_030322", "metadata", "dados_030322"),
+        ("result", "metadata", "dados_030322"),
+        ("metadata", "resultado_030322", "dados_030322"),
+        ("metadata", "resultado_030322", "metadata", "dados_030322"),
+        ("metadata", "prestacao_contas"),
+        ("prestacao_contas",),
+    )
+    for path in paths:
+        value = _nested_get(source, path)
+        if isinstance(value, dict) and not value.get("erro"):
+            return value
+    if isinstance(source, dict) and (
+        not source.get("erro")
+        and (
+            isinstance(source.get("vasilhames"), list)
+            or isinstance(source.get("produtos"), list)
+            or str(source.get("rotina") or "") == "030322"
+        )
+    ):
+        return source
+    return {}
+
+
+def _iter_030322_item_dicts(dados: dict[str, Any]) -> Iterable[tuple[dict[str, Any], str]]:
+    for key in ("vasilhames", "produtos", "itens", "lista_produtos", "listaProdutos"):
+        rows = dados.get(key)
+        if isinstance(rows, list):
+            for item in rows:
+                if isinstance(item, dict):
+                    yield item, key
+
+
+def _normalize_030322_item(raw: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(raw)
+    descricao = _first_text(normalized, "descricao", "denominacao", "nome", "texto", "produto")
+    if descricao:
+        normalized.setdefault("descricao", descricao)
+    quantity = _quantity_from_030322_raw(normalized)
+    normalized["quantidade"] = _decimal_str(quantity)
+    if _norm_key("valor_unitario") not in {_norm_key(key) for key in normalized}:
+        preco = _first_decimal(normalized, "preco", "valor_unitario", "valorUnitario", "valor")
+        if preco:
+            normalized["valor_unitario"] = _decimal_str(preco)
+    if _norm_key("tipo_item") not in {_norm_key(key) for key in normalized}:
+        normalized["tipo_item"] = "item"
+    return normalized
+
+
+def _quantity_from_030322_raw(raw: dict[str, Any]) -> Decimal:
+    indexed = {_norm_key(key): value for key, value in raw.items()}
+    for key in (
+        "diferenca_qtd",
+        "diferencaqtd",
+        "diferenca",
+        "falta_qtd",
+        "faltaqtd",
+        "cobrar_repack",
+        "cobrar",
+        "vazio",
+        "vazio_qtd",
+        "troca",
+        "troca_qtd",
+        "devolucao",
+        "devolucao_qtd",
+        "saida_qtd",
+        "saidaqtd",
+        "saida",
+        "quantidade",
+        "qtd",
+        "qtde",
+    ):
+        if key in indexed:
+            quantity = _decimal_from_030322_quantity(indexed.get(key))
+            if quantity:
+                return abs(quantity)
+    return Decimal("0")
+
+
+def _decimal_from_030322_quantity(value: Any) -> Decimal:
+    if value in (None, ""):
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    text = str(value).strip()
+    if not text:
+        return Decimal("0")
+    negative = text.endswith("-") or text.startswith("-")
+    text = text.strip("-").strip()
+    if "/" in text:
+        text = text.split("/", 1)[0]
+    text = text.replace("R$", "").replace(" ", "")
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif "." in text and re.fullmatch(r"\d{1,3}(?:\.\d{3})+", text):
+        text = text.replace(".", "")
+    try:
+        number = Decimal(text)
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
+    return -number if negative else number
 
 
 def _candidate_030302_roots(source: Any) -> list[Any]:
@@ -1229,7 +1420,13 @@ def _enrich_item(
     categoria = str(ref.get("tipo_material") or ref.get("grupo") or ref.get("subtipo") or ref.get("familia") or "") if garrafeira else item.categoria or str(ref.get("tipo_material") or ref.get("grupo") or ref.get("subtipo") or ref.get("familia") or "")
     unidade = str(ref.get("un_venda") or ref.get("embalagem") or "") if garrafeira else item.unidade or str(ref.get("un_venda") or ref.get("embalagem") or "")
     grupo = _classify_garrafeira_tipo_material(categoria) if garrafeira else _classify_group(f"{categoria} {descricao} {unidade}")
-    item_payload = {**item.payload, "cadastro_ref": _json_safe(ref), "garrafeira_ref": bool(garrafeira)}
+    item_payload = {
+        **item.payload,
+        "cadastro_ref": _json_safe(ref),
+        "garrafeira_ref": bool(garrafeira),
+        "material_ref": bool(material),
+        "produto_ref": bool(product),
+    }
     units_per_box = _units_per_box_from_text(unidade)
     if units_per_box:
         item_payload["unidades_por_caixa"] = units_per_box
@@ -1299,10 +1496,16 @@ def _is_expected_garrafeira_item(item: ConferenciaItemDraft) -> bool:
 def _is_conferencia_product_item(item: ConferenciaItemDraft) -> bool:
     if bool(item.payload.get("garrafeira_ref")):
         return False
+    if bool(item.payload.get("produto_ref")):
+        return item.total_sistema != 0
     tipo = _strip_accents(item.tipo_item).upper()
     if tipo == "MATERIAL":
         return False
-    text = _strip_accents(f"{item.descricao} {item.categoria}").upper()
+    raw_text = " ".join(
+        str(item.payload.get(key) or "")
+        for key in ("texto", "descricao", "denominacao", "nome", "produto")
+    )
+    text = _strip_accents(f"{item.descricao} {item.categoria} {raw_text}").upper()
     if any(token in text for token in ("GARRAFEIRA", "GFA ", "GFA_", "VASILHAME", "CHAPATEX", "PALLET")):
         return False
     return item.total_sistema != 0

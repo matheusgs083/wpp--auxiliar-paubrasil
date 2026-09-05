@@ -61,6 +61,7 @@ class WorkerConfig:
     backoff_initial_seconds: float = 2.0
     backoff_max_seconds: float = 60.0
     boleto_import_timeout_seconds: float = 900.0
+    job_timeout_seconds: float = 900.0
     visual_lock_enabled: bool = True
     visual_lock_file: str = ""
 
@@ -100,6 +101,7 @@ class WorkerConfig:
             backoff_initial_seconds=_env_float("PROMAX_WORKER_BACKOFF_INITIAL_SECONDS", 2.0),
             backoff_max_seconds=_env_float("PROMAX_WORKER_BACKOFF_MAX_SECONDS", 60.0),
             boleto_import_timeout_seconds=boleto_import_timeout_seconds,
+            job_timeout_seconds=_env_float("PROMAX_WORKER_JOB_TIMEOUT_SECONDS", 900.0),
             visual_lock_enabled=_env_bool("PROMAX_VISUAL_LOCK_ENABLED", True),
             visual_lock_file=os.environ.get("PROMAX_VISUAL_LOCK_FILE", ""),
         )
@@ -113,6 +115,8 @@ class WorkerConfig:
             raise ValueError(
                 "PROMAX_WORKER_BOLETO_IMPORT_TIMEOUT_SECONDS must not exceed the active job lease."
             )
+        if self.job_timeout_seconds <= 0:
+            raise ValueError("PROMAX_WORKER_JOB_TIMEOUT_SECONDS must be positive.")
         if self.poll_interval_seconds <= 0:
             raise ValueError("PROMAX_WORKER_POLL_SECONDS must be positive.")
         if self.backoff_initial_seconds <= 0:
@@ -204,6 +208,7 @@ class PromaxWorker:
         self._next_log_retry_at = 0.0
         self._last_worker_heartbeat = 0.0
         self._last_visual_lock_wait_log = 0.0
+        self._pending_partial_results: dict[str, list[tuple[str, PromaxRunResult]]] = {}
 
     def run_forever(self) -> None:
         backoff = self.config.backoff_initial_seconds
@@ -297,6 +302,7 @@ class PromaxWorker:
     def _run_claimed_job(self, job: Mapping[str, Any]) -> None:
         job_id = _job_id(job)
         lease_token = _job_lease_token(job)
+        self._pending_partial_results[job_id] = []
         self.logger.info("Executando job Promax %s.", job_id)
         try:
             result = self.runner.run(
@@ -341,8 +347,9 @@ class PromaxWorker:
                 "return_code": result.return_code,
             },
         )
-        self._finish_with_retry(job, job_id, lease_token, result)
-        self.logger.info("Job Promax %s finalizado com status %s.", job_id, result.status)
+        final_result = self._finish_with_retry(job, job_id, lease_token, result)
+        self._pending_partial_results.pop(job_id, None)
+        self.logger.info("Job Promax %s finalizado com status %s.", job_id, final_result.status)
 
     def _heartbeat_active_job(self, job_id: str, lease_token: str) -> None:
         try:
@@ -384,7 +391,7 @@ class PromaxWorker:
         message: str,
         level: str,
         data: Mapping[str, Any],
-    ) -> None:
+    ) -> PromaxRunResult:
         clean_message = redact_log_message(str(message or "").rstrip("\r\n")) or " "
         for offset in range(0, len(clean_message), 8000):
             self._send_log_entry(
@@ -440,6 +447,8 @@ class PromaxWorker:
     ) -> None:
         backoff = self.config.backoff_initial_seconds
         post_import_attempted = False
+        sync_completed = False
+        final_result = result
         while True:
             try:
                 self._flush_logs()
@@ -454,28 +463,60 @@ class PromaxWorker:
                     self._import_0112_dmateriais_if_needed(job, job_id, lease_token, result)
                     self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
                     self._import_030111_critica_if_needed(job, job_id, lease_token, result)
-                    self._sync_financeiro_fechamento_if_needed(job, job_id, lease_token, result)
                     post_import_attempted = True
+                if not sync_completed:
+                    self._sync_pending_partial_results(job, job_id, lease_token)
+                    self._sync_financeiro_fechamento_if_needed(
+                        job,
+                        job_id,
+                        lease_token,
+                        result,
+                        raise_on_failure=True,
+                    )
+                    sync_completed = True
                 self.client.finish(
                     job_id,
                     lease_token,
-                    status=result.status,
+                    status=final_result.status,
                     result={
-                        **dict(result.details or {}),
-                        "return_code": result.return_code,
-                        "child_pid": result.child_pid or None,
-                        "message": result.message or "",
+                        **dict(final_result.details or {}),
+                        "return_code": final_result.return_code,
+                        "child_pid": final_result.child_pid or None,
+                        "message": final_result.message or "",
                     },
-                    error=result.error,
+                    error=final_result.error,
                 )
-                return
+                return final_result
             except PromaxApiUnavailable as exc:
                 self.logger.warning("API indisponivel ao finalizar job %s: %s", job_id, exc)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, self.config.backoff_max_seconds)
-            except PromaxClientError as exc:
-                self.logger.error("Finalizacao rejeitada para job %s: %s", job_id, exc)
-                return
+            except (PromaxClientError, ValueError) as exc:
+                self.logger.error("Sincronizacao/finalizacao rejeitada para job %s: %s", job_id, exc)
+                if sync_completed:
+                    return
+                original_status = normalize_status(result.status)
+                final_status = "partial_success" if original_status == "success" else original_status
+                final_result = PromaxRunResult(
+                    status=final_status,
+                    return_code=result.return_code,
+                    child_pid=result.child_pid,
+                    cancelled=result.cancelled,
+                    stopped=result.stopped,
+                    error=result.error if final_status == "failed" else None,
+                    message=(
+                        "Fechamento concluido, mas a sincronizacao com o painel ficou pendente."
+                        if final_status == "partial_success"
+                        else (result.message or "Execucao Promax falhou e possui sincronizacao pendente.")
+                    ),
+                    details={**dict(result.details or {}), "sync_error": str(exc)},
+                )
+                self.logger.warning(
+                    "Job Promax %s sera finalizado como %s por falha de sincronizacao.",
+                    job_id,
+                    final_result.status,
+                )
+                sync_completed = True
 
     def _import_030206_boletos_if_needed(
         self,
@@ -1296,16 +1337,17 @@ class PromaxWorker:
         *,
         sync_scope: str = "all",
         allow_failed_with_payload: bool = False,
-    ) -> None:
+        raise_on_failure: bool = False,
+    ) -> bool:
         normalized_result_status = normalize_status(result.status)
         if normalized_result_status not in {"success", "partial_success"} and not allow_failed_with_payload:
-            return
+            return True
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = {}
         operation = str(payload.get("operation") or job.get("job_type") or "").strip().lower().replace("-", "_")
         if operation not in {"fechamento_mapa", "mapa_fechamento"}:
-            return
+            return True
         mapa = str(payload.get("mapa") or payload.get("map") or "").strip()
         filial = str(payload.get("filial") or "").strip()
         data = str(payload.get("data") or payload.get("start_date") or "").strip()
@@ -1322,7 +1364,9 @@ class PromaxWorker:
                     "data": data,
                 },
             )
-            return
+            if raise_on_failure:
+                raise ValueError("Payload de fechamento sem mapa, filial ou data.")
+            return False
         try:
             self._heartbeat_active_job(job_id, lease_token)
             response = self.client.sync_financeiro_fechamento_mapa(
@@ -1340,6 +1384,12 @@ class PromaxWorker:
                 sync_scope=sync_scope,
             )
             self._heartbeat_active_job(job_id, lease_token)
+            if sync_scope == "03030702" and not bool(response.get("dados_fechamento_found")):
+                raise ValueError("A API nao reconheceu os dados estruturados da 03030702.")
+            if sync_scope in {"prestacao", "030322"} and not bool(response.get("dados_030322_found")):
+                raise ValueError("A API nao reconheceu os dados estruturados da 030322.")
+            if sync_scope == "030302" and not isinstance(response.get("conferencia"), Mapping):
+                raise ValueError(str(response.get("conferencia_error") or "A API nao confirmou a conferencia da 030302."))
             metrics = response.get("metrics") if isinstance(response, Mapping) else {}
             if sync_scope in {"all", "financeiro", "03030702"}:
                 self._send_log(
@@ -1354,6 +1404,21 @@ class PromaxWorker:
                     "info",
                     {
                         "event": "promax_financeiro_fechamento_sync_done",
+                        "mapa": mapa,
+                        "filial": filial,
+                        "data": data,
+                        "sync_scope": sync_scope,
+                        "response": dict(response) if isinstance(response, Mapping) else {},
+                    },
+                )
+            elif sync_scope == "030303":
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Dados da 030303 do mapa {mapa} sincronizados com o caixa financeiro.",
+                    "info",
+                    {
+                        "event": "promax_financeiro_030303_sync_done",
                         "mapa": mapa,
                         "filial": filial,
                         "data": data,
@@ -1382,6 +1447,8 @@ class PromaxWorker:
                     itens = int(conferencia.get("itens") or 0)
                     gravados = int(conferencia.get("itens_gravados") or 0)
                     extraidos = int(conferencia.get("itens_extraidos_030302") or 0)
+                    extraidos_030322 = int(conferencia.get("itens_extraidos_030322") or 0)
+                    fonte_itens = str(conferencia.get("fonte_itens") or "-")
                     conferidos = int(conferencia.get("conferidos") or 0)
                     level = "info" if itens > 0 else "warning"
                     self._send_log(
@@ -1392,6 +1459,8 @@ class PromaxWorker:
                             f"{itens} item(ns) esperado(s) no banco, "
                             f"{gravados} item(ns) gravado(s) nesta sincronizacao, "
                             f"{extraidos} item(ns) extraido(s) da 030302, "
+                            f"{extraidos_030322} item(ns) extraido(s) da 030322, "
+                            f"fonte usada: {fonte_itens}, "
                             f"{conferidos} ja conferido(s)."
                         ),
                         level,
@@ -1430,6 +1499,7 @@ class PromaxWorker:
                             "data": data,
                         },
                     )
+            return True
         except (PromaxClientError, ValueError) as exc:
             self._send_log(
                 job_id,
@@ -1438,6 +1508,29 @@ class PromaxWorker:
                 "error",
                 {"event": "promax_financeiro_fechamento_sync_failed", "mapa": mapa, "filial": filial},
             )
+            if raise_on_failure:
+                raise
+            return False
+
+    def _sync_pending_partial_results(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+    ) -> None:
+        pending = self._pending_partial_results.get(job_id) or []
+        while pending:
+            sync_scope, partial_result = pending[0]
+            self._sync_financeiro_fechamento_if_needed(
+                job,
+                job_id,
+                lease_token,
+                partial_result,
+                sync_scope=sync_scope,
+                allow_failed_with_payload=True,
+                raise_on_failure=True,
+            )
+            pending.pop(0)
 
     def _handle_partial_result_event(
         self,
@@ -1458,6 +1551,7 @@ class PromaxWorker:
             "financeiro": "03030702",
             "030322": "030322",
             "prestacao": "030322",
+            "030303": "030303",
         }
         sync_scope = scope_aliases.get(scope, scope or "all")
         partial_result = PromaxRunResult(
@@ -1471,6 +1565,8 @@ class PromaxWorker:
                 if key not in {"event", "sync_scope"}
             },
         )
+        pending = self._pending_partial_results.setdefault(job_id, [])
+        pending.append((sync_scope, partial_result))
         self._send_log(
             job_id,
             lease_token,
@@ -1478,7 +1574,7 @@ class PromaxWorker:
             "info",
             {"event": "promax_financeiro_partial_sync_started", "sync_scope": sync_scope},
         )
-        self._sync_financeiro_fechamento_if_needed(
+        sincronizou = self._sync_financeiro_fechamento_if_needed(
             job,
             job_id,
             lease_token,
@@ -1486,6 +1582,11 @@ class PromaxWorker:
             sync_scope=sync_scope,
             allow_failed_with_payload=True,
         )
+        if sincronizou:
+            try:
+                pending.remove((sync_scope, partial_result))
+            except ValueError:
+                pass
 
     def _import_csv_folder_if_needed(
         self,
@@ -1596,6 +1697,7 @@ def build_worker(config: WorkerConfig) -> PromaxWorker:
         python_executable=config.python_executable,
         heartbeat_interval_seconds=config.heartbeat_interval_seconds,
         control_interval_seconds=config.control_interval_seconds,
+        max_runtime_seconds=config.job_timeout_seconds,
     )
     return PromaxWorker(
         config=config,
