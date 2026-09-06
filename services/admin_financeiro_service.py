@@ -232,6 +232,7 @@ class AdminFinanceiroService:
                 ids = [int(row["id"]) for row in mapas]
                 details = self._load_details(cur, ids)
                 rotas_dia = self._load_rotas_dia_031120(cur, caixa_date=caixa_date, filial=requested_filial)
+                rotas_dia_meta = self._load_rotas_dia_031120_meta(cur, caixa_date=caixa_date, filial=requested_filial)
 
         records = [self._serialize_map(row, details) for row in mapas]
         return {
@@ -241,6 +242,7 @@ class AdminFinanceiroService:
             "maps": records,
             "summary": self._build_summary(records),
             "rotas_dia": rotas_dia,
+            "rotas_dia_meta": rotas_dia_meta,
         }
 
     def upsert_mapa(self, payload: dict[str, Any], *, context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -627,8 +629,11 @@ class AdminFinanceiroService:
                 FROM {}.conferencia_mapas
                 WHERE filial = %s
                   AND mapa = %s
-                  AND source_job_id = '03114902'
-                ORDER BY caixa_date DESC, updated_at DESC
+                  AND source_job_id IN ('031120', '03114902')
+                ORDER BY
+                    CASE WHEN source_job_id = '031120' THEN 0 ELSE 1 END,
+                    caixa_date DESC,
+                    updated_at DESC
                 LIMIT 1
                 """
             ).format(sql.Identifier(self.schema)),
@@ -680,12 +685,21 @@ class AdminFinanceiroService:
                     mapa=clean_mapa,
                     caixa_date=caixa_date,
                 )
-                km_prev = self._lookup_03114902_km_prev(
+                km_prev = self._lookup_031120_km_prev(
                     cur,
                     filial=clean_filial,
                     mapa=clean_mapa,
                     caixa_date=caixa_date,
                 )
+                km_prev_source = "031120"
+                if km_prev <= 0:
+                    km_prev = self._lookup_03114902_km_prev(
+                        cur,
+                        filial=clean_filial,
+                        mapa=clean_mapa,
+                        caixa_date=caixa_date,
+                    )
+                    km_prev_source = "03114902" if km_prev > 0 else "none"
 
         if km_inicial > 0 and km_prev > 0:
             return {
@@ -693,7 +707,7 @@ class AdminFinanceiroService:
                 "km_atual": _fmt_km_integer(km_inicial + km_prev),
                 "km_inicial": _fmt_km_integer(km_inicial),
                 "km_prev": _fmt_km_integer(km_prev),
-                "source": "031120_km_atual_plus_03114902_km_prev",
+                "source": f"031120_km_atual_plus_{km_prev_source}_km_prev",
             }
         return {
             "ok": False,
@@ -725,9 +739,6 @@ class AdminFinanceiroService:
         km_carregado_fallback = Decimal("0")
         for row in cur.fetchall():
             payload = dict(row.get("payload") or {})
-            row_date = _parse_report_date(payload.get("Emissao")) or _parse_report_date(payload.get("DtOper"))
-            if row_date != caixa_date:
-                continue
             if _strip_left_zeroes(payload.get("Mapa")) != mapa:
                 continue
             fase = _normalize_031120_fase(payload.get("Fase"))
@@ -737,6 +748,34 @@ class AdminFinanceiroService:
             if fase == "carregado" and km_atual > 0:
                 km_carregado_fallback = km_atual
         return km_carregado_fallback
+
+    def _lookup_031120_km_prev(self, cur: Any, *, filial: str, mapa: str, caixa_date: date) -> Decimal:
+        if not _relation_exists_cur(cur, self.schema, "relatorio_031120_rows") or not _relation_exists_cur(cur, self.schema, "dataset_state"):
+            return Decimal("0")
+        dataset_name = f"relatorio_031120_op_{_normalize_filial(filial)}"
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT r.payload
+                FROM {}.relatorio_031120_rows r
+                JOIN {}.dataset_state s
+                  ON s.dataset_name = r.dataset_name
+                 AND s.active_batch_id = r.batch_id
+                WHERE r.dataset_name = %s
+                  AND r.filial = %s
+                ORDER BY r.row_number
+                """
+            ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
+            (dataset_name, _normalize_filial(filial)),
+        )
+        for row in cur.fetchall():
+            payload = dict(row.get("payload") or {})
+            if _strip_left_zeroes(payload.get("Mapa")) != mapa:
+                continue
+            km_prev = _decimal(payload.get("KmPrev") or payload.get("KM Prev.") or payload.get("KM Prev"))
+            if km_prev > 0:
+                return km_prev
+        return Decimal("0")
 
     def _lookup_03114902_km_prev(self, cur: Any, *, filial: str, mapa: str, caixa_date: date) -> Decimal:
         if not _relation_exists_cur(cur, self.schema, "relatorio_031120_rows") or not _relation_exists_cur(cur, self.schema, "dataset_state"):
@@ -1057,6 +1096,70 @@ class AdminFinanceiroService:
         )
         rows = [dict(row.get("payload") or {}) for row in cur.fetchall()]
         return _build_rotas_dia_031120(rows, caixa_date=caixa_date)
+
+    def _load_rotas_dia_031120_meta(self, cur: Any, *, caixa_date: date, filial: str) -> dict[str, Any]:
+        clean_filial = _normalize_filial(filial)
+        if not clean_filial:
+            return {"status": "missing_filial", "message": "Escolha uma revenda para validar a 031120."}
+        if (
+            not _relation_exists_cur(cur, self.schema, "relatorio_031120_reports")
+            or not _relation_exists_cur(cur, self.schema, "dataset_state")
+            or not _relation_exists_cur(cur, self.schema, "import_batches")
+        ):
+            return {"status": "missing", "message": "031120 ainda nao importada para esta revenda."}
+        dataset_name = f"relatorio_031120_op_{clean_filial}"
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT b.reference_date, b.imported_at, b.total_rows, r.filename
+                FROM {}.dataset_state s
+                JOIN {}.import_batches b ON b.id = s.active_batch_id
+                LEFT JOIN {}.relatorio_031120_reports r ON r.batch_id = b.id
+                WHERE s.dataset_name = %s
+                """
+            ).format(sql.Identifier(self.schema), sql.Identifier(self.schema), sql.Identifier(self.schema)),
+            (dataset_name,),
+        )
+        batch = cur.fetchone()
+        if not batch:
+            return {"status": "missing", "message": "031120 ainda nao importada para esta revenda."}
+
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT r.payload->>'DtOper' AS dtoper,
+                       r.payload->>'Emissao' AS emissao
+                FROM {}.relatorio_031120_rows r
+                JOIN {}.dataset_state s
+                  ON s.dataset_name = r.dataset_name
+                 AND s.active_batch_id = r.batch_id
+                WHERE r.dataset_name = %s
+                  AND r.filial = %s
+                """
+            ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
+            (dataset_name, clean_filial),
+        )
+        available_dates = sorted(
+            {
+                parsed.isoformat()
+                for row in cur.fetchall()
+                for parsed in (_parse_report_date(row.get("dtoper")) or _parse_report_date(row.get("emissao")),)
+                if parsed is not None
+            }
+        )
+        covers_date = caixa_date.isoformat() in available_dates
+        status = "ok" if covers_date else "stale"
+        message = "031120 atualizada para a data selecionada." if covers_date else "031120 importada, mas nao cobre a data selecionada."
+        return {
+            "status": status,
+            "message": message,
+            "dataset_name": dataset_name,
+            "filename": str(batch.get("filename") or ""),
+            "reference_date": _date_iso(batch.get("reference_date")),
+            "imported_at": _datetime_iso(batch.get("imported_at")),
+            "total_rows": int(batch.get("total_rows") or 0),
+            "available_dates": available_dates,
+        }
 
     def _visible_filiais(self, allowed_filiais: set[str] | None) -> list[dict[str, str]]:
         items = self.filial_labels.items()

@@ -225,6 +225,8 @@
     .finance-sheet-ass.nok { color: var(--danger); font-weight: 900; }
     .finance-route-status.ok { color: var(--success); font-weight: 900; white-space: nowrap; }
     .finance-route-status.pending { color: var(--danger); font-weight: 900; white-space: nowrap; }
+    .finance-route-notice { margin-bottom: 0.55rem; padding: 0.5rem 0.6rem; border: 1px solid rgba(180, 83, 9, 0.34); border-radius: 7px; color: var(--warning); background: var(--accent-soft); font-size: 0.78rem; font-weight: 800; }
+    .finance-route-notice.ok { border-color: rgba(4, 120, 87, 0.28); color: var(--success); background: rgba(4, 120, 87, 0.08); }
     .finance-closing-log { margin-top: 0.75rem; padding: 0.65rem 0.75rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
     .finance-closing-log-title { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.45rem; color: var(--ink-700); font-size: 0.72rem; font-weight: 900; text-transform: uppercase; }
     .finance-closing-log.is-collapsed .finance-closing-log-list { display: none; }
@@ -6820,7 +6822,7 @@
       `;
       }).join("");
       const emptyRows = (!rows && !manualHtml)
-        ? `<tr><td colspan="${reveal ? 9 : 6}" class="text-center py-4 text-secondary">Este mapa esta aberto pela 03114902 e ainda nao recebeu os itens da 030302. Use o botao Adicionar item manual para fazer a contagem mesmo assim.</td></tr>`
+        ? `<tr><td colspan="${reveal ? 9 : 6}" class="text-center py-4 text-secondary">Este mapa esta aberto pelo relatorio de rotas e ainda nao recebeu os itens da 030302. Use o botao Adicionar item manual para fazer a contagem mesmo assim.</td></tr>`
         : "";
       const blindPersistedCards = items.map(item => {
         return `
@@ -7250,8 +7252,16 @@
         </tr>
       `).join("") : '<tr><td colspan="4" class="text-center finance-sheet-muted">Sem vales lancados.</td></tr>';
       const rotasDia = Array.isArray(payload && payload.rotas_dia) ? payload.rotas_dia : [];
+      const rotasDiaMeta = payload && payload.rotas_dia_meta && typeof payload.rotas_dia_meta === "object" ? payload.rotas_dia_meta : {};
       const rotasDiaFechados = rotasDia.filter(row => row && row.fechamento_ok).length;
       const rotasDiaPendentes = rotasDia.filter(row => row && row.fechamento_ok === false).length;
+      const rotasDiaMetaStatus = String(rotasDiaMeta.status || "").toLowerCase();
+      const rotasDiaMetaText = rotasDiaMeta.message
+        ? `${rotasDiaMeta.message}${rotasDiaMeta.imported_at ? ` Importado em ${formatDateTime(rotasDiaMeta.imported_at)}.` : ""}`
+        : "";
+      const rotasDiaNotice = rotasDiaMetaText
+        ? `<div class="finance-route-notice ${rotasDiaMetaStatus === "ok" ? "ok" : ""}">${escapeHtml(rotasDiaMetaText)}</div>`
+        : "";
       const rotasDiaBody = rotasDia.length ? rotasDia.map(row => `
         <tr>
           <td>${escapeHtml(row.mapa || "-")}</td>
@@ -7358,6 +7368,7 @@
           <div class="finance-sheet-wide">
             <div class="finance-sheet-box">
               <div class="finance-sheet-box-title"><span>Relatorio de rotas do dia</span><strong>${escapeHtml(String(rotasDiaFechados))} fech. | ${escapeHtml(String(rotasDiaPendentes))} pend.</strong></div>
+              ${rotasDiaNotice}
               <div class="finance-sheet-scroll">
                 <table class="finance-sheet-table">
                   <thead>

@@ -309,8 +309,11 @@ class ConferenciaService:
                 FROM {}.conferencia_mapas
                 WHERE filial = %s
                   AND mapa = %s
-                  AND source_job_id = '03114902'
-                ORDER BY caixa_date DESC, updated_at DESC
+                  AND source_job_id IN ('031120', '03114902')
+                ORDER BY
+                    CASE WHEN source_job_id = '031120' THEN 0 ELSE 1 END,
+                    caixa_date DESC,
+                    updated_at DESC
                 LIMIT 1
                 """
             ).format(sql.Identifier(self.schema)),
@@ -341,13 +344,13 @@ class ConferenciaService:
         allowed_filiais = _allowed_filiais(context)
         if clean_filial:
             _assert_filial_allowed(clean_filial, context)
-        self._sync_open_mapas_from_03114902(
+        self._sync_open_mapas_from_031120(
             caixa_date=caixa_date,
             filial=clean_filial,
             allowed_filiais=allowed_filiais,
         )
         clean_search = str(search or "").strip().lower()
-        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_03114902', 'aberta_manual')"]
+        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_031120', 'aberta_03114902', 'aberta_manual')"]
         params: list[Any] = [caixa_date]
         if clean_filial:
             where.append("m.filial = %s")
@@ -475,12 +478,12 @@ class ConferenciaService:
         allowed_filiais = _allowed_filiais(context)
         if clean_filial:
             _assert_filial_allowed(clean_filial, context)
-        self._sync_open_mapas_from_03114902(
+        self._sync_open_mapas_from_031120(
             caixa_date=caixa_date,
             filial=clean_filial,
             allowed_filiais=allowed_filiais,
         )
-        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_03114902', 'aberta_manual')"]
+        where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_031120', 'aberta_03114902', 'aberta_manual')"]
         params: list[Any] = [caixa_date]
         if clean_filial:
             where.append("m.filial = %s")
@@ -987,7 +990,7 @@ class ConferenciaService:
             )
         return payload
 
-    def _sync_open_mapas_from_03114902(
+    def _sync_open_mapas_from_031120(
         self,
         *,
         caixa_date: date,
@@ -997,16 +1000,13 @@ class ConferenciaService:
         with self._connect() as conn:
             if not _relation_exists(conn, self.schema, "relatorio_031120_rows") or not _relation_exists(conn, self.schema, "dataset_state"):
                 return 0
-            where = ["r.dataset_name = 'relatorio_03114902_geo'", "s.active_batch_id = r.batch_id"]
+            where = ["r.dataset_name LIKE 'relatorio_031120_op_%'", "s.active_batch_id = r.batch_id"]
             params: list[Any] = []
-            date_tokens = {caixa_date.isoformat(), caixa_date.strftime("%d/%m/%Y")}
-            where.append("(r.payload->>'Data Entrega' = ANY(%s) OR r.payload->>'Data' = ANY(%s))")
-            params.extend([sorted(date_tokens), sorted(date_tokens)])
             if filial:
-                where.append("COALESCE(NULLIF(regexp_replace(r.payload->>'UNB', '\\D', '', 'g'), ''), r.filial) = %s")
+                where.append("r.filial = %s")
                 params.append(filial)
             elif allowed_filiais is not None:
-                where.append("COALESCE(NULLIF(regexp_replace(r.payload->>'UNB', '\\D', '', 'g'), ''), r.filial) = ANY(%s)")
+                where.append("r.filial = ANY(%s)")
                 params.append(sorted(allowed_filiais))
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
@@ -1014,12 +1014,12 @@ class ConferenciaService:
                         """
                         WITH active_rows AS (
                             SELECT
-                                COALESCE(NULLIF(regexp_replace(r.payload->>'UNB', '\\D', '', 'g'), ''), r.filial) AS filial,
-                                regexp_replace(COALESCE(r.payload->>'Nro do Mapa', r.payload->>'Mapa', ''), '^0+', '') AS mapa,
+                                r.filial AS filial,
+                                regexp_replace(COALESCE(r.payload->>'Mapa', ''), '^0+', '') AS mapa,
                                 MAX(NULLIF(r.payload->>'Placa', '')) AS placa,
                                 MAX(NULLIF(r.payload->>'Motorista', '')) AS motorista,
-                                BOOL_OR((r.payload->>'MPD') ILIKE '%%saida%%' OR (r.payload->>'MPD') ILIKE '%%saída%%') AS tem_saida,
-                                BOOL_OR((r.payload->>'MPD') ILIKE '%%entrada%%') AS tem_entrada,
+                                BOOL_OR(UPPER(r.payload->>'Fase') = 'CARREGADO') AS tem_carregado,
+                                BOOL_OR(UPPER(r.payload->>'Fase') LIKE '%%PC_FINANCEIRA%%' OR UPPER(r.payload->>'Fase') LIKE '%%PC FINANCEIRA%%') AS tem_pc_financeira,
                                 jsonb_agg(r.payload ORDER BY r.row_number) AS payloads
                             FROM {}.relatorio_031120_rows r
                             JOIN {}.dataset_state s ON s.dataset_name = r.dataset_name
@@ -1032,13 +1032,14 @@ class ConferenciaService:
                         )
                         SELECT
                             %s, filial, mapa, COALESCE(placa, ''), COALESCE(motorista, ''),
-                            'aberta_03114902',
-                            '03114902',
-                            jsonb_build_object('source', '03114902', 'payloads', payloads),
+                            'aberta_031120',
+                            '031120',
+                            jsonb_build_object('source', '031120', 'payloads', payloads),
                             NOW()
                         FROM active_rows
-                        WHERE tem_saida
-                          AND NOT tem_entrada
+                        WHERE tem_carregado
+                          AND NOT tem_pc_financeira
+                          AND COALESCE(placa, '') <> ''
                           AND filial <> ''
                           AND mapa <> ''
                         ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
@@ -1049,8 +1050,12 @@ class ConferenciaService:
                                 ELSE EXCLUDED.status
                             END,
                             source_payload = CASE
-                                WHEN current_map.source_job_id = '03114902' THEN EXCLUDED.source_payload
+                                WHEN current_map.source_job_id IN ('031120', '03114902') THEN EXCLUDED.source_payload
                                 ELSE current_map.source_payload
+                            END,
+                            source_job_id = CASE
+                                WHEN current_map.source_job_id IN ('031120', '03114902') THEN EXCLUDED.source_job_id
+                                ELSE current_map.source_job_id
                             END,
                             updated_at = NOW()
                         RETURNING id
@@ -1919,6 +1924,8 @@ def _count_display_str(value: Any, group: str) -> str:
 
 def _source_status_label(value: Any) -> str:
     status = str(value or "").strip().lower()
+    if status == "aberta_031120":
+        return "Mapa aberto pela 031120"
     if status == "aberta_03114902":
         return "Mapa aberto pela 03114902"
     if status == "aberta_manual":
