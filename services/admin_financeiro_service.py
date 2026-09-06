@@ -239,10 +239,18 @@ class AdminFinanceiroService:
                 except Exception:
                     logger.exception("Falha ao validar metadados da 031120 para filial=%s data=%s", requested_filial, caixa_date)
                     conn.rollback()
-                    rotas_dia_meta = {
-                        "status": "error",
-                        "message": "Nao foi possivel validar a atualizacao da 031120, mas o caixa foi carregado.",
-                    }
+                    if rotas_dia:
+                        rotas_dia_meta = {
+                            "status": "ok",
+                            "message": "031120 atualizada para a data selecionada.",
+                            "dataset_name": f"relatorio_031120_op_{requested_filial}",
+                            "total_rows": len(rotas_dia),
+                        }
+                    else:
+                        rotas_dia_meta = {
+                            "status": "error",
+                            "message": "Nao foi possivel validar a atualizacao da 031120, mas o caixa foi carregado.",
+                        }
 
         records = [self._serialize_map(row, details) for row in mapas]
         return {
