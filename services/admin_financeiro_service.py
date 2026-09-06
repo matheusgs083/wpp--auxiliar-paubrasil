@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import logging
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -15,6 +16,7 @@ from bot_api.db import get_connection_pool
 
 
 DENOMINATIONS = ("200", "100", "50", "20", "10", "5", "2")
+logger = logging.getLogger(__name__)
 
 
 class AdminFinanceiroService:
@@ -232,7 +234,15 @@ class AdminFinanceiroService:
                 ids = [int(row["id"]) for row in mapas]
                 details = self._load_details(cur, ids)
                 rotas_dia = self._load_rotas_dia_031120(cur, caixa_date=caixa_date, filial=requested_filial)
-                rotas_dia_meta = self._load_rotas_dia_031120_meta(cur, caixa_date=caixa_date, filial=requested_filial)
+                try:
+                    rotas_dia_meta = self._load_rotas_dia_031120_meta(cur, caixa_date=caixa_date, filial=requested_filial)
+                except Exception:
+                    logger.exception("Falha ao validar metadados da 031120 para filial=%s data=%s", requested_filial, caixa_date)
+                    conn.rollback()
+                    rotas_dia_meta = {
+                        "status": "error",
+                        "message": "Nao foi possivel validar a atualizacao da 031120, mas o caixa foi carregado.",
+                    }
 
         records = [self._serialize_map(row, details) for row in mapas]
         return {
