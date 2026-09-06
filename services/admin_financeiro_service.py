@@ -1111,22 +1111,24 @@ class AdminFinanceiroService:
         clean_filial = _normalize_filial(filial)
         if not clean_filial:
             return {"status": "missing_filial", "message": "Escolha uma revenda para validar a 031120."}
-        if (
-            not _relation_exists_cur(cur, self.schema, "relatorio_031120_reports")
-            or not _relation_exists_cur(cur, self.schema, "dataset_state")
-        ):
+        if not _relation_exists_cur(cur, self.schema, "relatorio_031120_rows") or not _relation_exists_cur(cur, self.schema, "dataset_state"):
             return {"status": "missing", "message": "031120 ainda nao importada para esta revenda."}
         dataset_name = f"relatorio_031120_op_{clean_filial}"
         cur.execute(
             sql.SQL(
                 """
-                SELECT s.activated_at, r.imported_at, r.total_rows, r.filename
+                SELECT s.activated_at,
+                       COUNT(r.row_number) AS total_rows
                 FROM {}.dataset_state s
-                LEFT JOIN {}.relatorio_031120_reports r ON r.batch_id = s.active_batch_id
+                LEFT JOIN {}.relatorio_031120_rows r
+                  ON r.dataset_name = s.dataset_name
+                 AND r.batch_id = s.active_batch_id
+                 AND r.filial = %s
                 WHERE s.dataset_name = %s
+                GROUP BY s.activated_at
                 """
             ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
-            (dataset_name,),
+            (clean_filial, dataset_name),
         )
         batch = cur.fetchone()
         if not batch:
@@ -1162,9 +1164,8 @@ class AdminFinanceiroService:
             "status": status,
             "message": message,
             "dataset_name": dataset_name,
-            "filename": str(batch.get("filename") or ""),
             "activated_at": _datetime_iso(batch.get("activated_at")),
-            "imported_at": _datetime_iso(batch.get("imported_at") or batch.get("activated_at")),
+            "imported_at": _datetime_iso(batch.get("activated_at")),
             "total_rows": int(batch.get("total_rows") or 0),
             "available_dates": available_dates,
         }
