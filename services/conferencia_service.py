@@ -344,11 +344,17 @@ class ConferenciaService:
         allowed_filiais = _allowed_filiais(context)
         if clean_filial:
             _assert_filial_allowed(clean_filial, context)
-        self._sync_open_mapas_from_031120(
+        synced = self._sync_open_mapas_from_031120(
             caixa_date=caixa_date,
             filial=clean_filial,
             allowed_filiais=allowed_filiais,
         )
+        if synced == 0:
+            self._sync_open_mapas_from_03114902(
+                caixa_date=caixa_date,
+                filial=clean_filial,
+                allowed_filiais=allowed_filiais,
+            )
         clean_search = str(search or "").strip().lower()
         where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_031120', 'aberta_03114902', 'aberta_manual')"]
         params: list[Any] = [caixa_date]
@@ -478,11 +484,17 @@ class ConferenciaService:
         allowed_filiais = _allowed_filiais(context)
         if clean_filial:
             _assert_filial_allowed(clean_filial, context)
-        self._sync_open_mapas_from_031120(
+        synced = self._sync_open_mapas_from_031120(
             caixa_date=caixa_date,
             filial=clean_filial,
             allowed_filiais=allowed_filiais,
         )
+        if synced == 0:
+            self._sync_open_mapas_from_03114902(
+                caixa_date=caixa_date,
+                filial=clean_filial,
+                allowed_filiais=allowed_filiais,
+            )
         where = ["m.caixa_date <= %s", "m.status IN ('aberta', 'aberta_031120', 'aberta_03114902', 'aberta_manual')"]
         params: list[Any] = [caixa_date]
         if clean_filial:
@@ -1056,6 +1068,86 @@ class ConferenciaService:
                             source_job_id = CASE
                                 WHEN current_map.source_job_id IN ('031120', '03114902') THEN EXCLUDED.source_job_id
                                 ELSE current_map.source_job_id
+                            END,
+                            updated_at = NOW()
+                        RETURNING id
+                        """
+                    ).format(
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.SQL(" AND ").join(sql.SQL(part) for part in where),
+                        sql.Identifier(self.schema),
+                    ),
+                    (*params, caixa_date),
+                )
+                inserted = len(cur.fetchall())
+            conn.commit()
+            return inserted
+
+    def _sync_open_mapas_from_03114902(
+        self,
+        *,
+        caixa_date: date,
+        filial: str = "",
+        allowed_filiais: set[str] | None = None,
+    ) -> int:
+        with self._connect() as conn:
+            if not _relation_exists(conn, self.schema, "relatorio_031120_rows") or not _relation_exists(conn, self.schema, "dataset_state"):
+                return 0
+            where = ["r.dataset_name = 'relatorio_03114902_geo'", "s.active_batch_id = r.batch_id"]
+            params: list[Any] = []
+            date_tokens = {caixa_date.isoformat(), caixa_date.strftime("%d/%m/%Y")}
+            where.append("(r.payload->>'Data Entrega' = ANY(%s) OR r.payload->>'Data' = ANY(%s))")
+            params.extend([sorted(date_tokens), sorted(date_tokens)])
+            if filial:
+                where.append("COALESCE(NULLIF(regexp_replace(r.payload->>'UNB', '\\D', '', 'g'), ''), r.filial) = %s")
+                params.append(filial)
+            elif allowed_filiais is not None:
+                where.append("COALESCE(NULLIF(regexp_replace(r.payload->>'UNB', '\\D', '', 'g'), ''), r.filial) = ANY(%s)")
+                params.append(sorted(allowed_filiais))
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        WITH active_rows AS (
+                            SELECT
+                                COALESCE(NULLIF(regexp_replace(r.payload->>'UNB', '\\D', '', 'g'), ''), r.filial) AS filial,
+                                regexp_replace(COALESCE(r.payload->>'Nro do Mapa', r.payload->>'Mapa', ''), '^0+', '') AS mapa,
+                                MAX(NULLIF(r.payload->>'Placa', '')) AS placa,
+                                MAX(NULLIF(r.payload->>'Motorista', '')) AS motorista,
+                                BOOL_OR((r.payload->>'MPD') ILIKE '%%saida%%' OR (r.payload->>'MPD') ILIKE '%%saída%%') AS tem_saida,
+                                BOOL_OR((r.payload->>'MPD') ILIKE '%%entrada%%') AS tem_entrada,
+                                jsonb_agg(r.payload ORDER BY r.row_number) AS payloads
+                            FROM {}.relatorio_031120_rows r
+                            JOIN {}.dataset_state s ON s.dataset_name = r.dataset_name
+                            WHERE {}
+                            GROUP BY 1, 2
+                        )
+                        INSERT INTO {}.conferencia_mapas AS current_map (
+                            caixa_date, filial, mapa, placa, motorista, status,
+                            source_job_id, source_payload, updated_at
+                        )
+                        SELECT
+                            %s, filial, mapa, COALESCE(placa, ''), COALESCE(motorista, ''),
+                            'aberta_03114902',
+                            '03114902',
+                            jsonb_build_object('source', '03114902', 'payloads', payloads),
+                            NOW()
+                        FROM active_rows
+                        WHERE tem_saida
+                          AND NOT tem_entrada
+                          AND filial <> ''
+                          AND mapa <> ''
+                        ON CONFLICT (caixa_date, filial, mapa) DO UPDATE SET
+                            placa = CASE WHEN current_map.placa = '' THEN EXCLUDED.placa ELSE current_map.placa END,
+                            motorista = CASE WHEN current_map.motorista = '' THEN EXCLUDED.motorista ELSE current_map.motorista END,
+                            status = CASE
+                                WHEN current_map.status = 'aberta' THEN current_map.status
+                                ELSE current_map.status
+                            END,
+                            source_payload = CASE
+                                WHEN current_map.source_job_id = '03114902' THEN EXCLUDED.source_payload
+                                ELSE current_map.source_payload
                             END,
                             updated_at = NOW()
                         RETURNING id
