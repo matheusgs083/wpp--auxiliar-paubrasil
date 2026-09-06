@@ -1338,10 +1338,11 @@ def _pdf_rotas_dia_table(rows: list[dict[str, Any]], styles: dict[str, Any], p: 
         p("TI Fisico", "cell_bold"),
         p("TI Financeiro", "cell_bold"),
         p("TI total", "cell_bold"),
-        p("Validacao", "cell_bold"),
+        p("Operacional", "cell_bold"),
+        p("Fechamento", "cell_bold"),
     ]]
     if not rows:
-        data.append([p("Sem relatorio 031120 importado para esta data."), "", "", "", "", "", "", "", "", "", ""])
+        data.append([p("Sem relatorio 031120 importado para esta data."), "", "", "", "", "", "", "", "", "", "", ""])
     for row in rows:
         data.append([
             p(row.get("mapa")),
@@ -1354,11 +1355,12 @@ def _pdf_rotas_dia_table(rows: list[dict[str, Any]], styles: dict[str, Any], p: 
             p(row.get("ti_fisico"), "center"),
             p(row.get("ti_financeiro"), "center"),
             p(row.get("ti_total"), "center"),
+            p(row.get("status_operacional")),
             p(row.get("fechamento_status")),
         ])
     table = Table(
         data,
-        colWidths=[13 * mm, 20 * mm, 13 * mm, 15 * mm, 18 * mm, 18 * mm, 20 * mm, 20 * mm, 22 * mm, 17 * mm, 24 * mm],
+        colWidths=[12 * mm, 18 * mm, 12 * mm, 14 * mm, 17 * mm, 17 * mm, 18 * mm, 18 * mm, 20 * mm, 15 * mm, 20 * mm, 20 * mm],
         repeatRows=1,
     )
     table.setStyle(_pdf_table_style())
@@ -1519,9 +1521,6 @@ def _build_rotas_dia_031120(rows: list[dict[str, Any]], *, caixa_date: date) -> 
     for raw in rows:
         if not isinstance(raw, dict):
             continue
-        row_date = _parse_report_date(raw.get("Emissao")) or _parse_report_date(raw.get("DtOper"))
-        if row_date != caixa_date:
-            continue
         mapa = _strip_left_zeroes(raw.get("Mapa"))
         if not mapa:
             continue
@@ -1554,14 +1553,24 @@ def _build_rotas_dia_031120(rows: list[dict[str, Any]], *, caixa_date: date) -> 
 
     output: list[dict[str, Any]] = []
     for mapa, bucket in grouped.items():
+        if not str(bucket.get("placa") or "").strip():
+            continue
         fases = bucket["fases"]
         fase_kms = bucket["fase_kms"]
+        carregado = fases.get("carregado")
         saida = fases.get("saida")
         entrada = fases.get("entrada")
         pc_fisica = fases.get("pc_fisica")
         pc_financeira = fases.get("pc_financeira")
-        fechamento_status, fechamento_ok = _status_fechamento_031120(
+        if not carregado:
+            continue
+        if pc_financeira and entrada and entrada.date() != caixa_date:
+            continue
+        status_operacional, operacional_ok = _status_operacional_031120(
             saida=saida,
+            entrada=entrada,
+        )
+        fechamento_status, fechamento_ok = _status_fechamento_031120(
             entrada=entrada,
             pc_fisica=pc_fisica,
             pc_financeira=pc_financeira,
@@ -1587,6 +1596,8 @@ def _build_rotas_dia_031120(rows: list[dict[str, Any]], *, caixa_date: date) -> 
                 "ti_fisico": _fmt_duration(_duration_minutes(entrada, pc_fisica)),
                 "ti_financeiro": _fmt_duration(_duration_minutes(pc_fisica, pc_financeira)),
                 "ti_total": _fmt_duration(_duration_minutes(entrada, pc_financeira)),
+                "status_operacional": status_operacional,
+                "operacional_ok": operacional_ok,
                 "fechamento_status": fechamento_status,
                 "fechamento_ok": fechamento_ok,
             }
@@ -1609,9 +1620,20 @@ def _normalize_031120_fase(value: Any) -> str:
     return ""
 
 
-def _status_fechamento_031120(
+def _status_operacional_031120(
     *,
     saida: datetime | None,
+    entrada: datetime | None,
+) -> tuple[str, bool]:
+    if saida and entrada:
+        return "Retornou", True
+    if saida and not entrada:
+        return "Em rota / sem entrada", False
+    return "Sem saida", False
+
+
+def _status_fechamento_031120(
+    *,
     entrada: datetime | None,
     pc_fisica: datetime | None,
     pc_financeira: datetime | None,
@@ -1622,9 +1644,7 @@ def _status_fechamento_031120(
         return "Entrada sem fechamento fisico", False
     if entrada and pc_fisica and not pc_financeira:
         return "Entrada sem fechamento financeiro", False
-    if saida and not entrada:
-        return "Em rota / sem entrada", True
-    return "Sem saida", True
+    return "Nao iniciado", False
 
 
 def _parse_report_date(value: Any) -> date | None:

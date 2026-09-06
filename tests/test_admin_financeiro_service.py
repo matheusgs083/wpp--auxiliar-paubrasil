@@ -15,6 +15,7 @@ def test_build_rotas_dia_031120_groups_route_phases_by_map() -> None:
         {"Mapa": "028429", "Fase": "Entrada Cdd/Fab", "Placa": "SKZ8I57", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "21:52", "KmPrev": "85", "KmAtual": "0"},
         {"Mapa": "028429", "Fase": "PC_Fisica", "Placa": "SKZ8I57", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "21:53", "KmPrev": "85", "KmAtual": "81027"},
         {"Mapa": "028429", "Fase": "PC_Financeira", "Placa": "SKZ8I57", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "21:55", "KmPrev": "100", "KmAtual": "0"},
+        {"Mapa": "028430", "Fase": "Carregado", "Placa": "RLS8A29", "Emissao": "19/08/2026", "DtOper": "20/08/2026", "HrOper": "03:00", "KmPrev": "0", "KmAtual": "70000"},
         {"Mapa": "028430", "Fase": "Saida Cdd/Fab", "Placa": "RLS8A29", "Emissao": "19/08/2026", "DtOper": "20/08/2026", "HrOper": "07:00", "KmPrev": "0", "KmAtual": "0"},
     ]
 
@@ -33,9 +34,28 @@ def test_build_rotas_dia_031120_groups_route_phases_by_map() -> None:
             "ti_fisico": "00:01",
             "ti_financeiro": "00:02",
             "ti_total": "00:03",
+            "status_operacional": "Retornou",
+            "operacional_ok": True,
             "fechamento_status": "Fechado",
             "fechamento_ok": True,
-        }
+        },
+        {
+            "mapa": "28430",
+            "placa": "RLS8A29",
+            "km_prev": "0",
+            "km_atual": "70000",
+            "km_percorrido": "0",
+            "saida": "20/08/2026 07:00",
+            "entrada": "-",
+            "tempo_rota": "-",
+            "ti_fisico": "-",
+            "ti_financeiro": "-",
+            "ti_total": "-",
+            "status_operacional": "Em rota / sem entrada",
+            "operacional_ok": False,
+            "fechamento_status": "Nao iniciado",
+            "fechamento_ok": False,
+        },
     ]
 
 
@@ -50,8 +70,56 @@ def test_build_rotas_dia_031120_flags_entered_route_without_financial_close() ->
     result = _build_rotas_dia_031120(rows, caixa_date=date(2026, 8, 20))
 
     assert result[0]["km_percorrido"] == "107"
+    assert result[0]["status_operacional"] == "Retornou"
+    assert result[0]["operacional_ok"] is True
     assert result[0]["fechamento_status"] == "Entrada sem fechamento financeiro"
     assert result[0]["fechamento_ok"] is False
+
+
+def test_build_rotas_dia_031120_ignores_maps_without_plate() -> None:
+    rows = [
+        {"Mapa": "028431", "Fase": "Carregado", "Placa": "", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "03:35", "KmPrev": "106", "KmAtual": "89526"},
+        {"Mapa": "028431", "Fase": "Saida Cdd/Fab", "Placa": "", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "07:35", "KmPrev": "106", "KmAtual": "0"},
+        {"Mapa": "028432", "Fase": "Carregado", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "03:35", "KmPrev": "106", "KmAtual": "89526"},
+        {"Mapa": "028432", "Fase": "Saida Cdd/Fab", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "07:35", "KmPrev": "106", "KmAtual": "0"},
+    ]
+
+    result = _build_rotas_dia_031120(rows, caixa_date=date(2026, 8, 20))
+
+    assert [row["mapa"] for row in result] == ["28432"]
+    assert result[0]["status_operacional"] == "Em rota / sem entrada"
+    assert result[0]["fechamento_status"] == "Nao iniciado"
+
+
+def test_build_rotas_dia_031120_requires_carregamento() -> None:
+    rows = [
+        {"Mapa": "028431", "Fase": "Carregado", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "03:35", "KmPrev": "106", "KmAtual": "89526"},
+        {"Mapa": "028432", "Fase": "Saida Cdd/Fab", "Placa": "RLS8A30", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "07:35", "KmPrev": "106", "KmAtual": "0"},
+        {"Mapa": "028433", "Fase": "Carregado", "Placa": "RLS8A31", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "03:35", "KmPrev": "106", "KmAtual": "89526"},
+        {"Mapa": "028433", "Fase": "Saida Cdd/Fab", "Placa": "RLS8A31", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "07:35", "KmPrev": "106", "KmAtual": "0"},
+    ]
+
+    result = _build_rotas_dia_031120(rows, caixa_date=date(2026, 8, 20))
+
+    assert [row["mapa"] for row in result] == ["28431", "28433"]
+    assert result[0]["status_operacional"] == "Sem saida"
+    assert result[0]["fechamento_status"] == "Nao iniciado"
+
+
+def test_build_rotas_dia_031120_closed_map_uses_entry_date_for_caixa() -> None:
+    rows = [
+        {"Mapa": "028434", "Fase": "Carregado", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "23:10", "KmPrev": "106", "KmAtual": "89526"},
+        {"Mapa": "028434", "Fase": "Saida Cdd/Fab", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "20/08/2026", "HrOper": "23:35", "KmPrev": "106", "KmAtual": "0"},
+        {"Mapa": "028434", "Fase": "Entrada Cdd/Fab", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "21/08/2026", "HrOper": "01:25", "KmPrev": "106", "KmAtual": "0"},
+        {"Mapa": "028434", "Fase": "PC_Fisica", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "21/08/2026", "HrOper": "01:27", "KmPrev": "106", "KmAtual": "89633"},
+        {"Mapa": "028434", "Fase": "PC_Financeira", "Placa": "RLS8A29", "Emissao": "20/08/2026", "DtOper": "21/08/2026", "HrOper": "01:40", "KmPrev": "106", "KmAtual": "0"},
+    ]
+
+    assert _build_rotas_dia_031120(rows, caixa_date=date(2026, 8, 20)) == []
+    result = _build_rotas_dia_031120(rows, caixa_date=date(2026, 8, 21))
+
+    assert [row["mapa"] for row in result] == ["28434"]
+    assert result[0]["fechamento_status"] == "Fechado"
 
 
 def test_normalize_financeiro_dirty_fields_ignores_unknown_values() -> None:

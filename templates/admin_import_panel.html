@@ -7264,9 +7264,10 @@
           <td>${escapeHtml(row.ti_fisico || "-")}</td>
           <td>${escapeHtml(row.ti_financeiro || "-")}</td>
           <td>${escapeHtml(row.ti_total || "-")}</td>
+          <td class="finance-route-status ${row.operacional_ok === false ? "pending" : "ok"}">${escapeHtml(row.status_operacional || "-")}</td>
           <td class="finance-route-status ${row.fechamento_ok === false ? "pending" : "ok"}">${escapeHtml(row.fechamento_status || "-")}</td>
         </tr>
-      `).join("") : '<tr><td colspan="11" class="text-center finance-sheet-muted">Sem relatorio 031120 importado para esta data.</td></tr>';
+      `).join("") : '<tr><td colspan="12" class="text-center finance-sheet-muted">Sem relatorio 031120 importado para esta data.</td></tr>';
       el.innerHTML = `
         <div class="finance-sheet-title">
           <h3>Caixa Noturno ${escapeHtml((payload.filiais || []).find(item => String(item.code) === String(payload.filial))?.name || payload.filial || "")}</h3>
@@ -7371,7 +7372,8 @@
                       <th>TI - Fisico</th>
                       <th>TI - Financeiro</th>
                       <th>TI total</th>
-                      <th>Validacao</th>
+                      <th>Operacional</th>
+                      <th>Fechamento</th>
                     </tr>
                   </thead>
                   <tbody>${rotasDiaBody}</tbody>
