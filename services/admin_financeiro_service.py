@@ -1114,20 +1114,18 @@ class AdminFinanceiroService:
         if (
             not _relation_exists_cur(cur, self.schema, "relatorio_031120_reports")
             or not _relation_exists_cur(cur, self.schema, "dataset_state")
-            or not _relation_exists_cur(cur, self.schema, "import_batches")
         ):
             return {"status": "missing", "message": "031120 ainda nao importada para esta revenda."}
         dataset_name = f"relatorio_031120_op_{clean_filial}"
         cur.execute(
             sql.SQL(
                 """
-                SELECT b.reference_date, b.imported_at, b.total_rows, r.filename
+                SELECT s.activated_at, r.imported_at, r.total_rows, r.filename
                 FROM {}.dataset_state s
-                JOIN {}.import_batches b ON b.id = s.active_batch_id
-                LEFT JOIN {}.relatorio_031120_reports r ON r.batch_id = b.id
+                LEFT JOIN {}.relatorio_031120_reports r ON r.batch_id = s.active_batch_id
                 WHERE s.dataset_name = %s
                 """
-            ).format(sql.Identifier(self.schema), sql.Identifier(self.schema), sql.Identifier(self.schema)),
+            ).format(sql.Identifier(self.schema), sql.Identifier(self.schema)),
             (dataset_name,),
         )
         batch = cur.fetchone()
@@ -1165,8 +1163,8 @@ class AdminFinanceiroService:
             "message": message,
             "dataset_name": dataset_name,
             "filename": str(batch.get("filename") or ""),
-            "reference_date": _date_iso(batch.get("reference_date")),
-            "imported_at": _datetime_iso(batch.get("imported_at")),
+            "activated_at": _datetime_iso(batch.get("activated_at")),
+            "imported_at": _datetime_iso(batch.get("imported_at") or batch.get("activated_at")),
             "total_rows": int(batch.get("total_rows") or 0),
             "available_dates": available_dates,
         }
