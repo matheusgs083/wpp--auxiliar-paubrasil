@@ -761,9 +761,9 @@ class AdminFinanceiroService:
                 continue
             fase = _normalize_031120_fase(payload.get("Fase"))
             km_atual = _decimal(payload.get("KmAtual") or payload.get("KM Atual") or payload.get("Km Atual"))
-            if fase == "saida" and km_atual > 0:
-                return km_atual
             if fase == "carregado" and km_atual > 0:
+                return km_atual
+            if fase == "saida" and km_atual > 0:
                 km_carregado_fallback = km_atual
         return km_carregado_fallback
 
@@ -1709,6 +1709,7 @@ def _build_rotas_dia_031120(rows: list[dict[str, Any]], *, caixa_date: date) -> 
                 "placa": bucket.get("placa") or "",
                 "km_prev": _fmt_plain_qty(km_prev),
                 "km_atual": _fmt_plain_qty(km_atual),
+                "km_carregado": _fmt_plain_qty(km_carregado),
                 "km_percorrido": _fmt_plain_qty(km_percorrido),
                 "saida": _fmt_datetime_short(saida),
                 "entrada": _fmt_datetime_short(entrada),

@@ -74,6 +74,8 @@ class AdminFinanceiroFechamentoRequest(BaseModel):
     modo: str = "completo"
     ponto_apoio: str = ""
     km_atual: str = ""
+    km_inicial: str = ""
+    km_prev: str = ""
     target_worker_id: str = Field(default="", max_length=120)
 
 
@@ -478,24 +480,35 @@ def create_admin_financeiro_router(
                     status_code=409,
                     detail=f"Ja existe um fechamento em andamento para o mapa {clean_mapa} nesta data.",
                 )
-        clean_km_atual = str(payload.km_atual or "").strip()
-        if clean_km_atual:
-            clean_km_atual = clean_km_atual.replace(".", "").replace(",", "")
-            if not clean_km_atual.isdigit():
-                raise HTTPException(status_code=400, detail="KM atual deve conter apenas numeros.")
+        def _clean_km_field(value: Any, field_name: str) -> str:
+            clean_value = str(value or "").strip()
+            if not clean_value:
+                return ""
+            clean_value = clean_value.replace(".", "").replace(",", "")
+            if not clean_value.isdigit():
+                raise HTTPException(status_code=400, detail=f"{field_name} deve conter apenas numeros.")
+            return clean_value
+
+        clean_km_atual = _clean_km_field(payload.km_atual, "KM atual")
+        payload_km_inicial = _clean_km_field(payload.km_inicial, "KM inicial")
+        payload_km_prev = _clean_km_field(payload.km_prev, "KM previsto")
         km_resolved = resolve_financeiro_fechamento_km(
             filial=clean_filial,
             mapa=clean_mapa,
             caixa_date=caixa_date,
         )
-        clean_km_inicial = str(km_resolved.get("km_inicial") or "").strip().replace(".", "").replace(",", "")
-        clean_km_prev = str(km_resolved.get("km_prev") or "").strip().replace(".", "").replace(",", "")
+        clean_km_inicial = payload_km_inicial or str(km_resolved.get("km_inicial") or "").strip().replace(".", "").replace(",", "")
+        clean_km_prev = payload_km_prev or str(km_resolved.get("km_prev") or "").strip().replace(".", "").replace(",", "")
         clean_km_fallback = str(km_resolved.get("km_atual") or "").strip().replace(".", "").replace(",", "")
+        if not clean_km_fallback and clean_km_inicial and clean_km_prev:
+            clean_km_fallback = str(int(clean_km_inicial) + int(clean_km_prev))
         if not clean_km_atual:
             clean_km_atual = clean_km_fallback
         km_source = km_resolved.get("source") or ""
         if str(payload.km_atual or "").strip():
             km_source = "manual_with_fallback" if clean_km_inicial and clean_km_prev else "manual"
+        elif clean_km_atual and (payload_km_inicial or payload_km_prev):
+            km_source = "painel_km_inicial_plus_km_prev"
         clean_target_worker_id = str(payload.target_worker_id or "").strip()
         promax_unit = PROMAX_UNIT_BY_FILIAL.get(str(int(clean_filial)) if clean_filial.isdigit() else clean_filial, clean_filial)
         job_payload = {

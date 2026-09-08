@@ -144,13 +144,18 @@ class PromaxRunner:
             ponto_apoio = str(payload.get("ponto_apoio") or payload.get("pontoApoio") or "").strip()
             if ponto_apoio and ponto_apoio != "0":
                 command.extend(["--ponto-apoio", ponto_apoio])
+            km_inicial = str(payload.get("km_inicial") or payload.get("kmInicial") or "").strip()
+            km_prev = str(payload.get("km_prev") or payload.get("kmPrev") or payload.get("km_previsto") or payload.get("kmPrevisto") or "").strip()
             km_atual = str(payload.get("km_atual") or payload.get("kmAtual") or payload.get("km") or "").strip()
+            if not km_atual and km_inicial and km_prev:
+                try:
+                    km_atual = str(int(km_inicial.replace(".", "").replace(",", "")) + int(km_prev.replace(".", "").replace(",", "")))
+                except ValueError:
+                    km_atual = ""
             if km_atual:
                 command.extend(["--km-atual", km_atual])
-            km_inicial = str(payload.get("km_inicial") or payload.get("kmInicial") or "").strip()
             if km_inicial:
                 command.extend(["--km-inicial", km_inicial])
-            km_prev = str(payload.get("km_prev") or payload.get("kmPrev") or payload.get("km_previsto") or payload.get("kmPrevisto") or "").strip()
             if km_prev:
                 command.extend(["--km-prev", km_prev])
             data_fechamento = str(

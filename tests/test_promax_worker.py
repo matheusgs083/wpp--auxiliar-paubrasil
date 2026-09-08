@@ -1496,6 +1496,30 @@ class PromaxRunnerTests(unittest.TestCase):
 
         self.assertNotIn("--ponto-apoio", command)
 
+    def test_runner_calculates_km_atual_from_initial_and_prev_for_fechamento_mapa(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-fechamento",
+                    "job_type": "fechamento_mapa",
+                    "payload": {
+                        "operation": "fechamento-mapa",
+                        "mapa": "94154",
+                        "unidade": "2210003",
+                        "modo": "completo",
+                        "km_inicial": "195234",
+                        "km_prev": "307",
+                    },
+                }
+            )
+
+        self.assertEqual(command[command.index("--km-atual") + 1], "195541")
+        self.assertEqual(command[command.index("--km-inicial") + 1], "195234")
+        self.assertEqual(command[command.index("--km-prev") + 1], "307")
+
     def test_runner_closes_browser_on_unattended_closure_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._config(Path(temp_dir))

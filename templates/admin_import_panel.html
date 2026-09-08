@@ -8496,13 +8496,19 @@
         ? els.fechamentoData.value
         : (els.data && els.data.value ? els.data.value : formatDateInputValue(new Date()));
       const caixaData = els.data && els.data.value ? els.data.value : formatDateInputValue(new Date());
+      const rotasDia = Array.isArray(state.financeiro.payload && state.financeiro.payload.rotas_dia)
+        ? state.financeiro.payload.rotas_dia
+        : [];
+      const rotaMapa = rotasDia.find(row => String(row && row.mapa || "").trim() === mapa);
       const payload = {
         data: caixaData,
         data_rotina: dataRotina,
         filial: els.filial && els.filial.value ? els.filial.value : "",
         mapa,
         modo: els.fechamentoModo && els.fechamentoModo.value ? els.fechamentoModo.value : "completo",
-        km_atual: els.fechamentoKm && els.fechamentoKm.value ? els.fechamentoKm.value : ""
+        km_atual: els.fechamentoKm && els.fechamentoKm.value ? els.fechamentoKm.value : "",
+        km_inicial: rotaMapa && (rotaMapa.km_carregado || rotaMapa.km_atual) ? (rotaMapa.km_carregado || rotaMapa.km_atual) : "",
+        km_prev: rotaMapa && rotaMapa.km_prev ? rotaMapa.km_prev : ""
       };
       if (els.fechamentoBtn) els.fechamentoBtn.disabled = true;
       if (els.fechamentoStatus) {
