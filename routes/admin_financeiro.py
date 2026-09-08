@@ -502,12 +502,10 @@ def create_admin_financeiro_router(
         clean_km_fallback = str(km_resolved.get("km_atual") or "").strip().replace(".", "").replace(",", "")
         if not clean_km_fallback and clean_km_inicial and clean_km_prev:
             clean_km_fallback = str(int(clean_km_inicial) + int(clean_km_prev))
-        if not clean_km_atual:
-            clean_km_atual = clean_km_fallback
         km_source = km_resolved.get("source") or ""
         if str(payload.km_atual or "").strip():
             km_source = "manual_with_fallback" if clean_km_inicial and clean_km_prev else "manual"
-        elif clean_km_atual and (payload_km_inicial or payload_km_prev):
+        elif clean_km_fallback and (payload_km_inicial or payload_km_prev):
             km_source = "painel_km_inicial_plus_km_prev"
         clean_target_worker_id = str(payload.target_worker_id or "").strip()
         promax_unit = PROMAX_UNIT_BY_FILIAL.get(str(int(clean_filial)) if clean_filial.isdigit() else clean_filial, clean_filial)

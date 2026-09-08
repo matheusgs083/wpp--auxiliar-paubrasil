@@ -147,11 +147,6 @@ class PromaxRunner:
             km_inicial = str(payload.get("km_inicial") or payload.get("kmInicial") or "").strip()
             km_prev = str(payload.get("km_prev") or payload.get("kmPrev") or payload.get("km_previsto") or payload.get("kmPrevisto") or "").strip()
             km_atual = str(payload.get("km_atual") or payload.get("kmAtual") or payload.get("km") or "").strip()
-            if not km_atual and km_inicial and km_prev:
-                try:
-                    km_atual = str(int(km_inicial.replace(".", "").replace(",", "")) + int(km_prev.replace(".", "").replace(",", "")))
-                except ValueError:
-                    km_atual = ""
             if km_atual:
                 command.extend(["--km-atual", km_atual])
             if km_inicial:
