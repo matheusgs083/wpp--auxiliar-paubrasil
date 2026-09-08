@@ -577,6 +577,7 @@ class AdminFinanceiroService:
         if allowed_filiais is not None and filial not in allowed_filiais:
             raise HTTPException(status_code=403, detail="Filial fora do acesso do usuario.")
         payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        payload = self._enrich_prestacao_clientes(payload, filial=filial)
         summary = {
             "available": bool(payload),
             "notas_count": int(row.get("notas_count") or 0),
@@ -636,6 +637,51 @@ class AdminFinanceiroService:
                 str(username or ""),
             ),
         )
+
+    def _enrich_prestacao_clientes(self, payload: dict[str, Any], *, filial: str) -> dict[str, Any]:
+        if not isinstance(payload, dict) or not isinstance(payload.get("notas"), list):
+            return payload
+        notas = [dict(item or {}) for item in payload.get("notas") or []]
+        nbs = sorted({_strip_left_zeroes(item.get("nb")) for item in notas if _strip_left_zeroes(item.get("nb"))})
+        if not filial or not nbs:
+            return {**payload, "notas": notas}
+        try:
+            with self._connect() as conn:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    if not _relation_exists_cur(cur, self.schema, "dclientes_latest"):
+                        return {**payload, "notas": notas}
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            SELECT cod_pdv, nome_fantasia, razao_social
+                            FROM {}.dclientes_latest
+                            WHERE filial = %s
+                              AND cod_pdv = ANY(%s)
+                            """
+                        ).format(sql.Identifier(self.schema)),
+                        (str(filial), nbs),
+                    )
+                    clientes = {
+                        _strip_left_zeroes(row.get("cod_pdv")): {
+                            "nome_fantasia": str(row.get("nome_fantasia") or "").strip(),
+                            "razao_social": str(row.get("razao_social") or "").strip(),
+                        }
+                        for row in cur.fetchall()
+                    }
+        except Exception as exc:
+            logger.warning("030322 | Nao foi possivel enriquecer notas com dclientes: %s", exc)
+            return {**payload, "notas": notas}
+
+        for item in notas:
+            nb = _strip_left_zeroes(item.get("nb"))
+            item["filial_nb"] = f"{filial}_{nb}" if filial and nb else ""
+            cliente = clientes.get(nb) or {}
+            if cliente:
+                item["cliente_original"] = str(item.get("cliente") or "").strip()
+                item["nome_fantasia"] = cliente.get("nome_fantasia") or ""
+                item["razao_social"] = cliente.get("razao_social") or ""
+                item["cliente_dclientes"] = cliente.get("nome_fantasia") or cliente.get("razao_social") or ""
+        return {**payload, "notas": notas}
 
     def _lookup_conferencia_route_identity(self, cur: Any, *, filial: str, mapa: str) -> dict[str, str]:
         if not _relation_exists_cur(cur, self.schema, "conferencia_mapas"):

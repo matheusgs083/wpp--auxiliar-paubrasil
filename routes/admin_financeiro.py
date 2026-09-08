@@ -449,7 +449,7 @@ def create_admin_financeiro_router(
         if not clean_mapa.isdigit():
             raise HTTPException(status_code=400, detail="Mapa deve conter apenas numeros.")
         clean_modo = str(payload.modo or "completo").strip().lower()
-        if clean_modo not in {"completo", "fisico", "financeiro", "prestacao", "030322"}:
+        if clean_modo not in {"completo", "fisico", "financeiro", "prestacao", "030303", "030322"}:
             raise HTTPException(status_code=400, detail="Modo de fechamento invalido.")
         caixa_date = _parse_admin_financeiro_date(payload.data)
         data_rotina = str(payload.data_rotina or "").strip()

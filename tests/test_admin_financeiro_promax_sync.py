@@ -1,6 +1,8 @@
 from decimal import Decimal
+from contextlib import contextmanager
 
 from services.admin_financeiro_service import (
+    AdminFinanceiroService,
     _extract_dados_030322,
     _extract_dados_fechamento_03030702,
     _extract_030303_fields,
@@ -19,6 +21,69 @@ def test_extractors_ignore_error_payloads_instead_of_zeroing_saved_values():
 
     assert _extract_dados_fechamento_03030702(payload) == {}
     assert _extract_dados_030322(payload) == {}
+
+
+def test_enrich_prestacao_clientes_uses_filial_nb_from_dclientes():
+    service = AdminFinanceiroService(
+        database_url="postgresql://example",
+        schema="reports",
+        connect_timeout_seconds=1,
+        filial_labels={},
+    )
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, *_args):
+            return None
+
+        def fetchone(self):
+            return {"rel": "reports.dclientes_latest"}
+
+        def fetchall(self):
+            return [
+                {
+                    "cod_pdv": "13868",
+                    "nome_fantasia": "PEREIRA BEBIDAS",
+                    "razao_social": "R PEREIRA DA SILVA LTDA",
+                }
+            ]
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def cursor(self, **_kwargs):
+            return FakeCursor()
+
+    @contextmanager
+    def fake_connect():
+        yield FakeConnection()
+
+    service._connect = fake_connect
+    payload = {
+        "notas": [
+            {
+                "nb": "13868",
+                "cliente": "R PEREIRA DA SILVA LTDA",
+                "condicao_pagamento": "BOLETO 2 DIAS S/ADF",
+            }
+        ]
+    }
+
+    enriched = service._enrich_prestacao_clientes(payload, filial="3")
+    nota = enriched["notas"][0]
+
+    assert nota["filial_nb"] == "3_13868"
+    assert nota["nome_fantasia"] == "PEREIRA BEBIDAS"
+    assert nota["cliente_original"] == "R PEREIRA DA SILVA LTDA"
 
 
 def test_extract_motorista_030303_from_worker_result_metadata():

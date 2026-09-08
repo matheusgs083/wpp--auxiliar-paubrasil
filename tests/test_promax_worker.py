@@ -1605,6 +1605,28 @@ class PromaxRunnerTests(unittest.TestCase):
         self.assertEqual(command[command.index("--modo") + 1], "prestacao")
         self.assertEqual(command[command.index("--data") + 1], "2026-09-04")
 
+    def test_runner_allows_030303_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "job-030303",
+                    "job_type": "fechamento_mapa",
+                    "payload": {
+                        "operation": "fechamento-mapa",
+                        "mapa": "94041",
+                        "unidade": "2210003",
+                        "modo": "030303",
+                        "data": "2026-09-04",
+                    },
+                }
+            )
+
+        self.assertEqual(command[command.index("--modo") + 1], "030303")
+        self.assertEqual(command[command.index("--data") + 1], "2026-09-04")
+
     def test_runner_accepts_dynamic_profile_with_safe_identifiers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._config(Path(temp_dir))
