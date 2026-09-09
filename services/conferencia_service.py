@@ -387,7 +387,14 @@ class ConferenciaService:
                                COALESCE(SUM(
                                    CASE
                                        WHEN i.grupo_contagem = 'PRODUTO' THEN
-                                           COALESCE(c.contagem_caixas, 0) * COALESCE(NULLIF((i.payload->>'unidades_por_caixa')::numeric, 0), 1)
+                                           COALESCE(c.contagem_caixas, 0) * COALESCE(NULLIF(
+                                               CASE
+                                                   WHEN COALESCE(i.payload->>'unidades_por_caixa', '') ~ '^[0-9]+([.,][0-9]+)?$'
+                                                       THEN REPLACE(i.payload->>'unidades_por_caixa', ',', '.')::numeric
+                                                   ELSE 0
+                                               END,
+                                               0
+                                           ), 1)
                                            + COALESCE(c.contagem_unidades, 0)
                                        WHEN i.grupo_contagem IN ('300', '600', '1L', '51') THEN
                                            COALESCE(c.contagem_real, 0) + COALESCE(c.contagem_vazia, 0)
@@ -696,7 +703,14 @@ class ConferenciaService:
                                COALESCE(SUM(
                                    CASE
                                        WHEN i.grupo_contagem = 'PRODUTO' THEN
-                                           COALESCE(c.contagem_caixas, 0) * COALESCE(NULLIF((i.payload->>'unidades_por_caixa')::numeric, 0), 1)
+                                           COALESCE(c.contagem_caixas, 0) * COALESCE(NULLIF(
+                                               CASE
+                                                   WHEN COALESCE(i.payload->>'unidades_por_caixa', '') ~ '^[0-9]+([.,][0-9]+)?$'
+                                                       THEN REPLACE(i.payload->>'unidades_por_caixa', ',', '.')::numeric
+                                                   ELSE 0
+                                               END,
+                                               0
+                                           ), 1)
                                            + COALESCE(c.contagem_unidades, 0)
                                        WHEN i.grupo_contagem IN ('300', '600', '1L', '51') THEN
                                            COALESCE(c.contagem_real, 0) + COALESCE(c.contagem_vazia, 0)
@@ -1012,7 +1026,7 @@ class ConferenciaService:
         with self._connect() as conn:
             if not _relation_exists(conn, self.schema, "relatorio_031120_rows") or not _relation_exists(conn, self.schema, "dataset_state"):
                 return 0
-            where = ["r.dataset_name LIKE 'relatorio_031120_op_%'", "s.active_batch_id = r.batch_id"]
+            where = ["r.dataset_name LIKE 'relatorio_031120_op_%%'", "s.active_batch_id = r.batch_id"]
             params: list[Any] = []
             if filial:
                 where.append("r.filial = %s")
