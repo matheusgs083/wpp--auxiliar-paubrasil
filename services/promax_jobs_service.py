@@ -1646,7 +1646,7 @@ class PromaxJobsService:
                                 SELECT parent.id, parent.finished_at
                                 FROM {schema}.{jobs} AS parent
                                 WHERE parent.source_schedule_id = child.trigger_after_schedule_id
-                                  AND parent.status IN ('success', 'partial_success')
+                                  AND parent.status IN ('success', 'partial_success', 'failed', 'cancelled')
                                   AND parent.finished_at IS NOT NULL
                                   AND NOT EXISTS (
                                       SELECT 1

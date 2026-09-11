@@ -258,7 +258,7 @@ class PromaxSqlContractTests(unittest.TestCase):
         self.assertIn("open_job.source_schedule_id = due.id", statements[0])
         self.assertIn("open_job.status IN ('pending', 'running', 'cancel_requested')", statements[0])
         self.assertIn("JOIN LATERAL", statements[1])
-        self.assertIn("parent.status IN ('success', 'partial_success')", statements[1])
+        self.assertIn("parent.status IN ('success', 'partial_success', 'failed', 'cancelled')", statements[1])
         self.assertIn("triggered.triggered_by_job_id = parent.id", statements[1])
         self.assertIn("open_child_job.source_schedule_id = child.id", statements[1])
         self.assertIn("open_child_job.status IN ('pending', 'running', 'cancel_requested')", statements[1])
