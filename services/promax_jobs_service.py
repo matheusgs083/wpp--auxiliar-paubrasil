@@ -933,6 +933,7 @@ class PromaxJobsService:
                     message=log_message,
                     data={"requested_by": clean_requested_by, "reason": clean_reason},
                 )
+                self._skip_cancelled_schedule_occurrence_cursor(cur, job=current)
                 self._cancel_dependent_jobs_cursor(
                     cur,
                     root_job_id=normalized_job_id,
@@ -940,6 +941,62 @@ class PromaxJobsService:
                     reason=clean_reason or "Cadeia cancelada pelo cancelamento do job pai.",
                 )
         return _job_record(row)
+
+    def _skip_cancelled_schedule_occurrence_cursor(self, cur: Any, *, job: Mapping[str, Any]) -> None:
+        schedule_id = job.get("source_schedule_id")
+        if schedule_id is None or job.get("triggered_by_job_id") is not None:
+            return
+        scheduled_for = job.get("scheduled_for")
+        if scheduled_for is None:
+            return
+
+        normalized_scheduled_for = _aware_utc(scheduled_for, field_name="scheduled_for")
+        now = datetime.now(UTC)
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT *
+                FROM {schema}.{schedules}
+                WHERE id = %s
+                  AND enabled = TRUE
+                  AND trigger_after_schedule_id IS NULL
+                FOR UPDATE
+                """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                schedules=sql.Identifier(SCHEDULES_TABLE),
+            ),
+            (str(schedule_id),),
+        )
+        schedule = cur.fetchone()
+        if schedule is None:
+            return
+
+        current_next_run_at = _aware_utc(schedule["next_run_at"], field_name="next_run_at")
+        if current_next_run_at > now and current_next_run_at > normalized_scheduled_for:
+            return
+
+        definition = _schedule_definition_from_row(schedule)
+        next_run_at = calculate_next_run(
+            definition,
+            after=max(now, normalized_scheduled_for),
+        )
+        cur.execute(
+            sql.SQL(
+                """
+                UPDATE {schema}.{schedules}
+                SET
+                    last_enqueued_for = %s,
+                    next_run_at = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                schedules=sql.Identifier(SCHEDULES_TABLE),
+            ),
+            (normalized_scheduled_for, next_run_at, str(schedule_id)),
+        )
 
     def _cancel_dependent_jobs_cursor(
         self,
@@ -1047,7 +1104,7 @@ class PromaxJobsService:
                 if clean_key is not None:
                     query += sql.SQL(" AND concurrency_key = %s")
                     params.append(clean_key)
-                query += sql.SQL(" RETURNING id")
+                query += sql.SQL(" RETURNING *")
                 cur.execute(query, params)
                 rows = cur.fetchall()
                 for row in rows:
@@ -1061,6 +1118,7 @@ class PromaxJobsService:
                             "reason": str(reason or "").strip(),
                         },
                     )
+                    self._skip_cancelled_schedule_occurrence_cursor(cur, job=row)
         return len(rows)
 
     def pause_queue(self, *, reason: str = "", paused_by: str = "") -> QueueStateRecord:
