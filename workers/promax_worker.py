@@ -360,6 +360,32 @@ class PromaxWorker:
         except PromaxClientError as exc:
             self.logger.error("Heartbeat rejeitado para job %s: %s", job_id, exc)
 
+    def _start_finalization_keepalive(self, job_id: str, lease_token: str) -> Callable[[], None]:
+        stop_event = threading.Event()
+        interval = max(1.0, min(float(self.config.heartbeat_interval_seconds), float(self.config.lease_seconds) / 3.0))
+
+        def keepalive() -> None:
+            while not stop_event.wait(interval):
+                try:
+                    self.client.heartbeat_job(job_id, lease_token)
+                except PromaxApiUnavailable as exc:
+                    self.logger.warning("Heartbeat de finalizacao temporariamente indisponivel para job %s: %s", job_id, exc)
+                except PromaxClientError as exc:
+                    self.logger.error("Heartbeat de finalizacao rejeitado para job %s: %s", job_id, exc)
+
+        thread = threading.Thread(
+            target=keepalive,
+            name=f"promax-finalization-keepalive-{job_id}",
+            daemon=True,
+        )
+        thread.start()
+
+        def stop() -> None:
+            stop_event.set()
+            thread.join(timeout=1.0)
+
+        return stop
+
     def _heartbeat_worker(self, *, force: bool, extra_details: Mapping[str, Any] | None = None) -> None:
         now = time.monotonic()
         if not force and now - self._last_worker_heartbeat < self.config.heartbeat_interval_seconds:
@@ -449,74 +475,78 @@ class PromaxWorker:
         post_import_attempted = False
         sync_completed = False
         final_result = result
-        while True:
-            try:
-                self._flush_logs()
-                if not post_import_attempted:
-                    self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
-                    self._import_020304_estoque_if_needed(job, job_id, lease_token, result)
-                    self._import_031120_relatorio_if_needed(job, job_id, lease_token, result)
-                    self._import_03114902_relatorio_if_needed(job, job_id, lease_token, result)
-                    self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
-                    self._import_020220_comodatos_if_needed(job, job_id, lease_token, result)
-                    self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
-                    self._import_0112_dmateriais_if_needed(job, job_id, lease_token, result)
-                    self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
-                    self._import_030111_critica_if_needed(job, job_id, lease_token, result)
-                    post_import_attempted = True
-                if not sync_completed:
-                    self._sync_pending_partial_results(job, job_id, lease_token)
-                    self._sync_financeiro_fechamento_if_needed(
-                        job,
+        stop_keepalive = self._start_finalization_keepalive(job_id, lease_token)
+        try:
+            while True:
+                try:
+                    self._flush_logs()
+                    if not post_import_attempted:
+                        self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
+                        self._import_020304_estoque_if_needed(job, job_id, lease_token, result)
+                        self._import_031120_relatorio_if_needed(job, job_id, lease_token, result)
+                        self._import_03114902_relatorio_if_needed(job, job_id, lease_token, result)
+                        self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
+                        self._import_020220_comodatos_if_needed(job, job_id, lease_token, result)
+                        self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
+                        self._import_0112_dmateriais_if_needed(job, job_id, lease_token, result)
+                        self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
+                        self._import_030111_critica_if_needed(job, job_id, lease_token, result)
+                        post_import_attempted = True
+                    if not sync_completed:
+                        self._sync_pending_partial_results(job, job_id, lease_token)
+                        self._sync_financeiro_fechamento_if_needed(
+                            job,
+                            job_id,
+                            lease_token,
+                            result,
+                            raise_on_failure=True,
+                        )
+                        sync_completed = True
+                    self.client.finish(
                         job_id,
                         lease_token,
-                        result,
-                        raise_on_failure=True,
+                        status=final_result.status,
+                        result={
+                            **dict(final_result.details or {}),
+                            "return_code": final_result.return_code,
+                            "child_pid": final_result.child_pid or None,
+                            "message": final_result.message or "",
+                        },
+                        error=final_result.error,
+                    )
+                    return final_result
+                except PromaxApiUnavailable as exc:
+                    self.logger.warning("API indisponivel ao finalizar job %s: %s", job_id, exc)
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, self.config.backoff_max_seconds)
+                except (PromaxClientError, ValueError) as exc:
+                    self.logger.error("Sincronizacao/finalizacao rejeitada para job %s: %s", job_id, exc)
+                    if sync_completed:
+                        return final_result
+                    original_status = normalize_status(result.status)
+                    final_status = "partial_success" if original_status == "success" else original_status
+                    final_result = PromaxRunResult(
+                        status=final_status,
+                        return_code=result.return_code,
+                        child_pid=result.child_pid,
+                        cancelled=result.cancelled,
+                        stopped=result.stopped,
+                        error=result.error if final_status == "failed" else None,
+                        message=(
+                            "Fechamento concluido, mas a sincronizacao com o painel ficou pendente."
+                            if final_status == "partial_success"
+                            else (result.message or "Execucao Promax falhou e possui sincronizacao pendente.")
+                        ),
+                        details={**dict(result.details or {}), "sync_error": str(exc)},
+                    )
+                    self.logger.warning(
+                        "Job Promax %s sera finalizado como %s por falha de sincronizacao.",
+                        job_id,
+                        final_result.status,
                     )
                     sync_completed = True
-                self.client.finish(
-                    job_id,
-                    lease_token,
-                    status=final_result.status,
-                    result={
-                        **dict(final_result.details or {}),
-                        "return_code": final_result.return_code,
-                        "child_pid": final_result.child_pid or None,
-                        "message": final_result.message or "",
-                    },
-                    error=final_result.error,
-                )
-                return final_result
-            except PromaxApiUnavailable as exc:
-                self.logger.warning("API indisponivel ao finalizar job %s: %s", job_id, exc)
-                time.sleep(backoff)
-                backoff = min(backoff * 2, self.config.backoff_max_seconds)
-            except (PromaxClientError, ValueError) as exc:
-                self.logger.error("Sincronizacao/finalizacao rejeitada para job %s: %s", job_id, exc)
-                if sync_completed:
-                    return final_result
-                original_status = normalize_status(result.status)
-                final_status = "partial_success" if original_status == "success" else original_status
-                final_result = PromaxRunResult(
-                    status=final_status,
-                    return_code=result.return_code,
-                    child_pid=result.child_pid,
-                    cancelled=result.cancelled,
-                    stopped=result.stopped,
-                    error=result.error if final_status == "failed" else None,
-                    message=(
-                        "Fechamento concluido, mas a sincronizacao com o painel ficou pendente."
-                        if final_status == "partial_success"
-                        else (result.message or "Execucao Promax falhou e possui sincronizacao pendente.")
-                    ),
-                    details={**dict(result.details or {}), "sync_error": str(exc)},
-                )
-                self.logger.warning(
-                    "Job Promax %s sera finalizado como %s por falha de sincronizacao.",
-                    job_id,
-                    final_result.status,
-                )
-                sync_completed = True
+        finally:
+            stop_keepalive()
 
     def _import_030206_boletos_if_needed(
         self,

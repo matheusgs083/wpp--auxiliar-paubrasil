@@ -933,7 +933,84 @@ class PromaxJobsService:
                     message=log_message,
                     data={"requested_by": clean_requested_by, "reason": clean_reason},
                 )
+                self._cancel_dependent_jobs_cursor(
+                    cur,
+                    root_job_id=normalized_job_id,
+                    requested_by=clean_requested_by,
+                    reason=clean_reason or "Cadeia cancelada pelo cancelamento do job pai.",
+                )
         return _job_record(row)
+
+    def _cancel_dependent_jobs_cursor(
+        self,
+        cur: Any,
+        *,
+        root_job_id: str,
+        requested_by: str,
+        reason: str,
+    ) -> None:
+        cur.execute(
+            sql.SQL(
+                """
+                WITH RECURSIVE dependent_jobs AS (
+                    SELECT child.id
+                    FROM {schema}.{jobs} AS child
+                    WHERE child.triggered_by_job_id = %s
+                      AND child.status IN ('pending', 'running', 'cancel_requested')
+
+                    UNION ALL
+
+                    SELECT grandchild.id
+                    FROM {schema}.{jobs} AS grandchild
+                    JOIN dependent_jobs AS parent ON parent.id = grandchild.triggered_by_job_id
+                    WHERE grandchild.status IN ('pending', 'running', 'cancel_requested')
+                )
+                UPDATE {schema}.{jobs} AS job
+                SET
+                    status = CASE
+                        WHEN job.status = 'pending' THEN 'cancelled'
+                        ELSE 'cancel_requested'
+                    END,
+                    cancel_requested_at = NOW(),
+                    cancel_requested_by = %s,
+                    cancel_reason = %s,
+                    finished_at = CASE
+                        WHEN job.status = 'pending' THEN NOW()
+                        ELSE job.finished_at
+                    END,
+                    idempotency_key = CASE
+                        WHEN job.status = 'pending' AND job.job_type = 'fechamento_mapa' THEN NULL
+                        ELSE job.idempotency_key
+                    END,
+                    updated_at = NOW()
+                FROM dependent_jobs
+                WHERE job.id = dependent_jobs.id
+                  AND job.status IN ('pending', 'running', 'cancel_requested')
+                RETURNING job.id, job.status
+                """
+            ).format(
+                schema=sql.Identifier(self.schema),
+                jobs=sql.Identifier(JOBS_TABLE),
+            ),
+            (root_job_id, requested_by, reason),
+        )
+        for dependent in cur.fetchall():
+            status = str(dependent.get("status") or "")
+            self._append_log_cursor(
+                cur,
+                job_id=str(dependent["id"]),
+                level="warning",
+                message=(
+                    "Job dependente cancelado pelo cancelamento do job pai."
+                    if status == "cancelled"
+                    else "Cancelamento solicitado por cancelamento do job pai."
+                ),
+                data={
+                    "root_job_id": root_job_id,
+                    "requested_by": requested_by,
+                    "reason": reason,
+                },
+            )
 
     def clear_pending_jobs(
         self,
@@ -1646,7 +1723,7 @@ class PromaxJobsService:
                                 SELECT parent.id, parent.finished_at
                                 FROM {schema}.{jobs} AS parent
                                 WHERE parent.source_schedule_id = child.trigger_after_schedule_id
-                                  AND parent.status IN ('success', 'partial_success', 'failed', 'cancelled')
+                                  AND parent.status IN ('success', 'partial_success', 'failed')
                                   AND parent.finished_at IS NOT NULL
                                   AND NOT EXISTS (
                                       SELECT 1
