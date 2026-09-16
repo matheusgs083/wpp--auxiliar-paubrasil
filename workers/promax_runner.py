@@ -154,6 +154,8 @@ class PromaxRunner:
                 or payload.get("kmFallbackAtual")
                 or ""
             ).strip()
+            if not km_atual and km_inicial.isdigit() and km_prev.isdigit():
+                km_atual = str(int(km_inicial) + int(km_prev))
             if km_atual:
                 command.extend(["--km-atual", km_atual])
             if km_inicial:
