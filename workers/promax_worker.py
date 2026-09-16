@@ -61,7 +61,7 @@ class WorkerConfig:
     backoff_initial_seconds: float = 2.0
     backoff_max_seconds: float = 60.0
     boleto_import_timeout_seconds: float = 900.0
-    job_timeout_seconds: float = 900.0
+    job_timeout_seconds: float = 1500.0
     visual_lock_enabled: bool = True
     visual_lock_file: str = ""
 
@@ -101,7 +101,7 @@ class WorkerConfig:
             backoff_initial_seconds=_env_float("PROMAX_WORKER_BACKOFF_INITIAL_SECONDS", 2.0),
             backoff_max_seconds=_env_float("PROMAX_WORKER_BACKOFF_MAX_SECONDS", 60.0),
             boleto_import_timeout_seconds=boleto_import_timeout_seconds,
-            job_timeout_seconds=_env_float("PROMAX_WORKER_JOB_TIMEOUT_SECONDS", 900.0),
+            job_timeout_seconds=_env_float("PROMAX_WORKER_JOB_TIMEOUT_SECONDS", 1500.0),
             visual_lock_enabled=_env_bool("PROMAX_VISUAL_LOCK_ENABLED", True),
             visual_lock_file=os.environ.get("PROMAX_VISUAL_LOCK_FILE", ""),
         )

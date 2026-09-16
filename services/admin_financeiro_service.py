@@ -177,6 +177,46 @@ class AdminFinanceiroService:
                 )
                 cur.execute(
                     sql.SQL(
+                        """
+                        INSERT INTO {}.financeiro_caixa_diaristas (
+                            mapa_id, nome, valor, observacao, recibo_recebido
+                        )
+                        SELECT
+                            m.id,
+                            COALESCE(NULLIF(BTRIM(m.motorista), ''), 'Diarista'),
+                            m.diarista,
+                            'Migrado do campo legado de diarista',
+                            m.diarista_recibo_recebido
+                        FROM {}.financeiro_caixa_mapas AS m
+                        WHERE m.diarista > 0
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM {}.financeiro_caixa_diaristas AS d
+                              WHERE d.mapa_id = m.id
+                                AND LOWER(BTRIM(d.nome)) = LOWER(COALESCE(NULLIF(BTRIM(m.motorista), ''), 'Diarista'))
+                                AND d.valor = m.diarista
+                                AND d.recibo_recebido = m.diarista_recibo_recebido
+                          )
+                        """
+                    ).format(
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                        sql.Identifier(self.schema),
+                    )
+                )
+                cur.execute(
+                    sql.SQL(
+                        """
+                        UPDATE {}.financeiro_caixa_mapas
+                        SET diarista = 0,
+                            diarista_recibo_recebido = TRUE,
+                            updated_at = NOW()
+                        WHERE diarista > 0
+                        """
+                    ).format(sql.Identifier(self.schema))
+                )
+                cur.execute(
+                    sql.SQL(
                         "CREATE INDEX IF NOT EXISTS financeiro_caixa_mapas_date_idx ON {}.financeiro_caixa_mapas (caixa_date, filial)"
                     ).format(sql.Identifier(self.schema))
                 )
@@ -285,13 +325,25 @@ class AdminFinanceiroService:
         dinheiro = _normalize_dinheiro(payload.get("dinheiro") or {})
         dirty_fields = _normalize_financeiro_dirty_fields(payload.get("dirty_fields"))
         dirty_flags = _financeiro_manual_update_flags(dirty_fields)
+        detail_fields = _normalize_financeiro_detail_fields(payload.get("detail_fields"))
+        if not detail_fields:
+            detail_fields = {"transferencias", "despesas", "vales", "diaristas"}
+        vales = payload.get("vales") or []
+        diaristas = payload.get("diaristas") or []
+        if "vales" in detail_fields:
+            _validate_financeiro_people_rows(vales, label="Vale")
+        if "diaristas" in detail_fields:
+            diaristas = _merge_legacy_diarista(payload, diaristas)
+            _validate_financeiro_people_rows(diaristas, label="Diarista")
+            dirty_flags["diarista"] = True
+            dirty_flags["diarista_recibo_recebido"] = True
         dinheiro_promax_payload = _decimal(payload.get("dinheiro_promax"))
         total_promax_payload = dinheiro_promax_payload
         username = str((context or {}).get("username") or (context or {}).get("mode") or "")
         with self._connect() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
-                diarista = _decimal(payload.get("diarista"))
-                diarista_recibo_recebido = _bool(payload.get("diarista_recibo_recebido"), default=True)
+                diarista = Decimal("0")
+                diarista_recibo_recebido = True
                 motorista = str(payload.get("motorista") or "").strip()
                 placa = str(payload.get("placa") or "").strip()
                 ajudante1 = str(payload.get("ajudante1") or "").strip()
@@ -398,10 +450,15 @@ class AdminFinanceiroService:
                 )
                 row = dict(cur.fetchone() or {})
                 mapa_id = int(row["id"])
-                self._replace_details(cur, mapa_id, "transferencias", payload.get("transferencias") or [])
-                self._replace_details(cur, mapa_id, "despesas", payload.get("despesas") or [])
-                self._replace_details(cur, mapa_id, "vales", payload.get("vales") or [])
-                self._replace_details(cur, mapa_id, "diaristas", payload.get("diaristas") or [])
+                detail_rows = {
+                    "transferencias": payload.get("transferencias") or [],
+                    "despesas": payload.get("despesas") or [],
+                    "vales": vales,
+                    "diaristas": diaristas,
+                }
+                for detail_key in ("transferencias", "despesas", "vales", "diaristas"):
+                    if detail_key in detail_fields:
+                        self._replace_details(cur, mapa_id, detail_key, detail_rows[detail_key])
                 details = self._load_details(cur, [mapa_id])
             conn.commit()
         return {"ok": True, "map": self._serialize_map(row, details)}
@@ -1000,7 +1057,7 @@ class AdminFinanceiroService:
             diaristas=diaristas,
             vales=vales,
         )
-        vales_total = _sum_detail([item for item in vales if not _is_vale_chapa(item)]) + _sum_detail(vales_diaristas)
+        vales_total = _sum_detail(vales) + _sum_detail(vales_diaristas)
         diaristas_total = (diarista_avulso if diarista_avulso_com_recibo else Decimal("0")) + _sum_detail(diaristas_com_recibo)
         alimentacao_total = (
             hospedagem_total
@@ -1940,8 +1997,55 @@ def _sum_detail(rows: list[dict[str, Any]]) -> Decimal:
     return sum((_decimal(row.get("valor")) for row in rows), Decimal("0"))
 
 
-def _is_vale_chapa(row: dict[str, Any]) -> bool:
-    return str(row.get("observacao") or "").strip().lower() == "vale de chapa"
+def _normalize_financeiro_detail_fields(value: Any) -> set[str]:
+    supported = {"transferencias", "despesas", "vales", "diaristas"}
+    return {
+        item for item in (str(raw or "").strip() for raw in (value or []))
+        if item in supported
+    }
+
+
+def _validate_financeiro_people_rows(rows: Any, *, label: str) -> None:
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail=f"Lista de {label.lower()}s invalida.")
+    for index, row in enumerate(rows, start=1):
+        if not isinstance(row, dict):
+            raise HTTPException(status_code=400, detail=f"{label} {index} invalido.")
+        nome = str(row.get("nome") or "").strip()
+        if not nome:
+            raise HTTPException(status_code=400, detail=f"Informe o nome do {label.lower()} {index}.")
+        if len(nome) > 200:
+            raise HTTPException(status_code=400, detail=f"Nome do {label.lower()} {index} muito longo.")
+        valor = _decimal(row.get("valor"))
+        if not valor.is_finite() or valor <= 0:
+            raise HTTPException(status_code=400, detail=f"Valor do {label.lower()} {index} deve ser maior que zero.")
+        if valor > Decimal("999999999999.99"):
+            raise HTTPException(status_code=400, detail=f"Valor do {label.lower()} {index} excede o limite permitido.")
+
+
+def _merge_legacy_diarista(payload: dict[str, Any], diaristas: Any) -> list[dict[str, Any]]:
+    rows = [dict(row) for row in diaristas if isinstance(row, dict)] if isinstance(diaristas, list) else []
+    valor = _decimal(payload.get("diarista"))
+    if not valor.is_finite() or valor <= 0:
+        return rows
+    nome = str(payload.get("motorista") or "").strip() or "Diarista"
+    recibo = _bool(payload.get("diarista_recibo_recebido"), default=True)
+    already_present = any(
+        str(row.get("nome") or "").strip().lower() == nome.lower()
+        and _decimal(row.get("valor")) == valor
+        and _bool(row.get("recibo_recebido"), default=True) == recibo
+        for row in rows
+    )
+    if not already_present:
+        rows.append(
+            {
+                "nome": nome,
+                "valor": valor,
+                "observacao": "Migrado do campo legado de diarista",
+                "recibo_recebido": recibo,
+            }
+        )
+    return rows
 
 
 def _diarista_vale_rows(

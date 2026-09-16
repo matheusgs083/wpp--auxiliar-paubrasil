@@ -7176,7 +7176,7 @@
         return total + financeiroNumber(denom) * Math.max(0, Math.trunc(financeiroNumber(map.dinheiro && map.dinheiro[denom])));
       }, 0);
       const sumRows = rows => (Array.isArray(rows) ? rows : []).reduce((total, row) => total + financeiroNumber(row.valor), 0);
-      const valesCalculados = (Array.isArray(map.vales) ? map.vales : []).filter(row => !financeiroIsValeChapa(row));
+      const valesCalculados = Array.isArray(map.vales) ? map.vales : [];
       const valesExistentes = Array.isArray(map.vales) ? map.vales : [];
       const hasValeMesmoNomeValor = (nome, valor) => valesExistentes.some(row => (
         financeiroTextKey(row.nome) === financeiroTextKey(nome)
@@ -7436,6 +7436,7 @@
       map.despesas = financeiroCollectRows(root, "despesas");
       map.vales = financeiroCollectRows(root, "vales");
       map.diaristas = financeiroCollectRows(root, "diaristas");
+      map.detail_fields = ["transferencias", "despesas", "vales", "diaristas"];
       map.total_promax = map.dinheiro_promax;
       map.dirty_fields = financeiroNormalizeDirtyFields(map.dirty_fields);
       return map;
@@ -8069,8 +8070,13 @@
       const rows = [];
       maps.forEach(map => {
         (map.vales || []).forEach((vale, index) => {
-          rows.push({ map, vale, index });
+          rows.push({ map, vale, index, persisted: true });
         });
+        (map.vales_consolidados || [])
+          .filter(vale => vale && vale.origem === "diarista_sem_recibo")
+          .forEach(vale => {
+            rows.push({ map, vale, index: -1, persisted: false });
+          });
       });
       return rows;
     }
@@ -8090,8 +8096,9 @@
       const el = document.getElementById("financeiroEditor");
       if (!el) return;
       const rows = financeiroValeRows();
+      state.financeiro.valeReviewChangedMapIds = new Set();
       const total = rows.reduce((sum, row) => sum + financeiroNumber(row.vale.valor), 0);
-      const body = rows.length ? rows.map(({ map: itemMap, vale, index }) => `
+      const body = rows.length ? rows.map(({ map: itemMap, vale }, rowIndex) => `
         <tr>
           <td><strong>${escapeHtml(itemMap.mapa || "-")}</strong></td>
           <td>${escapeHtml(itemMap.motorista || "-")}</td>
@@ -8099,7 +8106,7 @@
           <td class="text-end fw-bold">${escapeHtml(formatMoneyText(vale.valor || 0))}</td>
           <td class="text-center">
             <label class="finance-review-check">
-              <input class="form-check-input" type="checkbox" data-financeiro-vale-map="${escapeHtml(itemMap.id)}" data-financeiro-vale-index="${index}" data-financeiro-vale-field="assinado" ${vale.assinado ? "checked" : ""}>
+              <input class="form-check-input" type="checkbox" data-financeiro-vale-row-index="${rowIndex}" data-financeiro-vale-field="assinado" ${vale.assinado ? "checked" : ""}>
             </label>
           </td>
         </tr>
@@ -8134,11 +8141,25 @@
       `;
       el.querySelectorAll("[data-financeiro-vale-field]").forEach(input => {
         input.addEventListener("change", () => {
-          const targetMap = (state.financeiro.payload.maps || []).find(item => String(item.id) === String(input.dataset.financeiroValeMap));
-          if (!targetMap || !Array.isArray(targetMap.vales)) return;
-          const vale = targetMap.vales[Number(input.dataset.financeiroValeIndex)];
-          if (!vale) return;
-          vale[input.dataset.financeiroValeField] = input.checked;
+          const reviewRow = rows[Number(input.dataset.financeiroValeRowIndex)];
+          if (!reviewRow || !reviewRow.map || !reviewRow.vale) return;
+          const targetMap = reviewRow.map;
+          targetMap.vales = Array.isArray(targetMap.vales) ? targetMap.vales : [];
+          let vale = reviewRow.persisted ? targetMap.vales[reviewRow.index] : null;
+          if (!vale) {
+            vale = {
+              nome: reviewRow.vale.nome || targetMap.motorista || "Diarista",
+              valor: financeiroNumber(reviewRow.vale.valor),
+              observacao: reviewRow.vale.observacao || "vale de chapa",
+              assinado: false
+            };
+            targetMap.vales.push(vale);
+            reviewRow.persisted = true;
+            reviewRow.index = targetMap.vales.length - 1;
+          }
+          vale.assinado = input.checked;
+          reviewRow.vale.assinado = input.checked;
+          state.financeiro.valeReviewChangedMapIds.add(String(targetMap.id));
           state.financeiro.draft = Object.assign({}, map, { tipo_bloco: "vale_conferencia" });
         });
       });
@@ -8211,7 +8232,10 @@
       }
       try {
         for (const map of changedMaps) {
-          const payload = Object.assign({}, map, { mapa: map.mapa_key || map.mapa });
+          const payload = Object.assign({}, map, {
+            mapa: map.mapa_key || map.mapa,
+            detail_fields: ["despesas"]
+          });
           await req(CONFIG.endpoints.financeiro.mapas, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -8233,14 +8257,20 @@
     async function financeiroSaveValeReview() {
       if (!financeiroRequireFilial()) return;
       const maps = state.financeiro.payload && Array.isArray(state.financeiro.payload.maps) ? state.financeiro.payload.maps : [];
-      const changedMaps = maps.filter(map => Array.isArray(map.vales) && map.vales.length);
+      const changedIds = state.financeiro.valeReviewChangedMapIds instanceof Set
+        ? state.financeiro.valeReviewChangedMapIds
+        : new Set();
+      const changedMaps = maps.filter(map => changedIds.has(String(map.id)));
       if (!changedMaps.length) {
-        addLog("Nenhum vale para conferir neste caixa.", "warn");
+        addLog("Nenhuma alteracao de vale para salvar.", "warn");
         return;
       }
       try {
         for (const map of changedMaps) {
-          const payload = Object.assign({}, map, { mapa: map.mapa_key || map.mapa });
+          const payload = Object.assign({}, map, {
+            mapa: map.mapa_key || map.mapa,
+            detail_fields: ["vales"]
+          });
           await req(CONFIG.endpoints.financeiro.mapas, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -8299,7 +8329,7 @@
       if (type === "diaristas") {
         return `<div class="finance-diarista-row" data-financeiro-row="${type}">
           <input class="form-control form-control-sm" data-financeiro-cell="nome" placeholder="Nome" value="${escapeHtml(row.nome || "")}">
-          <input class="form-control form-control-sm" type="number" step="0.01" data-financeiro-cell="valor" placeholder="Valor" value="${escapeHtml(String(row.valor || ""))}">
+          <input class="form-control form-control-sm" type="number" min="0.01" step="0.01" data-financeiro-cell="valor" placeholder="Valor" value="${escapeHtml(String(row.valor || ""))}">
           <label class="form-check small fw-semibold d-flex align-items-center gap-2 mb-0">
             <input class="form-check-input m-0" type="checkbox" data-financeiro-cell="recibo_recebido" ${row.recibo_recebido === false ? "" : "checked"}>
             Recibo recebido
@@ -8307,11 +8337,16 @@
           <button type="button" class="btn btn-outline-danger btn-sm finance-row-remove" data-financeiro-remove="${type}" data-index="${index}"><i class="bi bi-x"></i></button>
         </div>`;
       }
+      const assinadoField = type === "vales"
+        ? `<input type="hidden" data-financeiro-cell="assinado" value="${row.assinado ? "true" : "false"}">`
+        : "";
+      const positiveValue = type === "vales" ? ' min="0.01"' : "";
       return `<div class="finance-detail-row" data-financeiro-row="${type}">
         <input class="form-control form-control-sm" data-financeiro-cell="nome" placeholder="${type === "despesas" ? "Ex: almoco, janta, chapa" : "Nome"}" value="${escapeHtml(row.nome || "")}">
-        <input class="form-control form-control-sm" type="number" step="0.01" data-financeiro-cell="valor" placeholder="Valor" value="${escapeHtml(String(row.valor || ""))}">
+        <input class="form-control form-control-sm" type="number"${positiveValue} step="0.01" data-financeiro-cell="valor" placeholder="Valor" value="${escapeHtml(String(row.valor || ""))}">
         <button type="button" class="btn btn-outline-danger btn-sm finance-row-remove" data-financeiro-remove="${type}" data-index="${index}"><i class="bi bi-x"></i></button>
         <input class="form-control form-control-sm grid-column-full" data-financeiro-cell="observacao" placeholder="Observacao" value="${escapeHtml(row.observacao || "")}">
+        ${assinadoField}
       </div>`;
     }
 
@@ -8333,14 +8368,33 @@
       const map = state.financeiro.draft || financeiroBlankMap();
       const diaristas = Array.isArray(map.diaristas) ? map.diaristas : [];
       const valesBase = (Array.isArray(map.vales) ? map.vales : []).filter(row => !financeiroIsValeChapa(row));
-      const novosVales = diaristas
+      const valesChapaExistentes = (Array.isArray(map.vales) ? map.vales : []).filter(financeiroIsValeChapa);
+      const novosVales = [];
+      diaristas
         .filter(row => financeiroNumber(row.valor) > 0 && row.recibo_recebido === false)
-        .map(row => ({
-          nome: String(row.nome || map.motorista || "").trim(),
-          valor: row.valor,
-          observacao: "vale de chapa",
-          assinado: false
-        }));
+        .forEach(row => {
+          const nome = String(row.nome || map.motorista || "").trim();
+          const valor = financeiroNumber(row.valor);
+          const valeManual = valesBase.some(vale => (
+            financeiroTextKey(vale.nome) === financeiroTextKey(nome)
+            && Math.abs(financeiroNumber(vale.valor) - valor) < 0.01
+          ));
+          const valeNovo = novosVales.some(vale => (
+            financeiroTextKey(vale.nome) === financeiroTextKey(nome)
+            && Math.abs(financeiroNumber(vale.valor) - valor) < 0.01
+          ));
+          if (valeManual || valeNovo) return;
+          const existente = valesChapaExistentes.find(vale => (
+            financeiroTextKey(vale.nome) === financeiroTextKey(nome)
+            && Math.abs(financeiroNumber(vale.valor) - valor) < 0.01
+          ));
+          novosVales.push({
+            nome,
+            valor,
+            observacao: "vale de chapa",
+            assinado: Boolean(existente && existente.assinado)
+          });
+        });
       map.vales = valesBase.concat(novosVales);
       state.financeiro.draft = map;
       addLog(`${novosVales.length} vale(s) de chapa gerado(s).`, novosVales.length ? "ok" : "warn");

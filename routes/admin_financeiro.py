@@ -62,6 +62,7 @@ class AdminFinanceiroMapaRequest(BaseModel):
     transferencias: list[dict[str, Any]] = Field(default_factory=list)
     despesas: list[dict[str, Any]] = Field(default_factory=list)
     vales: list[dict[str, Any]] = Field(default_factory=list)
+    detail_fields: list[str] = Field(default_factory=list)
     observacao: str = ""
     dirty_fields: list[str] = Field(default_factory=list)
 

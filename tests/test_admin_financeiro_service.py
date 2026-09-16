@@ -1,10 +1,15 @@
 from datetime import date, datetime
 
+import pytest
+from fastapi import HTTPException
+
 from bot_api.services.admin_financeiro_service import (
     AdminFinanceiroService,
     _build_rotas_dia_031120,
     _financeiro_manual_update_flags,
+    _merge_legacy_diarista,
     _normalize_financeiro_dirty_fields,
+    _validate_financeiro_people_rows,
 )
 
 
@@ -344,3 +349,83 @@ def test_financeiro_diarista_sem_recibo_nao_duplica_vale_manual_mesmo_nome_valor
     assert result["vales_total"] == 80.0
     assert result["total_apurado"] == 1704.0
     assert result["diferenca"] == -21.77
+
+
+def test_financeiro_vale_chapa_persistido_conta_uma_vez() -> None:
+    service = AdminFinanceiroService.__new__(AdminFinanceiroService)
+    service.filial_labels = {"3": "Patos"}
+    row = {
+        "id": 1,
+        "caixa_date": date(2026, 9, 16),
+        "filial": "3",
+        "tipo_bloco": "mapa",
+        "mapa": "95001",
+        "mapa_ref": "95001",
+        "motorista": "MOTORISTA",
+        "dinheiro_promax": "80",
+        "total_promax": "80",
+        "credito_conta": "0",
+        "dinheiro": {},
+        "moedas": "0",
+        "boletos_rota": "0",
+        "boletos_recebido_qtd": "0",
+        "diarista": "0",
+        "diarista_recibo_recebido": True,
+        "pernoite": "0",
+        "hospedagem": "0",
+        "janta": "0",
+        "almoco": "0",
+        "cafe": "0",
+        "observacao": "",
+        "updated_at": datetime(2026, 9, 16, 12, 0),
+    }
+    vale = {
+        "nome": "CHAPA 1",
+        "valor": "80",
+        "observacao": "vale de chapa",
+        "assinado": True,
+    }
+    details = {
+        "transferencias": {},
+        "despesas": {},
+        "vales": {1: [vale]},
+        "diaristas": {1: [{"nome": "CHAPA 1", "valor": "80", "recibo_recebido": False}]},
+    }
+
+    result = service._serialize_map(row, details)
+
+    assert result["vales_total"] == 80.0
+    assert result["total_apurado"] == 80.0
+    assert result["vales_consolidados"] == [vale]
+
+
+def test_financeiro_mescla_diarista_legado_sem_duplicar() -> None:
+    payload = {
+        "motorista": "CHAPA 1",
+        "diarista": "80,00",
+        "diarista_recibo_recebido": False,
+    }
+
+    result = _merge_legacy_diarista(payload, [])
+    repeated = _merge_legacy_diarista(payload, result)
+
+    assert len(result) == 1
+    assert result[0]["nome"] == "CHAPA 1"
+    assert result[0]["valor"] == 80
+    assert result[0]["recibo_recebido"] is False
+    assert repeated == result
+
+
+@pytest.mark.parametrize("valor", ["0", "-1", "abc", "NaN"])
+def test_financeiro_rejeita_vale_com_valor_invalido(valor: str) -> None:
+    with pytest.raises(HTTPException) as raised:
+        _validate_financeiro_people_rows([{"nome": "CHAPA 1", "valor": valor}], label="Vale")
+
+    assert raised.value.status_code == 400
+
+
+def test_financeiro_rejeita_diarista_sem_nome() -> None:
+    with pytest.raises(HTTPException) as raised:
+        _validate_financeiro_people_rows([{"nome": " ", "valor": "80"}], label="Diarista")
+
+    assert raised.value.status_code == 400
