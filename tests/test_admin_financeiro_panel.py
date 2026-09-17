@@ -32,3 +32,19 @@ def test_financeiro_refresh_preserva_editor_com_alteracoes_nao_salvas() -> None:
     assert "function financeiroHasPendingEditorChanges()" in html
     assert "financeiroRender({ preserveEditor: true });" in html
     assert "financeiroRender({ preserveEditor: !refreshDraft });" in html
+
+
+def test_financeiro_ignora_linha_de_vale_vazia_com_assinatura_oculta() -> None:
+    html = TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    assert 'if (type === "diaristas" || type === "vales")' in html
+    assert 'return ["nome", "valor", "observacao"].some' in html
+
+
+def test_painel_bloqueia_alteracao_de_numero_pela_roda_do_mouse() -> None:
+    html = TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    assert "function setupNumberInputWheelGuard()" in html
+    assert 'target.type !== "number"' in html
+    assert 'event.preventDefault();' in html
+    assert 'setupNumberInputWheelGuard();' in html

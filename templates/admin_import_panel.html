@@ -7450,11 +7450,19 @@
         });
         return item;
       }).filter(item => {
-        if (type === "diaristas") {
+        if (type === "diaristas" || type === "vales") {
           return ["nome", "valor", "observacao"].some(key => String(item[key] || "").trim());
         }
         return Object.values(item).some(value => typeof value === "boolean" ? value : String(value || "").trim());
       });
+    }
+
+    function setupNumberInputWheelGuard() {
+      document.addEventListener("wheel", event => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement) || target.type !== "number") return;
+        event.preventDefault();
+      }, { passive: false });
     }
 
     function financeiroRefreshEditorComputedValues(map) {
@@ -8966,6 +8974,7 @@
 
     function init() {
       applyTheme(localStorage.getItem("bot_admin_theme") || "dark");
+      setupNumberInputWheelGuard();
       setupRecolhasPane();
       setupPayipPane();
       selectInitialPanelPage();
