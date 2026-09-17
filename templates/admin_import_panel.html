@@ -7492,7 +7492,12 @@
       financeiroRefreshEditorComputedValues(state.financeiro.draft);
     }
 
-    function financeiroRender() {
+    function financeiroHasPendingEditorChanges() {
+      const draft = state.financeiro.draft;
+      return Boolean(draft && financeiroNormalizeDirtyFields(draft.dirty_fields).length);
+    }
+
+    function financeiroRender({ preserveEditor = false } = {}) {
       const els = financeiroElements();
       if (!els.editor) return;
       const payload = state.financeiro.payload || { maps: [], summary: {}, filiais: [] };
@@ -7515,7 +7520,9 @@
         const selected = (payload.maps || []).find(item => String(item.id) === String(state.financeiro.selectedId));
         state.financeiro.draft = selected ? JSON.parse(JSON.stringify(selected)) : financeiroBlankMap();
       }
-      financeiroRenderEditor(state.financeiro.draft);
+      if (!preserveEditor || !financeiroHasPendingEditorChanges()) {
+        financeiroRenderEditor(state.financeiro.draft);
+      }
     }
 
     function financeiroRenderFiliais(filiais) {
@@ -8718,7 +8725,7 @@
       if (els.filial && els.filial.value) params.set("filial", els.filial.value);
       if (refreshDraft) state.financeiro.draft = null;
       state.financeiro.loading = true;
-      financeiroRender();
+      financeiroRender({ preserveEditor: true });
       try {
         const [caixaResult, workerResult] = await Promise.allSettled([
           req(`${CONFIG.endpoints.financeiro.caixas}?${params.toString()}`, { timeoutMs: 20000 }),
@@ -8753,7 +8760,7 @@
         if (!silent) addLog(`Falha ao carregar fechamento financeiro: ${err.message}`, "err");
       } finally {
         state.financeiro.loading = false;
-        financeiroRender();
+        financeiroRender({ preserveEditor: !refreshDraft });
       }
     }
 

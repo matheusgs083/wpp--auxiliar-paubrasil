@@ -24,3 +24,11 @@ def test_financeiro_conferencia_exibe_vale_virtual_de_diarista() -> None:
 
     assert 'vale.origem === "diarista_sem_recibo"' in html
     assert "targetMap.vales.push(vale)" in html
+
+
+def test_financeiro_refresh_preserva_editor_com_alteracoes_nao_salvas() -> None:
+    html = TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    assert "function financeiroHasPendingEditorChanges()" in html
+    assert "financeiroRender({ preserveEditor: true });" in html
+    assert "financeiroRender({ preserveEditor: !refreshDraft });" in html
