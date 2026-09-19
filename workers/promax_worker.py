@@ -548,6 +548,30 @@ class PromaxWorker:
         finally:
             stop_keepalive()
 
+    def _run_started_at_for_auto_import(
+        self,
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+        *,
+        routine_id: str,
+        event_prefix: str,
+    ) -> float | None:
+        run_started_at_epoch = _promax_run_started_at_epoch(result.details)
+        if run_started_at_epoch is not None:
+            return run_started_at_epoch
+        self._send_log(
+            job_id,
+            lease_token,
+            (
+                f"Importacao automatica {routine_id} ignorada: o resultado do driver nao "
+                "informou o inicio da execucao para validar os arquivos atuais."
+            ),
+            "warning",
+            {"event": f"{event_prefix}_missing_run_start"},
+        )
+        return None
+
     def _import_030206_boletos_if_needed(
         self,
         job: Mapping[str, Any],
@@ -589,22 +613,39 @@ class PromaxWorker:
                 {"event": "promax_030206_auto_import_missing_dir", "source_dir": str(source_dir)},
             )
             return
+        run_started_at_epoch = self._run_started_at_for_auto_import(
+            job_id,
+            lease_token,
+            result,
+            routine_id="030206_BOT",
+            event_prefix="promax_030206_auto_import",
+        )
+        if run_started_at_epoch is None:
+            return
+        no_content_units = _promax_no_content_units(result.details)
         units = requested_units or [
             match.group(1)
             for pdf_path in source_dir.glob("03,02,06_*.pdf")
-            if (match := re.fullmatch(r"03,02,06_([A-Za-z0-9_.-]+)\.pdf", pdf_path.name))
+            if (
+                _arquivo_pertence_execucao_atual(pdf_path, run_started_at_epoch)
+                and (match := re.fullmatch(r"03,02,06_([A-Za-z0-9_.-]+)\.pdf", pdf_path.name))
+            )
         ]
 
         imported = 0
         missing: list[str] = []
         failed: list[str] = []
+        skipped_no_content: list[str] = []
         seen_pdf_hashes: dict[str, str] = {}
         for unit in units:
             filial = unit_filial_map.get(unit)
             if not filial:
                 continue
+            if unit in no_content_units:
+                skipped_no_content.append(unit)
+                continue
             pdf_path = source_dir / f"03,02,06_{unit}.pdf"
-            if not pdf_path.is_file():
+            if not pdf_path.is_file() or not _arquivo_pertence_execucao_atual(pdf_path, run_started_at_epoch):
                 missing.append(unit)
                 continue
             try:
@@ -687,6 +728,7 @@ class PromaxWorker:
                 "imported": imported,
                 "failed_units": failed,
                 "missing_units": missing,
+                "no_content_units": skipped_no_content,
             },
         )
 
@@ -731,20 +773,43 @@ class PromaxWorker:
                 {"event": "promax_020304_auto_import_missing_dir", "source_dir": str(source_dir)},
             )
             return
+        run_started_at_epoch = self._run_started_at_for_auto_import(
+            job_id,
+            lease_token,
+            result,
+            routine_id="020304_BOT",
+            event_prefix="promax_020304_auto_import",
+        )
+        if run_started_at_epoch is None:
+            return
+        no_content_units = _promax_no_content_units(result.details)
 
         if requested_units:
             units = requested_units
         else:
-            units = _discover_promax_units_from_files(source_dir, unit_filial_map=unit_filial_map, suffix=".csv")
+            units = _discover_promax_units_from_files(
+                source_dir,
+                unit_filial_map=unit_filial_map,
+                suffix=".csv",
+                min_mtime_epoch=run_started_at_epoch,
+            )
 
         imported = 0
         missing: list[str] = []
         failed: list[str] = []
+        skipped_no_content: list[str] = []
         for unit in units:
             filial = unit_filial_map.get(unit)
             if not filial:
                 continue
-            csv_path = _find_promax_020304_csv(source_dir, unit)
+            if unit in no_content_units:
+                skipped_no_content.append(unit)
+                continue
+            csv_path = _find_promax_020304_csv(
+                source_dir,
+                unit,
+                min_mtime_epoch=run_started_at_epoch,
+            )
             if csv_path is None:
                 missing.append(unit)
                 continue
@@ -802,6 +867,7 @@ class PromaxWorker:
                 "imported": imported,
                 "failed_units": failed,
                 "missing_units": missing,
+                "no_content_units": skipped_no_content,
             },
         )
 
@@ -846,24 +912,40 @@ class PromaxWorker:
                 {"event": "promax_031120_auto_import_missing_dir", "source_dir": str(source_dir)},
             )
             return
+        run_started_at_epoch = self._run_started_at_for_auto_import(
+            job_id,
+            lease_token,
+            result,
+            routine_id="031120_BOT",
+            event_prefix="promax_031120_auto_import",
+        )
+        if run_started_at_epoch is None:
+            return
+        no_content_units = _promax_no_content_units(result.details)
 
         units = requested_units or _discover_promax_units_from_files(
             source_dir,
             unit_filial_map=unit_filial_map,
             suffix=".csv",
+            min_mtime_epoch=run_started_at_epoch,
         )
 
         imported = 0
         missing: list[str] = []
         failed: list[str] = []
+        skipped_no_content: list[str] = []
         for unit in units:
             filial = unit_filial_map.get(unit)
             if not filial:
+                continue
+            if unit in no_content_units:
+                skipped_no_content.append(unit)
                 continue
             csv_path = _find_promax_csv_by_unit(
                 source_dir,
                 unit,
                 preferred_tokens=("031120", "31120"),
+                min_mtime_epoch=run_started_at_epoch,
             )
             if csv_path is None:
                 missing.append(unit)
@@ -922,6 +1004,7 @@ class PromaxWorker:
                 "imported": imported,
                 "failed_units": failed,
                 "missing_units": missing,
+                "no_content_units": skipped_no_content,
             },
         )
 
@@ -964,8 +1047,21 @@ class PromaxWorker:
                 {"event": "promax_03114902_auto_import_missing_dir", "source_dir": str(source_dir)},
             )
             return
+        run_started_at_epoch = self._run_started_at_for_auto_import(
+            job_id,
+            lease_token,
+            result,
+            routine_id="03114902_BOT",
+            event_prefix="promax_03114902_auto_import",
+        )
+        if run_started_at_epoch is None:
+            return
 
-        csv_path = _find_first_csv_by_tokens(source_dir, preferred_tokens=("03114902", "3114902", "geo"))
+        csv_path = _find_first_csv_by_tokens(
+            source_dir,
+            preferred_tokens=("03114902", "3114902", "geo"),
+            min_mtime_epoch=run_started_at_epoch,
+        )
         if csv_path is None:
             self._send_log(
                 job_id,
@@ -1063,11 +1159,26 @@ class PromaxWorker:
                 {"event": "promax_120601_auto_import_missing_dir", "source_dir": str(source_dir)},
             )
             return
+        run_started_at_epoch = self._run_started_at_for_auto_import(
+            job_id,
+            lease_token,
+            result,
+            routine_id="120601_BOT",
+            event_prefix="promax_120601_auto_import",
+        )
+        if run_started_at_epoch is None:
+            return
+        no_content_units = _promax_no_content_units(result.details)
 
         csv_paths = sorted(
             path
             for path in source_dir.glob("*.csv")
-            if path.is_file() and not path.name.startswith(".")
+            if (
+                path.is_file()
+                and not path.name.startswith(".")
+                and _arquivo_pertence_execucao_atual(path, run_started_at_epoch)
+                and not _arquivo_de_unidade_sem_conteudo(path, no_content_units)
+            )
         )
         if not csv_paths:
             self._send_log(
@@ -1266,12 +1377,22 @@ class PromaxWorker:
             )
             return
 
+        no_content_units = _promax_no_content_units(result.details)
+        run_started_at_epoch = self._run_started_at_for_auto_import(
+            job_id,
+            lease_token,
+            result,
+            routine_id="030111_BOT",
+            event_prefix="promax_030111_auto_import",
+        )
+        if run_started_at_epoch is None:
+            return
         units = requested_units or _discover_promax_units_from_files(
             source_dir,
             unit_filial_map=unit_filial_map,
             suffix=".csv",
+            min_mtime_epoch=run_started_at_epoch,
         )
-        no_content_units = _promax_no_content_units(result.details)
 
         imported = 0
         missing: list[str] = []
@@ -1288,6 +1409,7 @@ class PromaxWorker:
                 source_dir,
                 unit,
                 preferred_tokens=("030111", "30111", "critica"),
+                min_mtime_epoch=run_started_at_epoch,
             )
             if csv_path is None:
                 missing.append(unit)
@@ -1664,9 +1786,28 @@ class PromaxWorker:
                 {"event": f"{event_prefix}_missing_dir", "source_dir": str(source_dir)},
             )
             return
+        run_started_at_epoch = self._run_started_at_for_auto_import(
+            job_id,
+            lease_token,
+            result,
+            routine_id=routine_id,
+            event_prefix=event_prefix,
+        )
+        if run_started_at_epoch is None:
+            return
+        no_content_units = _promax_no_content_units(result.details)
 
         csv_paths = sorted(
-            (path for path in source_dir.glob("*.csv") if path.is_file() and not path.name.startswith(".")),
+            (
+                path
+                for path in source_dir.glob("*.csv")
+                if (
+                    path.is_file()
+                    and not path.name.startswith(".")
+                    and _arquivo_pertence_execucao_atual(path, run_started_at_epoch)
+                    and not _arquivo_de_unidade_sem_conteudo(path, no_content_units)
+                )
+            ),
             key=lambda path: (path.stat().st_mtime, path.name),
         )
         if single_latest_file and csv_paths:
@@ -1819,12 +1960,23 @@ def _promax_030206_publication_dir(result_details: Mapping[str, Any] | None) -> 
     return _promax_publication_dir(result_details, "030206 bot")
 
 
-def _discover_promax_units_from_files(source_dir: Path, *, unit_filial_map: Mapping[str, str], suffix: str) -> list[str]:
+def _discover_promax_units_from_files(
+    source_dir: Path,
+    *,
+    unit_filial_map: Mapping[str, str],
+    suffix: str,
+    min_mtime_epoch: float | None = None,
+) -> list[str]:
     units: list[str] = []
     seen: set[str] = set()
     suffix_text = str(suffix or "").casefold()
     for path in sorted(source_dir.iterdir(), key=lambda item: item.name):
-        if not path.is_file() or path.name.startswith(".") or path.suffix.casefold() != suffix_text:
+        if (
+            not path.is_file()
+            or path.name.startswith(".")
+            or path.suffix.casefold() != suffix_text
+            or not _arquivo_pertence_execucao_atual(path, min_mtime_epoch)
+        ):
             continue
         name = path.name
         for unit in unit_filial_map:
@@ -1835,11 +1987,17 @@ def _discover_promax_units_from_files(source_dir: Path, *, unit_filial_map: Mapp
     return units
 
 
-def _find_promax_020304_csv(source_dir: Path, unit: str) -> Path | None:
+def _find_promax_020304_csv(
+    source_dir: Path,
+    unit: str,
+    *,
+    min_mtime_epoch: float | None = None,
+) -> Path | None:
     return _find_promax_csv_by_unit(
         source_dir,
         unit,
         preferred_tokens=("020304", "20304", "estoque"),
+        min_mtime_epoch=min_mtime_epoch,
     )
 
 
@@ -1848,6 +2006,7 @@ def _find_promax_csv_by_unit(
     unit: str,
     *,
     preferred_tokens: Sequence[str] = (),
+    min_mtime_epoch: float | None = None,
 ) -> Path | None:
     unit_text = str(unit or "").strip()
     if not unit_text:
@@ -1856,7 +2015,12 @@ def _find_promax_csv_by_unit(
     candidates = [
         path
         for path in source_dir.glob("*.csv")
-        if path.is_file() and not path.name.startswith(".") and unit_text in path.name
+        if (
+            path.is_file()
+            and not path.name.startswith(".")
+            and unit_text in path.name
+            and _arquivo_pertence_execucao_atual(path, min_mtime_epoch)
+        )
     ]
     if not candidates:
         return None
@@ -1874,12 +2038,17 @@ def _find_first_csv_by_tokens(
     source_dir: Path,
     *,
     preferred_tokens: Sequence[str] = (),
+    min_mtime_epoch: float | None = None,
 ) -> Path | None:
     tokens = tuple(str(token or "").casefold() for token in preferred_tokens if str(token or "").strip())
     candidates = [
         path
         for path in source_dir.glob("*.csv")
-        if path.is_file() and not path.name.startswith(".")
+        if (
+            path.is_file()
+            and not path.name.startswith(".")
+            and _arquivo_pertence_execucao_atual(path, min_mtime_epoch)
+        )
     ]
     if not candidates:
         return None
@@ -1911,6 +2080,30 @@ def _promax_no_content_units(result_details: Mapping[str, Any] | None) -> set[st
             if unit:
                 units.add(unit)
     return units
+
+
+def _promax_run_started_at_epoch(result_details: Mapping[str, Any] | None) -> float | None:
+    if not isinstance(result_details, Mapping):
+        return None
+    raw_value = result_details.get("run_started_at_epoch")
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _arquivo_pertence_execucao_atual(path: Path, min_mtime_epoch: float | None) -> bool:
+    if min_mtime_epoch is None:
+        return True
+    try:
+        return path.stat().st_mtime >= min_mtime_epoch
+    except OSError:
+        return False
+
+
+def _arquivo_de_unidade_sem_conteudo(path: Path, no_content_units: set[str]) -> bool:
+    return any(unit in path.name for unit in no_content_units)
 
 
 def _promax_publication_dir(result_details: Mapping[str, Any] | None, folder_name: str) -> Path | None:

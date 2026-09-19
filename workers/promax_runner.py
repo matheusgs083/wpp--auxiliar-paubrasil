@@ -100,6 +100,7 @@ class PromaxRunner:
         *,
         popen_factory: Callable[..., Any] = subprocess.Popen,
         monotonic: Callable[[], float] = time.monotonic,
+        wall_time: Callable[[], float] = time.time,
         taskkill_runner: Callable[..., Any] = subprocess.run,
         platform: str = os.name,
     ) -> None:
@@ -107,6 +108,7 @@ class PromaxRunner:
         self.config = config
         self._popen_factory = popen_factory
         self._monotonic = monotonic
+        self._wall_time = wall_time
         self._taskkill_runner = taskkill_runner
         self._platform = platform
 
@@ -266,6 +268,7 @@ class PromaxRunner:
     ) -> PromaxRunResult:
         command = self.build_command(job)
         on_line("stdout", f"Comando Promax: {subprocess.list2cmdline(command)}")
+        run_started_at_epoch = self._wall_time()
         process = self._popen_factory(
             command,
             cwd=str(self.config.driver_dir),
@@ -435,7 +438,10 @@ class PromaxRunner:
             stopped=stopped,
             error=error,
             message=result_message,
-            details=result_details,
+            details={
+                **result_details,
+                "run_started_at_epoch": run_started_at_epoch,
+            },
         )
 
 

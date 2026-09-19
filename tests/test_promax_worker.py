@@ -591,6 +591,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {
                                 str(source_dir.parent / "030206 bot"): str(source_dir),
@@ -645,6 +646,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {
                                 str(source_dir.parent / "030206 bot"): str(source_dir),
@@ -703,6 +705,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {
                                 str(source_dir.parent / "120601 bot"): str(source_dir),
@@ -758,6 +761,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "020304 bot"): str(source_dir)}
                         }
@@ -810,6 +814,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "020304 bot"): str(source_dir)}
                         }
@@ -861,6 +866,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "020304 bot"): str(source_dir)}
                         }
@@ -915,6 +921,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "031120 bot"): str(source_dir)}
                         }
@@ -960,12 +967,62 @@ class PromaxClientTests(unittest.TestCase):
                     status="success",
                     return_code=0,
                     child_pid=123,
-                    details={"metadata": {"publication_mapping": {str(source_dir.parent / "020220 bot"): str(source_dir)}}},
+                    details={
+                        "run_started_at_epoch": 1.0,
+                        "metadata": {"publication_mapping": {str(source_dir.parent / "020220 bot"): str(source_dir)}},
+                    },
                 ),
             )
 
         client.import_comodatos_csvs.assert_called_once()
         self.assertEqual(client.heartbeat_job.call_count, 2)
+
+    def test_020220_bot_imports_only_csvs_created_by_current_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            old_path = source_dir / "020220 bot - antigo.csv"
+            current_path = source_dir / "020220 bot - atual.csv"
+            old_path.write_bytes(b"Cliente;Valor\n1;10\n")
+            current_path.write_bytes(b"Cliente;Valor\n2;20\n")
+            os.utime(old_path, (100, 100))
+            os.utime(current_path, (300, 300))
+            client = Mock()
+            client.import_comodatos_csvs.return_value = {"ok": True, "result": {"rows": 1}}
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_020220_comodatos_if_needed(
+                {"payload": {"routines": ["020220_BOT"]}},
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "run_started_at_epoch": 200.0,
+                        "metadata": {"publication_mapping": {str(source_dir.parent / "020220 bot"): str(source_dir)}},
+                    },
+                ),
+            )
+
+        client.import_comodatos_csvs.assert_called_once()
+        self.assertEqual(
+            list(client.import_comodatos_csvs.call_args.kwargs["files"]),
+            ["020220 bot - atual.csv"],
+        )
 
     def test_0105070402_bot_imports_latest_dclientes_csv(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1005,6 +1062,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "0105070402 bot"): str(source_dir)}
                         }
@@ -1048,7 +1106,10 @@ class PromaxClientTests(unittest.TestCase):
                     status="success",
                     return_code=0,
                     child_pid=123,
-                    details={"metadata": {"publication_mapping": {str(source_dir.parent / "031702 bot"): str(source_dir)}}},
+                    details={
+                        "run_started_at_epoch": 1.0,
+                        "metadata": {"publication_mapping": {str(source_dir.parent / "031702 bot"): str(source_dir)}},
+                    },
                 ),
             )
 
@@ -1103,6 +1164,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}
                         }
@@ -1164,6 +1226,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}
                         }
@@ -1213,6 +1276,7 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=0,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}
                         }
@@ -1259,10 +1323,50 @@ class PromaxClientTests(unittest.TestCase):
                     return_code=10,
                     child_pid=123,
                     details={
+                        "run_started_at_epoch": 1.0,
                         "no_content_units": ["2210003"],
                         "metadata": {
                             "publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}
                         },
+                    },
+                ),
+            )
+
+        client.import_critica_csvs.assert_not_called()
+
+    def test_030111_bot_does_not_import_csv_older_than_current_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            stale_csv = source_dir / "030111 bot - nomeUnidade030111_2210003.csv"
+            stale_csv.write_bytes(b"Filial Origem;Valor\n3;10\n")
+            os.utime(stale_csv, (100, 100))
+            client = Mock()
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_030111_critica_if_needed(
+                {"payload": {"routines": ["030111_BOT"], "units": ["2210003"]}},
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "run_started_at_epoch": 200.0,
+                        "metadata": {"publication_mapping": {str(source_dir.parent / "030111 bot"): str(source_dir)}},
                     },
                 ),
             )
@@ -1346,6 +1450,7 @@ class PromaxRunnerTests(unittest.TestCase):
                 config,
                 popen_factory=popen,
                 monotonic=lambda: next(ticks, 3.0),
+                wall_time=lambda: 1234.5,
                 platform="nt",
             )
             lines: list[tuple[str, str]] = []
@@ -1396,6 +1501,7 @@ class PromaxRunnerTests(unittest.TestCase):
         )
         self.assertIs(popen.call_args.kwargs["shell"], False)
         self.assertEqual(result.status, "success")
+        self.assertEqual(result.details["run_started_at_epoch"], 1234.5)
         self.assertIn(("stdout", "linha stdout"), lines)
         self.assertIn(("stderr", "linha stderr"), lines)
 
