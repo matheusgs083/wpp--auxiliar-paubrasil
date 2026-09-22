@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -28,7 +29,7 @@ class LigaEntregaReportImportServiceTest(unittest.TestCase):
             self.assertEqual(validation["error_count"], 0)
             self.assertEqual(validation["file_count"], 2)
 
-            result = service.import_source(source).to_dict()
+            result = service.import_source(source, reference_date=date(2026, 9, 30)).to_dict()
             self.assertEqual(result["file_count"], 2)
             self.assertEqual(result["routine"], "030805_LIGA")
 
@@ -36,6 +37,33 @@ class LigaEntregaReportImportServiceTest(unittest.TestCase):
             self.assertIsNotNone(latest)
             self.assertEqual(latest["total_rows"], 2)
             self.assertIn("PATOS_21_09.csv", latest["source_file"])
+
+
+    def test_030805_history_upload_groups_files_by_filename_date(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "PATOS_20_09.csv").write_text("a;b\n1;2\n", encoding="utf-8")
+            (source / "SUME_20_09.csv").write_text("a;b\n3;4\n", encoding="utf-8")
+            (source / "PATOS_21_09.csv").write_text("a;b\n5;6\n", encoding="utf-8")
+            store = LigaEntregaReportStore(root / "store")
+            service = LigaEntregaReportImportService(
+                report_store=store,
+                dataset_name="liga_030805",
+                label="Liga Entrega - 03.08.05 Rotas do dia",
+                routine="030805_LIGA",
+                allowed_extensions={".csv", ".txt"},
+                expected_name_patterns=(r"^(PATOS|SUME)_\d{2}_\d{2}\.csv$",),
+                history_by_filename_date=True,
+            )
+
+            result = service.import_source(source, reference_date=date(2026, 9, 30)).to_dict()
+
+            self.assertEqual(result["file_count"], 3)
+            self.assertIn("2026-09-20", result["reference_date"])
+            self.assertTrue((root / "store" / "030805_LIGA" / "2026-09-20").exists())
+            self.assertTrue((root / "store" / "030805_LIGA" / "2026-09-21").exists())
 
     def test_validate_rejects_invalid_extension(self):
         with TemporaryDirectory() as tmp:

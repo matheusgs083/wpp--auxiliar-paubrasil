@@ -1510,8 +1510,19 @@ class PromaxWorker:
             return
 
         for routine_id, relative_folder in selected_specs:
-            source_dir = _promax_publication_dir_by_relative(result.details, relative_folder)
+            source_dir = _promax_liga_entrega_publication_dir(result.details, relative_folder)
             if source_dir is None:
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Upload automatico Liga Entrega ignorado para {routine_id}: pasta publicada nao localizada para {relative_folder}",
+                    "warning",
+                    {
+                        "event": "promax_liga_entrega_upload_missing_publication_dir",
+                        "routine": routine_id,
+                        "relative_folder": relative_folder,
+                    },
+                )
                 continue
             if not source_dir.is_dir():
                 self._send_log(
@@ -2241,6 +2252,57 @@ def _promax_publication_dir_by_relative(result_details: Mapping[str, Any] | None
             if destination_text:
                 return Path(destination_text)
     return None
+
+
+def _promax_liga_entrega_publication_dir(
+    result_details: Mapping[str, Any] | None,
+    relative_folder: str,
+) -> Path | None:
+    mapped_dir = _promax_publication_dir_by_relative(result_details, relative_folder)
+    if mapped_dir is not None:
+        return mapped_dir
+
+    wanted_parts = _normalized_path_parts(relative_folder)
+    if not wanted_parts:
+        return None
+    for root in _promax_liga_entrega_reports_roots():
+        candidate = root.joinpath(*relative_folder.replace("\\", "/").split("/"))
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def _promax_liga_entrega_reports_roots() -> tuple[Path, ...]:
+    configured_roots: list[Path] = []
+    for env_name in (
+        "PROMAX_LIGA_ENTREGA_REPORTS_ROOT",
+        "PROMAX_ENTREGA_REPORTS_ROOT",
+        "LIGA_ENTREGA_REPORTS_ROOT",
+    ):
+        raw_value = os.environ.get(env_name, "")
+        for chunk in raw_value.split(os.pathsep):
+            text = chunk.strip().strip('"')
+            if text:
+                configured_roots.append(Path(text))
+
+    year = datetime.now(PROMAX_LOCAL_TIMEZONE).date().year
+    default_roots = [
+        Path("M:/REVENDA") / f"SDPO {year}" / "DPO" / "PILAR ENTREGA" / "RELATORIOS",
+        Path(r"\\dc01n\publico_patos\REVENDA")
+        / f"SDPO {year}"
+        / "DPO"
+        / "PILAR ENTREGA"
+        / "RELATORIOS",
+    ]
+
+    roots: list[Path] = []
+    seen: set[str] = set()
+    for root in [*configured_roots, *default_roots]:
+        key = str(root).casefold()
+        if key and key not in seen:
+            roots.append(root)
+            seen.add(key)
+    return tuple(roots)
 
 
 def _normalized_path_parts(value: str) -> tuple[str, ...]:

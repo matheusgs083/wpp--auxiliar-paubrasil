@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,7 @@ class LigaEntregaReportImportService:
         allowed_extensions: set[str],
         min_files: int = 1,
         expected_name_patterns: tuple[str, ...] = (),
+        history_by_filename_date: bool = False,
     ) -> None:
         self.report_store = report_store
         self.dataset_name = str(dataset_name)
@@ -83,6 +85,7 @@ class LigaEntregaReportImportService:
         self.allowed_extensions = {ext.lower() for ext in allowed_extensions}
         self.min_files = max(1, int(min_files))
         self.expected_name_patterns = tuple(expected_name_patterns)
+        self.history_by_filename_date = bool(history_by_filename_date)
 
     def validate_source(self, source_path: str | Path) -> LigaEntregaImportValidation:
         files = self._source_files(source_path)
@@ -112,6 +115,8 @@ class LigaEntregaReportImportService:
             total_bytes += max(size, 0)
             if self.expected_name_patterns and not any(re.search(pattern, name, flags=re.IGNORECASE) for pattern in self.expected_name_patterns):
                 warnings.append(f"Nome fora do padrao esperado: {name}.")
+            if self.history_by_filename_date and self._date_from_filename(path.name, reference_date=None) is None:
+                errors.append(f"Nao foi possivel identificar a data pelo nome do arquivo: {name}.")
 
         if not files:
             errors.append("Nenhum arquivo encontrado para importar.")
@@ -149,15 +154,31 @@ class LigaEntregaReportImportService:
         if validation.error_count:
             raise ValueError("A validacao encontrou erros: " + "; ".join(validation.errors))
         files = self._source_files(source_path)
-        payload = {path.name: path.read_bytes() for path in files}
+        summary = self.summarize_source(source_path)
         ref_date = reference_date or datetime.now().date()
+
+        if self.history_by_filename_date:
+            manifests = self._store_history_by_filename_date(files, fallback_reference_date=ref_date)
+            return LigaEntregaImportSummary(
+                dataset_name=self.dataset_name,
+                label=self.label,
+                routine=self.routine,
+                file_count=summary.file_count,
+                total_rows=summary.total_rows,
+                total_bytes=summary.total_bytes,
+                filenames=summary.filenames,
+                reference_date=str(min(str(manifest.get("reference_date") or "") for manifest in manifests) if manifests else ref_date.isoformat()),
+                batch_id=",".join(str(manifest.get("batch_id") or "") for manifest in manifests),
+                stored_at=str(max(str(manifest.get("stored_at") or "") for manifest in manifests) if manifests else ""),
+            )
+
+        payload = {path.name: path.read_bytes() for path in files}
         manifest = self.report_store.store_batch(
             routine=self.routine,
             files=payload,
             reference_date=ref_date,
             metadata={"source": "admin_import_panel", "dataset": self.dataset_name},
         )
-        summary = self.summarize_source(source_path)
         return LigaEntregaImportSummary(
             dataset_name=self.dataset_name,
             label=self.label,
@@ -188,6 +209,54 @@ class LigaEntregaReportImportService:
             "total_bytes": total_bytes,
         }
 
+
+
+    def _store_history_by_filename_date(self, files: list[Path], *, fallback_reference_date: date) -> list[dict[str, Any]]:
+        grouped: dict[date, list[Path]] = defaultdict(list)
+        for path in files:
+            file_date = self._date_from_filename(path.name, reference_date=fallback_reference_date)
+            if file_date is None:
+                raise ValueError(f"Nao foi possivel identificar a data pelo nome do arquivo: {path.name}.")
+            grouped[file_date].append(path)
+
+        manifests: list[dict[str, Any]] = []
+        for file_date in sorted(grouped):
+            day_files = grouped[file_date]
+            manifests.append(
+                self.report_store.store_batch(
+                    routine=self.routine,
+                    files={path.name: path.read_bytes() for path in day_files},
+                    reference_date=file_date,
+                    metadata={
+                        "source": "admin_import_panel",
+                        "dataset": self.dataset_name,
+                        "history_by_filename_date": True,
+                    },
+                )
+            )
+        return manifests
+
+    @staticmethod
+    def _date_from_filename(filename: str, *, reference_date: date | None) -> date | None:
+        name = Path(filename).name
+        match = re.search(r"(?:^|_)(\d{2})_(\d{2})(?:\.|_|$)", name)
+        if match:
+            day = int(match.group(1))
+            month = int(match.group(2))
+            year = (reference_date or datetime.now().date()).year
+            try:
+                return date(year, month, day)
+            except ValueError:
+                return None
+        match = re.search(r"2artd(\d{2})_\d{4}\.txt$", name, flags=re.IGNORECASE)
+        if match:
+            day = int(match.group(1))
+            base = reference_date or datetime.now().date()
+            try:
+                return date(base.year, base.month, day)
+            except ValueError:
+                return None
+        return None
 
     def _source_files(self, source_path: str | Path) -> list[Path]:
         path = Path(source_path)

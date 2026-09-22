@@ -950,11 +950,12 @@ def _store_admin_import_uploads(
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_dataset = _normalize_admin_import_dataset(dataset)
-    if len(files) > settings.admin_upload_max_file_count:
+    dataset_max_file_count = int(ADMIN_IMPORT_DATASETS[normalized_dataset].get("max_file_count") or settings.admin_upload_max_file_count)
+    if len(files) > dataset_max_file_count:
         _close_admin_upload_files(files)
         raise HTTPException(
             status_code=413,
-            detail=f"Upload permite no maximo {settings.admin_upload_max_file_count} arquivo(s) por requisicao.",
+            detail=f"Upload permite no maximo {dataset_max_file_count} arquivo(s) por requisicao.",
         )
     file_names = [str(upload.filename or "") for upload in files]
     lock_keys = _admin_import_lock_keys(normalized_dataset, "upload")

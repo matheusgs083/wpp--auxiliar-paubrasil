@@ -79,5 +79,25 @@ class AdminImportsRuntimeTest(unittest.TestCase):
             )
 
 
+    def test_dataset_specific_max_file_count_overrides_global_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            dataset = "liga_030805"
+            admin_imports_runtime.ADMIN_IMPORT_RUNTIME_ROOT = root
+            admin_imports_runtime.ADMIN_IMPORT_DATASETS = {
+                dataset: {
+                    "label": "Liga 030805",
+                    "default_path": root / "030805",
+                    "upload_mode": "multiple",
+                    "max_file_count": 120,
+                    "allow_default_source": False,
+                }
+            }
+            self.assertEqual(
+                int(admin_imports_runtime.ADMIN_IMPORT_DATASETS[dataset].get("max_file_count")),
+                120,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
