@@ -268,6 +268,7 @@ def _register_admin_promax_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             dmateriais_import_service=deps["dmateriais_import_service"],
             documentacao_pendente_import_service=deps["documentacao_pendente_import_service"],
             critica_operacao_import_services=deps["critica_operacao_import_services"],
+            liga_entrega_report_store=deps["liga_entrega_report_store"],
             after_critica_operacao_import=deps["after_critica_operacao_import"],
             require_admin_panel_auth=deps["require_admin_panel_auth"],
             require_admin_panel_feature=deps["require_admin_panel_feature"],

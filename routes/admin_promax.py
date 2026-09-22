@@ -695,6 +695,44 @@ class PromaxCsvImportFile(_StrictPayload):
         return name
 
 
+class PromaxLigaEntregaImportFile(_StrictPayload):
+    filename: str = Field(min_length=1, max_length=255)
+    file_base64: str = Field(min_length=1)
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        name = FilePath(str(value or "").strip()).name
+        suffix = FilePath(name).suffix.lower()
+        if not name or suffix not in {".csv", ".txt", ".xlsx"}:
+            raise ValueError("filename deve ser CSV, TXT ou XLSX")
+        return name
+
+
+class PromaxLigaEntregaImportRequest(_StrictPayload):
+    worker_id: str = Field(min_length=1, max_length=120)
+    job_id: str = Field(min_length=1, max_length=120)
+    lease_token: str | None = Field(default=None, min_length=1, max_length=120)
+    routine: str = Field(min_length=1, max_length=64)
+    files: list[PromaxLigaEntregaImportFile] = Field(min_length=1, max_length=300)
+    reference_date: date | None = None
+
+    @field_validator("routine")
+    @classmethod
+    def validate_routine(cls, value: str) -> str:
+        routine = str(value or "").strip()
+        if not _IDENTIFIER_PATTERN.fullmatch(routine):
+            raise ValueError("routine invalida")
+        return routine
+
+    @model_validator(mode="after")
+    def validate_files(self) -> PromaxLigaEntregaImportRequest:
+        filenames = [item.filename for item in self.files]
+        if len(filenames) != len(set(filenames)):
+            raise ValueError("files contem nomes duplicados")
+        return self
+
+
 class PromaxInadimplenciaImportRequest(_StrictPayload):
     worker_id: str = Field(min_length=1, max_length=120)
     job_id: str = Field(min_length=1, max_length=120)
@@ -825,6 +863,7 @@ def create_admin_promax_router(
     dmateriais_import_service: Any | None = None,
     documentacao_pendente_import_service: Any | None = None,
     critica_operacao_import_services: Mapping[str, Any] | None = None,
+    liga_entrega_report_store: Any | None = None,
     after_critica_operacao_import: Callable[[str], Mapping[str, Any] | None] | None = None,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
@@ -1981,6 +2020,67 @@ def create_admin_promax_router(
                 "filename": payload.filename,
                 "result": result,
             },
+        )
+        return {"ok": True, "result": result}
+
+    @router.post("/api/internal/promax/liga-entrega/import")
+    def api_internal_promax_import_liga_entrega_files(
+        payload: PromaxLigaEntregaImportRequest,
+        _worker_auth: None = Depends(require_worker_auth),
+    ) -> dict[str, Any]:
+        if liga_entrega_report_store is None:
+            raise HTTPException(status_code=400, detail="Armazenamento da Liga Entrega nao configurado.")
+        lease_token = resolve_job_lease_token(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            provided_lease_token=payload.lease_token,
+        )
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                f"Upload automatico Liga Entrega iniciado para {payload.routine}: "
+                f"{len(payload.files)} arquivo(s)."
+            ),
+            data={
+                "event": "promax_liga_entrega_upload_start",
+                "routine": payload.routine,
+                "file_count": len(payload.files),
+                "files": [item.filename for item in payload.files],
+            },
+        )
+        decoded: dict[str, bytes] = {}
+        for item in payload.files:
+            try:
+                file_bytes = base64.b64decode(item.file_base64.encode("ascii"), validate=True)
+            except (UnicodeEncodeError, binascii.Error) as exc:
+                raise HTTPException(status_code=400, detail="Arquivo da Liga Entrega em base64 invalido.") from exc
+            if not file_bytes.strip():
+                raise HTTPException(status_code=400, detail=f"Arquivo vazio: {item.filename}.")
+            decoded[item.filename] = file_bytes
+
+        try:
+            result = liga_entrega_report_store.store_batch(
+                routine=payload.routine,
+                files=decoded,
+                reference_date=payload.reference_date,
+                metadata={"job_id": payload.job_id, "worker_id": payload.worker_id},
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                f"Upload automatico Liga Entrega concluido para {payload.routine}: "
+                f"{result.get('file_count', len(payload.files))} arquivo(s)."
+            ),
+            data={"event": "promax_liga_entrega_upload_success", "routine": payload.routine, "result": result},
         )
         return {"ok": True, "result": result}
 

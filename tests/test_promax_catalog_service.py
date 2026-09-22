@@ -100,6 +100,7 @@ class PromaxCatalogServiceTest(unittest.TestCase):
                 "fluxo_caixa",
                 "giro",
                 "inadimplencia",
+                "liga_entrega",
                 "obz",
                 "outros",
             },

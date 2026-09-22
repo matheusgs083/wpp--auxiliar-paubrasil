@@ -491,6 +491,7 @@ class PromaxWorker:
                         self._import_0112_dmateriais_if_needed(job, job_id, lease_token, result)
                         self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
                         self._import_030111_critica_if_needed(job, job_id, lease_token, result)
+                        self._upload_liga_entrega_reports_if_needed(job, job_id, lease_token, result)
                         post_import_attempted = True
                     if not sync_completed:
                         self._sync_pending_partial_results(job, job_id, lease_token)
@@ -1480,6 +1481,110 @@ class PromaxWorker:
             },
         )
 
+    def _upload_liga_entrega_reports_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        if payload.get("publish", True) is False:
+            return
+
+        specs = (
+            ("030805_LIGA", "03.08.05"),
+            ("030224_MOTORISTA_LIGA", "03.02.24/Motorista"),
+            ("030224_AJUDANTE_LIGA", "03.02.24/Ajudante"),
+            ("031120_BOT", "03.11.20"),
+            ("031129_LIGA", "03.11.29"),
+            ("03114902_BOT", "03.11.49.02"),
+            ("030237", "03.02.37 - Entregas"),
+        )
+        selected_specs = [spec for spec in specs if _routine_selected(payload, spec[0])]
+        if not selected_specs:
+            return
+
+        for routine_id, relative_folder in selected_specs:
+            source_dir = _promax_publication_dir_by_relative(result.details, relative_folder)
+            if source_dir is None:
+                continue
+            if not source_dir.is_dir():
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Upload automatico Liga Entrega ignorado para {routine_id}: pasta nao encontrada {source_dir}",
+                    "warning",
+                    {"event": "promax_liga_entrega_upload_missing_dir", "routine": routine_id, "source_dir": str(source_dir)},
+                )
+                continue
+
+            run_started_at_epoch = self._run_started_at_for_auto_import(
+                job_id,
+                lease_token,
+                result,
+                routine_id=routine_id,
+                event_prefix="promax_liga_entrega_upload",
+            )
+            if run_started_at_epoch is None:
+                continue
+            files = sorted(
+                path
+                for path in source_dir.iterdir()
+                if (
+                    path.is_file()
+                    and not path.name.startswith(".")
+                    and path.suffix.lower() in {".csv", ".txt", ".xlsx"}
+                    and _arquivo_pertence_execucao_atual(path, run_started_at_epoch)
+                )
+            )
+            if not files:
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Upload automatico Liga Entrega sem arquivo novo para {routine_id} em {source_dir}",
+                    "warning",
+                    {"event": "promax_liga_entrega_upload_no_files", "routine": routine_id, "source_dir": str(source_dir)},
+                )
+                continue
+
+            try:
+                self._heartbeat_active_job(job_id, lease_token)
+                response = self.client.import_liga_entrega_files(
+                    job_id=job_id,
+                    lease_token=lease_token,
+                    routine=routine_id,
+                    files={path.name: path.read_bytes() for path in files},
+                    reference_date=_current_reference_date(),
+                )
+                self._heartbeat_active_job(job_id, lease_token)
+                result_payload = response.get("result") if isinstance(response, Mapping) else None
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Upload automatico Liga Entrega enviado para {routine_id}: {len(files)} arquivo(s).",
+                    "info",
+                    {
+                        "event": "promax_liga_entrega_upload_done",
+                        "routine": routine_id,
+                        "file_count": len(files),
+                        "files": [path.name for path in files],
+                        "result": result_payload if isinstance(result_payload, Mapping) else {},
+                    },
+                )
+            except (OSError, PromaxClientError, ValueError) as exc:
+                self._send_log(
+                    job_id,
+                    lease_token,
+                    f"Falha no upload automatico Liga Entrega para {routine_id}: {exc}",
+                    "error",
+                    {"event": "promax_liga_entrega_upload_failed", "routine": routine_id, "file_count": len(files)},
+                )
+
     def _sync_financeiro_fechamento_if_needed(
         self,
         job: Mapping[str, Any],
@@ -2117,6 +2222,30 @@ def _promax_publication_dir(result_details: Mapping[str, Any] | None, folder_nam
                 if destination_text:
                     return Path(destination_text)
     return None
+
+
+def _promax_publication_dir_by_relative(result_details: Mapping[str, Any] | None, relative_folder: str) -> Path | None:
+    metadata = result_details.get("metadata") if isinstance(result_details, Mapping) else None
+    publication_mapping = metadata.get("publication_mapping") if isinstance(metadata, Mapping) else None
+    if not isinstance(publication_mapping, Mapping):
+        return None
+    wanted_parts = _normalized_path_parts(relative_folder)
+    if not wanted_parts:
+        return None
+    for source, destination in publication_mapping.items():
+        source_parts = _normalized_path_parts(str(source or ""))
+        if len(source_parts) < len(wanted_parts):
+            continue
+        if source_parts[-len(wanted_parts):] == wanted_parts:
+            destination_text = str(destination or "").strip()
+            if destination_text:
+                return Path(destination_text)
+    return None
+
+
+def _normalized_path_parts(value: str) -> tuple[str, ...]:
+    text = str(value or "").replace("\\", "/")
+    return tuple(part.casefold() for part in text.split("/") if part and part not in {".", ".."})
 
 
 def load_project_env(project_root: Path = PROJECT_ROOT) -> Path | None:

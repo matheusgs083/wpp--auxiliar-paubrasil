@@ -91,6 +91,12 @@ def normalize_report_group(value: Any) -> dict[str, Any]:
         max_length=500,
         required=False,
     )
+    section = _limited_text(
+        value.get("section") or value.get("group") or "",
+        field_name="section",
+        max_length=80,
+        required=False,
+    )
     routines_value = value.get("routines")
     if not isinstance(routines_value, (list, tuple)) or not routines_value:
         raise ValueError("routines deve ser uma lista nao vazia")
@@ -130,6 +136,7 @@ def normalize_report_group(value: Any) -> dict[str, Any]:
         "key": key,
         "name": name,
         "description": description,
+        "section": section,
         "routines": routines,
         "units": units,
     }

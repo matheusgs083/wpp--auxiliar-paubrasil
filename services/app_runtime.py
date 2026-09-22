@@ -32,6 +32,7 @@ from bot_api.services.relatorio_031120_import_service import Relatorio031120Impo
 from bot_api.services.filial_labels import set_filial_labels
 from bot_api.services.health_service import HealthPayloadBuilder
 from bot_api.services.promax_catalog_service import DEFAULT_PROMAX_CATALOG, PromaxCatalogService
+from bot_api.services.liga_entrega_report_store import LigaEntregaReportStore
 from bot_api.services.promax_scheduler import PromaxScheduler
 from bot_api.services.webhook_runtime import WebhookRuntime
 from bot_api.security.http_auth import HttpAuthDependencies
@@ -103,6 +104,8 @@ def configure_app_runtime(
     ADMIN_IMPORT_RUNTIME_ROOT = (
         Path("/tmp/bot_api_admin_imports") if Path("/tmp").exists() else PROJECT_ROOT / "exports" / "admin_import_uploads"
     )
+    LIGA_ENTREGA_REPORTS_ROOT = PROJECT_ROOT / "exports" / "liga_entrega_reports"
+    liga_entrega_report_store = LigaEntregaReportStore(LIGA_ENTREGA_REPORTS_ROOT)
     ADMIN_UPLOAD_CHUNK_SIZE_BYTES = 1024 * 1024
     ADMIN_PANEL_SESSION_COOKIE = "bot_admin_session"
     ADMIN_PANEL_SESSION_TTL_SECONDS = 12 * 60 * 60
@@ -635,6 +638,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "dmateriais_import_service": runtime["services"].dmateriais_import_service,
         "documentacao_pendente_import_service": runtime["services"].documentacao_pendente_import_service,
         "critica_operacao_import_services": runtime["services"].critica_operacao_import_services,
+        "liga_entrega_report_store": runtime["liga_entrega_report_store"],
         "after_critica_operacao_import": runtime["_after_critica_operacao_auto_import"],
         "require_webhook_token": runtime["_require_webhook_token"],
         "require_meta_cloud_signature": runtime["_require_meta_cloud_signature"],

@@ -93,6 +93,21 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
             ],
             "units": [],
         },
+        "liga_entrega": {
+            "name": "Liga Entrega",
+            "section": "Entrega",
+            "description": "Relatorios ja mapeados para apoiar a Liga Entrega.",
+            "routines": [
+                {"id": "030805_LIGA", "name": "Rotina 030805 Liga Entrega"},
+                {"id": "030224_MOTORISTA_LIGA", "name": "Rotina 030224 Motorista Liga Entrega"},
+                {"id": "030224_AJUDANTE_LIGA", "name": "Rotina 030224 Ajudante Liga Entrega"},
+                {"id": "031120_BOT", "name": "Rotina 031120 Bot"},
+                {"id": "031129_LIGA", "name": "Rotina 031129 Liga Entrega"},
+                {"id": "03114902_BOT", "name": "Rotina 03114902 Geo Bot"},
+                {"id": "030237", "name": "Rotina 030237"},
+            ],
+            "units": [],
+        },
         "obz": {
             "name": "OBZ",
             "description": "Relatorios de acompanhamento do OBZ.",
@@ -224,14 +239,18 @@ def normalize_catalog(value: Any) -> dict[str, Any]:
                 units.append(unit)
 
         name = str(raw_category.get("name") or raw_category.get("label") or key).strip()
+        section = str(raw_category.get("section") or raw_category.get("group") or "").strip()
         description = str(raw_category.get("description") or "").strip()
         if not name or len(name) > 120:
             raise ValueError(f"nome invalido para categoria {key}")
+        if len(section) > 80:
+            raise ValueError(f"secao excede o limite para categoria {key}")
         if len(description) > 500:
             raise ValueError(f"descricao excede o limite para categoria {key}")
         categories[key] = {
             "key": key,
             "name": name,
+            "section": section,
             "description": description,
             "routines": routines,
             "units": units,

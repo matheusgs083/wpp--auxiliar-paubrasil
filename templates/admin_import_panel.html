@@ -687,6 +687,10 @@
           <span class="flow-icon"><i class="bi bi-pc-display-horizontal"></i></span>
           <span><span class="flow-title">Promax</span><span class="flow-desc">Fila, execucoes, agendas e logs do robo.</span><span class="flow-meta">Automacao</span></span>
         </a>
+        <a href="/admin/entrega" class="flow-path" data-flow-target="entregaTab" data-flow-label="Entrega" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-trophy"></i></span>
+          <span><span class="flow-title">Entrega</span><span class="flow-desc">Liga da Entrega, rotinas e expurgos operacionais.</span><span class="flow-meta">Liga</span></span>
+        </a>
         <a href="/admin/critica" class="flow-path" data-flow-target="criticaTab" data-flow-label="Crítica comercial" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-clipboard-data"></i></span>
           <span><span class="flow-title">Crítica</span><span class="flow-desc">Dashboard, PDFs e crítica 030111 por operação.</span><span class="flow-meta">Análise</span></span>
@@ -738,6 +742,11 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link" id="promaxTab" href="/admin/promax" data-admin-page-link="true" data-bs-target="#promaxPane" role="tab" aria-controls="promaxPane" aria-selected="false">
             <i class="bi bi-pc-display-horizontal me-1"></i>Promax
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="entregaTab" href="/admin/entrega" data-admin-page-link="true" data-bs-target="#entregaPane" role="tab" aria-controls="entregaPane" aria-selected="false">
+            <i class="bi bi-trophy me-1"></i>Entrega
           </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -1396,6 +1405,48 @@
                 </table>
               </div>
             </article>
+          </div>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="entregaPane" role="tabpanel" aria-labelledby="entregaTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-trophy me-2 text-primary"></i>Entrega · A Liga</h2>
+              <div class="form-text">Central da Liga da Entrega dentro do painel do bot. Use somente as rotinas homologadas e mantenha os expurgos que ajustam o ranking sem mexer nas demais medições.</div>
+            </div>
+            <span class="pill">Liga Entrega</span>
+          </div>
+          <div class="row g-3">
+            <div class="col-xl-7">
+              <div class="border rounded-3 p-3 h-100 bg-light-subtle">
+                <h3 class="h6 fw-bold mb-2"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Rotinas usadas</h3>
+                <div class="row g-2 small">
+                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.08.05</span>Rotas do dia</div>
+                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.11.20</span>Portaria</div>
+                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.02.24</span>Devoluções por motorista</div>
+                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.02.24</span>Devoluções por ajudante</div>
+                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.02.37</span>Entregas</div>
+                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.11.49.02</span>Cidades por mapa</div>
+                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.11.29</span>Equipe do dia por mapa</div>
+                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">XLSX</span>Espelho de ponto e Checklist Frota</div>
+                </div>
+                <div class="form-text mt-3">Resumo, Mapa e Setor da 03.02.24 não entram no escopo da Liga.</div>
+              </div>
+            </div>
+            <div class="col-xl-5">
+              <div class="border rounded-3 p-3 h-100">
+                <h3 class="h6 fw-bold mb-2"><i class="bi bi-scissors me-2"></i>Expurgos mantidos</h3>
+                <ul class="small mb-3 ps-3">
+                  <li><b>Devolução:</b> remover quando não for problema da entrega.</li>
+                  <li><b>TML:</b> remover saída incoerente, recarga, segunda viagem, mapa reaberto ou baixa fora de hora.</li>
+                  <li><b>Dispersão/KM:</b> remover rota com odômetro digitado errado ou desvio de km incoerente.</li>
+                </ul>
+                <button class="btn btn-primary btn-sm" type="button" id="entregaOpenLigaPromaxBtn"><i class="bi bi-pc-display-horizontal me-1"></i>Abrir Liga no Promax</button>
+                <div class="form-text mt-2">O atalho seleciona o grupo Liga Entrega e mantém apenas as rotinas homologadas pelo catálogo.</div>
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -3309,6 +3360,7 @@
       historyTable: document.getElementById("historyBody"),
       jobsTable: document.getElementById("jobsBody"),
       promaxTab: document.getElementById("promaxTab"),
+      entregaOpenLigaPromaxBtn: document.getElementById("entregaOpenLigaPromaxBtn"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
@@ -3765,6 +3817,7 @@
       "/admin/payip": "payipTab",
       "/admin/reports": "reportsTab",
       "/admin/promax": "promaxTab",
+      "/admin/entrega": "entregaTab",
       "/admin/tables": "reportsTab",
       "/admin/power-bi": "reportsTab",
       "/admin/critica": "criticaTab",
@@ -3780,6 +3833,7 @@
       payipTab: "/admin/payip",
       reportsTab: "/admin/reports",
       promaxTab: "/admin/promax",
+      entregaTab: "/admin/entrega",
       criticaTab: "/admin/critica",
       recolhasTab: "/admin/recolhas",
       protestosTab: "/admin/protestos",
@@ -3928,6 +3982,7 @@
         return {
           id,
           name: String(value.name || value.label || id).trim() || id,
+          section: String(value.section || value.group || "Geral").trim() || "Geral",
           description: String(value.description || "").trim(),
           routines: normalizePromaxCatalogItems(value.routines),
           units: normalizePromaxCatalogItems(value.units)
@@ -4195,12 +4250,13 @@
       if (kind === "category") {
         const options = promaxCatalogCategories().map(category => ({
           value: category.id,
-          label: category.name
+          label: category.name,
+          section: category.section || "Geral"
         }));
         const values = new Set(options.map(item => item.value));
         promaxSelectionSelectedCategories(scope).forEach(categoryId => {
           if (!values.has(categoryId)) {
-            options.unshift({ value: categoryId, label: `${categoryId} (indisponivel)` });
+            options.unshift({ value: categoryId, label: `${categoryId} (indisponivel)`, section: "Indisponivel" });
             values.add(categoryId);
           }
         });
@@ -4241,7 +4297,7 @@
       const search = normalizeTextForSearch(els.search ? els.search.value : "");
       return promaxScheduleSlicerOptions(kind, scope).filter(item => (
         !search || normalizeTextForSearch(
-          `${item.label || item.value} ${item.categoryName || ""}`
+          `${item.label || item.value} ${item.categoryName || ""} ${item.section || ""}`
         ).includes(search)
       ));
     }
@@ -4320,6 +4376,25 @@
           title.textContent = group.name;
           wrapper.appendChild(title);
           group.items.forEach(item => {
+            wrapper.appendChild(createPromaxScheduleSlicerItem(kind, item, selected, scope));
+          });
+          els.list.appendChild(wrapper);
+        });
+      } else if (kind === "category") {
+        const grouped = new Map();
+        options.forEach(item => {
+          const section = String(item.section || "Geral");
+          if (!grouped.has(section)) grouped.set(section, []);
+          grouped.get(section).push(item);
+        });
+        grouped.forEach((items, section) => {
+          const wrapper = document.createElement("div");
+          wrapper.className = "promax-slicer-group";
+          const title = document.createElement("div");
+          title.className = "promax-slicer-group-title";
+          title.textContent = section;
+          wrapper.appendChild(title);
+          items.forEach(item => {
             wrapper.appendChild(createPromaxScheduleSlicerItem(kind, item, selected, scope));
           });
           els.list.appendChild(wrapper);
@@ -4519,6 +4594,34 @@
 
     function renderPromaxScheduleCatalog(options = {}) {
       renderPromaxSelectionCatalog("schedule", options);
+    }
+
+    async function openLigaEntregaPromax() {
+      if (!state.panel || !state.panel.canManagePromax) {
+        addLog("Sem permissao para acessar a Liga no Promax.", "warn");
+        return;
+      }
+      showPanelTab("promaxTab");
+      updateFlowNavigation("promaxTab");
+      if (!state.promax.catalog) {
+        await syncPromax({ silent: true });
+      }
+      const category = promaxCatalogCategory("liga_entrega");
+      if (!category) {
+        addLog("Grupo Liga Entrega ainda nao apareceu no catalogo Promax.", "warn");
+        return;
+      }
+      const routines = category.routines.map(routine => routine.id);
+      setPromaxScheduleSlicerSelection("category", ["liga_entrega"], "run");
+      setPromaxScheduleSlicerSelection(
+        "routine",
+        routines.map(routineId => promaxScheduleRoutineKey("liga_entrega", routineId)),
+        "run"
+      );
+      if (E.promaxSendDates) E.promaxSendDates.checked = true;
+      if (E.promaxPublish) E.promaxPublish.checked = true;
+      syncPromaxDateFields();
+      addLog("Liga Entrega selecionada no Promax Admin.", "ok");
     }
 
     function promaxRunBatchPayload() {
@@ -9024,6 +9127,7 @@
       if (E.promaxReprocessPublicationsBtn) E.promaxReprocessPublicationsBtn.addEventListener("click", promaxReprocessPublications);
       if (E.promaxSaveWorkerAssignmentsBtn) E.promaxSaveWorkerAssignmentsBtn.addEventListener("click", savePromaxWorkerAssignments);
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
+      if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobFromDate) E.promaxJobFromDate.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobToDate) E.promaxJobToDate.addEventListener("change", applyPromaxJobFilters);
@@ -9384,6 +9488,8 @@
         if (state.panel && state.panel.canViewGiro) tasks.push(syncGiroRecolha({ silent }));
       } else if (activeTabId === "criticaTab") {
         if (state.panel && state.panel.canViewCritica) tasks.push(syncCriticaDashboard({ silent }));
+      } else if (activeTabId === "entregaTab") {
+        if (state.panel && state.panel.canManagePromax && !state.promax.catalog) tasks.push(syncPromax({ silent }));
       } else if (activeTabId === "promaxTab") {
         if (state.panel && state.panel.canManagePromax) tasks.push(syncPromax({ silent }));
       }
@@ -9766,6 +9872,7 @@
       setPanelTabVisible("payipTab", payipVisible);
       setPanelTabVisible("reportsTab", reportsVisible);
       setPanelTabVisible("promaxTab", Boolean(state.panel && state.panel.canManagePromax));
+      setPanelTabVisible("entregaTab", Boolean(state.panel && state.panel.canManagePromax));
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
       setPanelTabVisible("financeiroTab", Boolean(state.panel && state.panel.canFinanceiro) && !isCritica);

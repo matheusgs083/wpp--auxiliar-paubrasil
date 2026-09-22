@@ -358,6 +358,26 @@ class FakeCriticaOperacaoImportService:
         }
 
 
+class FakeLigaEntregaReportStore:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def store_batch(self, *, routine: str, files: Mapping[str, bytes], reference_date: Any = None, metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        self.calls.append({
+            "routine": routine,
+            "files": dict(files),
+            "reference_date": reference_date,
+            "metadata": dict(metadata or {}),
+        })
+        return {
+            "batch_id": "batch-1",
+            "routine": routine,
+            "reference_date": str(reference_date),
+            "file_count": len(files),
+            "files": [{"filename": name, "bytes": len(content)} for name, content in files.items()],
+        }
+
+
 class AdminPromaxRoutesTests(unittest.TestCase):
     context = {"mode": "admin", "is_admin": True, "filiais": ()}
     worker_headers = {"x-promax-worker-token": "worker-secret"}
@@ -439,6 +459,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         dclientes_import_service = FakeDClientesImportService()
         documentacao_import_service = FakeDocumentacaoImportService()
         critica_import_service = FakeCriticaOperacaoImportService("3")
+        liga_entrega_report_store = FakeLigaEntregaReportStore()
         app.state.boleto_import_service = boleto_import_service
         app.state.estoque_import_service = estoque_import_service
         app.state.relatorio_031120_import_service = relatorio_031120_import_service
@@ -447,6 +468,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         app.state.dclientes_import_service = dclientes_import_service
         app.state.documentacao_import_service = documentacao_import_service
         app.state.critica_import_service = critica_import_service
+        app.state.liga_entrega_report_store = liga_entrega_report_store
         app.state.critica_post_actions = []
 
         def after_critica_import(reason: str) -> dict[str, Any]:
@@ -476,6 +498,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 dclientes_import_service=dclientes_import_service,
                 documentacao_pendente_import_service=documentacao_import_service,
                 critica_operacao_import_services={"3": critica_import_service},
+                liga_entrega_report_store=liga_entrega_report_store,
                 after_critica_operacao_import=after_critica_import,
                 require_admin_panel_auth=require_auth,
                 require_admin_panel_feature=require_feature,
@@ -1272,6 +1295,45 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         _source_path, reference_date = import_service.calls[0]
         self.assertEqual(str(reference_date), "2026-07-20")
         self.assertEqual(client.app.state.critica_post_actions, ["030111_BOT"])
+        self.assertEqual(
+            [name for name, _args, _kwargs in service.calls],
+            ["append_job_log", "append_job_log"],
+        )
+
+    def test_internal_worker_uploads_liga_entrega_files(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+
+        response = client.post(
+            "/api/internal/promax/liga-entrega/import",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "job_id": "job-1",
+                "lease_token": "lease-token",
+                "routine": "030805_LIGA",
+                "files": [
+                    {
+                        "filename": "2artd21_0003.txt",
+                        "file_base64": base64.b64encode(b"linha dvs\n").decode("ascii"),
+                    },
+                    {
+                        "filename": "03.11.20_Patos.csv",
+                        "file_base64": base64.b64encode(b"Mapa;Data\n1;21/09/2026\n").decode("ascii"),
+                    },
+                ],
+                "reference_date": "2026-09-21",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["result"]["file_count"], 2)
+        store = client.app.state.liga_entrega_report_store
+        self.assertEqual(len(store.calls), 1)
+        self.assertEqual(store.calls[0]["routine"], "030805_LIGA")
+        self.assertEqual(set(store.calls[0]["files"]), {"2artd21_0003.txt", "03.11.20_Patos.csv"})
+        self.assertEqual(str(store.calls[0]["reference_date"]), "2026-09-21")
         self.assertEqual(
             [name for name, _args, _kwargs in service.calls],
             ["append_job_log", "append_job_log"],

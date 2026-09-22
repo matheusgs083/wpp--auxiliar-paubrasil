@@ -273,6 +273,7 @@ def create_admin_panel_router(
     @router.get("/admin/reports", response_class=HTMLResponse)
     @router.get("/admin/payip", response_class=HTMLResponse)
     @router.get("/admin/promax", response_class=HTMLResponse)
+    @router.get("/admin/entrega", response_class=HTMLResponse)
     @router.get("/admin/power-bi", response_class=HTMLResponse)
     @router.get("/admin/tables", response_class=HTMLResponse)
     @router.get("/admin/critica", response_class=HTMLResponse)

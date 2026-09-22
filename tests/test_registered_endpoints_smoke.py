@@ -223,6 +223,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "access_call": lambda func, *args, **kwargs: func(*args, **kwargs),
             "require_admin_api_auth": lambda **_kwargs: None,
             "record_security_event": lambda _request, **_kwargs: None,
+            "record_admin_panel_action": lambda *_args, **_kwargs: None,
             "require_admin_panel_auth": lambda **_kwargs: dict(context),
             "require_admin_panel_feature": lambda _context, _feature: None,
             "require_admin_panel_import_dataset": lambda _context, dataset: str(dataset),
@@ -310,8 +311,16 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "inadimplencia_import_service": None,
             "comodatos_import_service": None,
             "dclientes_import_service": None,
+            "dmateriais_import_service": None,
             "documentacao_pendente_import_service": None,
             "critica_operacao_import_services": {},
+            "liga_entrega_report_store": SimpleNamespace(
+                store_batch=lambda **kwargs: {
+                    "batch_id": "batch-1",
+                    "routine": kwargs.get("routine"),
+                    "file_count": len(kwargs.get("files") or {}),
+                }
+            ),
             "after_critica_operacao_import": None,
             "promax_catalog": {
                 "categories": {
@@ -715,6 +724,25 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
                             {
                                 "filename": "031702 bot - Patos.csv",
                                 "file_base64": "Q2xpZW50ZTtWYWxvcgoxOzEwCg==",
+                            }
+                        ],
+                    },
+                },
+            ),
+            EndpointCase(
+                "POST",
+                "/api/internal/promax/liga-entrega/import",
+                kwargs={
+                    "headers": worker_headers,
+                    "json": {
+                        "worker_id": "worker-1",
+                        "job_id": "job-1",
+                        "lease_token": "lease-1",
+                        "routine": "030805_LIGA",
+                        "files": [
+                            {
+                                "filename": "2artd21_0003.txt",
+                                "file_base64": "bGluaGEK",
                             }
                         ],
                     },

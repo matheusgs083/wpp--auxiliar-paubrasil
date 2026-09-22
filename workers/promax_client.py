@@ -456,6 +456,43 @@ class PromaxClient:
             reference_date=reference_date,
         )
 
+    def import_liga_entrega_files(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        routine: str,
+        files: Mapping[str, bytes],
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        if not files:
+            raise ValueError("Liga Entrega files must not be empty.")
+        payload_files: list[dict[str, str]] = []
+        for filename, file_bytes in files.items():
+            if not file_bytes:
+                raise ValueError(f"Liga Entrega file {filename!r} must not be empty.")
+            payload_files.append(
+                {
+                    "filename": str(filename or "").strip(),
+                    "file_base64": base64.b64encode(file_bytes).decode("ascii"),
+                }
+            )
+        payload: dict[str, Any] = {
+            "worker_id": self.worker_id,
+            "job_id": _path_identifier(job_id),
+            "lease_token": _path_identifier(lease_token),
+            "routine": str(routine or "").strip(),
+            "files": payload_files,
+        }
+        if reference_date:
+            payload["reference_date"] = str(reference_date)
+        return self._request(
+            "POST",
+            "/api/internal/promax/liga-entrega/import",
+            payload,
+            timeout_seconds=self.boleto_import_timeout_seconds,
+        )
+
     def sync_financeiro_fechamento_mapa(
         self,
         *,
