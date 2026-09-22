@@ -1421,16 +1421,15 @@
           <div class="row g-3">
             <div class="col-xl-7">
               <div class="border rounded-3 p-3 h-100 bg-light-subtle">
-                <h3 class="h6 fw-bold mb-2"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Rotinas usadas</h3>
-                <div class="row g-2 small">
-                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.08.05</span>Rotas do dia</div>
-                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.11.20</span>Portaria</div>
-                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.02.24</span>Devoluções por motorista</div>
-                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.02.24</span>Devoluções por ajudante</div>
-                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.02.37</span>Entregas</div>
-                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.11.49.02</span>Cidades por mapa</div>
-                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">03.11.29</span>Equipe do dia por mapa</div>
-                  <div class="col-md-6"><span class="badge text-bg-light border me-1 mono">XLSX</span>Espelho de ponto e Checklist Frota</div>
+                <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+                  <div>
+                    <h3 class="h6 fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Relatórios carregados</h3>
+                    <div class="form-text" id="entregaLigaReportsSummary">Aguardando leitura dos lotes salvos.</div>
+                  </div>
+                  <button class="btn btn-outline-primary btn-sm" type="button" id="entregaLigaReportsRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+                </div>
+                <div class="row g-2 small" id="entregaLigaReportsGrid">
+                  <div class="col-12 text-secondary">Carregando relatórios da Liga...</div>
                 </div>
                 <div class="form-text mt-3">Resumo, Mapa e Setor da 03.02.24 não entram no escopo da Liga.</div>
               </div>
@@ -2924,7 +2923,8 @@
           upload: "/api/admin/imports/upload"
         },
         ligaEntrega: {
-          expurgos: "/api/admin/liga-entrega/expurgos"
+          expurgos: "/api/admin/liga-entrega/expurgos",
+          reports: "/api/admin/liga-entrega/relatorios"
         },
         usage: {
           evolution: "/api/admin/usage/evolution",
@@ -3395,6 +3395,9 @@
       jobsTable: document.getElementById("jobsBody"),
       promaxTab: document.getElementById("promaxTab"),
       entregaOpenLigaPromaxBtn: document.getElementById("entregaOpenLigaPromaxBtn"),
+      entregaLigaReportsGrid: document.getElementById("entregaLigaReportsGrid"),
+      entregaLigaReportsSummary: document.getElementById("entregaLigaReportsSummary"),
+      entregaLigaReportsRefreshBtn: document.getElementById("entregaLigaReportsRefreshBtn"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
@@ -4628,6 +4631,70 @@
 
     function renderPromaxScheduleCatalog(options = {}) {
       renderPromaxSelectionCatalog("schedule", options);
+    }
+
+    function renderLigaEntregaReports() {
+      const payload = state.ligaEntregaReports || {};
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      const summary = payload.summary || {};
+      if (E.entregaLigaReportsSummary) {
+        const loaded = Number(summary.loaded || 0);
+        const total = Number(summary.total || items.length || 0);
+        E.entregaLigaReportsSummary.textContent = total
+          ? `${loaded}/${total} relatório(s) com lote salvo no backend.`
+          : "Nenhum status de relatório carregado.";
+      }
+      if (!E.entregaLigaReportsGrid) return;
+      if (!items.length) {
+        E.entregaLigaReportsGrid.innerHTML = '<div class="col-12 text-secondary">Nenhum relatório da Liga retornado pelo backend.</div>';
+        return;
+      }
+      E.entregaLigaReportsGrid.innerHTML = items.map(item => {
+        const manifest = item && item.manifest && typeof item.manifest === "object" ? item.manifest : null;
+        const loaded = Boolean(item && item.loaded && manifest);
+        const files = manifest && Array.isArray(manifest.files) ? manifest.files : [];
+        const storedAt = manifest && manifest.stored_at ? formatDateTime(manifest.stored_at) : "-";
+        const referenceDate = manifest && manifest.reference_date ? formatDate(manifest.reference_date) : "-";
+        const badgeClass = loaded ? "text-bg-success" : "text-bg-secondary";
+        const statusText = loaded ? "Carregado" : "Pendente";
+        const fileText = loaded ? `${files.length || Number(manifest.file_count || 0)} arquivo(s)` : "sem lote";
+        const filenames = files.slice(0, 3).map(file => escapeHtml(file.filename || "")).filter(Boolean).join(", ");
+        const more = files.length > 3 ? ` +${files.length - 3}` : "";
+        return `
+          <div class="col-md-6">
+            <div class="border rounded-3 p-2 h-100 ${loaded ? "" : "opacity-75"}">
+              <div class="d-flex align-items-start justify-content-between gap-2">
+                <div><span class="badge text-bg-light border me-1 mono">${escapeHtml(item.code || "-")}</span>${escapeHtml(item.label || item.routine || "-")}</div>
+                <span class="badge ${badgeClass}">${statusText}</span>
+              </div>
+              <div class="text-secondary mt-2">${escapeHtml(fileText)} • ref. ${escapeHtml(referenceDate)}</div>
+              <div class="text-secondary">Atualizado: ${escapeHtml(storedAt)}</div>
+              ${filenames ? `<div class="mono small text-truncate mt-1" title="${filenames}${escapeHtml(more)}">${filenames}${escapeHtml(more)}</div>` : ""}
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    async function syncLigaEntregaReports({ silent = true, force = false } = {}) {
+      if (!hasPanelAuth()) return false;
+      if (!force && state.ligaEntregaReports && Array.isArray(state.ligaEntregaReports.items)) {
+        renderLigaEntregaReports();
+        return true;
+      }
+      if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.disabled = true;
+      try {
+        const payload = await req(CONFIG.endpoints.ligaEntrega.reports, { timeoutMs: 30000 });
+        state.ligaEntregaReports = payload || { items: [], summary: {} };
+        renderLigaEntregaReports();
+        if (!silent) addLog("Relatórios da Liga atualizados.", "ok");
+        return true;
+      } catch (err) {
+        if (E.entregaLigaReportsSummary) E.entregaLigaReportsSummary.textContent = `Falha ao carregar relatórios da Liga: ${err.message}`;
+        if (!silent) addLog(`Falha ao carregar relatórios da Liga: ${err.message}`, "err");
+        return false;
+      } finally {
+        if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.disabled = false;
+      }
     }
 
     async function openLigaEntregaPromax() {
@@ -9162,6 +9229,7 @@
       if (E.promaxSaveWorkerAssignmentsBtn) E.promaxSaveWorkerAssignmentsBtn.addEventListener("click", savePromaxWorkerAssignments);
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
+      if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
       if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobFromDate) E.promaxJobFromDate.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobToDate) E.promaxJobToDate.addEventListener("change", applyPromaxJobFilters);
@@ -9524,6 +9592,7 @@
         if (state.panel && state.panel.canViewCritica) tasks.push(syncCriticaDashboard({ silent }));
       } else if (activeTabId === "entregaTab") {
         if (state.panel && state.panel.canManagePromax && !state.promax.catalog) tasks.push(syncPromax({ silent }));
+        tasks.push(syncLigaEntregaReports({ silent }));
       } else if (activeTabId === "promaxTab") {
         if (state.panel && state.panel.canManagePromax) tasks.push(syncPromax({ silent }));
       }

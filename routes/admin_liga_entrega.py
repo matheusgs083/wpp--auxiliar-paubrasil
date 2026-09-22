@@ -8,6 +8,19 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 
+LIGA_ENTREGA_REPORTS = (
+    {"routine": "030805_LIGA", "code": "03.08.05", "label": "Rotas do dia", "kind": "Diario"},
+    {"routine": "031120_BOT", "code": "03.11.20", "label": "Portaria", "kind": "Mensal"},
+    {"routine": "030224_MOTORISTA_LIGA", "code": "03.02.24", "label": "Devolucoes por motorista", "kind": "Mensal"},
+    {"routine": "030224_AJUDANTE_LIGA", "code": "03.02.24", "label": "Devolucoes por ajudante", "kind": "Mensal"},
+    {"routine": "030237", "code": "03.02.37", "label": "Entregas", "kind": "Mensal"},
+    {"routine": "03114902_BOT", "code": "03.11.49.02", "label": "Cidades por mapa", "kind": "Mensal"},
+    {"routine": "031129_LIGA", "code": "03.11.29", "label": "Equipe do dia por mapa", "kind": "Mensal"},
+    {"routine": "liga_espelho_ponto", "code": "PONTO", "label": "Espelho de ponto", "kind": "Mensal"},
+    {"routine": "liga_checklist_frota", "code": "XLSX", "label": "Checklist Frota", "kind": "Mensal"},
+)
+
+
 class LigaEntregaExpurgoRequest(BaseModel):
     tipo: str = Field(..., description="devolucao, km, tml ou dispersao")
     competencia: str = Field(..., description="AAAA-MM")
@@ -25,6 +38,7 @@ def create_admin_liga_entrega_router(
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     liga_entrega_expurgo_service: Any,
+    liga_entrega_report_store: Any | None = None,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
@@ -74,6 +88,56 @@ def create_admin_liga_entrega_router(
             target_id=target_id,
             metadata=metadata or {},
         )
+
+
+    @router.get("/api/admin/liga-entrega/relatorios")
+    def api_admin_liga_entrega_relatorios(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        items: list[dict[str, Any]] = []
+        loaded = 0
+        for spec in LIGA_ENTREGA_REPORTS:
+            manifest = None
+            if liga_entrega_report_store is not None:
+                try:
+                    manifest = liga_entrega_report_store.latest_manifest(str(spec["routine"]))
+                except ValueError:
+                    manifest = None
+            if manifest:
+                loaded += 1
+            items.append(
+                {
+                    **spec,
+                    "loaded": bool(manifest),
+                    "manifest": manifest,
+                }
+            )
+        result = {
+            "ok": True,
+            "items": items,
+            "summary": {
+                "total": len(items),
+                "loaded": loaded,
+                "missing": len(items) - loaded,
+            },
+        }
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_liga_relatorios_list",
+            decision="allowed",
+            reason=f"loaded={loaded}",
+        )
+        return result
 
     @router.get("/api/admin/liga-entrega/expurgos")
     def api_admin_liga_entrega_expurgos(

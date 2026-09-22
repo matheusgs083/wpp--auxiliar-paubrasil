@@ -525,6 +525,22 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/api/admin/promax/jobs/job-1"),
             EndpointCase("POST", "/api/admin/promax/jobs/job-1/retry", expected_status=409),
             EndpointCase("GET", "/api/admin/promax/jobs/job-1/logs"),
+            EndpointCase("GET", "/api/admin/liga-entrega/relatorios"),
+            EndpointCase("GET", "/api/admin/liga-entrega/expurgos"),
+            EndpointCase(
+                "POST",
+                "/api/admin/liga-entrega/expurgos",
+                kwargs={
+                    "json": {
+                        "tipo": "km",
+                        "competencia": "2026-09",
+                        "filial": "PATOS",
+                        "data": "2026-09-22",
+                        "mapa": "12345",
+                    }
+                },
+            ),
+            EndpointCase("DELETE", "/api/admin/liga-entrega/expurgos/expurgo-1", expected_status=404),
             EndpointCase("POST", "/api/admin/promax/jobs/job-1/cancel"),
             EndpointCase("POST", "/api/admin/promax/jobs/job-1/stop"),
             EndpointCase("POST", "/api/admin/promax/queue/pause"),
@@ -864,6 +880,7 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             "/api/admin/promax/jobs/job-1/logs": "/api/admin/promax/jobs/{job_id}/logs",
             "/api/admin/promax/jobs/job-1/cancel": "/api/admin/promax/jobs/{job_id}/cancel",
             "/api/admin/promax/jobs/job-1/stop": "/api/admin/promax/jobs/{job_id}/stop",
+            "/api/admin/liga-entrega/expurgos/expurgo-1": "/api/admin/liga-entrega/expurgos/{expurgo_id}",
             "/api/admin/promax/schedules/schedule-1": "/api/admin/promax/schedules/{schedule_id}",
             "/api/admin/promax/schedules/schedule-1/run-now": "/api/admin/promax/schedules/{schedule_id}/run-now",
             "/api/internal/promax/jobs/job-1/heartbeat": "/api/internal/promax/jobs/{job_id}/heartbeat",
