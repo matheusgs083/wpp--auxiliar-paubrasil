@@ -1439,10 +1439,14 @@
               <div class="border rounded-3 p-3 h-100">
                 <h3 class="h6 fw-bold mb-2"><i class="bi bi-scissors me-2"></i>Expurgos mantidos</h3>
                 <ul class="small mb-3 ps-3">
-                  <li><b>Devolução:</b> remover quando não for problema da entrega.</li>
-                  <li><b>TML:</b> remover saída incoerente, recarga, segunda viagem, mapa reaberto ou baixa fora de hora.</li>
-                  <li><b>Dispersão/KM:</b> remover rota com odômetro digitado errado ou desvio de km incoerente.</li>
+                  <li><b>Devolução:</b> remove por cliente + data da entrega.</li>
+                  <li><b>TML:</b> remove por filial + data + mapa apenas do indicador de saída.</li>
+                  <li><b>Dispersão/KM:</b> remove por filial + data + mapa apenas do indicador de km.</li>
                 </ul>
+                <div class="source-box mb-3">
+                  <div class="small text-secondary">Persistência</div>
+                  <div class="source-path">Expurgos ficam salvos no backend e continuam valendo quando novos relatórios substituírem os lotes ativos.</div>
+                </div>
                 <button class="btn btn-primary btn-sm" type="button" id="entregaOpenLigaPromaxBtn"><i class="bi bi-pc-display-horizontal me-1"></i>Abrir Liga no Promax</button>
                 <div class="form-text mt-2">O atalho seleciona o grupo Liga Entrega e mantém apenas as rotinas homologadas pelo catálogo.</div>
               </div>
@@ -2919,6 +2923,9 @@
           run: "/api/admin/imports/run",
           upload: "/api/admin/imports/upload"
         },
+        ligaEntrega: {
+          expurgos: "/api/admin/liga-entrega/expurgos"
+        },
         usage: {
           evolution: "/api/admin/usage/evolution",
           evolutionReport: "/api/admin/usage/evolution/report",
@@ -3178,6 +3185,16 @@
       documentacao_pendente: { id: "DocumentacaoPendente", name: "Documentacao Pendente - 031701", icon: "bi-file-earmark-check", area: "promax", group: "Promax" },
       prazo_limite: { id: "PrazoLimite", name: "Prazo e Limite", icon: "bi-cash-stack", area: "powerbi", group: "Power BI", groupNote: "Relatorios oriundos do Power BI: prazo e limite e giro de vasilhame." },
       giro: { id: "Giro", name: "Giro de Vasilhame", icon: "bi-arrow-repeat", area: "powerbi", group: "Power BI" },
+
+      liga_030805: { id: "Liga030805", name: "03.08.05 - Rotas do dia", icon: "bi-calendar-day", area: "promax", group: "Liga Entrega", groupNote: "Relatorios que alimentam o painel da Liga. 03.08.05 e diario por data; os demais substituem o lote ativo e preservam historico no armazenamento da Liga." },
+      liga_031120: { id: "Liga031120", name: "03.11.20 - Portaria", icon: "bi-map", area: "promax", group: "Liga Entrega" },
+      liga_030224_motorista: { id: "Liga030224Motorista", name: "03.02.24 - Devolucoes Motorista", icon: "bi-person-vcard", area: "promax", group: "Liga Entrega" },
+      liga_030224_ajudante: { id: "Liga030224Ajudante", name: "03.02.24 - Devolucoes Ajudante", icon: "bi-people", area: "promax", group: "Liga Entrega" },
+      liga_030237: { id: "Liga030237", name: "03.02.37 - Entregas", icon: "bi-truck", area: "promax", group: "Liga Entrega" },
+      liga_03114902: { id: "Liga03114902", name: "03.11.49.02 - Cidades por mapa", icon: "bi-geo-alt", area: "promax", group: "Liga Entrega" },
+      liga_031129: { id: "Liga031129", name: "03.11.29 - Equipes do dia", icon: "bi-person-lines-fill", area: "promax", group: "Liga Entrega" },
+      liga_espelho_ponto: { id: "LigaEspelhoPonto", name: "Espelho de ponto", icon: "bi-clock-history", area: "promax", group: "Liga Entrega" },
+      liga_checklist_frota: { id: "LigaChecklistFrota", name: "Checklist Frota", icon: "bi-clipboard-check", area: "promax", group: "Liga Entrega" },
       critica_rn: { id: "CriticaRNLegacy", name: "Critica RN (legado)", icon: "bi-archive", area: "critica", group: "Rotina anterior", groupNote: "Mantida apenas para compatibilidade. O fluxo atual deve usar os uploads por operacao.", disabled: true, badge: "Legado", description: "Importacao antiga preservada no codigo, sem uso no fluxo atual do bot.", sourcePath: "data/CriticaRN/critica_rn.xlsx" }
     };
 
@@ -3195,10 +3212,11 @@
       if (estoqueMatch) return `Estoque020304Op${estoqueMatch[1]}`;
       const rel031120Match = name.match(/^relatorio_031120_op_(\d+)$/);
       if (rel031120Match) return `Relatorio031120Op${rel031120Match[1]}`;
-      if (name === "relatorio_03114902_geo") return "Relatorio03114902Geo";
+      if (name === "relatorio_03114902_geo") return "Relatorio03114902Csv";
       const criticaMatch = name.match(/^critica_op_(\d+)$/);
       if (criticaMatch) return `CriticaOp${criticaMatch[1]}`;
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].id) return DATASET_UI_OVERRIDES[name].id;
+      if (name.startsWith("liga_")) return name.replace(/(^|_)([a-z0-9])/g, (_, __, chr) => chr.toUpperCase());
       return name.replace(/(^|_)([a-z0-9])/g, (_, __, chr) => chr.toUpperCase());
     }
 
@@ -3210,6 +3228,7 @@
       if (name.startsWith("estoque_020304_op_")) return "promax";
       if (name.startsWith("relatorio_031120_op_")) return "promax";
       if (name === "relatorio_03114902_geo") return "promax";
+      if (name.startsWith("liga_")) return "promax";
       if (["prazo_limite", "giro"].includes(name)) return "powerbi";
       if (["dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dgarrafeiras", "dmateriais", "produto_cestas"].includes(name)) return "operational";
       return "promax";
@@ -3222,7 +3241,8 @@
       if (name.startsWith("boletos_bradesco_op_")) return "bi-upc-scan";
       if (name.startsWith("estoque_020304_op_")) return "bi-boxes";
       if (name.startsWith("relatorio_031120_op_")) return "bi-map";
-      if (name === "relatorio_03114902_geo") return "bi-geo-alt";
+      if (name === "relatorio_03114902_geo") return "bi-filetype-csv";
+      if (name.startsWith("liga_")) return "bi-trophy";
       return "bi-table";
     }
 
@@ -3232,7 +3252,8 @@
       if (name.startsWith("critica_op_")) return "Promax 030111 - Critica por operacao";
       if (name.startsWith("estoque_020304_op_")) return "Promax 020304 - Estoque por operacao";
       if (name.startsWith("relatorio_031120_op_")) return "Promax 031120 - Mapa por operacao";
-      if (name === "relatorio_03114902_geo") return "Promax 03114902 - Geo";
+      if (name === "relatorio_03114902_geo") return "Promax 03114902 - CSV";
+      if (name.startsWith("liga_")) return "Liga Entrega";
       if (datasetArea(name) === "operational") return "Operacional";
       if (datasetArea(name) === "powerbi") return "Power BI";
       return "Promax";
@@ -3244,7 +3265,8 @@
       if (name.startsWith("critica_op_")) return "Upload separado por filial. A consolidacao final do bot passa a sair desta aba.";
       if (name.startsWith("estoque_020304_op_")) return "Upload separado por filial. O bot envia o PDF ativo pelo comando estoque filial.";
       if (name.startsWith("relatorio_031120_op_")) return "Upload separado por filial. Rotina 031120 com classificacao Mapa e armazem central.";
-      if (name === "relatorio_03114902_geo") return "Relatorio unico para todas as operacoes. Rotina 03114902 gerada pelo botao CSV Geo.";
+      if (name === "relatorio_03114902_geo") return "Relatorio unico para todas as operacoes. Rotina 03114902 gerada pelo botao Gerar CSV.";
+      if (name.startsWith("liga_")) return "Arquivos usados para montar o painel da Liga. A 03.08.05 fica diaria; os demais usam o ultimo lote importado.";
       return "";
     }
 
@@ -3262,7 +3284,19 @@
         return { accept, mode, label: "CSV da Operacao", emptyHint: `Selecione o CSV 031120 da operacao ${apiName.replace("relatorio_031120_op_", "")}.` };
       }
       if (apiName === "relatorio_03114902_geo") {
-        return { accept, mode, label: "CSV Geo", emptyHint: "Selecione o CSV Geo 03114902 consolidado." };
+        return { accept, mode, label: "CSV", emptyHint: "Selecione o CSV 03114902 consolidado." };
+      }
+      if (apiName.startsWith("liga_")) {
+        const isDaily = apiName === "liga_030805";
+        const label = apiName === "liga_checklist_frota" ? "Checklist Frota" : (apiName === "liga_espelho_ponto" ? "Espelho de ponto" : "Arquivo(s) da Liga");
+        return {
+          accept,
+          mode,
+          label,
+          emptyHint: isDaily
+            ? "Selecione os arquivos da 03.08.05 do dia, normalmente PATOS_DD_MM e SUME_DD_MM."
+            : "Selecione o(s) arquivo(s) mais recente(s) deste relatorio da Liga."
+        };
       }
       if (apiName.startsWith("critica_op_")) {
         return { accept, mode, label: "CSV da Operacao", emptyHint: `Selecione o CSV da operacao ${apiName.replace("critica_op_", "")}.` };

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Any
+
+from bot_api.services.liga_entrega_import_service import LigaEntregaReportImportService
+from bot_api.services.liga_entrega_report_store import LigaEntregaReportStore
 
 
 ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS = {"critica_rn", "dclientes", "doperacoes", "dprecos", "dsetores", "dcondicoes"}
@@ -12,8 +16,10 @@ def build_admin_import_datasets(
     project_root: Path,
     services: Any,
     filial_labels: dict[str, str],
+    liga_entrega_report_store: LigaEntregaReportStore | None = None,
 ) -> dict[str, dict[str, Any]]:
-    return {
+    entrega_reports_root = Path(r"M:/REVENDA") / f"SDPO {date.today().year}" / "DPO" / "PILAR ENTREGA" / "RELATORIOS"
+    datasets: dict[str, dict[str, Any]] = {
         "dsetores": {
             "label": "dSetores",
             "default_path": project_root / "data" / "dSetores" / "dSetores.csv",
@@ -153,8 +159,8 @@ def build_admin_import_datasets(
             for filial_code in sorted(filial_labels, key=int)
         },
         "relatorio_03114902_geo": {
-            "label": "Relatorio 03114902 Geo - Todas as operacoes",
-            "default_path": project_root / "data" / "Relatorio03114902" / "03114902_geo.csv",
+            "label": "Relatorio 03114902 - Todas as operacoes",
+            "default_path": project_root / "data" / "Relatorio03114902" / "03114902.csv",
             "allow_default_source": False,
             "service": services.relatorio_03114902_import_service,
             "upload_mode": "single",
@@ -250,3 +256,109 @@ def build_admin_import_datasets(
             "import_method": "import_source",
         },
     }
+
+    if liga_entrega_report_store is not None:
+        liga_specs = {
+            "liga_030805": {
+                "allow_default_source": False,
+                "label": "Liga Entrega - 03.08.05 Rotas do dia",
+                "routine": "030805_LIGA",
+                "folder": entrega_reports_root / "03.08.05",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv,.txt",
+                "patterns": (r"^(PATOS|SUME)_\d{2}_\d{2}\.csv$", r"^2artd\d{2}_\d{4}\.txt$"),
+            },
+            "liga_031120": {
+                "allow_default_source": False,
+                "label": "Liga Entrega - 03.11.20 Portaria",
+                "routine": "031120_BOT",
+                "folder": entrega_reports_root / "03.11.20",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv",
+                "patterns": (r"^03\.11\.20_(PATOS|SUME)_[A-Z]{3}\.csv$",),
+            },
+            "liga_030224_motorista": {
+                "allow_default_source": False,
+                "label": "Liga Entrega - 03.02.24 Devolucoes Motorista",
+                "routine": "030224_MOTORISTA_LIGA",
+                "folder": entrega_reports_root / "03.02.24" / "Motorista",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv",
+                "patterns": (r"^03\.02\.24_(PATOS|SUME)_[A-Z]{3}\.csv$",),
+            },
+            "liga_030224_ajudante": {
+                "allow_default_source": False,
+                "label": "Liga Entrega - 03.02.24 Devolucoes Ajudante",
+                "routine": "030224_AJUDANTE_LIGA",
+                "folder": entrega_reports_root / "03.02.24" / "Ajudante",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv",
+                "patterns": (r"^03\.02\.24_(PATOS|SUME)_[A-Z]{3}\.csv$",),
+            },
+            "liga_030237": {
+                "allow_default_source": False,
+                "label": "Liga Entrega - 03.02.37 Entregas",
+                "routine": "030237",
+                "folder": entrega_reports_root / "03.02.37 - Entregas",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv",
+                "patterns": (r"^03\.02\.37_(PATOS|SUME)_[A-Z]{3}\.csv$",),
+            },
+            "liga_03114902": {
+                "allow_default_source": False,
+                "label": "Liga Entrega - 03.11.49.02 Cidades por mapa",
+                "routine": "03114902_BOT",
+                "folder": entrega_reports_root / "03.11.49.02",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv",
+                "patterns": (r"^03\.11\.49\.02_(PATOS|SUME)_[A-Z]{3}\.csv$",),
+            },
+            "liga_031129": {
+                "allow_default_source": False,
+                "label": "Liga Entrega - 03.11.29 Equipes do dia",
+                "routine": "031129_LIGA",
+                "folder": entrega_reports_root / "03.11.29",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv",
+                "patterns": (r"^03\.11\.29_(PATOS|SUME)_[A-Z]{3}\.csv$",),
+            },
+            "liga_espelho_ponto": {
+                "allow_default_source": True,
+                "label": "Liga Entrega - Espelho de ponto",
+                "routine": "PONTOMAIS_ESPELHO",
+                "folder": entrega_reports_root / "PONTOMAIS" / "espelho_matricula",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv",
+                "patterns": (r"^Espelho_[A-Z]{3}_(PATOS|SUME)_?\.csv$",),
+            },
+            "liga_checklist_frota": {
+                "allow_default_source": True,
+                "label": "Liga Entrega - Checklist Frota",
+                "routine": "CHECKLIST_FROTA",
+                "folder": entrega_reports_root / "Checklist Frota" / "Checklist Setembro.xlsx",
+                "upload_mode": "single",
+                "accept_extensions": ".xlsx,.xlsm",
+                "patterns": (r"^Checklist .*\.xls[xm]$",),
+            },
+        }
+        for dataset_name, spec in liga_specs.items():
+            datasets[dataset_name] = {
+                "label": spec["label"],
+                "default_path": spec["folder"],
+                "allow_default_source": bool(spec.get("allow_default_source", False)),
+                "service": LigaEntregaReportImportService(
+                    report_store=liga_entrega_report_store,
+                    dataset_name=dataset_name,
+                    label=spec["label"],
+                    routine=spec["routine"],
+                    allowed_extensions={item.strip() for item in str(spec["accept_extensions"]).split(",") if item.strip()},
+                    expected_name_patterns=tuple(spec["patterns"]),
+                ),
+                "upload_mode": spec["upload_mode"],
+                "accept_extensions": spec["accept_extensions"],
+                "validate_method": "validate_source",
+                "summarize_method": "summarize_source",
+                "import_method": "import_source",
+            }
+
+    return datasets

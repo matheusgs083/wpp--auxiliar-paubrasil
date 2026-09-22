@@ -1067,7 +1067,7 @@ class PromaxWorker:
             self._send_log(
                 job_id,
                 lease_token,
-                "Importacao automatica 03114902_BOT sem CSV Geo na pasta publicada.",
+                "Importacao automatica 03114902_BOT sem CSV na pasta publicada.",
                 "warning",
                 {"event": "promax_03114902_auto_import_missing_file"},
             )

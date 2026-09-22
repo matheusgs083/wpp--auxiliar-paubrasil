@@ -1101,7 +1101,11 @@ def _list_admin_import_status() -> dict[str, Any]:
                 "upload_mode": str(config.get("upload_mode") or "single"),
                 "accept_extensions": str(config.get("accept_extensions") or ""),
                 "active_upload_activated_at": source_status.get("active_upload_activated_at", ""),
-                "last_import": dataset_rows.get(dataset_name),
+                "last_import": dataset_rows.get(dataset_name) or (
+                    config["service"].latest_status()
+                    if hasattr(config.get("service"), "latest_status")
+                    else None
+                ),
             }
         )
 

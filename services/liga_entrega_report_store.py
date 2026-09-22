@@ -10,7 +10,7 @@ from typing import Any
 
 _SAFE_ROUTINE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _SAFE_FILENAME_PATTERN = re.compile(r"^[^\\/:*?\"<>|\r\n]{1,255}$")
-_ALLOWED_SUFFIXES = {".csv", ".txt", ".xlsx"}
+_ALLOWED_SUFFIXES = {".csv", ".txt", ".xlsx", ".xlsm", ".xls"}
 
 
 class LigaEntregaReportStore:
@@ -63,6 +63,49 @@ class LigaEntregaReportStore:
             encoding="utf-8",
         )
         return manifest
+
+    def latest_manifest(self, routine: str) -> dict[str, Any] | None:
+        """Retorna o manifesto mais recente gravado para uma rotina da Liga Entrega."""
+
+        clean_routine = self._clean_routine(routine)
+        routine_dir = self.root_dir / clean_routine
+        if not routine_dir.exists() or not routine_dir.is_dir():
+            return None
+
+        candidates: list[Path] = []
+        try:
+            date_dirs = [path for path in routine_dir.iterdir() if path.is_dir()]
+        except OSError:
+            return None
+        for date_dir in date_dirs:
+            try:
+                batch_dirs = [path for path in date_dir.iterdir() if path.is_dir()]
+            except OSError:
+                continue
+            for batch_dir in batch_dirs:
+                manifest_path = batch_dir / "manifest.json"
+                if manifest_path.is_file():
+                    candidates.append(manifest_path)
+
+        latest_payload: dict[str, Any] | None = None
+        latest_sort_key: tuple[str, float] | None = None
+        for manifest_path in candidates:
+            try:
+                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(payload, dict):
+                continue
+            stored_at = str(payload.get("stored_at") or "")
+            try:
+                mtime = manifest_path.stat().st_mtime
+            except OSError:
+                mtime = 0.0
+            sort_key = (stored_at, mtime)
+            if latest_sort_key is None or sort_key > latest_sort_key:
+                latest_sort_key = sort_key
+                latest_payload = payload
+        return latest_payload
 
     @staticmethod
     def _clean_routine(value: str) -> str:

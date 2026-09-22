@@ -12,6 +12,7 @@ from bot_api.routes.admin_critica import create_admin_critica_router
 from bot_api.routes.admin_financeiro import create_admin_financeiro_router
 from bot_api.routes.admin_giro import create_admin_giro_router
 from bot_api.routes.admin_imports import create_admin_imports_router
+from bot_api.routes.admin_liga_entrega import create_admin_liga_entrega_router
 from bot_api.routes.admin_panel import create_admin_panel_router
 from bot_api.routes.admin_payip import create_admin_payip_router
 from bot_api.routes.admin_promax import create_admin_promax_router
@@ -37,6 +38,7 @@ def build_admin_route_registrars(deps: dict[str, Any]) -> tuple[RouteRegistrar, 
         lambda app: _register_admin_usage_routes(app, deps=deps),
         lambda app: _register_admin_broadcast_routes(app, deps=deps),
         lambda app: _register_admin_promax_routes(app, deps=deps),
+        lambda app: _register_admin_liga_entrega_routes(app, deps=deps),
     )
 
 
@@ -248,6 +250,18 @@ def _register_admin_broadcast_routes(app: FastAPI, *, deps: dict[str, Any]) -> N
             build_admin_broadcast_payload=deps["build_admin_broadcast_payload"],
             queue_admin_broadcast=deps["queue_admin_broadcast"],
             record_security_event=deps["record_security_event"],
+        )
+    )
+
+
+def _register_admin_liga_entrega_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    app.include_router(
+        create_admin_liga_entrega_router(
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
+            liga_entrega_expurgo_service=deps["liga_entrega_expurgo_service"],
+            record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps["record_admin_panel_action"],
         )
     )
 
