@@ -101,6 +101,8 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
                 {"id": "030805_LIGA", "name": "Rotina 030805 Liga Entrega"},
                 {"id": "030224_MOTORISTA_LIGA", "name": "Rotina 030224 Motorista Liga Entrega"},
                 {"id": "030224_AJUDANTE_LIGA", "name": "Rotina 030224 Ajudante Liga Entrega"},
+                {"id": "030224_MOTORISTA_LIGA_PDF", "name": "PDF 030224 Motorista Liga Entrega"},
+                {"id": "030224_AJUDANTE_LIGA_PDF", "name": "PDF 030224 Ajudante Liga Entrega"},
                 {"id": "031120_BOT", "name": "Rotina 031120 Bot"},
                 {"id": "031129_LIGA", "name": "Rotina 031129 Liga Entrega"},
                 {"id": "03114902_BOT", "name": "Rotina 03114902 Bot"},

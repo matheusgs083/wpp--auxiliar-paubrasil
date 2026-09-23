@@ -1541,8 +1541,12 @@
                   </div>
                 </form>
                 <div id="entregaLigaExpurgosList" class="small mb-3 text-secondary">Carregando expurgos...</div>
-                <button class="btn btn-primary btn-sm" type="button" id="entregaOpenLigaPromaxBtn"><i class="bi bi-pc-display-horizontal me-1"></i>Abrir Liga no Promax</button>
-                <div class="form-text mt-2">O atalho seleciona o grupo Liga Entrega e mantém apenas as rotinas homologadas pelo catálogo.</div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button class="btn btn-primary btn-sm" type="button" id="entregaOpenLigaPromaxBtn"><i class="bi bi-pc-display-horizontal me-1"></i>Abrir Liga no Promax</button>
+                  <button class="btn btn-outline-primary btn-sm" type="button" id="entregaDownloadLigaMotoristaPdfBtn"><i class="bi bi-file-earmark-pdf me-1"></i>Baixar PDF Motoristas</button>
+                  <button class="btn btn-outline-primary btn-sm" type="button" id="entregaDownloadLigaAjudantePdfBtn"><i class="bi bi-file-earmark-pdf me-1"></i>Baixar PDF Ajudantes</button>
+                </div>
+                <div class="form-text mt-2">Os botoes de PDF enfileiram a rotina correspondente no Promax e salvam o arquivo na pasta da Liga.</div>
               </div>
             </div>
           </div>
@@ -3507,6 +3511,8 @@
       jobsTable: document.getElementById("jobsBody"),
       promaxTab: document.getElementById("promaxTab"),
       entregaOpenLigaPromaxBtn: document.getElementById("entregaOpenLigaPromaxBtn"),
+      entregaDownloadLigaMotoristaPdfBtn: document.getElementById("entregaDownloadLigaMotoristaPdfBtn"),
+      entregaDownloadLigaAjudantePdfBtn: document.getElementById("entregaDownloadLigaAjudantePdfBtn"),
       entregaLigaExpurgoForm: document.getElementById("entregaLigaExpurgoForm"),
       entregaLigaExpurgoTipo: document.getElementById("entregaLigaExpurgoTipo"),
       entregaLigaExpurgoFilial: document.getElementById("entregaLigaExpurgoFilial"),
@@ -5075,6 +5081,35 @@
       if (E.promaxPublish) E.promaxPublish.checked = true;
       syncPromaxDateFields();
       addLog("Liga Entrega selecionada no Promax Admin.", "ok");
+    }
+
+    async function baixarPdfLigaEntrega(routineId, label) {
+      if (!state.panel || !state.panel.canManagePromax) {
+        addLog("Sem permissao para executar a Liga no Promax.", "warn");
+        return;
+      }
+      showPanelTab("promaxTab");
+      updateFlowNavigation("promaxTab");
+      try {
+        if (!state.promax.catalog) await syncPromax({ silent: true });
+        const category = promaxCatalogCategory("liga_entrega");
+        if (!category || !category.routines.some(item => String(item.id || item) === String(routineId))) {
+          throw new Error("O worker Promax ainda nao publicou as rotinas de PDF da Liga. Atualize o worker e tente novamente.");
+        }
+        setPromaxScheduleSlicerSelection("category", ["liga_entrega"], "run");
+        setPromaxScheduleSlicerSelection(
+          "routine",
+          [promaxScheduleRoutineKey("liga_entrega", routineId)],
+          "run"
+        );
+        if (E.promaxSendDates) E.promaxSendDates.checked = true;
+        if (E.promaxPublish) E.promaxPublish.checked = true;
+        syncPromaxDateFields();
+        await promaxRunNow();
+        addLog(`${label} solicitado no Promax.`, "ok");
+      } catch (err) {
+        addLog(`Falha ao solicitar ${label}: ${err.message}`, "err");
+      }
     }
 
     function promaxRunBatchPayload() {
@@ -9581,6 +9616,8 @@
       if (E.promaxSaveWorkerAssignmentsBtn) E.promaxSaveWorkerAssignmentsBtn.addEventListener("click", savePromaxWorkerAssignments);
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
+      if (E.entregaDownloadLigaMotoristaPdfBtn) E.entregaDownloadLigaMotoristaPdfBtn.addEventListener("click", () => baixarPdfLigaEntrega("030224_MOTORISTA_LIGA_PDF", "PDF de motoristas"));
+      if (E.entregaDownloadLigaAjudantePdfBtn) E.entregaDownloadLigaAjudantePdfBtn.addEventListener("click", () => baixarPdfLigaEntrega("030224_AJUDANTE_LIGA_PDF", "PDF de ajudantes"));
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
       if (E.entregaLigaExpurgoTipo) E.entregaLigaExpurgoTipo.addEventListener("change", updateLigaEntregaExpurgoForm);
       if (E.entregaLigaExpurgoForm) E.entregaLigaExpurgoForm.addEventListener("submit", event => {
