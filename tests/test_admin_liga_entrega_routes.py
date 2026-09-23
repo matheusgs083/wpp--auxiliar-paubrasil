@@ -59,7 +59,32 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(item["manifest"]["file_count"], 1)
         missing = next(item for item in payload["items"] if item["routine"] == "031120_BOT")
         self.assertFalse(missing["loaded"])
+        self.assertFalse(payload["summary"]["ready"])
+        self.assertEqual(payload["summary"]["total_files"], 1)
+        self.assertEqual(payload["summary"]["latest_reference_date"], "2026-09-22")
         self.assertEqual(events[-1]["event_type"], "admin_liga_relatorios_list")
+
+    def test_list_relatorios_uses_manual_upload_routine_names(self) -> None:
+        client, _events = self.make_client()
+        store = LigaEntregaReportStore(Path(self.tmp.name) / "reports")
+        store.store_batch(
+            routine="PONTOMAIS_ESPELHO",
+            files={"Espelho_SET_PATOS.csv": b"matricula;nome\n1;A\n"},
+            reference_date="2026-09-22",
+        )
+        store.store_batch(
+            routine="CHECKLIST_FROTA",
+            files={"Checklist Setembro.xlsx": b"xlsx"},
+            reference_date="2026-09-22",
+        )
+
+        response = client.get("/api/admin/liga-entrega/relatorios")
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        espelho = next(item for item in payload["items"] if item["routine"] == "PONTOMAIS_ESPELHO")
+        checklist = next(item for item in payload["items"] if item["routine"] == "CHECKLIST_FROTA")
+        self.assertTrue(espelho["loaded"])
+        self.assertTrue(checklist["loaded"])
 
     def test_upsert_list_and_delete_expurgo(self) -> None:
         client, events = self.make_client()

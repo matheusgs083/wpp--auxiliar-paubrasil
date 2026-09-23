@@ -16,8 +16,8 @@ LIGA_ENTREGA_REPORTS = (
     {"routine": "030237", "code": "03.02.37", "label": "Entregas", "kind": "Mensal"},
     {"routine": "03114902_BOT", "code": "03.11.49.02", "label": "Cidades por mapa", "kind": "Mensal"},
     {"routine": "031129_LIGA", "code": "03.11.29", "label": "Equipe do dia por mapa", "kind": "Mensal"},
-    {"routine": "liga_espelho_ponto", "code": "PONTO", "label": "Espelho de ponto", "kind": "Mensal"},
-    {"routine": "liga_checklist_frota", "code": "XLSX", "label": "Checklist Frota", "kind": "Mensal"},
+    {"routine": "PONTOMAIS_ESPELHO", "code": "PONTO", "label": "Espelho de ponto", "kind": "Mensal"},
+    {"routine": "CHECKLIST_FROTA", "code": "XLSX", "label": "Checklist Frota", "kind": "Mensal"},
 )
 
 
@@ -121,6 +121,19 @@ def create_admin_liga_entrega_router(
                     "manifest": manifest,
                 }
             )
+        loaded_items = [item for item in items if item.get("loaded")]
+        latest_stored_at = max(
+            (str((item.get("manifest") or {}).get("stored_at") or "") for item in loaded_items),
+            default="",
+        )
+        latest_reference_date = max(
+            (str((item.get("manifest") or {}).get("reference_date") or "") for item in loaded_items),
+            default="",
+        )
+        total_files = sum(
+            int((item.get("manifest") or {}).get("file_count") or 0)
+            for item in loaded_items
+        )
         result = {
             "ok": True,
             "items": items,
@@ -128,6 +141,10 @@ def create_admin_liga_entrega_router(
                 "total": len(items),
                 "loaded": loaded,
                 "missing": len(items) - loaded,
+                "ready": loaded == len(items),
+                "total_files": total_files,
+                "latest_reference_date": latest_reference_date,
+                "latest_stored_at": latest_stored_at,
             },
         }
         record_security_event(

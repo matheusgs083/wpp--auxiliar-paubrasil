@@ -1452,6 +1452,21 @@
             </div>
           </div>
         </section>
+
+        <section class="panel-card p-3 mb-3" id="entregaLigaDashboardSection">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Dashboard da Liga</h2>
+              <div class="form-text" id="entregaLigaDashboardStatus">Aguardando relatórios carregados para montar o dashboard.</div>
+            </div>
+            <span class="pill" id="entregaLigaDashboardBadge">Pendente</span>
+          </div>
+          <div class="recolha-dashboard-grid mb-3" id="entregaLigaDashboardCards"></div>
+          <div class="source-box" id="entregaLigaDashboardDetails">
+            <div class="small text-secondary">Fonte</div>
+            <div class="source-path">O dashboard usa os lotes salvos no backend da Liga e mantém os expurgos separados dos relatórios.</div>
+          </div>
+        </section>
       </div>
 
       <div class="tab-pane fade" id="promaxPane" role="tabpanel" aria-labelledby="promaxTab" tabindex="0">
@@ -3398,6 +3413,10 @@
       entregaLigaReportsGrid: document.getElementById("entregaLigaReportsGrid"),
       entregaLigaReportsSummary: document.getElementById("entregaLigaReportsSummary"),
       entregaLigaReportsRefreshBtn: document.getElementById("entregaLigaReportsRefreshBtn"),
+      entregaLigaDashboardStatus: document.getElementById("entregaLigaDashboardStatus"),
+      entregaLigaDashboardBadge: document.getElementById("entregaLigaDashboardBadge"),
+      entregaLigaDashboardCards: document.getElementById("entregaLigaDashboardCards"),
+      entregaLigaDashboardDetails: document.getElementById("entregaLigaDashboardDetails"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
@@ -4673,6 +4692,48 @@
             </div>
           </div>`;
       }).join("");
+      renderLigaEntregaDashboard(items, summary);
+    }
+
+    function renderLigaEntregaDashboard(items, summary) {
+      const loadedItems = items.filter(item => item && item.loaded && item.manifest);
+      const missingItems = items.filter(item => !item || !item.loaded);
+      const total = Number(summary.total || items.length || 0);
+      const loaded = Number(summary.loaded || loadedItems.length || 0);
+      const ready = Boolean(summary.ready || (total > 0 && loaded === total));
+      const totalFiles = Number(summary.total_files || loadedItems.reduce((sum, item) => sum + Number((item.manifest || {}).file_count || 0), 0));
+      const latestReference = summary.latest_reference_date ? formatDate(summary.latest_reference_date) : "-";
+      const latestStoredAt = summary.latest_stored_at ? formatDateTime(summary.latest_stored_at) : "-";
+      if (E.entregaLigaDashboardBadge) {
+        E.entregaLigaDashboardBadge.textContent = ready ? "Pronto" : "Pendente";
+        E.entregaLigaDashboardBadge.className = `pill ${ready ? "ok" : ""}`;
+      }
+      if (E.entregaLigaDashboardStatus) {
+        E.entregaLigaDashboardStatus.textContent = ready
+          ? "Todos os relatórios homologados estão carregados. O dashboard já pode usar os lotes ativos."
+          : `Faltam ${missingItems.length} relatório(s) para o dashboard ficar completo.`;
+      }
+      if (E.entregaLigaDashboardCards) {
+        E.entregaLigaDashboardCards.innerHTML = [
+          ["Relatórios", `${loaded}/${total}`, "lotes ativos"],
+          ["Arquivos", String(totalFiles || 0), "arquivos no backend"],
+          ["Referência", latestReference, "maior data carregada"],
+          ["Atualização", latestStoredAt, "último lote recebido"]
+        ].map(([label, value, sub]) => `
+          <article class="recolha-dashboard-card">
+            <span class="label">${escapeHtml(label)}</span>
+            <span class="value">${escapeHtml(value)}</span>
+            <span class="sub">${escapeHtml(sub)}</span>
+          </article>`).join("");
+      }
+      if (E.entregaLigaDashboardDetails) {
+        const missingText = missingItems.length
+          ? `Pendentes: ${missingItems.map(item => item.label || item.routine || "-").join(", ")}.`
+          : "Todos os insumos homologados estão disponíveis.";
+        E.entregaLigaDashboardDetails.innerHTML = `
+          <div class="small text-secondary">Fonte</div>
+          <div class="source-path">${escapeHtml(missingText)} Expurgos continuam aplicados no backend separadamente dos relatórios.</div>`;
+      }
     }
 
     async function syncLigaEntregaReports({ silent = true, force = false } = {}) {
