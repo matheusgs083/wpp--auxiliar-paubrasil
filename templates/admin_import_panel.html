@@ -229,6 +229,10 @@
     #entregaPane .liga-ranking-table tbody tr.top-1 td:first-child { border-left-width: 4px; }
     #entregaPane .liga-team-pending { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: space-between; padding: .7rem .85rem; border-bottom: 1px solid #2b3951; background: #111927; }
     #entregaPane .liga-team-pending small { color: #98a7c0; }
+    #entregaPane #entregaLigaExpurgosList { max-height: 248px; overflow-y: auto; padding-right: .42rem; scrollbar-color: #526684 #0c1320; scrollbar-width: thin; }
+    #entregaPane #entregaLigaExpurgosList::-webkit-scrollbar { width: 8px; }
+    #entregaPane #entregaLigaExpurgosList::-webkit-scrollbar-thumb { border-radius: 99px; background: #526684; }
+    #entregaPane #entregaLigaExpurgosList::-webkit-scrollbar-track { border-radius: 99px; background: #0c1320; }
     #entregaPane .liga-person-name { color: #f1f5f9; }
     #entregaPane .liga-person-meta, #entregaPane .liga-kpi small { color: #8492ab; }
     #entregaPane .liga-score { color: #f1f5f9; }
@@ -1518,8 +1522,8 @@
                 <h3 class="h6 fw-bold mb-2"><i class="bi bi-scissors me-2"></i>Expurgos mantidos</h3>
                 <ul class="small mb-3 ps-3">
                   <li><b>Devolução:</b> remove por cliente + data da entrega.</li>
-                  <li><b>TML:</b> remove por filial + data + mapa apenas do indicador de saída.</li>
-                  <li><b>Dispersão/KM:</b> remove por filial + data + mapa apenas do indicador de km.</li>
+                  <li><b>TML:</b> remove por filial + data + mapa apenas da saída de toda a equipe da rota.</li>
+                  <li><b>Dispersão/KM:</b> remove por filial + data + mapa apenas do km de toda a equipe da rota.</li>
                 </ul>
                 <div class="source-box mb-3">
                   <div class="small text-secondary">Persistência</div>
@@ -4937,7 +4941,7 @@
       if (E.entregaLigaExpurgoAlvo) E.entregaLigaExpurgoAlvo.placeholder = isDevolucao ? "Código do cliente" : "Número do mapa";
       if (E.entregaLigaExpurgoHint) E.entregaLigaExpurgoHint.textContent = isDevolucao
         ? "Remove apenas devolução por cliente e data."
-        : "Remove somente este indicador da rota; os demais continuam contando.";
+        : "Remove este indicador para motorista e ajudantes da rota; os demais continuam contando.";
     }
 
     function renderLigaEntregaExpurgos() {
