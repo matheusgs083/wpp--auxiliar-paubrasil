@@ -54,10 +54,6 @@ def build_liga_entrega_dashboard_pdf(
         fontSize=17, leading=20, textColor=INK,
         spaceAfter=3 * mm,
     )
-    subtitle_style = ParagraphStyle(
-        "LigaPdfSubtitle", parent=styles["Normal"], fontName="Helvetica",
-        fontSize=9, leading=12, textColor=MUTED,
-    )
     cell_style = ParagraphStyle(
         "LigaPdfCell", parent=styles["Normal"], fontName="Helvetica",
         fontSize=7.2, leading=8.5, textColor=INK,
@@ -73,12 +69,6 @@ def build_liga_entrega_dashboard_pdf(
         "LigaPdfHeaderCenter", parent=header_style, alignment=TA_CENTER,
     )
 
-    expurgos = dashboard.get("expurgos")
-    expurgos = expurgos if isinstance(expurgos, Mapping) else {}
-    counts = expurgos.get("counts")
-    counts = counts if isinstance(counts, Mapping) else {}
-    total_expurgos = sum(_number(counts.get(key)) for key in ("devolucao", "km", "dispersao", "tml"))
-
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer,
@@ -92,11 +82,7 @@ def build_liga_entrega_dashboard_pdf(
     )
     story: list[Any] = [
         Paragraph(escape(title), title_style),
-        Paragraph(
-            escape(f"Competência: {competencia}  |  Dashboard da Liga Entrega  |  Expurgos aplicados: {int(total_expurgos)}"),
-            subtitle_style,
-        ),
-        Spacer(1, 5 * mm),
+        Spacer(1, 4 * mm),
     ]
 
     story.append(Spacer(1, 2 * mm))
