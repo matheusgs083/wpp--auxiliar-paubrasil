@@ -207,15 +207,28 @@
     #entregaPane .recolha-dashboard-card { border-color: #2a3850; background: #111827; box-shadow: none; }
     #entregaPane .recolha-dashboard-card .label, #entregaPane .recolha-dashboard-card .sub { color: #91a0ba; }
     #entregaPane .recolha-dashboard-card .value { color: #f8fafc; }
-    #entregaPane .liga-command-bar { border-color: #33425c; background: linear-gradient(110deg, #131c30, #0e1523); }
-    #entregaPane .liga-eyebrow { color: #f5bd43; }
-    #entregaPane .liga-toolbar { border-color: #2b3951; }
-    #entregaPane .liga-view-tabs .btn { color: #aab7cc; border-color: #33425c; background: #111827; }
-    #entregaPane .liga-view-tabs .btn.btn-primary { color: #fff; border-color: #3b82f6; background: #3b82f6; }
-    #entregaPane .liga-operational-view { border-color: #2b3951; background: #0f1521; }
-    #entregaPane .liga-ranking-table thead th { color: #909db4; background: #161e2e; border-color: #2c3951; }
-    #entregaPane .liga-ranking-table td { color: #e6edf8; border-color: #263249; background: #0f1521; }
-    #entregaPane .liga-ranking-table tbody tr:hover td { background: #161f31; }
+    #entregaPane .liga-dash-shell { overflow: hidden; border: 1px solid #26344c; border-radius: 17px; background: #0c121e; box-shadow: 0 18px 46px rgba(0,0,0,.28); }
+    #entregaPane .liga-dash-controls { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; justify-content: space-between; padding: .85rem 1rem; border-bottom: 1px solid #26344c; background: linear-gradient(180deg, #151d2d, #101726); }
+    #entregaPane .liga-dash-context { min-width: 180px; color: #95a4bd; font-size: .77rem; font-weight: 700; }
+    #entregaPane .liga-dash-context b { display: block; color: #e9effa; font-size: .94rem; letter-spacing: .02em; }
+    #entregaPane .liga-dash-tools { display: flex; flex: 1 1 500px; flex-wrap: wrap; gap: .65rem; align-items: center; justify-content: flex-end; }
+    #entregaPane .liga-view-tabs { gap: 0; overflow: hidden; border: 1px solid #42516a; border-radius: 9px; }
+    #entregaPane .liga-view-tabs .btn { min-height: 32px; padding: .28rem .62rem; border: 0; border-right: 1px solid #42516a; border-radius: 0; color: #aab7cc; background: #111827; font-size: .8rem; }
+    #entregaPane .liga-view-tabs .btn:last-child { border-right: 0; }
+    #entregaPane .liga-view-tabs .btn.btn-primary { color: #fff; background: #2f80ed; }
+    #entregaPane .liga-filters { gap: .45rem; }
+    #entregaPane .liga-filters .form-select, #entregaPane .liga-filters .input-group { height: 32px; }
+    #entregaPane .liga-filters .form-control, #entregaPane .liga-filters .form-select, #entregaPane .liga-filters .input-group-text { min-height: 32px; border-color: #33425c; background: #0c1320; font-size: .8rem; }
+    #entregaPane .liga-operational-view { border: 0; border-radius: 0; background: #0c121e; }
+    #entregaPane .liga-ranking-table thead th { height: 54px; padding: .55rem .75rem; color: #94a1b9; background: #151d2c; border-color: #2b3850; font-size: .69rem; }
+    #entregaPane .liga-ranking-table td { height: 56px; padding: .55rem .75rem; color: #e6edf8; border-color: #263249; background: #0c121e; }
+    #entregaPane .liga-ranking-table tbody tr:hover td { background: #151e30; }
+    #entregaPane .liga-ranking-table .liga-person-name { font-size: .88rem; text-decoration: underline dotted rgba(220,230,248,.35); text-underline-offset: 5px; }
+    #entregaPane .liga-ranking-table .liga-rank { width: 2.1rem; height: 2.1rem; border-color: #32425e; border-radius: 8px; background: #152036; color: #c6d3e8; }
+    #entregaPane .liga-ranking-table .liga-rank.top { border-radius: 9px; background: linear-gradient(135deg, #e4a91c, #a85d00); color: #fff; box-shadow: 0 7px 18px rgba(228,169,28,.2); }
+    #entregaPane .liga-ranking-table tbody tr.top-1 td:first-child { border-left-width: 4px; }
+    #entregaPane .liga-team-pending { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: space-between; padding: .7rem .85rem; border-bottom: 1px solid #2b3951; background: #111927; }
+    #entregaPane .liga-team-pending small { color: #98a7c0; }
     #entregaPane .liga-person-name { color: #f1f5f9; }
     #entregaPane .liga-person-meta, #entregaPane .liga-kpi small { color: #8492ab; }
     #entregaPane .liga-score { color: #f1f5f9; }
@@ -4902,13 +4915,20 @@
       if (view === "motoristas" || view === "ajudantes") content = personRows(Array.isArray(rankings[view]) ? rankings[view] : [], view);
       if (view === "devolucoes") content = table('<th>Data</th><th>Filial</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Motivo</th><th class="text-end">Valor</th><th></th>', filter(devols).map(row => `<tr class="${row.excluida ? "opacity-50" : ""}"><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml(row.motorista || row.cod || "-")}</td><td>${escapeHtml(row.nota || "-")}</td><td>${escapeHtml(row.cliente || row.cliente_cod || "-")}</td><td>${escapeHtml(row.motivo || row.resp || "-")}</td><td class="text-end">${fmt(row.valor)}</td><td>${row.excluida ? '<span class="badge text-bg-secondary">Expurgada</span>' : `<button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-dev" type="button" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-cliente="${escapeHtml(row.cliente_cod || "")}">Expurgar</button>`}</td></tr>`).join(""));
       if (view === "rotas") content = table('<th>Data</th><th>Mapa</th><th>Filial</th><th>Motorista</th><th>Cidade</th><th class="text-end">KM real/prev.</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th></th>', filter(routes).slice().reverse().map(row => { const suspect = Number(row.km_real || 0) && Math.abs(Number(row.km_real) - Number(row.km_prev || 0)) > 50; const late = String(row.hr_sai || "") > "12:00"; return `<tr><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.mapa || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml((team.find(p => p.cod === row.mot) || {}).nome || row.mot || "-")}</td><td>${escapeHtml(row.cidade || "-")}</td><td class="text-end ${suspect ? "text-warning fw-bold" : ""}">${fmt(row.km_real)} / ${fmt(row.km_prev)}${suspect ? " ⚠" : ""}</td><td class="text-end ${late ? "text-warning fw-bold" : ""}">${escapeHtml(row.hr_sai || "-")}${late ? " ⚠" : ""}</td><td class="text-end">${pct(row.tempo_pct)}</td><td><button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">KM</button></td></tr>`; }).join(""));
-      if (view === "equipe") content = table('<th>Função</th><th>Colaborador</th><th>Filial</th><th>Status</th><th>Código</th>', filter(team).map(row => `<tr><td>${escapeHtml(row.funcao || "-")}</td><td>${escapeHtml(row.nome || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td><select class="form-select form-select-sm liga-team-status" data-liga-code="${escapeHtml(row.cod || "")}">${["ativo","ferias","afastado","desligado"].map(status => `<option value="${status}" ${row.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></td><td>${escapeHtml(row.cod || "-")}</td></tr>`).join(""));
+      if (view === "equipe") {
+        const pending = state.ligaEntregaTeamChanges || {};
+        const pendingCount = Object.keys(pending).length;
+        const rows = filter(team).map(row => {
+          const selected = pending[row.cod] || row.status || "ativo";
+          return `<tr><td>${escapeHtml(row.funcao || "-")}</td><td>${escapeHtml(row.nome || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td><select class="form-select form-select-sm liga-team-status" data-liga-code="${escapeHtml(row.cod || "")}">${["ativo","ferias","afastado","desligado"].map(status => `<option value="${status}" ${selected === status ? "selected" : ""}>${status}</option>`).join("")}</select></td><td>${escapeHtml(row.cod || "-")}</td></tr>`;
+        }).join("");
+        content = `<div class="liga-team-pending"><small>${pendingCount ? `${pendingCount} alteração(ões) pendente(s). Revise a equipe antes de gravar.` : "Altere os status livremente; nada será sincronizado até você salvar."}</small><button type="button" class="btn btn-primary btn-sm liga-team-save" ${pendingCount ? "" : "disabled"}><i class="bi bi-floppy me-1"></i>Salvar alterações${pendingCount ? ` (${pendingCount})` : ""}</button></div>${table('<th>Função</th><th>Colaborador</th><th>Filial</th><th>Status</th><th>Código</th>', rows)}`;
+      }
       if (view === "cobertura") content = `<div class="row g-2">${coverage.map(row => `<div class="col-md-4"><div class="border rounded p-2"><b>${escapeHtml(formatDate(row.data) || "-")}</b><div>${fmt(row.rotas)} rota(s) • ${fmt(row.motoristas || row.mot || 0)} motorista(s)</div><div class="small text-secondary">${escapeHtml(row.status || "Cobertura calculada")}</div></div></div>`).join("") || '<div class="text-secondary">Sem cobertura diária calculada.</div>'}</div>`;
       if (view === "regras") content = `<div class="row g-3"><div class="col-md-6"><h3 class="h6">Metas</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.metas || {}, null, 2))}</pre></div><div class="col-md-6"><h3 class="h6">Pesos do ranking</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.pesos || {}, null, 2))}</pre></div></div>`;
       const tabs = [["motoristas","Motoristas"],["ajudantes","Ajudantes"],["devolucoes","Devoluções"],["rotas","Rotas"],["equipe","Equipe"],["cobertura","Cobertura"],["regras","Regras"]].map(([key,label]) => `<button class="btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"} liga-view" data-liga-view="${key}" type="button">${label}</button>`).join(" ");
       const warnings = Array.isArray(dashboard.warnings) ? dashboard.warnings : [];
-      const applied = ((dashboard.expurgos || {}).items || []).reduce((sum, item) => sum + Number(item.aplicados || 0), 0);
-      E.entregaLigaDashboardDetails.innerHTML = `<div class="liga-command-bar"><div><span class="liga-eyebrow">CENTRAL OPERACIONAL</span><div class="fw-semibold">${escapeHtml(dashboard.competencia || "Liga Entrega")}</div><div class="small text-secondary">${fmt(routes.length)} rotas processadas · ${fmt(applied)} registro(s) expurgado(s)</div></div><div class="liga-actions"><button class="btn btn-outline-primary btn-sm liga-copy-summary" type="button"><i class="bi bi-clipboard me-1"></i>Copiar resumo</button><button class="btn btn-outline-secondary btn-sm liga-export-snapshot" type="button"><i class="bi bi-download me-1"></i>Exportar</button></div></div><div class="liga-toolbar"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small mt-3 mb-0"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}`;
+      E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
     }
 
     function updateLigaEntregaExpurgoForm() {
@@ -4969,6 +4989,22 @@
       state.ligaEntregaDashboard = null;
       await syncLigaEntregaReports({ silent: false, force: true });
       addLog("Expurgo removido e dashboard recalculado.", "ok");
+    }
+
+    async function saveLigaEntregaTeamChanges() {
+      const pending = state.ligaEntregaTeamChanges || {};
+      const changes = Object.entries(pending);
+      const dashboard = state.ligaEntregaDashboard || {};
+      if (!changes.length) return;
+      if (!dashboard.competencia) throw new Error("Competência da Liga indisponível para salvar a equipe.");
+      await Promise.all(changes.map(([cod, status]) => req(
+        `${CONFIG.endpoints.ligaEntrega.equipe}/${encodeURIComponent(cod)}`,
+        { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia: dashboard.competencia, status }), timeoutMs: 20000 }
+      )));
+      state.ligaEntregaTeamChanges = {};
+      state.ligaEntregaDashboard = null;
+      await syncLigaEntregaReports({ silent: false, force: true });
+      addLog(`${changes.length} status da equipe salvo(s).`, "ok");
     }
 
     async function syncLigaEntregaReports({ silent = true, force = false } = {}) {
@@ -9551,6 +9587,15 @@
         if (button) removeLigaEntregaExpurgo(button.dataset.expurgoId || "").catch(err => addLog(`Falha ao remover expurgo: ${err.message}`, "err"));
       });
       if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("click", event => {
+        const saveTeamButton = event.target.closest(".liga-team-save");
+        if (saveTeamButton) {
+          saveTeamButton.disabled = true;
+          saveLigaEntregaTeamChanges().catch(err => {
+            saveTeamButton.disabled = false;
+            addLog(`Falha ao salvar status da equipe: ${err.message}`, "err");
+          });
+          return;
+        }
         const viewButton = event.target.closest(".liga-view");
         if (viewButton) {
           state.ligaEntregaView = viewButton.dataset.ligaView || "motoristas";
@@ -9598,8 +9643,10 @@
       });
       if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("change", event => {
         if (event.target.matches(".liga-team-status")) {
-          const dashboard = state.ligaEntregaDashboard || {};
-          req(`${CONFIG.endpoints.ligaEntrega.equipe}/${encodeURIComponent(event.target.dataset.ligaCode || "")}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia: dashboard.competencia, status: event.target.value }), timeoutMs: 20000 }).then(() => { state.ligaEntregaDashboard = null; return syncLigaEntregaReports({ silent: false, force: true }); }).catch(err => addLog(`Falha ao salvar status da equipe: ${err.message}`, "err"));
+          const cod = String(event.target.dataset.ligaCode || "");
+          if (!cod) return;
+          state.ligaEntregaTeamChanges = { ...(state.ligaEntregaTeamChanges || {}), [cod]: event.target.value };
+          renderLigaEntregaDashboard((state.ligaEntregaReports || {}).items || [], (state.ligaEntregaReports || {}).summary || {});
           return;
         }
         if (!event.target.matches(".liga-filter-branch")) return;
