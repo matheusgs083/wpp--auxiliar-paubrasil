@@ -9592,7 +9592,7 @@
         if (state.panel && state.panel.canViewCritica) tasks.push(syncCriticaDashboard({ silent }));
       } else if (activeTabId === "entregaTab") {
         if (state.panel && state.panel.canManagePromax && !state.promax.catalog) tasks.push(syncPromax({ silent }));
-        tasks.push(syncLigaEntregaReports({ silent }));
+        tasks.push(syncLigaEntregaReports({ silent, force }));
       } else if (activeTabId === "promaxTab") {
         if (state.panel && state.panel.canManagePromax) tasks.push(syncPromax({ silent }));
       }
