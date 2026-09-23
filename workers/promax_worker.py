@@ -481,6 +481,11 @@ class PromaxWorker:
                 try:
                     self._flush_logs()
                     if not post_import_attempted:
+                        # A Liga Entrega precisa receber os arquivos do job mesmo
+                        # quando alguma importacao legada (031120/03114902 etc.)
+                        # falhar. Essas importacoes sao complementares e nao
+                        # podem bloquear os cards da Liga.
+                        self._upload_liga_entrega_reports_if_needed(job, job_id, lease_token, result)
                         self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
                         self._import_020304_estoque_if_needed(job, job_id, lease_token, result)
                         self._import_031120_relatorio_if_needed(job, job_id, lease_token, result)
@@ -491,7 +496,6 @@ class PromaxWorker:
                         self._import_0112_dmateriais_if_needed(job, job_id, lease_token, result)
                         self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
                         self._import_030111_critica_if_needed(job, job_id, lease_token, result)
-                        self._upload_liga_entrega_reports_if_needed(job, job_id, lease_token, result)
                         post_import_attempted = True
                     if not sync_completed:
                         self._sync_pending_partial_results(job, job_id, lease_token)
@@ -1507,6 +1511,16 @@ class PromaxWorker:
         )
         selected_specs = [spec for spec in specs if _routine_selected(payload, spec[0])]
         if not selected_specs:
+            self._send_log(
+                job_id,
+                lease_token,
+                "Upload automatico Liga Entrega ignorado: nenhuma rotina homologada foi selecionada no job.",
+                "info",
+                {
+                    "event": "promax_liga_entrega_upload_no_selected_routines",
+                    "routines": _payload_routines(payload),
+                },
+            )
             return
 
         for routine_id, relative_folder in selected_specs:
@@ -2245,9 +2259,10 @@ def _promax_publication_dir_by_relative(result_details: Mapping[str, Any] | None
         return None
     for source, destination in publication_mapping.items():
         source_parts = _normalized_path_parts(str(source or ""))
-        if len(source_parts) < len(wanted_parts):
-            continue
-        if source_parts[-len(wanted_parts):] == wanted_parts:
+        destination_parts = _normalized_path_parts(str(destination or ""))
+        matches_source = len(source_parts) >= len(wanted_parts) and source_parts[-len(wanted_parts):] == wanted_parts
+        matches_destination = len(destination_parts) >= len(wanted_parts) and destination_parts[-len(wanted_parts):] == wanted_parts
+        if matches_source or matches_destination:
             destination_text = str(destination or "").strip()
             if destination_text:
                 return Path(destination_text)
@@ -2259,17 +2274,25 @@ def _promax_liga_entrega_publication_dir(
     relative_folder: str,
 ) -> Path | None:
     mapped_dir = _promax_publication_dir_by_relative(result_details, relative_folder)
-    if mapped_dir is not None:
+    if mapped_dir is not None and mapped_dir.is_dir():
         return mapped_dir
 
-    wanted_parts = _normalized_path_parts(relative_folder)
-    if not wanted_parts:
-        return None
+    aliases = _promax_liga_entrega_folder_aliases(relative_folder)
     for root in _promax_liga_entrega_reports_roots():
-        candidate = root.joinpath(*relative_folder.replace("\\", "/").split("/"))
-        if candidate.is_dir():
-            return candidate
+        for alias in aliases:
+            candidate = root.joinpath(*alias.replace("\\", "/").split("/"))
+            if candidate.is_dir():
+                return candidate
     return None
+
+
+def _promax_liga_entrega_folder_aliases(relative_folder: str) -> tuple[str, ...]:
+    normalized = str(relative_folder or "").replace("\\", "/").strip("/")
+    aliases: list[str] = [normalized] if normalized else []
+    # O renomeador do Promax usa 031149 para a rotina 03.11.49.02.
+    if normalized.casefold() == "03.11.49.02":
+        aliases.append("031149")
+    return tuple(dict.fromkeys(aliases))
 
 
 def _promax_liga_entrega_reports_roots() -> tuple[Path, ...]:
@@ -2287,6 +2310,10 @@ def _promax_liga_entrega_reports_roots() -> tuple[Path, ...]:
 
     year = datetime.now(PROMAX_LOCAL_TIMEZONE).date().year
     default_roots = [
+        # A automacao ainda conserva a copia local antes/depois da publicacao.
+        # Ela e a ultima alternativa quando o mapa de publicacao nao traz a
+        # pasta (por exemplo, quando o renomeador troca 031149 por 03.11.49.02).
+        PROJECT_ROOT.parent / "Relatorios",
         Path("M:/REVENDA") / f"SDPO {year}" / "DPO" / "PILAR ENTREGA" / "RELATORIOS",
         Path(r"\\dc01n\publico_patos\REVENDA")
         / f"SDPO {year}"
