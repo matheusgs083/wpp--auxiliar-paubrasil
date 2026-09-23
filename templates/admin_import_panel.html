@@ -2951,6 +2951,7 @@
         },
         ligaEntrega: {
           expurgos: "/api/admin/liga-entrega/expurgos",
+          equipe: "/api/admin/liga-entrega/equipe",
           reports: "/api/admin/liga-entrega/relatorios",
           dashboard: "/api/admin/liga-entrega/dashboard"
         },
@@ -4749,7 +4750,7 @@
           ["Entregas", fmtNum(operacao.entregas), "PDVs únicos/0805"],
           ["Devolução", fmtPct(operacao.devolucao_pct), `${fmtNum(dashSummary.devolucoes)} ativa(s)`],
           ["Saída", fmtPct(operacao.saida_pct), `meta até ${(dashboard.metas || {}).saida || "07:30"}`],
-          ["Desvio KM", fmtPct(operacao.km_desv), "sem expurgos de KM"],
+          ["Desvio KM", fmtPct(operacao.km_desv), `${fmtNum((dashboard.expurgos || {}).counts && (((dashboard.expurgos || {}).counts.km || 0) + ((dashboard.expurgos || {}).counts.dispersao || 0)))} expurgo(s) de KM`],
           ["Expurgos", fmtNum(dashSummary.expurgos), `${fmtNum(dashSummary.devolucoes_expurgadas)} devolução(ões)`]
         ].map(([label, value, sub]) => `
           <article class="recolha-dashboard-card">
@@ -4802,7 +4803,35 @@
             </div>
           </div>
           ${warnings.length ? `<div class="alert alert-warning small mt-3 mb-0"><b>Avisos de leitura:</b><br>${warnings.slice(0, 5).map(w => escapeHtml(w)).join("<br>")}</div>` : ""}`;
+        renderLigaEntregaOperationalViews(dashboard);
       }
+    }
+
+    function renderLigaEntregaOperationalViews(dashboard) {
+      if (!E.entregaLigaDashboardDetails) return;
+      const rankings = dashboard.rankings || {};
+      const routes = Array.isArray(dashboard.rotas) ? dashboard.rotas : [];
+      const devols = Array.isArray(dashboard.devolucoes) ? dashboard.devolucoes : [];
+      const team = Array.isArray(dashboard.equipe) ? dashboard.equipe : [];
+      const coverage = Array.isArray(dashboard.cobertura) ? dashboard.cobertura : [];
+      const view = state.ligaEntregaView || "motoristas";
+      const filters = state.ligaEntregaFilters || {};
+      const q = String(filters.q || "").trim().toLowerCase();
+      const branch = String(filters.filial || "");
+      const filter = rows => rows.filter(row => (!branch || String(row.filial || "") === branch) && (!q || JSON.stringify(row).toLowerCase().includes(q)));
+      const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      const pct = value => value === null || value === undefined ? "-" : `${fmt(value)}%`;
+      const table = (head, body) => `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="12" class="text-center text-secondary py-3">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div>`;
+      const personRows = rows => table('<th>#</th><th>Colaborador</th><th>Filial</th><th class="text-end">Rotas</th><th class="text-end">Dev.</th><th class="text-end">Saída</th><th class="text-end">KM</th><th class="text-end">Checklist</th><th class="text-end">Total</th>', filter(rows).map(row => `<tr><td>${row.pos || "-"}</td><td><button type="button" class="btn btn-link p-0 fw-semibold liga-person-detail" data-liga-person="${escapeHtml(row.cod || "")}">${escapeHtml(row.nome || row.cod || "-")}</button><div class="small text-secondary">${escapeHtml(row.status || "ativo")} ${row.elegivel ? "" : "• não elegível"}</div></td><td>${escapeHtml(row.filial || "-")}</td><td class="text-end">${fmt(row.rotas)}</td><td class="text-end">${pct(row.pdev)}</td><td class="text-end">${pct(row.psaida)}</td><td class="text-end">${pct(row.km_desv)}</td><td class="text-end">${pct(row.pcheck)}</td><td class="text-end fw-bold">${fmt(row.total)}</td></tr>`).join(""));
+      let content = "";
+      if (view === "motoristas" || view === "ajudantes") content = personRows(Array.isArray(rankings[view]) ? rankings[view] : []);
+      if (view === "devolucoes") content = table('<th>Data</th><th>Filial</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Motivo</th><th class="text-end">Valor</th><th></th>', filter(devols).map(row => `<tr class="${row.excluida ? "opacity-50" : ""}"><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml(row.motorista || row.cod || "-")}</td><td>${escapeHtml(row.nota || "-")}</td><td>${escapeHtml(row.cliente || row.cliente_cod || "-")}</td><td>${escapeHtml(row.motivo || row.resp || "-")}</td><td class="text-end">${fmt(row.valor)}</td><td>${row.excluida ? '<span class="badge text-bg-secondary">Expurgada</span>' : `<button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-dev" type="button" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-cliente="${escapeHtml(row.cliente_cod || "")}">Expurgar</button>`}</td></tr>`).join(""));
+      if (view === "rotas") content = table('<th>Data</th><th>Mapa</th><th>Filial</th><th>Motorista</th><th>Cidade</th><th class="text-end">KM real/prev.</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th></th>', filter(routes).slice().reverse().map(row => { const suspect = Number(row.km_real || 0) && Math.abs(Number(row.km_real) - Number(row.km_prev || 0)) > 50; const late = String(row.hr_sai || "") > "12:00"; return `<tr><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.mapa || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml((team.find(p => p.cod === row.mot) || {}).nome || row.mot || "-")}</td><td>${escapeHtml(row.cidade || "-")}</td><td class="text-end ${suspect ? "text-warning fw-bold" : ""}">${fmt(row.km_real)} / ${fmt(row.km_prev)}${suspect ? " ⚠" : ""}</td><td class="text-end ${late ? "text-warning fw-bold" : ""}">${escapeHtml(row.hr_sai || "-")}${late ? " ⚠" : ""}</td><td class="text-end">${pct(row.tempo_pct)}</td><td><button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">KM</button></td></tr>`; }).join(""));
+      if (view === "equipe") content = table('<th>Função</th><th>Colaborador</th><th>Filial</th><th>Status</th><th>Código</th>', filter(team).map(row => `<tr><td>${escapeHtml(row.funcao || "-")}</td><td>${escapeHtml(row.nome || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td><select class="form-select form-select-sm liga-team-status" data-liga-code="${escapeHtml(row.cod || "")}">${["ativo","ferias","afastado","desligado"].map(status => `<option value="${status}" ${row.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></td><td>${escapeHtml(row.cod || "-")}</td></tr>`).join(""));
+      if (view === "cobertura") content = `<div class="row g-2">${coverage.map(row => `<div class="col-md-4"><div class="border rounded p-2"><b>${escapeHtml(formatDate(row.data) || "-")}</b><div>${fmt(row.rotas)} rota(s) • ${fmt(row.motoristas || row.mot || 0)} motorista(s)</div><div class="small text-secondary">${escapeHtml(row.status || "Cobertura calculada")}</div></div></div>`).join("") || '<div class="text-secondary">Sem cobertura diária calculada.</div>'}</div>`;
+      if (view === "regras") content = `<div class="row g-3"><div class="col-md-6"><h3 class="h6">Metas</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.metas || {}, null, 2))}</pre></div><div class="col-md-6"><h3 class="h6">Pesos do ranking</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.pesos || {}, null, 2))}</pre></div></div>`;
+      const tabs = [["motoristas","Motoristas"],["ajudantes","Ajudantes"],["devolucoes","Devoluções"],["rotas","Rotas"],["equipe","Equipe"],["cobertura","Cobertura"],["regras","Regras"]].map(([key,label]) => `<button class="btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"} liga-view" data-liga-view="${key}" type="button">${label}</button>`).join(" ");
+      E.entregaLigaDashboardDetails.innerHTML += `<hr class="my-3"><div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3"><div class="btn-group flex-wrap" role="group">${tabs}</div><div class="d-flex gap-2"><button class="btn btn-outline-primary btn-sm liga-copy-summary" type="button">Copiar resumo</button><button class="btn btn-outline-secondary btn-sm liga-export-snapshot" type="button">Exportar visão</button><select class="form-select form-select-sm liga-filter-branch"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><input class="form-control form-control-sm liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar"></div></div><div id="ligaOperationalView">${content}</div>`;
     }
 
     function updateLigaEntregaExpurgoForm() {
@@ -9442,6 +9471,42 @@
         if (button) removeLigaEntregaExpurgo(button.dataset.expurgoId || "").catch(err => addLog(`Falha ao remover expurgo: ${err.message}`, "err"));
       });
       if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("click", event => {
+        const viewButton = event.target.closest(".liga-view");
+        if (viewButton) {
+          state.ligaEntregaView = viewButton.dataset.ligaView || "motoristas";
+          renderLigaEntregaDashboard((state.ligaEntregaReports || {}).items || [], (state.ligaEntregaReports || {}).summary || {});
+          return;
+        }
+        if (event.target.closest(".liga-copy-summary")) {
+          const top = (state.ligaEntregaDashboard && state.ligaEntregaDashboard.rankings && state.ligaEntregaDashboard.rankings.motoristas || []).filter(row => row.elegivel).slice(0, 3);
+          const summary = state.ligaEntregaDashboard && state.ligaEntregaDashboard.summary || {};
+          const message = `Liga Entrega ${state.ligaEntregaDashboard && state.ligaEntregaDashboard.competencia || ""}\n${summary.rotas || 0} rotas • ${summary.devolucoes || 0} devoluções ativas\n${top.map((row, index) => `${index + 1}. ${row.nome} — ${row.total} pts`).join("\n")}`;
+          navigator.clipboard.writeText(message).then(() => addLog("Resumo da Liga copiado.", "ok")).catch(() => addLog("Não foi possível copiar o resumo.", "warn"));
+          return;
+        }
+        if (event.target.closest(".liga-export-snapshot")) {
+          const payload = state.ligaEntregaDashboard || {};
+          const html = `<!doctype html><meta charset="utf-8"><title>Liga Entrega ${payload.competencia || ""}</title><style>body{font:14px Arial;padding:24px;color:#172033}pre{white-space:pre-wrap;background:#f4f6fa;padding:16px;border-radius:8px}</style><h1>Liga Entrega ${escapeHtml(payload.competencia || "")}</h1><p>Gerado em ${escapeHtml(payload.generated_at || "")}</p><pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>`;
+          const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([html], { type: "text/html" })); link.download = `liga-entrega-${payload.competencia || "dados"}.html`; link.click(); URL.revokeObjectURL(link.href);
+          return;
+        }
+        const devButton = event.target.closest(".liga-expurgo-dev");
+        if (devButton) {
+          E.entregaLigaExpurgoTipo.value = "devolucao";
+          E.entregaLigaExpurgoData.value = devButton.dataset.expurgoData || "";
+          E.entregaLigaExpurgoFilial.value = devButton.dataset.expurgoFilial || "PATOS";
+          E.entregaLigaExpurgoAlvo.value = devButton.dataset.expurgoCliente || "";
+          updateLigaEntregaExpurgoForm();
+          E.entregaLigaExpurgoForm.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        const personButton = event.target.closest(".liga-person-detail");
+        if (personButton) {
+          state.ligaEntregaView = "rotas";
+          state.ligaEntregaFilters = { ...(state.ligaEntregaFilters || {}), q: personButton.dataset.ligaPerson || "" };
+          renderLigaEntregaDashboard((state.ligaEntregaReports || {}).items || [], (state.ligaEntregaReports || {}).summary || {});
+          return;
+        }
         const button = event.target.closest(".liga-expurgo-route");
         if (!button) return;
         E.entregaLigaExpurgoTipo.value = button.dataset.expurgoTipo || "km";
@@ -9450,6 +9515,21 @@
         E.entregaLigaExpurgoAlvo.value = button.dataset.expurgoMapa || "";
         updateLigaEntregaExpurgoForm();
         E.entregaLigaExpurgoForm.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("change", event => {
+        if (event.target.matches(".liga-team-status")) {
+          const dashboard = state.ligaEntregaDashboard || {};
+          req(`${CONFIG.endpoints.ligaEntrega.equipe}/${encodeURIComponent(event.target.dataset.ligaCode || "")}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia: dashboard.competencia, status: event.target.value }), timeoutMs: 20000 }).then(() => { state.ligaEntregaDashboard = null; return syncLigaEntregaReports({ silent: false, force: true }); }).catch(err => addLog(`Falha ao salvar status da equipe: ${err.message}`, "err"));
+          return;
+        }
+        if (!event.target.matches(".liga-filter-branch")) return;
+        state.ligaEntregaFilters = { ...(state.ligaEntregaFilters || {}), filial: event.target.value || "" };
+        renderLigaEntregaDashboard((state.ligaEntregaReports || {}).items || [], (state.ligaEntregaReports || {}).summary || {});
+      });
+      if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("input", event => {
+        if (!event.target.matches(".liga-filter-search")) return;
+        state.ligaEntregaFilters = { ...(state.ligaEntregaFilters || {}), q: event.target.value || "" };
+        renderLigaEntregaDashboard((state.ligaEntregaReports || {}).items || [], (state.ligaEntregaReports || {}).summary || {});
       });
       updateLigaEntregaExpurgoForm();
       if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", applyPromaxJobFilters);

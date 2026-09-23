@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from bot_api.routes.admin_liga_entrega import create_admin_liga_entrega_router
 from bot_api.services.liga_entrega_expurgo_service import LigaEntregaExpurgoService
 from bot_api.services.liga_entrega_report_store import LigaEntregaReportStore
+from bot_api.services.liga_entrega_status_service import LigaEntregaStatusService
 
 
 class AdminLigaEntregaRoutesTest(unittest.TestCase):
@@ -28,6 +29,7 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
                 require_admin_panel_auth=lambda **_kwargs: {"mode": "admin", "is_admin": True},
                 require_admin_panel_feature=lambda _context, _feature: None,
                 liga_entrega_expurgo_service=LigaEntregaExpurgoService(Path(self.tmp.name) / "expurgos.json"),
+                liga_entrega_status_service=LigaEntregaStatusService(Path(self.tmp.name) / "status.json"),
                 liga_entrega_report_store=LigaEntregaReportStore(Path(self.tmp.name) / "reports"),
                 record_security_event=record_security_event,
                 record_admin_panel_action=lambda **_kwargs: None,
@@ -193,6 +195,16 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200, deleted.text)
         self.assertFalse(deleted.json()["item"]["active"])
         self.assertEqual([event["event_type"] for event in events], ["admin_liga_expurgo_upsert", "admin_liga_expurgos_list", "admin_liga_expurgo_delete"])
+
+    def test_persists_monthly_team_status(self) -> None:
+        client, events = self.make_client()
+        response = client.put(
+            "/api/admin/liga-entrega/equipe/100",
+            json={"competencia": "2026-09", "status": "ferias"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["item"]["status"], "ferias")
+        self.assertEqual(events[-1]["event_type"], "admin_liga_equipe_status")
 
 
 if __name__ == "__main__":

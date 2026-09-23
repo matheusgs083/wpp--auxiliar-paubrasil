@@ -260,6 +260,7 @@ def _register_admin_liga_entrega_routes(app: FastAPI, *, deps: dict[str, Any]) -
             require_admin_panel_auth=deps["require_admin_panel_auth"],
             require_admin_panel_feature=deps["require_admin_panel_feature"],
             liga_entrega_expurgo_service=deps["liga_entrega_expurgo_service"],
+            liga_entrega_status_service=deps.get("liga_entrega_status_service"),
             liga_entrega_report_store=deps["liga_entrega_report_store"],
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps["record_admin_panel_action"],

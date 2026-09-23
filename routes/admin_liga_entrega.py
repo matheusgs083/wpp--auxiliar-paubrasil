@@ -35,11 +35,17 @@ class LigaEntregaExpurgoRequest(BaseModel):
     active: bool = True
 
 
+class LigaEntregaStatusRequest(BaseModel):
+    competencia: str = Field(..., description="AAAA-MM")
+    status: str = Field(..., description="ativo, ferias, afastado ou desligado")
+
+
 def create_admin_liga_entrega_router(
     *,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     liga_entrega_expurgo_service: Any,
+    liga_entrega_status_service: Any | None = None,
     liga_entrega_report_store: Any | None = None,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
@@ -178,6 +184,7 @@ def create_admin_liga_entrega_router(
             result = LigaEntregaDashboardService(
                 report_store=liga_entrega_report_store,
                 expurgo_service=liga_entrega_expurgo_service,
+                status_service=liga_entrega_status_service,
             ).build_dashboard(competencia=competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -241,6 +248,26 @@ def create_admin_liga_entrega_router(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         record_security_event(request, channel="api", event_type="admin_liga_expurgo_upsert", decision="allowed", reason=str(item.get("id") or ""))
         record_panel_action(request, context, action="salvar_expurgo", target_id=str(item.get("id") or ""), metadata={"tipo": item.get("tipo"), "competencia": item.get("competencia")})
+        return {"ok": True, "item": item}
+
+    @router.put("/api/admin/liga-entrega/equipe/{cod}")
+    def api_admin_liga_entrega_equipe_status(
+        cod: str,
+        request: Request,
+        payload: LigaEntregaStatusRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_status_service is None:
+            raise HTTPException(status_code=503, detail="Status da equipe indisponível.")
+        try:
+            item = liga_entrega_status_service.set_status(competencia=payload.competencia, cod=cod, status=payload.status, actor=actor_from_context(context))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_security_event(request, channel="api", event_type="admin_liga_equipe_status", decision="allowed", reason=str(item.get("cod") or ""))
+        record_panel_action(request, context, action="salvar_status_equipe", target_id=str(item.get("cod") or ""), metadata=item)
         return {"ok": True, "item": item}
 
     @router.delete("/api/admin/liga-entrega/expurgos/{expurgo_id}")

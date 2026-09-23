@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
 import re
 import threading
@@ -69,9 +70,10 @@ _DASHBOARD_CACHE_LOCK = threading.Lock()
 
 
 class LigaEntregaDashboardService:
-    def __init__(self, *, report_store: Any, expurgo_service: Any) -> None:
+    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None) -> None:
         self.report_store = report_store
         self.expurgo_service = expurgo_service
+        self.status_service = status_service
 
     def build_dashboard(self, *, competencia: str | None = None) -> dict[str, Any]:
         comp = _clean_comp(competencia) if competencia else self._latest_competencia()
@@ -79,12 +81,18 @@ class LigaEntregaDashboardService:
             return _empty("")
         manifests = self._select_manifests(comp)
         expurgos = self._active_expurgos(comp)
+        status_overrides = self._status_overrides(comp)
         cache_key = (str(getattr(self.report_store, "root_dir", id(self.report_store))), comp)
-        cache_signature = dashboard_signature(manifests, expurgos)
+        cache_signature = dashboard_signature(manifests, expurgos, status_overrides)
         with _DASHBOARD_CACHE_LOCK:
             cached = _DASHBOARD_CACHE.get(cache_key)
         if cached and cached[0] == cache_signature:
             return cached[1]
+        persisted = self._read_persisted_cache(comp, cache_signature)
+        if persisted is not None:
+            with _DASHBOARD_CACHE_LOCK:
+                _DASHBOARD_CACHE[cache_key] = (cache_signature, persisted)
+            return persisted
         rotas: dict[str, dict[str, Any]] = {}
         port: dict[str, dict[str, Any]] = {}
         equipes: dict[str, dict[str, Any]] = {}
@@ -96,7 +104,7 @@ class LigaEntregaDashboardService:
         ponto: dict[str, str] = {}
         checklist: list[dict[str, str]] = []
         colab: dict[str, dict[str, str]] = {
-            code: {"cod": code, "nome": name, "filial": filial, "funcao": "MOTORISTA", "status": CANONICAL_STATUS.get(code, "ativo")}
+            code: {"cod": code, "nome": name, "filial": filial, "funcao": "MOTORISTA", "status": status_overrides.get(code, CANONICAL_STATUS.get(code, "ativo"))}
             for code, (name, filial) in CANONICAL_MOTORISTAS.items()
         }
         warnings: list[str] = []
@@ -109,7 +117,7 @@ class LigaEntregaDashboardService:
             c = norm_code(cod)
             if c == "0":
                 return c
-            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": funcao, "status": CANONICAL_STATUS.get(c, "ativo")})
+            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": funcao, "status": status_overrides.get(c, CANONICAL_STATUS.get(c, "ativo"))})
             if nome and str(row.get("nome") or "").startswith("COD "):
                 row["nome"] = clean_name(nome)
             if filial and not row.get("filial"):
@@ -297,6 +305,9 @@ class LigaEntregaDashboardService:
             if match:
                 dev["excluida"] = True
                 dev["expurgo_id"] = str(match.get("id") or "")
+            owner = colab.get(str(dev.get("cod") or ""), {})
+            dev["motorista"] = str(owner.get("nome") or dev.get("cod") or "-")
+            dev["ajudantes"] = [str(colab.get(code, {}).get("nome") or code) for code in dev.get("aju", [])]
 
         rotas_list: list[dict[str, Any]] = []
         for mapa, r0 in rotas.items():
@@ -323,10 +334,34 @@ class LigaEntregaDashboardService:
         )
         operacao = build_operacao(rotas_list, devols, motoristas, ajudantes)
         cobertura = build_cobertura(rotas_list)
-        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len([d for d in devols if not d.get("excluida")]), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50]}
+        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len([d for d in devols if not d.get("excluida")]), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": sorted(devols, key=lambda x: (str(x.get("data") or ""), str(x.get("nota") or "")), reverse=True), "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50]}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
+        self._write_persisted_cache(comp, cache_signature, result)
         return result
+
+    def _cache_path(self, comp: str) -> Path:
+        root = Path(getattr(self.report_store, "root_dir", Path("exports/liga_entrega_reports"))).parent / "liga_entrega_dashboard_cache"
+        safe_comp = re.sub(r"[^0-9-]", "", comp)
+        return root / f"{safe_comp}.json"
+
+    def _read_persisted_cache(self, comp: str, signature: str) -> dict[str, Any] | None:
+        try:
+            payload = json.loads(self._cache_path(comp).read_text(encoding="utf-8"))
+            result = payload.get("result") if isinstance(payload, dict) else None
+            return result if payload.get("signature") == signature and isinstance(result, dict) else None
+        except (OSError, ValueError, json.JSONDecodeError):
+            return None
+
+    def _write_persisted_cache(self, comp: str, signature: str, result: dict[str, Any]) -> None:
+        try:
+            path = self._cache_path(comp)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temp = path.with_suffix(".tmp")
+            temp.write_text(json.dumps({"signature": signature, "result": result}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+            temp.replace(path)
+        except OSError:
+            return
 
     def _latest_competencia(self) -> str:
         latest = ""
@@ -360,13 +395,19 @@ class LigaEntregaDashboardService:
             return []
         return [dict(x) for x in result.get("items", []) if isinstance(x, dict)]
 
+    def _status_overrides(self, comp: str) -> dict[str, str]:
+        try:
+            return dict(self.status_service.statuses(comp)) if self.status_service is not None else {}
+        except Exception:
+            return {}
+
 
 
 def _empty(comp: str) -> dict[str, Any]:
-    return {"ok": True, "competencia": comp, "summary": {"ready": False, "rotas": 0, "motoristas": 0, "ajudantes": 0, "devolucoes": 0, "devolucoes_expurgadas": 0, "expurgos": 0, "arquivos": 0, "warnings": 0}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": {}, "rankings": {"motoristas": [], "ajudantes": []}, "rotas": [], "operacao": {}, "equipe": [], "cobertura": [], "expurgos": {"counts": {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}, "items": []}, "warnings": []}
+    return {"ok": True, "competencia": comp, "summary": {"ready": False, "rotas": 0, "motoristas": 0, "ajudantes": 0, "devolucoes": 0, "devolucoes_expurgadas": 0, "expurgos": 0, "arquivos": 0, "warnings": 0}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": {}, "rankings": {"motoristas": [], "ajudantes": []}, "rotas": [], "devolucoes": [], "operacao": {}, "equipe": [], "cobertura": [], "expurgos": {"counts": {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}, "items": []}, "warnings": []}
 
 
-def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: list[dict[str, Any]]) -> str:
+def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: list[dict[str, Any]], statuses: dict[str, str] | None = None) -> str:
     """Assinatura barata dos únicos dados que alteram o resultado calculado."""
 
     batches = tuple(
@@ -377,7 +418,7 @@ def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: li
         tuple(sorted((str(key), str(value)) for key, value in item.items()))
         for item in sorted(expurgos, key=lambda item: str(item.get("id") or ""))
     )
-    return repr((batches, exclusions))
+    return repr((batches, exclusions, tuple(sorted((statuses or {}).items()))))
 
 
 def _clean_comp(value: str | None) -> str:
@@ -827,11 +868,14 @@ def build_cobertura(rotas: list[dict[str, Any]]) -> list[dict[str, Any]]:
         data = str(r.get("data") or "")
         if not data:
             continue
-        row = by.setdefault(data, {"data": data, "rotas": 0, "entregas_0805": 0, "mapas": []})
+        row = by.setdefault(data, {"data": data, "rotas": 0, "entregas_0805": 0, "mapas": [], "motoristas": set(), "ajudantes": set()})
         row["rotas"] += 1
         row["entregas_0805"] += int(r.get("entregas") or 0)
         row["mapas"].append(str(r.get("mapa") or ""))
-    return [by[k] for k in sorted(by)]
+        if r.get("mot"):
+            row["motoristas"].add(str(r["mot"]))
+        row["ajudantes"].update(str(code) for code in r.get("aju") or [] if code)
+    return [{**by[k], "motoristas": len(by[k]["motoristas"]), "ajudantes": len(by[k]["ajudantes"])} for k in sorted(by)]
 
 
 def is_first_week(rotas: list[dict[str, Any]]) -> bool:

@@ -34,6 +34,7 @@ from bot_api.services.health_service import HealthPayloadBuilder
 from bot_api.services.promax_catalog_service import DEFAULT_PROMAX_CATALOG, PromaxCatalogService
 from bot_api.services.liga_entrega_expurgo_service import LigaEntregaExpurgoService
 from bot_api.services.liga_entrega_report_store import LigaEntregaReportStore
+from bot_api.services.liga_entrega_status_service import LigaEntregaStatusService
 from bot_api.services.promax_scheduler import PromaxScheduler
 from bot_api.services.webhook_runtime import WebhookRuntime
 from bot_api.security.http_auth import HttpAuthDependencies
@@ -107,8 +108,10 @@ def configure_app_runtime(
     )
     LIGA_ENTREGA_REPORTS_ROOT = PROJECT_ROOT / "exports" / "liga_entrega_reports"
     LIGA_ENTREGA_EXPURGOS_PATH = PROJECT_ROOT / "exports" / "liga_entrega_expurgos.json"
+    LIGA_ENTREGA_STATUS_PATH = PROJECT_ROOT / "exports" / "liga_entrega_status.json"
     liga_entrega_report_store = LigaEntregaReportStore(LIGA_ENTREGA_REPORTS_ROOT)
     liga_entrega_expurgo_service = LigaEntregaExpurgoService(LIGA_ENTREGA_EXPURGOS_PATH)
+    liga_entrega_status_service = LigaEntregaStatusService(LIGA_ENTREGA_STATUS_PATH)
     ADMIN_UPLOAD_CHUNK_SIZE_BYTES = 1024 * 1024
     ADMIN_PANEL_SESSION_COOKIE = "bot_admin_session"
     ADMIN_PANEL_SESSION_TTL_SECONDS = 12 * 60 * 60
@@ -645,6 +648,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "critica_operacao_import_services": runtime["services"].critica_operacao_import_services,
         "liga_entrega_report_store": runtime["liga_entrega_report_store"],
         "liga_entrega_expurgo_service": runtime["liga_entrega_expurgo_service"],
+        "liga_entrega_status_service": runtime["liga_entrega_status_service"],
         "after_critica_operacao_import": runtime["_after_critica_operacao_auto_import"],
         "require_webhook_token": runtime["_require_webhook_token"],
         "require_meta_cloud_signature": runtime["_require_meta_cloud_signature"],
