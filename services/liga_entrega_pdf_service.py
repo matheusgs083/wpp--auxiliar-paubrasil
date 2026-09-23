@@ -73,10 +73,6 @@ def build_liga_entrega_dashboard_pdf(
         "LigaPdfHeaderCenter", parent=header_style, alignment=TA_CENTER,
     )
 
-    summary = dashboard.get("summary")
-    summary = summary if isinstance(summary, Mapping) else {}
-    operation = dashboard.get("operacao")
-    operation = operation if isinstance(operation, Mapping) else {}
     expurgos = dashboard.get("expurgos")
     expurgos = expurgos if isinstance(expurgos, Mapping) else {}
     counts = expurgos.get("counts")
@@ -103,29 +99,7 @@ def build_liga_entrega_dashboard_pdf(
         Spacer(1, 5 * mm),
     ]
 
-    summary_data = [
-        [_p("Rotas processadas", header_style), _p("Entregas", header_style), _p("Devoluções", header_style), _p("Saída ≤07:30", header_style), _p("Desvio KM", header_style)],
-        [
-            _p(_fmt(summary.get("rotas")), cell_style),
-            _p(_fmt(summary.get("entregas", operation.get("entregas"))), cell_style),
-            _p(_fmt(summary.get("devolucoes", operation.get("devolucoes"))), cell_style),
-            _p(_fmt_pct(operation.get("saida_pct")), cell_style),
-            _p(_fmt_pct(operation.get("km_desv")), cell_style),
-        ],
-    ]
-    summary_table = Table(summary_data, colWidths=[48 * mm] * 5, repeatRows=1)
-    summary_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), SURFACE_ALT),
-        ("BACKGROUND", (0, 1), (-1, 1), SURFACE),
-        ("BOX", (0, 0), (-1, -1), 0.6, LINE),
-        ("INNERGRID", (0, 0), (-1, -1), 0.35, LINE),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]))
-    story.extend([summary_table, Spacer(1, 5 * mm)])
+    story.append(Spacer(1, 2 * mm))
 
     headers = ["#", "COLABORADOR", "FILIAL", "ROTAS", "DEVOLUÇÃO\n≤1,4%", "SAÍDA ≤07:30\n≥90%", "DESVIO KM\n≤10%", "CHECKLIST\ndesde 13/07", "TOTAL", "PRÊMIO"]
     widths = [10 * mm, 69 * mm, 24 * mm, 14 * mm, 28 * mm, 30 * mm, 26 * mm, 33 * mm, 22 * mm, 21 * mm]
