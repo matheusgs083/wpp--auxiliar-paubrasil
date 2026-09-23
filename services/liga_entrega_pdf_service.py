@@ -33,7 +33,8 @@ def build_liga_entrega_dashboard_pdf(
     rankings = dashboard.get("rankings")
     rankings = rankings if isinstance(rankings, Mapping) else {}
     competencia = str(dashboard.get("competencia") or "sem-competencia").strip()
-    title = "Liga Entrega - Dashboard"
+    title_role = {"motoristas": "Motoristas", "ajudantes": "Ajudantes"}.get(normalized_view)
+    title = f"Liga Entrega - {title_role}" if title_role else "Liga Entrega - Dashboard"
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(

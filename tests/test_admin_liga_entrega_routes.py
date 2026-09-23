@@ -229,14 +229,22 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
 
         response = client.get(
             "/api/admin/liga-entrega/dashboard/pdf",
-            params={"competencia": "2026-09"},
+            params={"view": "motoristas", "competencia": "2026-09"},
         )
 
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.headers["content-type"], "application/pdf")
         self.assertTrue(response.content.startswith(b"%PDF"))
-        self.assertIn("liga-entrega-completo-2026-09.pdf", response.headers["content-disposition"])
+        self.assertIn("liga-entrega-motoristas-2026-09.pdf", response.headers["content-disposition"])
         self.assertEqual(events[-1]["event_type"], "admin_liga_dashboard_pdf")
+
+        helper_response = client.get(
+            "/api/admin/liga-entrega/dashboard/pdf",
+            params={"view": "ajudantes", "competencia": "2026-09"},
+        )
+        self.assertEqual(helper_response.status_code, 200, helper_response.text)
+        self.assertTrue(helper_response.content.startswith(b"%PDF"))
+        self.assertIn("liga-entrega-ajudantes-2026-09.pdf", helper_response.headers["content-disposition"])
 
 
 if __name__ == "__main__":

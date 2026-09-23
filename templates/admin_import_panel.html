@@ -4895,7 +4895,7 @@
 
     async function downloadLigaDashboardPdf(view) {
       updateTokens();
-      const normalizedView = "completo";
+      const normalizedView = view === "ajudantes" ? "ajudantes" : "motoristas";
       const dashboard = state.ligaEntregaDashboard || {};
       const query = new URLSearchParams({ view: normalizedView });
       if (dashboard.competencia) query.set("competencia", dashboard.competencia);
@@ -4926,7 +4926,7 @@
         anchor.click();
         anchor.remove();
         URL.revokeObjectURL(blobUrl);
-        addLog("PDF completo da Liga baixado.", "ok");
+        addLog(`PDF da Liga (${normalizedView}) baixado.`, "ok");
       } catch (err) {
         addLog(`Falha ao baixar PDF da Liga: ${err.message}`, "err");
       }
@@ -4974,7 +4974,7 @@
       if (view === "regras") content = `<div class="row g-3"><div class="col-md-6"><h3 class="h6">Metas</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.metas || {}, null, 2))}</pre></div><div class="col-md-6"><h3 class="h6">Pesos do ranking</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.pesos || {}, null, 2))}</pre></div></div>`;
       const tabs = [["motoristas","Motoristas"],["ajudantes","Ajudantes"],["devolucoes","Devoluções"],["rotas","Rotas"],["equipe","Equipe"],["cobertura","Cobertura"],["regras","Regras"]].map(([key,label]) => `<button class="btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"} liga-view" data-liga-view="${key}" type="button">${label}</button>`).join(" ");
       const warnings = Array.isArray(dashboard.warnings) ? dashboard.warnings : [];
-      E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div><div class="liga-pdf-actions"><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf"><i class="bi bi-file-earmark-pdf me-1"></i>Baixar PDF da Liga</button></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
+      E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div><div class="liga-pdf-actions"><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="motoristas"><i class="bi bi-file-earmark-pdf me-1"></i>PDF motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="ajudantes"><i class="bi bi-file-earmark-pdf me-1"></i>PDF ajudantes</button></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
     }
 
     function updateLigaEntregaExpurgoForm() {
