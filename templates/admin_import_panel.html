@@ -217,6 +217,8 @@
     #entregaPane .liga-view-tabs .btn:last-child { border-right: 0; }
     #entregaPane .liga-view-tabs .btn.btn-primary { color: #fff; background: #2f80ed; }
     #entregaPane .liga-filters { gap: .45rem; }
+    #entregaPane .liga-pdf-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+    #entregaPane .liga-pdf-actions .btn { white-space: nowrap; }
     #entregaPane .liga-filters .form-select, #entregaPane .liga-filters .input-group { height: 32px; }
     #entregaPane .liga-filters .form-control, #entregaPane .liga-filters .form-select, #entregaPane .liga-filters .input-group-text { min-height: 32px; border-color: #33425c; background: #0c1320; font-size: .8rem; }
     #entregaPane .liga-operational-view { border: 0; border-radius: 0; background: #0c121e; }
@@ -3036,7 +3038,8 @@
           expurgos: "/api/admin/liga-entrega/expurgos",
           equipe: "/api/admin/liga-entrega/equipe",
           reports: "/api/admin/liga-entrega/relatorios",
-          dashboard: "/api/admin/liga-entrega/dashboard"
+          dashboard: "/api/admin/liga-entrega/dashboard",
+          dashboardPdf: "/api/admin/liga-entrega/dashboard/pdf"
         },
         usage: {
           evolution: "/api/admin/usage/evolution",
@@ -4890,6 +4893,45 @@
       }
     }
 
+    async function downloadLigaDashboardPdf(view) {
+      updateTokens();
+      const normalizedView = "completo";
+      const dashboard = state.ligaEntregaDashboard || {};
+      const query = new URLSearchParams({ view: normalizedView });
+      if (dashboard.competencia) query.set("competencia", dashboard.competencia);
+      const headers = {};
+      if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+      if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+      try {
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.ligaEntrega.dashboardPdf}?${query.toString()}`, {
+          method: "GET",
+          credentials: "same-origin",
+          headers,
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload && payload.detail ? payload.detail : `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const matchedName = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = matchedName && matchedName[1]
+          ? matchedName[1]
+          : `liga-entrega-${normalizedView}-${dashboard.competencia || "dados"}.pdf`;
+        const blobUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(blobUrl);
+        addLog("PDF completo da Liga baixado.", "ok");
+      } catch (err) {
+        addLog(`Falha ao baixar PDF da Liga: ${err.message}`, "err");
+      }
+    }
+
     function renderLigaEntregaOperationalViews(dashboard) {
       if (!E.entregaLigaDashboardDetails) return;
       const rankings = dashboard.rankings || {};
@@ -4932,7 +4974,7 @@
       if (view === "regras") content = `<div class="row g-3"><div class="col-md-6"><h3 class="h6">Metas</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.metas || {}, null, 2))}</pre></div><div class="col-md-6"><h3 class="h6">Pesos do ranking</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.pesos || {}, null, 2))}</pre></div></div>`;
       const tabs = [["motoristas","Motoristas"],["ajudantes","Ajudantes"],["devolucoes","Devoluções"],["rotas","Rotas"],["equipe","Equipe"],["cobertura","Cobertura"],["regras","Regras"]].map(([key,label]) => `<button class="btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"} liga-view" data-liga-view="${key}" type="button">${label}</button>`).join(" ");
       const warnings = Array.isArray(dashboard.warnings) ? dashboard.warnings : [];
-      E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
+      E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div><div class="liga-pdf-actions"><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf"><i class="bi bi-file-earmark-pdf me-1"></i>Baixar PDF da Liga</button></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
     }
 
     function updateLigaEntregaExpurgoForm() {
@@ -9598,6 +9640,12 @@
             saveTeamButton.disabled = false;
             addLog(`Falha ao salvar status da equipe: ${err.message}`, "err");
           });
+          return;
+        }
+        const pdfButton = event.target.closest(".liga-dashboard-pdf");
+        if (pdfButton) {
+          pdfButton.disabled = true;
+          downloadLigaDashboardPdf(pdfButton.dataset.ligaPdf || "motoristas").finally(() => { pdfButton.disabled = false; });
           return;
         }
         const viewButton = event.target.closest(".liga-view");

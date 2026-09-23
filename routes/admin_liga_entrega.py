@@ -4,10 +4,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService
+from bot_api.services.liga_entrega_pdf_service import build_liga_entrega_dashboard_pdf
 
 
 LIGA_ENTREGA_REPORTS = (
@@ -197,6 +198,47 @@ def create_admin_liga_entrega_router(
             reason=f"rotas={summary.get('rotas', 0)}",
         )
         return result
+
+    @router.get("/api/admin/liga-entrega/dashboard/pdf")
+    def api_admin_liga_entrega_dashboard_pdf(
+        request: Request,
+        view: str = Query(default="completo"),
+        competencia: str | None = Query(default=None),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> Response:
+        """Download the current Liga dashboard ranking as a PDF."""
+
+        require_liga_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        if liga_entrega_report_store is None:
+            raise HTTPException(status_code=503, detail="Armazenamento da Liga Entrega indisponivel.")
+        try:
+            dashboard = LigaEntregaDashboardService(
+                report_store=liga_entrega_report_store,
+                expurgo_service=liga_entrega_expurgo_service,
+                status_service=liga_entrega_status_service,
+            ).build_dashboard(competencia=competencia)
+            content, filename = build_liga_entrega_dashboard_pdf(dashboard, view=view)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_liga_dashboard_pdf",
+            decision="allowed",
+            reason=f"view={view}",
+        )
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @router.get("/api/admin/liga-entrega/expurgos")
     def api_admin_liga_entrega_expurgos(

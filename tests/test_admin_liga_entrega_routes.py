@@ -224,6 +224,20 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(response.json()["item"]["status"], "ferias")
         self.assertEqual(events[-1]["event_type"], "admin_liga_equipe_status")
 
+    def test_dashboard_pdf_exports_the_selected_ranking(self) -> None:
+        client, events = self.make_client()
+
+        response = client.get(
+            "/api/admin/liga-entrega/dashboard/pdf",
+            params={"competencia": "2026-09"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers["content-type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertIn("liga-entrega-completo-2026-09.pdf", response.headers["content-disposition"])
+        self.assertEqual(events[-1]["event_type"], "admin_liga_dashboard_pdf")
+
 
 if __name__ == "__main__":
     unittest.main()
