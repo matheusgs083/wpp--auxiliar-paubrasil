@@ -5,9 +5,11 @@ import csv
 import io
 import math
 import re
+import threading
 import unicodedata
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+from itertools import chain
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -21,6 +23,7 @@ PESOS_MOT = {"devol": 35, "saida": 25, "km": 15, "check": 25}
 PESOS_AJD = {"devol": 35, "saida": 25, "km": 15, "check": 25}
 MIN_ROTAS = 3
 TEMPO_PREV_MAX = 840
+MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -34,6 +37,13 @@ RCHK = "CHECKLIST_FROTA"
 ROUTINES = (R030805, R031120, R030224M, R030224A, R030237, R03114902, R031129, RESP, RCHK)
 
 
+# O painel consulta este endpoint mais de uma vez durante o carregamento. O
+# resultado depende dos lotes e expurgos; guardar o último cálculo evita reler
+# CSVs grandes quando nada mudou.
+_DASHBOARD_CACHE: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
+_DASHBOARD_CACHE_LOCK = threading.Lock()
+
+
 class LigaEntregaDashboardService:
     def __init__(self, *, report_store: Any, expurgo_service: Any) -> None:
         self.report_store = report_store
@@ -44,6 +54,13 @@ class LigaEntregaDashboardService:
         if not comp:
             return _empty("")
         manifests = self._select_manifests(comp)
+        expurgos = self._active_expurgos(comp)
+        cache_key = (str(getattr(self.report_store, "root_dir", id(self.report_store))), comp)
+        cache_signature = dashboard_signature(manifests, expurgos)
+        with _DASHBOARD_CACHE_LOCK:
+            cached = _DASHBOARD_CACHE.get(cache_key)
+        if cached and cached[0] == cache_signature:
+            return cached[1]
         rotas: dict[str, dict[str, Any]] = {}
         port: dict[str, dict[str, Any]] = {}
         equipes: dict[str, dict[str, Any]] = {}
@@ -216,6 +233,9 @@ class LigaEntregaDashboardService:
         else:
             for manifest in manifests.get(RESP, []):
                 for file in stored_files(manifest):
+                    if file["path"].stat().st_size > MAX_AUXILIARY_BYTES:
+                        warnings.append(f"Espelho de ponto {file['filename']} ignorado: arquivo acima de 25 MB.")
+                        continue
                     try:
                         ponto.update(parse_espelho(file["path"]))
                     except Exception as exc:  # noqa: BLE001
@@ -225,6 +245,9 @@ class LigaEntregaDashboardService:
         else:
             for manifest in manifests.get(RCHK, []):
                 for file in stored_files(manifest):
+                    if file["path"].stat().st_size > MAX_AUXILIARY_BYTES:
+                        warnings.append(f"Checklist {file['filename']} ignorado: arquivo acima de 25 MB.")
+                        continue
                     try:
                         checklist.extend(parse_checklist(file["path"], colab))
                     except Exception as exc:  # noqa: BLE001
@@ -238,7 +261,6 @@ class LigaEntregaDashboardService:
             if equipe.get("filial") and not rota.get("filial"):
                 rota["filial"] = equipe["filial"]
 
-        expurgos = self._active_expurgos(comp)
         exp_counts = {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}
         for item in expurgos:
             if item.get("tipo") in exp_counts:
@@ -269,7 +291,10 @@ class LigaEntregaDashboardService:
         motoristas, ajudantes = build_rankings(rotas_list, port, devols, {k: len(v) for k, v in ent_m.items()}, {k: len(v) for k, v in ent_a.items()}, checklist, colab)
         operacao = build_operacao(rotas_list, devols, motoristas, ajudantes)
         cobertura = build_cobertura(rotas_list)
-        return {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "ajudantes": len(ajudantes), "devolucoes": len([d for d in devols if not d.get("excluida")]), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "warnings": warnings[:50]}
+        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "ajudantes": len(ajudantes), "devolucoes": len([d for d in devols if not d.get("excluida")]), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "warnings": warnings[:50]}
+        with _DASHBOARD_CACHE_LOCK:
+            _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
+        return result
 
     def _latest_competencia(self) -> str:
         latest = ""
@@ -309,6 +334,20 @@ def _empty(comp: str) -> dict[str, Any]:
     return {"ok": True, "competencia": comp, "summary": {"ready": False, "rotas": 0, "motoristas": 0, "ajudantes": 0, "devolucoes": 0, "devolucoes_expurgadas": 0, "expurgos": 0, "arquivos": 0, "warnings": 0}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": {}, "rankings": {"motoristas": [], "ajudantes": []}, "rotas": [], "operacao": {}, "equipe": [], "cobertura": [], "expurgos": {"counts": {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}, "items": []}, "warnings": []}
 
 
+def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: list[dict[str, Any]]) -> str:
+    """Assinatura barata dos únicos dados que alteram o resultado calculado."""
+
+    batches = tuple(
+        (routine, tuple((str(item.get("batch_id") or ""), str(item.get("stored_at") or "")) for item in items))
+        for routine, items in sorted(manifests.items())
+    )
+    exclusions = tuple(
+        tuple(sorted((str(key), str(value)) for key, value in item.items()))
+        for item in sorted(expurgos, key=lambda item: str(item.get("id") or ""))
+    )
+    return repr((batches, exclusions))
+
+
 def _clean_comp(value: str | None) -> str:
     text = str(value or "").strip()
     if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", text):
@@ -334,14 +373,36 @@ def read_text(path: Path) -> str:
     return data.decode("utf-8", errors="replace")
 
 
-def rows_from(path: Path) -> list[dict[str, str]]:
-    lines = [line for line in read_text(path).splitlines() if line.strip()]
-    if not lines:
-        return []
-    head = lines[0]
-    delimiter = ";" if head.count(";") >= max(head.count(","), head.count("\t")) else ("\t" if head.count("\t") > head.count(",") else ",")
-    reader = csv.DictReader(io.StringIO("\n".join(lines)), delimiter=delimiter)
-    return [{str(k or "").strip(): str(v or "").strip() for k, v in row.items()} for row in reader if any(str(v or "").strip() for v in row.values())]
+def text_encoding(path: Path) -> str:
+    """Detecta UTF-8 pelo começo do arquivo; os relatórios legados são cp1252."""
+
+    try:
+        with path.open("rb") as handle:
+            sample = handle.read(65536)
+        sample.decode("utf-8-sig")
+        return "utf-8-sig"
+    except UnicodeDecodeError:
+        return "cp1252"
+
+
+def rows_from(path: Path) -> Iterable[dict[str, str]]:
+    """Lê CSV em fluxo e normaliza os cabeçalhos uma única vez por arquivo."""
+
+    # Cabeçalhos dos relatórios são ASCII. Ler diretamente do arquivo evita
+    # duplicar em memória CSVs mensais grandes antes de começar o cálculo.
+    with path.open("r", encoding=text_encoding(path), errors="replace", newline="") as handle:
+        lines = (line for line in handle if line.strip())
+        try:
+            head = next(lines)
+        except StopIteration:
+            return
+        delimiter = ";" if head.count(";") >= max(head.count(","), head.count("\t")) else ("\t" if head.count("\t") > head.count(",") else ",")
+        reader = csv.DictReader(chain([head], lines), delimiter=delimiter)
+        headers = {str(name or ""): norm_header(name) for name in (reader.fieldnames or [])}
+        for raw in reader:
+            if not any(str(value or "").strip() for value in raw.values()):
+                continue
+            yield {headers.get(str(key or ""), ""): str(value or "").strip() for key, value in raw.items()}
 
 
 def norm_header(value: Any) -> str:
@@ -351,14 +412,13 @@ def norm_header(value: Any) -> str:
 
 
 def pick(row: dict[str, str], *names: str) -> str:
-    lookup = {norm_header(k): v for k, v in row.items()}
     for name in names:
         key = norm_header(name)
-        if key in lookup:
-            return lookup[key]
+        if key in row:
+            return row[key]
     for name in names:
         key = norm_header(name)
-        for real, value in lookup.items():
+        for real, value in row.items():
             if key and (key in real or real in key):
                 return value
     return ""
@@ -453,21 +513,21 @@ def dev_key(nota: Any, serie: Any, data: Any) -> str:
 def parse_espelho(path: Path) -> dict[str, str]:
     out: dict[str, str] = {}
     idx_mat = None
-    for line in read_text(path).splitlines():
-        if not line.strip():
-            continue
-        row = next(csv.reader([line]))
-        if row[0].strip() == "Data":
-            idx_mat = next((i for i, v in enumerate(row) if "matr" in v.lower()), None)
-            continue
-        m = re.search(r"\d{2}/\d{2}/\d{4}", row[0]) if row else None
-        if idx_mat is None or not m or idx_mat >= len(row):
-            continue
-        cod = norm_code(row[idx_mat])
-        horas = sorted(v.strip() for v in row[2:10] if re.fullmatch(r"\d{2}:\d{2}", v.strip()))
-        if cod != "0" and horas:
-            key = f"{cod}|{to_iso(m.group(0))}"
-            out[key] = max(out.get(key, ""), horas[-1])
+    with path.open("r", encoding=text_encoding(path), errors="replace", newline="") as handle:
+        for row in csv.reader(handle):
+            if not row:
+                continue
+            if row[0].strip() == "Data":
+                idx_mat = next((i for i, v in enumerate(row) if "matr" in v.lower()), None)
+                continue
+            m = re.search(r"\d{2}/\d{2}/\d{4}", row[0])
+            if idx_mat is None or not m or idx_mat >= len(row):
+                continue
+            cod = norm_code(row[idx_mat])
+            horas = sorted(v.strip() for v in row[2:10] if re.fullmatch(r"\d{2}:\d{2}", v.strip()))
+            if cod != "0" and horas:
+                key = f"{cod}|{to_iso(m.group(0))}"
+                out[key] = max(out.get(key, ""), horas[-1])
     return out
 
 
@@ -475,10 +535,12 @@ def parse_checklist(path: Path, colab: dict[str, dict[str, str]]) -> list[dict[s
     if load_workbook is None:
         return []
     wb = load_workbook(path, read_only=True, data_only=True)
-    rows = list(wb.active.iter_rows(values_only=True))
-    if not rows:
+    rows = wb.active.iter_rows(values_only=True)
+    try:
+        first_row = next(rows)
+    except StopIteration:
         return []
-    header = [str(x or "") for x in rows[0]]
+    header = [str(x or "") for x in first_row]
     idx_dt = header_idx(header, "data conclus")
     idx_ex = header_idx(header, "executor")
     idx_tp = header_idx(header, "tipo")
@@ -486,7 +548,7 @@ def parse_checklist(path: Path, colab: dict[str, dict[str, str]]) -> list[dict[s
         return []
     name_to_cod = {norm_name(v.get("nome")): k for k, v in colab.items() if v.get("nome") and not str(v.get("nome")).startswith("COD ")}
     out: list[dict[str, str]] = []
-    for row in rows[1:]:
+    for row in rows:
         cod = name_to_cod.get(norm_name(row[idx_ex] if idx_ex < len(row) else ""))
         data = to_iso(row[idx_dt] if idx_dt < len(row) else "")
         if cod and data:
@@ -609,11 +671,34 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
             continue
         agg_m[mot]["saiTot"] += 1
         agg_m[mot]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
-    return mount(colab, agg_m, ent_m, devols, chk_e, chk_f, "MOTORISTA"), mount(colab, agg_a, ent_a, devols, chk_e, chk_f, "AJUDANTE")
+    devol_m, devol_a = aggregate_devolucoes(devols)
+    return (
+        mount(colab, agg_m, ent_m, devol_m, chk_e, chk_f, "MOTORISTA"),
+        mount(colab, agg_a, ent_a, devol_a, chk_e, chk_f, "AJUDANTE"),
+    )
 
 
 
-def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: list[dict[str, Any]], chk_e: dict[str, int], chk_f: dict[str, int], role: str) -> list[dict[str, Any]]:
+def aggregate_devolucoes(devols: list[dict[str, Any]]) -> tuple[dict[str, int], dict[str, int]]:
+    """Conta devoluções por pessoa uma vez, sem varrer a lista por colaborador."""
+
+    motoristas: dict[str, set[str]] = defaultdict(set)
+    ajudantes: dict[str, set[str]] = defaultdict(set)
+    for item in devols:
+        if item.get("excluida"):
+            continue
+        pair = f"{item.get('cliente_cod')}|{item.get('data')}"
+        mot = norm_code(item.get("cod"))
+        if mot != "0":
+            motoristas[mot].add(pair)
+        for helper in item.get("aju") or []:
+            cod = norm_code(helper)
+            if cod != "0":
+                ajudantes[cod].add(pair)
+    return ({code: len(pairs) for code, pairs in motoristas.items()}, {code: len(pairs) for code, pairs in ajudantes.items()})
+
+
+def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: dict[str, int], chk_e: dict[str, int], chk_f: dict[str, int], role: str) -> list[dict[str, Any]]:
     pesos = PESOS_MOT if role == "MOTORISTA" else PESOS_AJD
     codes = {k for k, v in colab.items() if v.get("funcao") == role} | set(agg) | set(entregas)
     rows: list[dict[str, Any]] = []
@@ -621,7 +706,7 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         info = colab.get(cod, {"nome": f"COD {cod}", "filial": ""})
         g = agg.get(cod, blank())
         ent = int(entregas.get(cod, 0))
-        dev = count_devols(devols, cod, role)
+        dev = int(devols.get(cod, 0))
         pdev = round(dev / ent * 100, 2) if ent else None
         psaida = pct(g["saiOk"] / g["saiTot"] * 100) if g["saiTot"] else None
         tempo = pct(g["tR"] / g["tP"] * 100) if g["tP"] else None
