@@ -64,6 +64,53 @@ class LigaEntregaReportStore:
         )
         return manifest
 
+
+    def list_manifests(
+        self,
+        routine: str,
+        *,
+        competencia: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Lista manifestos gravados para uma rotina, ordenados por data e gravacao."""
+
+        clean_routine = self._clean_routine(routine)
+        clean_competencia = str(competencia or "").strip()
+        if clean_competencia and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", clean_competencia):
+            raise ValueError("Competencia invalida. Use AAAA-MM.")
+
+        routine_dir = self.root_dir / clean_routine
+        if not routine_dir.exists() or not routine_dir.is_dir():
+            return []
+
+        manifests: list[dict[str, Any]] = []
+        try:
+            date_dirs = [path for path in routine_dir.iterdir() if path.is_dir()]
+        except OSError:
+            return []
+        for date_dir in date_dirs:
+            if clean_competencia and not date_dir.name.startswith(f"{clean_competencia}-"):
+                continue
+            try:
+                batch_dirs = [path for path in date_dir.iterdir() if path.is_dir()]
+            except OSError:
+                continue
+            for batch_dir in batch_dirs:
+                manifest_path = batch_dir / "manifest.json"
+                if not manifest_path.is_file():
+                    continue
+                try:
+                    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if isinstance(payload, dict):
+                    manifests.append(payload)
+
+        def sort_key(payload: dict[str, Any]) -> tuple[str, str]:
+            return (str(payload.get("reference_date") or ""), str(payload.get("stored_at") or ""))
+
+        manifests.sort(key=sort_key)
+        return manifests
+
     def latest_manifest(self, routine: str) -> dict[str, Any] | None:
         """Retorna o manifesto mais recente gravado para uma rotina da Liga Entrega."""
 

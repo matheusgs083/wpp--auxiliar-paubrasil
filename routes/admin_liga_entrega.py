@@ -7,6 +7,8 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService
+
 
 LIGA_ENTREGA_REPORTS = (
     {"routine": "030805_LIGA", "code": "03.08.05", "label": "Rotas do dia", "kind": "Diario"},
@@ -153,6 +155,39 @@ def create_admin_liga_entrega_router(
             event_type="admin_liga_relatorios_list",
             decision="allowed",
             reason=f"loaded={loaded}",
+        )
+        return result
+
+    @router.get("/api/admin/liga-entrega/dashboard")
+    def api_admin_liga_entrega_dashboard(
+        request: Request,
+        competencia: str | None = Query(default=None),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        if liga_entrega_report_store is None:
+            raise HTTPException(status_code=503, detail="Armazenamento da Liga Entrega indisponivel.")
+        try:
+            result = LigaEntregaDashboardService(
+                report_store=liga_entrega_report_store,
+                expurgo_service=liga_entrega_expurgo_service,
+            ).build_dashboard(competencia=competencia)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_liga_dashboard",
+            decision="allowed",
+            reason=f"rotas={summary.get('rotas', 0)}",
         )
         return result
 

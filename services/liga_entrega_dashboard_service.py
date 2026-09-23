@@ -1,0 +1,710 @@
+
+from __future__ import annotations
+
+import csv
+import io
+import math
+import re
+import unicodedata
+from collections import defaultdict
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any, Iterable
+
+try:
+    from openpyxl import load_workbook
+except Exception:  # pragma: no cover
+    load_workbook = None  # type: ignore[assignment]
+
+METAS = {"devol": 1.4, "saida": "07:30", "saida_pct": 90, "tempo": 110, "tempo_pern": 100, "km": 10, "check_inicio": "2026-07-13"}
+PESOS_MOT = {"devol": 35, "saida": 25, "km": 15, "check": 25}
+PESOS_AJD = {"devol": 35, "saida": 25, "km": 15, "check": 25}
+MIN_ROTAS = 3
+TEMPO_PREV_MAX = 840
+
+R030805 = "030805_LIGA"
+R031120 = "031120_BOT"
+R030224M = "030224_MOTORISTA_LIGA"
+R030224A = "030224_AJUDANTE_LIGA"
+R030237 = "030237"
+R03114902 = "03114902_BOT"
+R031129 = "031129_LIGA"
+RESP = "PONTOMAIS_ESPELHO"
+RCHK = "CHECKLIST_FROTA"
+ROUTINES = (R030805, R031120, R030224M, R030224A, R030237, R03114902, R031129, RESP, RCHK)
+
+
+class LigaEntregaDashboardService:
+    def __init__(self, *, report_store: Any, expurgo_service: Any) -> None:
+        self.report_store = report_store
+        self.expurgo_service = expurgo_service
+
+    def build_dashboard(self, *, competencia: str | None = None) -> dict[str, Any]:
+        comp = _clean_comp(competencia) if competencia else self._latest_competencia()
+        if not comp:
+            return _empty("")
+        manifests = self._select_manifests(comp)
+        rotas: dict[str, dict[str, Any]] = {}
+        port: dict[str, dict[str, Any]] = {}
+        equipes: dict[str, dict[str, Any]] = {}
+        cidades: dict[str, str] = {}
+        devols: list[dict[str, Any]] = []
+        ajud_devol: dict[str, list[str]] = {}
+        ent_m: dict[str, set[str]] = defaultdict(set)
+        ent_a: dict[str, set[str]] = defaultdict(set)
+        ponto: dict[str, str] = {}
+        checklist: list[dict[str, str]] = []
+        colab: dict[str, dict[str, str]] = {}
+        warnings: list[str] = []
+
+        def remember(cod: Any, *, nome: str = "", filial: str = "", funcao: str = "") -> str:
+            c = norm_code(cod)
+            if c == "0":
+                return c
+            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": funcao})
+            if nome and str(row.get("nome") or "").startswith("COD "):
+                row["nome"] = clean_name(nome)
+            if filial and not row.get("filial"):
+                row["filial"] = filial
+            if funcao and not row.get("funcao"):
+                row["funcao"] = funcao
+            return c
+
+        for manifest in manifests.get(R030805, []):
+            for file in stored_files(manifest):
+                filial = filial_from_name(file["filename"])
+                try:
+                    for row in rows_from(file["path"]):
+                        mot = remember(pick(row, "CdMot", "Motorista"), filial=filial, funcao="MOTORISTA")
+                        mapa = norm_mapa(pick(row, "Mapa"))
+                        if mot == "0" or not mapa:
+                            continue
+                        aju: list[str] = []
+                        for key in ("CdAju1", "Ajudante 1", "CdAju2", "Ajudante 2"):
+                            a = remember(pick(row, key), filial=filial, funcao="AJUDANTE")
+                            if a != "0" and a not in aju:
+                                aju.append(a)
+                        km_real = to_float(pick(row, "KmEntr", "Km Entrada")) - to_float(pick(row, "KmSai", "Km Saida"))
+                        km_prev = to_float(pick(row, "KmPrev", "Km Previsto"))
+                        km_ok = km_prev > 0 and km_real > 0 and km_real < 2000
+                        rotas[mapa] = {
+                            "data": to_iso(pick(row, "Data"), fallback=manifest_ref(manifest)), "mapa": mapa, "filial": filial,
+                            "mot": mot, "aju": aju, "km_real": round(km_real, 1) if km_ok else None,
+                            "km_prev": round(km_prev, 1) if km_ok else None, "tempo_prev": to_min(pick(row, "TempoPrev", "Tempo Prev")),
+                            "hs0805": to_time(pick(row, "HrSai", "Hora Saida")), "he0805": to_time(pick(row, "HrEntr", "Hora Entrada")),
+                            "entregas": to_int(pick(row, "Entregas")), "cx_carreg": to_float(pick(row, "CxCarreg")),
+                            "cx_entreg": to_float(pick(row, "CxEntreg")), "cidade": "", "src": file["filename"],
+                        }
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"03.08.05 {file['filename']}: {exc}")
+
+        for manifest in manifests.get(R031120, []):
+            for file in stored_files(manifest):
+                filial = filial_from_name(file["filename"])
+                try:
+                    for row in rows_from(file["path"]):
+                        mapa = norm_mapa(pick(row, "Mapa"))
+                        fase = str(pick(row, "Fase") or "").lower()
+                        if not mapa:
+                            continue
+                        item = port.setdefault(mapa, {})
+                        event = [to_iso(pick(row, "DtOper", "Data"), fallback=manifest_ref(manifest)), to_time(pick(row, "HrOper", "Hora"))]
+                        if fase.startswith("entrada"):
+                            item["ent"] = event
+                        elif fase.startswith("saida") and event[1]:
+                            item["sai"] = event
+                            item["mot"] = remember(pick(row, "Motorista", "CdMot"), filial=filial, funcao="MOTORISTA")
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"03.11.20 {file['filename']}: {exc}")
+
+        for manifest in manifests.get(R030224A, []):
+            for file in stored_files(manifest):
+                filial = filial_from_name(file["filename"])
+                try:
+                    for row in rows_from(file["path"]):
+                        nota = str(pick(row, "Nota") or "").strip()
+                        if not nota:
+                            continue
+                        data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
+                        key = dev_key(nota, pick(row, "Serie", "Série"), data)
+                        ajus: list[str] = []
+                        for col in ("Ajudante 1", "Ajudante1", "CdAju1", "Ajudante 2", "Ajudante2", "CdAju2"):
+                            a = remember(pick(row, col), filial=filial, funcao="AJUDANTE")
+                            if a != "0" and a not in ajus:
+                                ajus.append(a)
+                        ajud_devol[key] = ajus
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"03.02.24 ajudante {file['filename']}: {exc}")
+
+        for manifest in manifests.get(R030224M, []):
+            for file in stored_files(manifest):
+                filial = filial_from_name(file["filename"])
+                try:
+                    for row in rows_from(file["path"]):
+                        nota = str(pick(row, "Nota") or "").strip()
+                        if not nota:
+                            continue
+                        data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
+                        key = dev_key(nota, pick(row, "Serie", "Série"), data)
+                        mot = remember(pick(row, "Motorista", "CdMot"), nome=pick(row, "Nome Motorista"), filial=filial, funcao="MOTORISTA")
+                        devols.append({
+                            "chave": key, "filial": filial, "cod": mot, "aju": ajud_devol.get(key, []), "data": data,
+                            "nota": nota, "serie": str(pick(row, "Serie", "Série") or "").strip(),
+                            "cliente_cod": norm_code(pick(row, "Cod. Cliente", "Cod Cliente", "Cliente")),
+                            "cliente": str(pick(row, "Nome Cliente", "Cliente Nome") or "").strip(),
+                            "valor": to_float(pick(row, "Valor")), "motivo": str(pick(row, "Desc. Motivo", "Motivo") or "").strip(),
+                            "resp": str(pick(row, "Cod. Motivo", "Cod Motivo") or "").strip(), "excluida": False,
+                        })
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"03.02.24 motorista {file['filename']}: {exc}")
+
+        for manifest in manifests.get(R030237, []):
+            for file in stored_files(manifest):
+                filial = filial_from_name(file["filename"])
+                try:
+                    for row in rows_from(file["path"]):
+                        if str(pick(row, "Status") or "").strip().upper() == "C":
+                            continue
+                        pdv = f"{norm_code(pick(row, 'Cliente', 'Cod Cliente', 'Cod. Cliente'))}|{to_iso(pick(row, 'Dt. Operacao', 'Dt Operacao', 'Data'), fallback=manifest_ref(manifest))}"
+                        mot = remember(pick(row, "Motorista", "CdMot"), filial=filial, funcao="MOTORISTA")
+                        if mot != "0":
+                            ent_m[mot].add(pdv)
+                        for col in ("ajudante-1", "ajudante 1", "Ajudante 1", "CdAju1", "ajudante-2", "ajudante 2", "Ajudante 2", "CdAju2"):
+                            a = remember(pick(row, col), filial=filial, funcao="AJUDANTE")
+                            if a != "0":
+                                ent_a[a].add(pdv)
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"03.02.37 {file['filename']}: {exc}")
+
+        for manifest in manifests.get(R03114902, []):
+            for file in stored_files(manifest):
+                try:
+                    for row in rows_from(file["path"]):
+                        mapa = norm_mapa(pick(row, "Mapa"))
+                        cidade = str(pick(row, "Cidade", "Municipio", "Município", "Nome Cidade") or "").strip()
+                        if mapa and cidade:
+                            cidades[mapa] = cidade
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"03.11.49.02 {file['filename']}: {exc}")
+
+        for manifest in manifests.get(R031129, []):
+            for file in stored_files(manifest):
+                filial = filial_from_name(file["filename"])
+                try:
+                    for row in rows_from(file["path"]):
+                        mapa = norm_mapa(pick(row, "Mapa"))
+                        if not mapa:
+                            continue
+                        mot = remember(pick(row, "Motorista", "CdMot"), nome=pick(row, "Nome Motorista"), filial=filial, funcao="MOTORISTA")
+                        if mot == "0":
+                            continue
+                        aju: list[str] = []
+                        for code_col, name_col in (("Ajudante 1", "Nome Ajudante 1"), ("Ajudante 2", "Nome Ajudante 2"), ("CdAju1", "Nome Ajudante 1"), ("CdAju2", "Nome Ajudante 2")):
+                            a = remember(pick(row, code_col), nome=pick(row, name_col), filial=filial, funcao="AJUDANTE")
+                            if a != "0" and a not in aju:
+                                aju.append(a)
+                        equipes[mapa] = {"data": to_iso(pick(row, "Data"), fallback=manifest_ref(manifest)), "filial": filial, "mot": mot, "aju": aju, "sup": str(pick(row, "Nome Superv. Rota", "Supervisor") or "").strip(), "placa": str(pick(row, "Placa") or "").strip()}
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"03.11.29 {file['filename']}: {exc}")
+
+        for manifest in manifests.get(RESP, []):
+            for file in stored_files(manifest):
+                try:
+                    ponto.update(parse_espelho(file["path"]))
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"espelho {file['filename']}: {exc}")
+        for manifest in manifests.get(RCHK, []):
+            for file in stored_files(manifest):
+                try:
+                    checklist.extend(parse_checklist(file["path"], colab))
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"checklist {file['filename']}: {exc}")
+
+        for mapa, equipe in equipes.items():
+            rota = rotas.setdefault(mapa, {"data": equipe.get("data") or "", "mapa": mapa, "filial": equipe.get("filial") or "", "mot": equipe.get("mot") or "0", "aju": [], "km_real": None, "km_prev": None, "tempo_prev": None, "hs0805": "", "he0805": "", "entregas": 0, "cidade": "", "src": "03.11.29"})
+            rota.update({"mot": equipe.get("mot") or rota.get("mot"), "aju": equipe.get("aju") or rota.get("aju") or [], "sup": equipe.get("sup") or "", "placa": equipe.get("placa") or ""})
+            if equipe.get("data") and not rota.get("data"):
+                rota["data"] = equipe["data"]
+            if equipe.get("filial") and not rota.get("filial"):
+                rota["filial"] = equipe["filial"]
+
+        expurgos = self._active_expurgos(comp)
+        exp_counts = {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}
+        for item in expurgos:
+            if item.get("tipo") in exp_counts:
+                exp_counts[str(item["tipo"])] += 1
+        for dev in devols:
+            match = match_dev_exp(dev, expurgos)
+            if match:
+                dev["excluida"] = True
+                dev["expurgo_id"] = str(match.get("id") or "")
+
+        rotas_list: list[dict[str, Any]] = []
+        for mapa, r0 in rotas.items():
+            r = dict(r0)
+            p = port.get(mapa, {})
+            r["hr_sai"] = (p.get("sai") or [None, r.get("hs0805") or ""])[1]
+            if mapa in cidades:
+                r["cidade"] = cidades[mapa]
+            r["pernoite"] = bool(r.get("tempo_prev") and float(r["tempo_prev"]) > TEMPO_PREV_MAX)
+            r["tempo_real"] = tempo_real(r, p, ponto)
+            r["tempo_pct"] = pct(float(r["tempo_real"]) / float(r["tempo_prev"]) * 100) if r.get("tempo_real") and r.get("tempo_prev") else None
+            exp_s = match_route_exp(r, expurgos, {"tml"})
+            exp_k = match_route_exp(r, expurgos, {"km", "dispersao"})
+            r["expurgo_saida"] = bool(exp_s)
+            r["expurgo_km"] = bool(exp_k)
+            rotas_list.append(r)
+        rotas_list.sort(key=lambda x: (str(x.get("data") or ""), to_int(x.get("mapa"))))
+
+        motoristas, ajudantes = build_rankings(rotas_list, port, devols, {k: len(v) for k, v in ent_m.items()}, {k: len(v) for k, v in ent_a.items()}, checklist, colab)
+        operacao = build_operacao(rotas_list, devols, motoristas, ajudantes)
+        cobertura = build_cobertura(rotas_list)
+        return {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "ajudantes": len(ajudantes), "devolucoes": len([d for d in devols if not d.get("excluida")]), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "warnings": warnings[:50]}
+
+    def _latest_competencia(self) -> str:
+        latest = ""
+        for routine in ROUTINES:
+            try:
+                manifest = self.report_store.latest_manifest(routine)
+            except Exception:
+                continue
+            ref = str((manifest or {}).get("reference_date") or "")
+            if len(ref) >= 7 and ref[:7] > latest:
+                latest = ref[:7]
+        return latest
+
+    def _select_manifests(self, comp: str) -> dict[str, list[dict[str, Any]]]:
+        out: dict[str, list[dict[str, Any]]] = {R030805: self._list(R030805, comp)}
+        for routine in ROUTINES[1:]:
+            items = self._list(routine, comp)
+            out[routine] = [items[-1]] if items else []
+        return out
+
+    def _list(self, routine: str, comp: str) -> list[dict[str, Any]]:
+        if hasattr(self.report_store, "list_manifests"):
+            return list(self.report_store.list_manifests(routine, competencia=comp))
+        manifest = self.report_store.latest_manifest(routine)
+        return [manifest] if manifest and str(manifest.get("reference_date") or "").startswith(comp + "-") else []
+
+    def _active_expurgos(self, comp: str) -> list[dict[str, Any]]:
+        try:
+            result = self.expurgo_service.list_expurgos(competencia=comp, active_only=True)
+        except Exception:
+            return []
+        return [dict(x) for x in result.get("items", []) if isinstance(x, dict)]
+
+
+
+def _empty(comp: str) -> dict[str, Any]:
+    return {"ok": True, "competencia": comp, "summary": {"ready": False, "rotas": 0, "motoristas": 0, "ajudantes": 0, "devolucoes": 0, "devolucoes_expurgadas": 0, "expurgos": 0, "arquivos": 0, "warnings": 0}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": {}, "rankings": {"motoristas": [], "ajudantes": []}, "rotas": [], "operacao": {}, "equipe": [], "cobertura": [], "expurgos": {"counts": {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}, "items": []}, "warnings": []}
+
+
+def _clean_comp(value: str | None) -> str:
+    text = str(value or "").strip()
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", text):
+        raise ValueError("Competencia invalida. Use AAAA-MM.")
+    return text
+
+
+def stored_files(manifest: dict[str, Any]) -> Iterable[dict[str, Any]]:
+    for item in manifest.get("files", []):
+        if isinstance(item, dict):
+            path = Path(str(item.get("path") or ""))
+            if path.is_file():
+                yield {"filename": str(item.get("filename") or path.name), "path": path}
+
+
+def read_text(path: Path) -> str:
+    data = path.read_bytes()
+    for enc in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            pass
+    return data.decode("utf-8", errors="replace")
+
+
+def rows_from(path: Path) -> list[dict[str, str]]:
+    lines = [line for line in read_text(path).splitlines() if line.strip()]
+    if not lines:
+        return []
+    head = lines[0]
+    delimiter = ";" if head.count(";") >= max(head.count(","), head.count("\t")) else ("\t" if head.count("\t") > head.count(",") else ",")
+    reader = csv.DictReader(io.StringIO("\n".join(lines)), delimiter=delimiter)
+    return [{str(k or "").strip(): str(v or "").strip() for k, v in row.items()} for row in reader if any(str(v or "").strip() for v in row.values())]
+
+
+def norm_header(value: Any) -> str:
+    text = unicodedata.normalize("NFD", str(value or ""))
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def pick(row: dict[str, str], *names: str) -> str:
+    lookup = {norm_header(k): v for k, v in row.items()}
+    for name in names:
+        key = norm_header(name)
+        if key in lookup:
+            return lookup[key]
+    for name in names:
+        key = norm_header(name)
+        for real, value in lookup.items():
+            if key and (key in real or real in key):
+                return value
+    return ""
+
+
+def clean_name(value: Any) -> str:
+    return " ".join(str(value or "").strip().upper().split())
+
+
+def short_name(value: str) -> str:
+    parts = [x for x in str(value or "").split() if x]
+    if not parts:
+        return ""
+    conn = {"DE", "DA", "DO", "DOS", "DAS", "E"}
+    second = next((x for x in parts[1:] if x.upper() not in conn), parts[1] if len(parts) > 1 else "")
+    return " ".join(x.capitalize() for x in ([parts[0], second] if second else [parts[0]]))
+
+
+def norm_code(value: Any) -> str:
+    digits = re.sub(r"\D", "", str(value or "")).lstrip("0")
+    return digits or "0"
+
+
+def norm_mapa(value: Any) -> str:
+    return re.sub(r"\D", "", str(value or "")).lstrip("0")
+
+
+def to_float(value: Any) -> float:
+    text = str(value or "0").strip()
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    try:
+        return float(text or 0)
+    except ValueError:
+        return 0.0
+
+
+def to_int(value: Any) -> int:
+    try:
+        return int(float(str(value or "0").replace(",", ".")))
+    except ValueError:
+        return 0
+
+
+def to_min(value: Any) -> int | None:
+    text = str(value or "").strip()
+    m = re.match(r"^(\d+):(\d{2})", text)
+    if m:
+        return int(m.group(1)) * 60 + int(m.group(2))
+    return int(text) if text.isdigit() else None
+
+
+def to_time(value: Any) -> str:
+    m = re.match(r"^(\d{1,2}):(\d{2})", str(value or "").strip())
+    return f"{int(m.group(1)):02d}:{int(m.group(2)):02d}" if m else ""
+
+
+def to_iso(value: Any, *, fallback: str | None = None) -> str:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value or "").strip()
+    if not text:
+        return fallback or ""
+    for fmt in ("%d/%m/%Y", "%d%m%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text[:10] if fmt == "%Y-%m-%d" else text, fmt).date().isoformat()
+        except ValueError:
+            pass
+    return fallback or ""
+
+
+def manifest_ref(manifest: dict[str, Any]) -> str:
+    return to_iso(manifest.get("reference_date"))
+
+
+def filial_from_name(filename: str) -> str:
+    upper = filename.upper()
+    if "PATOS" in upper or "0003" in upper:
+        return "PATOS"
+    if "SUME" in upper or "SUMÉ" in upper or "0004" in upper:
+        return "SUME"
+    return ""
+
+
+def dev_key(nota: Any, serie: Any, data: Any) -> str:
+    return f"{str(nota or '').strip()}|{str(serie or '').strip()}|{to_iso(data)}"
+
+
+
+def parse_espelho(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    idx_mat = None
+    for line in read_text(path).splitlines():
+        if not line.strip():
+            continue
+        row = next(csv.reader([line]))
+        if row[0].strip() == "Data":
+            idx_mat = next((i for i, v in enumerate(row) if "matr" in v.lower()), None)
+            continue
+        m = re.search(r"\d{2}/\d{2}/\d{4}", row[0]) if row else None
+        if idx_mat is None or not m or idx_mat >= len(row):
+            continue
+        cod = norm_code(row[idx_mat])
+        horas = sorted(v.strip() for v in row[2:10] if re.fullmatch(r"\d{2}:\d{2}", v.strip()))
+        if cod != "0" and horas:
+            key = f"{cod}|{to_iso(m.group(0))}"
+            out[key] = max(out.get(key, ""), horas[-1])
+    return out
+
+
+def parse_checklist(path: Path, colab: dict[str, dict[str, str]]) -> list[dict[str, str]]:
+    if load_workbook is None:
+        return []
+    wb = load_workbook(path, read_only=True, data_only=True)
+    rows = list(wb.active.iter_rows(values_only=True))
+    if not rows:
+        return []
+    header = [str(x or "") for x in rows[0]]
+    idx_dt = header_idx(header, "data conclus")
+    idx_ex = header_idx(header, "executor")
+    idx_tp = header_idx(header, "tipo")
+    if idx_dt is None or idx_ex is None:
+        return []
+    name_to_cod = {norm_name(v.get("nome")): k for k, v in colab.items() if v.get("nome") and not str(v.get("nome")).startswith("COD ")}
+    out: list[dict[str, str]] = []
+    for row in rows[1:]:
+        cod = name_to_cod.get(norm_name(row[idx_ex] if idx_ex < len(row) else ""))
+        data = to_iso(row[idx_dt] if idx_dt < len(row) else "")
+        if cod and data:
+            tipo_raw = str(row[idx_tp] if idx_tp is not None and idx_tp < len(row) else "").lower()
+            out.append({"cod": cod, "data": data, "tipo": "R" if tipo_raw.startswith("ret") else "S"})
+    return out
+
+
+def header_idx(header: list[str], needle: str) -> int | None:
+    key = norm_header(needle)
+    return next((i for i, value in enumerate(header) if key in norm_header(value)), None)
+
+
+def norm_name(value: Any) -> str:
+    text = unicodedata.normalize("NFD", str(value or ""))
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+    return " ".join(text.upper().split())
+
+
+def tempo_real(rota: dict[str, Any], port: dict[str, Any], ponto: dict[str, str]) -> int | None:
+    out = None
+    if port.get("sai") and port.get("ent"):
+        t0, t1 = dt_min(port["sai"][0], port["sai"][1]), dt_min(port["ent"][0], port["ent"][1])
+        if t0 is not None and t1 is not None and 60 < t1 - t0 < 7200:
+            out = t1 - t0
+    if out is not None and out > 4320 and port.get("sai"):
+        ult = ponto.get(f"{norm_code(rota.get('mot'))}|{port['sai'][0]}")
+        a, b = to_min(ult), to_min(port["sai"][1])
+        out = a - b if a is not None and b is not None and a > b else None
+    if out is None and not rota.get("pernoite"):
+        hs, he = to_min(rota.get("hs0805")), to_min(rota.get("he0805"))
+        if hs is not None and he is not None:
+            delta = he - hs
+            if delta < 0:
+                delta += 1440
+            if 60 < delta <= 1200:
+                out = delta
+    return out
+
+
+def dt_min(data: Any, hora: Any) -> int | None:
+    iso, mins = to_iso(data), to_min(hora)
+    if not iso or mins is None:
+        return None
+    d = date.fromisoformat(iso)
+    return int(datetime(d.year, d.month, d.day).timestamp() // 60) + mins
+
+
+def pct(value: float) -> float:
+    return 0.0 if math.isnan(value) or math.isinf(value) else round(value, 1)
+
+
+def faixa(pior: float | None) -> float:
+    p = float(pior or 0)
+    return 1 if p <= 0 else 0.7 if p <= 25 else 0.4 if p <= 50 else 0
+
+
+def pior_pct(value: float | None, meta: float, *, menor: bool) -> float:
+    if value is None:
+        return 0
+    if meta == 0:
+        return 0 if value <= 0 else 100
+    return max(0, ((value - meta) if menor else (meta - value)) / meta * 100)
+
+
+def blank() -> dict[str, float]:
+    return {"rotas": 0, "kmR": 0, "kmP": 0, "tR": 0, "tP": 0, "saiOk": 0, "saiTot": 0}
+
+
+def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]], devols: list[dict[str, Any]], ent_m: dict[str, int], ent_a: dict[str, int], checklist: list[dict[str, str]], colab: dict[str, dict[str, str]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    agg_m: dict[str, dict[str, float]] = defaultdict(blank)
+    agg_a: dict[str, dict[str, float]] = defaultdict(blank)
+    chk_set = {f"{c.get('cod')}|{c.get('data')}|{c.get('tipo')}" for c in checklist}
+    chk_e: dict[str, int] = defaultdict(int)
+    chk_f: dict[str, int] = defaultdict(int)
+    for r in rotas:
+        mot = norm_code(r.get("mot"))
+        if mot != "0":
+            agg_m[mot]["rotas"] += 1
+        km_ok = r.get("km_real") is not None and r.get("km_prev") is not None and not r.get("expurgo_km")
+        if mot != "0" and km_ok:
+            agg_m[mot]["kmR"] += float(r.get("km_real") or 0)
+            agg_m[mot]["kmP"] += float(r.get("km_prev") or 0)
+        t_ok = r.get("tempo_real") is not None and r.get("tempo_prev")
+        target = float(r.get("tempo_prev") or 0) * (float(METAS["tempo_pern"] if r.get("pernoite") else METAS["tempo"]) / 100) if t_ok else 0
+        if mot != "0" and t_ok:
+            agg_m[mot]["tR"] += float(r.get("tempo_real") or 0)
+            agg_m[mot]["tP"] += target
+        for a0 in r.get("aju") or []:
+            a = norm_code(a0)
+            if a == "0":
+                continue
+            agg_a[a]["rotas"] += 1
+            if km_ok:
+                agg_a[a]["kmR"] += float(r.get("km_real") or 0)
+                agg_a[a]["kmP"] += float(r.get("km_prev") or 0)
+            if t_ok:
+                agg_a[a]["tR"] += float(r.get("tempo_real") or 0)
+                agg_a[a]["tP"] += target
+            p = port.get(str(r.get("mapa") or ""))
+            if p and p.get("sai") and not r.get("expurgo_saida"):
+                agg_a[a]["saiTot"] += 1
+                agg_a[a]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
+        if str(r.get("data") or "") >= str(METAS["check_inicio"]) and mot != "0":
+            p = port.get(str(r.get("mapa") or ""), {})
+            ds = (p.get("sai") or [r.get("data")])[0]
+            de = (p.get("ent") or [r.get("data")])[0]
+            fez_s = f"{mot}|{ds}|S" in chk_set
+            fez_r = f"{mot}|{de}|R" in chk_set or f"{mot}|{next_day(de)}|R" in chk_set
+            for c in [mot] + [norm_code(x) for x in (r.get("aju") or []) if norm_code(x) != "0"]:
+                chk_e[c] += 2
+                chk_f[c] += int(fez_s) + int(fez_r)
+    for mapa, p in port.items():
+        mot = norm_code(p.get("mot"))
+        if mot == "0" or not p.get("sai"):
+            continue
+        rota = next((x for x in rotas if str(x.get("mapa") or "") == str(mapa)), {})
+        if rota.get("expurgo_saida"):
+            continue
+        agg_m[mot]["saiTot"] += 1
+        agg_m[mot]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
+    return mount(colab, agg_m, ent_m, devols, chk_e, chk_f, "MOTORISTA"), mount(colab, agg_a, ent_a, devols, chk_e, chk_f, "AJUDANTE")
+
+
+
+def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: list[dict[str, Any]], chk_e: dict[str, int], chk_f: dict[str, int], role: str) -> list[dict[str, Any]]:
+    pesos = PESOS_MOT if role == "MOTORISTA" else PESOS_AJD
+    codes = {k for k, v in colab.items() if v.get("funcao") == role} | set(agg) | set(entregas)
+    rows: list[dict[str, Any]] = []
+    for cod in sorted(codes):
+        info = colab.get(cod, {"nome": f"COD {cod}", "filial": ""})
+        g = agg.get(cod, blank())
+        ent = int(entregas.get(cod, 0))
+        dev = count_devols(devols, cod, role)
+        pdev = round(dev / ent * 100, 2) if ent else None
+        psaida = pct(g["saiOk"] / g["saiTot"] * 100) if g["saiTot"] else None
+        tempo = pct(g["tR"] / g["tP"] * 100) if g["tP"] else None
+        km = pct(abs(g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else None
+        check = pct(chk_f[cod] / chk_e[cod] * 100) if chk_e.get(cod) else None
+        pts = {
+            "saida": round(pesos["saida"] * faixa(pior_pct(psaida, float(METAS["saida_pct"]), menor=False)), 1) if psaida is not None else 0,
+            "devol": round(pesos["devol"] * faixa(max(0, (pdev - float(METAS["devol"])) / float(METAS["devol"]) * 100)), 1) if pdev is not None else 0,
+            "km": round(pesos["km"] * faixa(pior_pct(km, float(METAS["km"]), menor=True)), 1) if km is not None else 0,
+            "check": round(pesos["check"] * faixa(pior_pct(check, 100, menor=False)), 1) if check is not None else 0,
+        }
+        measured = {"saida": psaida is not None, "devol": pdev is not None, "km": km is not None, "check": check is not None}
+        sw = sum(w for k, w in pesos.items() if measured[k])
+        sp = sum(float(pts[k]) for k in pesos if measured[k])
+        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "total": round(sp / sw * 100, 1) if sw else 0, "status": "ativo", "elegivel": int(g["rotas"]) >= MIN_ROTAS, "pos": None})
+    elig = [x for x in rows if x["elegivel"]]
+    elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -int(x.get("rotas") or 0)))
+    for i, row in enumerate(elig, 1):
+        row["pos"] = i
+    rows.sort(key=lambda x: (x.get("pos") is None, x.get("pos") or 9999, -float(x.get("total") or 0), x.get("nome") or ""))
+    return rows
+
+
+def count_devols(devols: list[dict[str, Any]], cod: str, role: str) -> int:
+    pairs = set()
+    for d in devols:
+        if d.get("excluida"):
+            continue
+        ok = norm_code(d.get("cod")) == cod if role == "MOTORISTA" else cod in {norm_code(x) for x in d.get("aju") or []}
+        if ok:
+            pairs.add(f"{d.get('cliente_cod')}|{d.get('data')}")
+    return len(pairs)
+
+
+def match_dev_exp(dev: dict[str, Any], expurgos: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for e in expurgos:
+        if e.get("tipo") != "devolucao":
+            continue
+        if e.get("data") and e.get("data") != dev.get("data"):
+            continue
+        if e.get("filial") and str(e.get("filial")).upper() != str(dev.get("filial")).upper():
+            continue
+        cliente = str(e.get("cliente") or "").strip()
+        if cliente and cliente not in {str(dev.get("cliente_cod") or ""), str(dev.get("cliente") or "")}:
+            continue
+        return e
+    return None
+
+
+def match_route_exp(rota: dict[str, Any], expurgos: list[dict[str, Any]], tipos: set[str]) -> dict[str, Any] | None:
+    for e in expurgos:
+        if e.get("tipo") not in tipos:
+            continue
+        if e.get("mapa") and norm_mapa(e.get("mapa")) != norm_mapa(rota.get("mapa")):
+            continue
+        if e.get("data") and e.get("data") != rota.get("data"):
+            continue
+        if e.get("filial") and str(e.get("filial")).upper() != str(rota.get("filial")).upper():
+            continue
+        return e
+    return None
+
+
+def next_day(value: Any) -> str:
+    iso = to_iso(value)
+    return (date.fromisoformat(iso) + timedelta(days=1)).isoformat() if iso else ""
+
+
+def build_operacao(rotas: list[dict[str, Any]], devols: list[dict[str, Any]], motoristas: list[dict[str, Any]], ajudantes: list[dict[str, Any]]) -> dict[str, Any]:
+    ent = sum(int(r.get("entregas") or 0) for r in rotas)
+    dev = len([d for d in devols if not d.get("excluida")])
+    saidas = [r for r in rotas if r.get("hr_sai") and not r.get("expurgo_saida")]
+    saidas_ok = [r for r in saidas if str(r.get("hr_sai") or "") <= str(METAS["saida"])]
+    kms = [r for r in rotas if r.get("km_real") is not None and r.get("km_prev") is not None and not r.get("expurgo_km")]
+    kr = sum(float(r.get("km_real") or 0) for r in kms)
+    kp = sum(float(r.get("km_prev") or 0) for r in kms)
+    return {"entregas": ent, "devolucoes": dev, "devolucao_pct": round(dev / ent * 100, 2) if ent else None, "saida_pct": pct(len(saidas_ok) / len(saidas) * 100) if saidas else None, "km_desv": pct(abs(kr - kp) / kp * 100) if kp else None, "rotas": len(rotas), "motoristas_elegiveis": len([x for x in motoristas if x.get("elegivel")]), "ajudantes_elegiveis": len([x for x in ajudantes if x.get("elegivel")])}
+
+
+def build_cobertura(rotas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by: dict[str, dict[str, Any]] = {}
+    for r in rotas:
+        data = str(r.get("data") or "")
+        if not data:
+            continue
+        row = by.setdefault(data, {"data": data, "rotas": 0, "entregas_0805": 0, "mapas": []})
+        row["rotas"] += 1
+        row["entregas_0805"] += int(r.get("entregas") or 0)
+        row["mapas"].append(str(r.get("mapa") or ""))
+    return [by[k] for k in sorted(by)]
+
+
+def manifest_summary(manifests: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for routine, items in manifests.items():
+        out[routine] = [{"batch_id": m.get("batch_id"), "reference_date": m.get("reference_date"), "stored_at": m.get("stored_at"), "file_count": m.get("file_count"), "filenames": [f.get("filename") for f in m.get("files", []) if isinstance(f, dict)]} for m in items]
+    return out

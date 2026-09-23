@@ -2939,7 +2939,8 @@
         },
         ligaEntrega: {
           expurgos: "/api/admin/liga-entrega/expurgos",
-          reports: "/api/admin/liga-entrega/relatorios"
+          reports: "/api/admin/liga-entrega/relatorios",
+          dashboard: "/api/admin/liga-entrega/dashboard"
         },
         usage: {
           evolution: "/api/admin/usage/evolution",
@@ -4695,30 +4696,36 @@
       renderLigaEntregaDashboard(items, summary);
     }
 
-    function renderLigaEntregaDashboard(items, summary) {
-      const loadedItems = items.filter(item => item && item.loaded && item.manifest);
+    function renderLigaEntregaDashboard(items = [], summary = {}) {
+      const dashboard = state.ligaEntregaDashboard || {};
+      const dashSummary = dashboard.summary || {};
+      const operacao = dashboard.operacao || {};
+      const rankings = dashboard.rankings || {};
+      const motoristas = Array.isArray(rankings.motoristas) ? rankings.motoristas : [];
+      const ajudantes = Array.isArray(rankings.ajudantes) ? rankings.ajudantes : [];
+      const rotas = Array.isArray(dashboard.rotas) ? dashboard.rotas : [];
       const missingItems = items.filter(item => !item || !item.loaded);
-      const total = Number(summary.total || items.length || 0);
-      const loaded = Number(summary.loaded || loadedItems.length || 0);
-      const ready = Boolean(summary.ready || (total > 0 && loaded === total));
-      const totalFiles = Number(summary.total_files || loadedItems.reduce((sum, item) => sum + Number((item.manifest || {}).file_count || 0), 0));
-      const latestReference = summary.latest_reference_date ? formatDate(summary.latest_reference_date) : "-";
-      const latestStoredAt = summary.latest_stored_at ? formatDateTime(summary.latest_stored_at) : "-";
+      const ready = Boolean(dashSummary.ready);
+      const fmtPct = value => value === null || value === undefined || value === "" ? "-" : `${Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+      const fmtNum = value => Number(value || 0).toLocaleString("pt-BR");
       if (E.entregaLigaDashboardBadge) {
-        E.entregaLigaDashboardBadge.textContent = ready ? "Pronto" : "Pendente";
+        E.entregaLigaDashboardBadge.textContent = ready ? "Calculado" : "Pendente";
         E.entregaLigaDashboardBadge.className = `pill ${ready ? "ok" : ""}`;
       }
       if (E.entregaLigaDashboardStatus) {
+        const comp = dashboard.competencia ? `Competência ${dashboard.competencia}. ` : "";
         E.entregaLigaDashboardStatus.textContent = ready
-          ? "Todos os relatórios homologados estão carregados. O dashboard já pode usar os lotes ativos."
-          : `Faltam ${missingItems.length} relatório(s) para o dashboard ficar completo.`;
+          ? `${comp}Ranking calculado com os lotes ativos e expurgos aplicados por indicador.`
+          : `${comp}Aguardando dados suficientes para calcular ranking, rotas e operação.`;
       }
       if (E.entregaLigaDashboardCards) {
         E.entregaLigaDashboardCards.innerHTML = [
-          ["Relatórios", `${loaded}/${total}`, "lotes ativos"],
-          ["Arquivos", String(totalFiles || 0), "arquivos no backend"],
-          ["Referência", latestReference, "maior data carregada"],
-          ["Atualização", latestStoredAt, "último lote recebido"]
+          ["Rotas", fmtNum(dashSummary.rotas), "mapas considerados"],
+          ["Entregas", fmtNum(operacao.entregas), "PDVs únicos/0805"],
+          ["Devolução", fmtPct(operacao.devolucao_pct), `${fmtNum(dashSummary.devolucoes)} ativa(s)`],
+          ["Saída", fmtPct(operacao.saida_pct), `meta até ${(dashboard.metas || {}).saida || "07:30"}`],
+          ["Desvio KM", fmtPct(operacao.km_desv), "sem expurgos de KM"],
+          ["Expurgos", fmtNum(dashSummary.expurgos), `${fmtNum(dashSummary.devolucoes_expurgadas)} devolução(ões)`]
         ].map(([label, value, sub]) => `
           <article class="recolha-dashboard-card">
             <span class="label">${escapeHtml(label)}</span>
@@ -4726,26 +4733,69 @@
             <span class="sub">${escapeHtml(sub)}</span>
           </article>`).join("");
       }
+      const rankingRows = (rows, role) => rows.slice(0, 10).map(item => `
+        <tr>
+          <td>${item.pos ? `${item.pos}º` : "-"}</td>
+          <td><b>${escapeHtml(item.nome || item.cod || "-")}</b><div class="text-secondary small">${escapeHtml(item.filial || "-")} • ${escapeHtml(item.cod || "-")}</div></td>
+          <td class="text-end">${fmtNum(item.rotas)}</td>
+          <td class="text-end">${fmtPct(item.pdev)}<div class="text-secondary small">${fmtNum(item.devol)}/${fmtNum(item.entregas)}</div></td>
+          <td class="text-end">${fmtPct(item.psaida)}</td>
+          <td class="text-end">${fmtPct(item.km_desv)}</td>
+          <td class="text-end"><b>${fmtNum(item.total)}</b></td>
+        </tr>`).join("") || `<tr><td colspan="7" class="text-center text-secondary py-3">Sem ${role} calculado.</td></tr>`;
+      const rotasRows = rotas.slice(-12).reverse().map(rota => `
+        <tr>
+          <td>${escapeHtml(formatDate(rota.data) || "-")}</td>
+          <td>${escapeHtml(rota.mapa || "-")}</td>
+          <td>${escapeHtml(rota.filial || "-")}</td>
+          <td>${escapeHtml(rota.cidade || "-")}</td>
+          <td class="text-end">${fmtNum(rota.entregas)}</td>
+          <td class="text-end">${escapeHtml(rota.hr_sai || "-")}</td>
+          <td class="text-end">${fmtPct(rota.tempo_pct)}</td>
+          <td class="text-end">${rota.expurgo_saida ? "TML" : ""}${rota.expurgo_km ? `${rota.expurgo_saida ? ", " : ""}KM` : ""}</td>
+        </tr>`).join("") || '<tr><td colspan="8" class="text-center text-secondary py-3">Sem rotas calculadas.</td></tr>';
       if (E.entregaLigaDashboardDetails) {
-        const missingText = missingItems.length
-          ? `Pendentes: ${missingItems.map(item => item.label || item.routine || "-").join(", ")}.`
-          : "Todos os insumos homologados estão disponíveis.";
+        const missingText = missingItems.length ? `Pendentes: ${missingItems.map(item => item.label || item.routine || "-").join(", ")}.` : "Todos os insumos homologados disponíveis ou já processados.";
+        const warnings = Array.isArray(dashboard.warnings) ? dashboard.warnings : [];
         E.entregaLigaDashboardDetails.innerHTML = `
-          <div class="small text-secondary">Fonte</div>
-          <div class="source-path">${escapeHtml(missingText)} Expurgos continuam aplicados no backend separadamente dos relatórios.</div>`;
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <div><div class="small text-secondary">Fonte</div><div class="source-path">${escapeHtml(missingText)} Expurgos aplicados: devolução só em devolução, TML só em saída, KM/dispersão só em KM.</div></div>
+            ${dashboard.generated_at ? `<span class="badge text-bg-light border">Atualizado ${escapeHtml(formatDateTime(dashboard.generated_at))}</span>` : ""}
+          </div>
+          <div class="row g-3">
+            <div class="col-xl-6">
+              <h3 class="h6 fw-bold mb-2">Ranking motoristas</h3>
+              <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>#</th><th>Motorista</th><th class="text-end">Rotas</th><th class="text-end">Dev.</th><th class="text-end">Saída</th><th class="text-end">KM</th><th class="text-end">Total</th></tr></thead><tbody>${rankingRows(motoristas, "motorista")}</tbody></table></div>
+            </div>
+            <div class="col-xl-6">
+              <h3 class="h6 fw-bold mb-2">Ranking ajudantes</h3>
+              <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>#</th><th>Ajudante</th><th class="text-end">Rotas</th><th class="text-end">Dev.</th><th class="text-end">Saída</th><th class="text-end">KM</th><th class="text-end">Total</th></tr></thead><tbody>${rankingRows(ajudantes, "ajudante")}</tbody></table></div>
+            </div>
+            <div class="col-12">
+              <h3 class="h6 fw-bold mb-2">Últimas rotas calculadas</h3>
+              <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Mapa</th><th>Filial</th><th>Cidade</th><th class="text-end">Entregas</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th class="text-end">Expurgo</th></tr></thead><tbody>${rotasRows}</tbody></table></div>
+            </div>
+          </div>
+          ${warnings.length ? `<div class="alert alert-warning small mt-3 mb-0"><b>Avisos de leitura:</b><br>${warnings.slice(0, 5).map(w => escapeHtml(w)).join("<br>")}</div>` : ""}`;
       }
     }
 
     async function syncLigaEntregaReports({ silent = true, force = false } = {}) {
       if (!hasPanelAuth()) return false;
-      if (!force && state.ligaEntregaReports && Array.isArray(state.ligaEntregaReports.items)) {
+      if (!force && state.ligaEntregaReports && Array.isArray(state.ligaEntregaReports.items) && state.ligaEntregaDashboard) {
         renderLigaEntregaReports();
         return true;
       }
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.disabled = true;
       try {
-        const payload = await req(CONFIG.endpoints.ligaEntrega.reports, { timeoutMs: 30000 });
-        state.ligaEntregaReports = payload || { items: [], summary: {} };
+        const [reportsResult, dashboardResult] = await Promise.allSettled([
+          req(CONFIG.endpoints.ligaEntrega.reports, { timeoutMs: 30000 }),
+          req(CONFIG.endpoints.ligaEntrega.dashboard, { timeoutMs: 60000 })
+        ]);
+        if (reportsResult.status === "fulfilled") state.ligaEntregaReports = reportsResult.value || { items: [], summary: {} };
+        else throw reportsResult.reason;
+        if (dashboardResult.status === "fulfilled") state.ligaEntregaDashboard = dashboardResult.value || {};
+        else state.ligaEntregaDashboard = { ok: false, summary: {}, warnings: [dashboardResult.reason && dashboardResult.reason.message ? dashboardResult.reason.message : "Falha ao calcular dashboard."] };
         renderLigaEntregaReports();
         if (!silent) addLog("Relatórios da Liga atualizados.", "ok");
         return true;
