@@ -1446,6 +1446,18 @@
                   <div class="small text-secondary">Persistência</div>
                   <div class="source-path">Expurgos ficam salvos no backend e continuam valendo quando novos relatórios substituírem os lotes ativos.</div>
                 </div>
+                <form id="entregaLigaExpurgoForm" class="border rounded-3 p-2 mb-3" autocomplete="off">
+                  <div class="small fw-bold mb-2">Novo expurgo</div>
+                  <div class="row g-2">
+                    <div class="col-6"><label class="form-label small mb-1" for="entregaLigaExpurgoTipo">Indicador</label><select class="form-select form-select-sm" id="entregaLigaExpurgoTipo"><option value="devolucao">Devolução</option><option value="tml">Saída / TML</option><option value="km">KM cadastrado</option><option value="dispersao">Dispersão</option></select></div>
+                    <div class="col-6"><label class="form-label small mb-1" for="entregaLigaExpurgoFilial">Filial</label><select class="form-select form-select-sm" id="entregaLigaExpurgoFilial"><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+                    <div class="col-6"><label class="form-label small mb-1" for="entregaLigaExpurgoData">Data</label><input class="form-control form-control-sm" id="entregaLigaExpurgoData" type="date" required></div>
+                    <div class="col-6"><label class="form-label small mb-1" id="entregaLigaExpurgoAlvoLabel" for="entregaLigaExpurgoAlvo">Cliente</label><input class="form-control form-control-sm" id="entregaLigaExpurgoAlvo" placeholder="Código do cliente" required></div>
+                    <div class="col-12"><label class="form-label small mb-1" for="entregaLigaExpurgoMotivo">Motivo</label><input class="form-control form-control-sm" id="entregaLigaExpurgoMotivo" maxlength="300" placeholder="Ex.: devolução não atribuída à entrega" required></div>
+                    <div class="col-12 d-flex justify-content-between align-items-center gap-2"><span class="small text-secondary" id="entregaLigaExpurgoHint">Remove apenas devolução por cliente e data.</span><button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-scissors me-1"></i>Aplicar</button></div>
+                  </div>
+                </form>
+                <div id="entregaLigaExpurgosList" class="small mb-3 text-secondary">Carregando expurgos...</div>
                 <button class="btn btn-primary btn-sm" type="button" id="entregaOpenLigaPromaxBtn"><i class="bi bi-pc-display-horizontal me-1"></i>Abrir Liga no Promax</button>
                 <div class="form-text mt-2">O atalho seleciona o grupo Liga Entrega e mantém apenas as rotinas homologadas pelo catálogo.</div>
               </div>
@@ -3411,6 +3423,15 @@
       jobsTable: document.getElementById("jobsBody"),
       promaxTab: document.getElementById("promaxTab"),
       entregaOpenLigaPromaxBtn: document.getElementById("entregaOpenLigaPromaxBtn"),
+      entregaLigaExpurgoForm: document.getElementById("entregaLigaExpurgoForm"),
+      entregaLigaExpurgoTipo: document.getElementById("entregaLigaExpurgoTipo"),
+      entregaLigaExpurgoFilial: document.getElementById("entregaLigaExpurgoFilial"),
+      entregaLigaExpurgoData: document.getElementById("entregaLigaExpurgoData"),
+      entregaLigaExpurgoAlvo: document.getElementById("entregaLigaExpurgoAlvo"),
+      entregaLigaExpurgoAlvoLabel: document.getElementById("entregaLigaExpurgoAlvoLabel"),
+      entregaLigaExpurgoMotivo: document.getElementById("entregaLigaExpurgoMotivo"),
+      entregaLigaExpurgoHint: document.getElementById("entregaLigaExpurgoHint"),
+      entregaLigaExpurgosList: document.getElementById("entregaLigaExpurgosList"),
       entregaLigaReportsGrid: document.getElementById("entregaLigaReportsGrid"),
       entregaLigaReportsSummary: document.getElementById("entregaLigaReportsSummary"),
       entregaLigaReportsRefreshBtn: document.getElementById("entregaLigaReportsRefreshBtn"),
@@ -4719,8 +4740,12 @@
           : `${comp}Aguardando dados suficientes para calcular ranking, rotas e operação.`;
       }
       if (E.entregaLigaDashboardCards) {
+        const eligibleDrivers = Number(dashSummary.motoristas_elegiveis || 0);
+        const activeDrivers = Number(dashSummary.motoristas_ativos || 0);
+        const registeredDrivers = Number(dashSummary.motoristas || 0);
         E.entregaLigaDashboardCards.innerHTML = [
           ["Rotas", fmtNum(dashSummary.rotas), "mapas considerados"],
+          ["Motoristas", fmtNum(eligibleDrivers), `${fmtNum(activeDrivers)} ativos • ${fmtNum(registeredDrivers)} cadastrados`],
           ["Entregas", fmtNum(operacao.entregas), "PDVs únicos/0805"],
           ["Devolução", fmtPct(operacao.devolucao_pct), `${fmtNum(dashSummary.devolucoes)} ativa(s)`],
           ["Saída", fmtPct(operacao.saida_pct), `meta até ${(dashboard.metas || {}).saida || "07:30"}`],
@@ -4752,7 +4777,7 @@
           <td class="text-end">${fmtNum(rota.entregas)}</td>
           <td class="text-end">${escapeHtml(rota.hr_sai || "-")}</td>
           <td class="text-end">${fmtPct(rota.tempo_pct)}</td>
-          <td class="text-end">${rota.expurgo_saida ? "TML" : ""}${rota.expurgo_km ? `${rota.expurgo_saida ? ", " : ""}KM` : ""}</td>
+          <td class="text-end">${rota.expurgo_saida ? "TML" : ""}${rota.expurgo_km ? `${rota.expurgo_saida ? ", " : ""}KM` : ""}<div class="mt-1"><button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(rota.data || "")}" data-expurgo-filial="${escapeHtml(rota.filial || "")}" data-expurgo-mapa="${escapeHtml(rota.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(rota.data || "")}" data-expurgo-filial="${escapeHtml(rota.filial || "")}" data-expurgo-mapa="${escapeHtml(rota.mapa || "")}">KM</button></div></td>
         </tr>`).join("") || '<tr><td colspan="8" class="text-center text-secondary py-3">Sem rotas calculadas.</td></tr>';
       if (E.entregaLigaDashboardDetails) {
         const missingText = missingItems.length ? `Pendentes: ${missingItems.map(item => item.label || item.routine || "-").join(", ")}.` : "Todos os insumos homologados disponíveis ou já processados.";
@@ -4778,6 +4803,63 @@
           </div>
           ${warnings.length ? `<div class="alert alert-warning small mt-3 mb-0"><b>Avisos de leitura:</b><br>${warnings.slice(0, 5).map(w => escapeHtml(w)).join("<br>")}</div>` : ""}`;
       }
+    }
+
+    function updateLigaEntregaExpurgoForm() {
+      const isDevolucao = String(E.entregaLigaExpurgoTipo && E.entregaLigaExpurgoTipo.value || "devolucao") === "devolucao";
+      if (E.entregaLigaExpurgoAlvoLabel) E.entregaLigaExpurgoAlvoLabel.textContent = isDevolucao ? "Cliente" : "Mapa";
+      if (E.entregaLigaExpurgoAlvo) E.entregaLigaExpurgoAlvo.placeholder = isDevolucao ? "Código do cliente" : "Número do mapa";
+      if (E.entregaLigaExpurgoHint) E.entregaLigaExpurgoHint.textContent = isDevolucao
+        ? "Remove apenas devolução por cliente e data."
+        : "Remove somente este indicador da rota; os demais continuam contando.";
+    }
+
+    function renderLigaEntregaExpurgos() {
+      if (!E.entregaLigaExpurgosList) return;
+      const items = Array.isArray(state.ligaEntregaExpurgos) ? state.ligaEntregaExpurgos : [];
+      if (!items.length) {
+        E.entregaLigaExpurgosList.innerHTML = '<span class="text-secondary">Nenhum expurgo ativo nesta competência.</span>';
+        return;
+      }
+      E.entregaLigaExpurgosList.innerHTML = `<div class="small fw-bold mb-1">Expurgos ativos (${items.length})</div>${items.map(item => {
+        const target = item.tipo === "devolucao" ? `cliente ${item.cliente || "-"}` : `mapa ${item.mapa || "-"}`;
+        return `<div class="d-flex justify-content-between gap-2 border-top pt-1 mt-1"><span><b>${escapeHtml(item.tipo || "-")}</b> · ${escapeHtml(item.filial || "-")} · ${escapeHtml(formatDate(item.data) || item.data || "-")} · ${escapeHtml(target)}<br><span class="text-secondary">${escapeHtml(item.motivo || "sem motivo")}</span></span><button class="btn btn-outline-danger btn-sm py-0 liga-expurgo-remove" type="button" data-expurgo-id="${escapeHtml(item.id || "")}" title="Remover expurgo"><i class="bi bi-x-lg"></i></button></div>`;
+      }).join("")}`;
+    }
+
+    async function syncLigaEntregaExpurgos() {
+      if (!hasPanelAuth()) return;
+      const competencia = String((state.ligaEntregaDashboard || {}).competencia || "");
+      const query = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
+      const payload = await req(`${CONFIG.endpoints.ligaEntrega.expurgos}${query}`, { timeoutMs: 15000 });
+      state.ligaEntregaExpurgos = Array.isArray(payload && payload.items) ? payload.items : [];
+      renderLigaEntregaExpurgos();
+    }
+
+    async function saveLigaEntregaExpurgo(event) {
+      event.preventDefault();
+      const tipo = String(E.entregaLigaExpurgoTipo && E.entregaLigaExpurgoTipo.value || "");
+      const data = String(E.entregaLigaExpurgoData && E.entregaLigaExpurgoData.value || "");
+      const competencia = String((state.ligaEntregaDashboard || {}).competencia || data.slice(0, 7));
+      const alvo = String(E.entregaLigaExpurgoAlvo && E.entregaLigaExpurgoAlvo.value || "").trim();
+      if (!competencia || !data || !alvo) throw new Error("Informe data e cliente ou mapa para aplicar o expurgo.");
+      const payload = { tipo, competencia, filial: String(E.entregaLigaExpurgoFilial && E.entregaLigaExpurgoFilial.value || ""), data, motivo: String(E.entregaLigaExpurgoMotivo && E.entregaLigaExpurgoMotivo.value || "") };
+      if (tipo === "devolucao") payload.cliente = alvo;
+      else payload.mapa = alvo;
+      await req(CONFIG.endpoints.ligaEntrega.expurgos, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), timeoutMs: 20000 });
+      E.entregaLigaExpurgoAlvo.value = "";
+      E.entregaLigaExpurgoMotivo.value = "";
+      state.ligaEntregaDashboard = null;
+      await syncLigaEntregaReports({ silent: false, force: true });
+      addLog("Expurgo aplicado e dashboard recalculado.", "ok");
+    }
+
+    async function removeLigaEntregaExpurgo(expurgoId) {
+      if (!expurgoId) return;
+      await req(`${CONFIG.endpoints.ligaEntrega.expurgos}/${encodeURIComponent(expurgoId)}`, { method: "DELETE", timeoutMs: 20000 });
+      state.ligaEntregaDashboard = null;
+      await syncLigaEntregaReports({ silent: false, force: true });
+      addLog("Expurgo removido e dashboard recalculado.", "ok");
     }
 
     async function syncLigaEntregaReports({ silent = true, force = false } = {}) {
@@ -4810,6 +4892,9 @@
         if (!silent) addLog(`Dashboard da Liga não calculou agora: ${err.message}`, "warn");
       } finally {
         renderLigaEntregaReports();
+        try { await syncLigaEntregaExpurgos(); } catch (err) { if (!silent) addLog(`Falha ao listar expurgos: ${err.message}`, "warn"); }
+        const latestRoute = Array.isArray((state.ligaEntregaDashboard || {}).rotas) ? state.ligaEntregaDashboard.rotas.slice(-1)[0] : null;
+        if (E.entregaLigaExpurgoData && !E.entregaLigaExpurgoData.value && latestRoute && latestRoute.data) E.entregaLigaExpurgoData.value = String(latestRoute.data);
         if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.disabled = false;
       }
       return true;
@@ -9348,6 +9433,25 @@
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
+      if (E.entregaLigaExpurgoTipo) E.entregaLigaExpurgoTipo.addEventListener("change", updateLigaEntregaExpurgoForm);
+      if (E.entregaLigaExpurgoForm) E.entregaLigaExpurgoForm.addEventListener("submit", event => {
+        saveLigaEntregaExpurgo(event).catch(err => addLog(`Falha ao aplicar expurgo: ${err.message}`, "err"));
+      });
+      if (E.entregaLigaExpurgosList) E.entregaLigaExpurgosList.addEventListener("click", event => {
+        const button = event.target.closest(".liga-expurgo-remove");
+        if (button) removeLigaEntregaExpurgo(button.dataset.expurgoId || "").catch(err => addLog(`Falha ao remover expurgo: ${err.message}`, "err"));
+      });
+      if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("click", event => {
+        const button = event.target.closest(".liga-expurgo-route");
+        if (!button) return;
+        E.entregaLigaExpurgoTipo.value = button.dataset.expurgoTipo || "km";
+        E.entregaLigaExpurgoData.value = button.dataset.expurgoData || "";
+        E.entregaLigaExpurgoFilial.value = button.dataset.expurgoFilial || "PATOS";
+        E.entregaLigaExpurgoAlvo.value = button.dataset.expurgoMapa || "";
+        updateLigaEntregaExpurgoForm();
+        E.entregaLigaExpurgoForm.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      updateLigaEntregaExpurgoForm();
       if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobFromDate) E.promaxJobFromDate.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobToDate) E.promaxJobToDate.addEventListener("change", applyPromaxJobFilters);

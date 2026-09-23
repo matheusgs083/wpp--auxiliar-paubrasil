@@ -36,6 +36,30 @@ RESP = "PONTOMAIS_ESPELHO"
 RCHK = "CHECKLIST_FROTA"
 ROUTINES = (R030805, R031120, R030224M, R030224A, R030237, R03114902, R031129, RESP, RCHK)
 
+# Mesmo status utilizado no painel Liga entregue em 22/09/2026. Quem estiver
+# de férias ou desligado continua monitorado, porém não ocupa posição nem prêmio.
+CANONICAL_STATUS = {
+    "7213": "ferias", "7328": "desligado", "7358": "ferias", "7417": "desligado",
+    "7431": "ferias", "7432": "desligado", "7470": "desligado", "7478": "desligado",
+}
+
+# Cadastro de motoristas que compõe a Liga. Mantém o denominador operacional
+# estável mesmo quando alguém não aparece no CSV do mês.
+CANONICAL_MOTORISTAS = {
+    "6096": ("JOSIVALDO GOMES DE OLIVEIRA", "PATOS"), "7016": ("RONALDO DINIZ DOS SANTOS", "PATOS"),
+    "7302": ("ADRIANO DINIZ PAULO", "PATOS"), "7351": ("LAIRES MENDES DE SOUSA", "PATOS"),
+    "7356": ("CARLOS ALEXANDRE LEITE SILVA", "PATOS"), "7358": ("EVERTON OLIVEIRA DE MORAIS", "PATOS"),
+    "7362": ("ROBERTO JORGE ALMEIDA DOS SANTOS JUNIOR", "PATOS"), "7375": ("JOSE VANDERLAN DA SILVA GOMES", "PATOS"),
+    "7383": ("PEDRO APRIGIO DOS SANTOS FILHO", "PATOS"), "7392": ("CICERO DELFINO DA COSTA", "PATOS"),
+    "7394": ("JOFLE LUILLES CARVALHO LEITE", "PATOS"), "7404": ("VINICIUS MENDES GOMES GONCALVES", "PATOS"),
+    "7410": ("LEONARDO VIEIRA DA SILVA", "PATOS"), "7430": ("DIOGO DE MEDEIROS LIMA", "PATOS"),
+    "7431": ("TULIO BELO DE LIMA", "PATOS"), "7446": ("COSMO JACKSON MONTEIRO SANTANA", "PATOS"),
+    "7459": ("JOSE FRANCILEUDO RODRIGUES", "PATOS"), "7478": ("DANRLEI SATORNO SANTOS", "PATOS"),
+    "7479": ("WILLYAN DE LIMA SATORNO", "PATOS"), "9078": ("YAN OLIVEIRA PEREIRA", "SUME"),
+    "9083": ("JOSE MARCIO CORDEIRO DE SOUZA", "SUME"), "9085": ("VALDECI SOARES DE LIMA", "SUME"),
+    "9087": ("JOSE ROBSON RIBEIRO DO NASCIMENTO", "SUME"), "9097": ("JOSE LUCAS DE OLIVEIRA DUARTE", "SUME"),
+}
+
 
 # O painel consulta este endpoint mais de uma vez durante o carregamento. O
 # resultado depende dos lotes e expurgos; guardar o último cálculo evita reler
@@ -71,7 +95,10 @@ class LigaEntregaDashboardService:
         ent_a: dict[str, set[str]] = defaultdict(set)
         ponto: dict[str, str] = {}
         checklist: list[dict[str, str]] = []
-        colab: dict[str, dict[str, str]] = {}
+        colab: dict[str, dict[str, str]] = {
+            code: {"cod": code, "nome": name, "filial": filial, "funcao": "MOTORISTA", "status": CANONICAL_STATUS.get(code, "ativo")}
+            for code, (name, filial) in CANONICAL_MOTORISTAS.items()
+        }
         warnings: list[str] = []
         started_at = datetime.now().timestamp()
 
@@ -82,7 +109,7 @@ class LigaEntregaDashboardService:
             c = norm_code(cod)
             if c == "0":
                 return c
-            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": funcao})
+            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": funcao, "status": CANONICAL_STATUS.get(c, "ativo")})
             if nome and str(row.get("nome") or "").startswith("COD "):
                 row["nome"] = clean_name(nome)
             if filial and not row.get("filial"):
@@ -288,10 +315,15 @@ class LigaEntregaDashboardService:
             rotas_list.append(r)
         rotas_list.sort(key=lambda x: (str(x.get("data") or ""), to_int(x.get("mapa"))))
 
-        motoristas, ajudantes = build_rankings(rotas_list, port, devols, {k: len(v) for k, v in ent_m.items()}, {k: len(v) for k, v in ent_a.items()}, checklist, colab)
+        has_farol = bool(manifests.get(RCHK))
+        first_week = is_first_week(rotas_list)
+        motoristas, ajudantes = build_rankings(
+            rotas_list, port, devols, {k: len(v) for k, v in ent_m.items()}, {k: len(v) for k, v in ent_a.items()},
+            checklist, colab, has_farol=has_farol, first_week=first_week,
+        )
         operacao = build_operacao(rotas_list, devols, motoristas, ajudantes)
         cobertura = build_cobertura(rotas_list)
-        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "ajudantes": len(ajudantes), "devolucoes": len([d for d in devols if not d.get("excluida")]), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "warnings": warnings[:50]}
+        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len([d for d in devols if not d.get("excluida")]), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50]}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
         return result
@@ -618,7 +650,7 @@ def blank() -> dict[str, float]:
     return {"rotas": 0, "kmR": 0, "kmP": 0, "tR": 0, "tP": 0, "saiOk": 0, "saiTot": 0}
 
 
-def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]], devols: list[dict[str, Any]], ent_m: dict[str, int], ent_a: dict[str, int], checklist: list[dict[str, str]], colab: dict[str, dict[str, str]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]], devols: list[dict[str, Any]], ent_m: dict[str, int], ent_a: dict[str, int], checklist: list[dict[str, str]], colab: dict[str, dict[str, str]], *, has_farol: bool, first_week: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     agg_m: dict[str, dict[str, float]] = defaultdict(blank)
     agg_a: dict[str, dict[str, float]] = defaultdict(blank)
     chk_set = {f"{c.get('cod')}|{c.get('data')}|{c.get('tipo')}" for c in checklist}
@@ -653,7 +685,7 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
             if p and p.get("sai") and not r.get("expurgo_saida"):
                 agg_a[a]["saiTot"] += 1
                 agg_a[a]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
-        if str(r.get("data") or "") >= str(METAS["check_inicio"]) and mot != "0":
+        if has_farol and str(r.get("data") or "") >= str(METAS["check_inicio"]) and mot != "0":
             p = port.get(str(r.get("mapa") or ""), {})
             ds = (p.get("sai") or [r.get("data")])[0]
             de = (p.get("ent") or [r.get("data")])[0]
@@ -673,8 +705,8 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
         agg_m[mot]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
     devol_m, devol_a = aggregate_devolucoes(devols)
     return (
-        mount(colab, agg_m, ent_m, devol_m, chk_e, chk_f, "MOTORISTA"),
-        mount(colab, agg_a, ent_a, devol_a, chk_e, chk_f, "AJUDANTE"),
+        mount(colab, agg_m, ent_m, devol_m, chk_e, chk_f, "MOTORISTA", has_farol=has_farol, first_week=first_week),
+        mount(colab, agg_a, ent_a, devol_a, chk_e, chk_f, "AJUDANTE", has_farol=has_farol, first_week=first_week),
     )
 
 
@@ -698,7 +730,7 @@ def aggregate_devolucoes(devols: list[dict[str, Any]]) -> tuple[dict[str, int], 
     return ({code: len(pairs) for code, pairs in motoristas.items()}, {code: len(pairs) for code, pairs in ajudantes.items()})
 
 
-def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: dict[str, int], chk_e: dict[str, int], chk_f: dict[str, int], role: str) -> list[dict[str, Any]]:
+def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: dict[str, int], chk_e: dict[str, int], chk_f: dict[str, int], role: str, *, has_farol: bool, first_week: bool) -> list[dict[str, Any]]:
     pesos = PESOS_MOT if role == "MOTORISTA" else PESOS_AJD
     codes = {k for k, v in colab.items() if v.get("funcao") == role} | set(agg) | set(entregas)
     rows: list[dict[str, Any]] = []
@@ -711,7 +743,9 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         psaida = pct(g["saiOk"] / g["saiTot"] * 100) if g["saiTot"] else None
         tempo = pct(g["tR"] / g["tP"] * 100) if g["tP"] else None
         km = pct(abs(g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else None
-        check = pct(chk_f[cod] / chk_e[cod] * 100) if chk_e.get(cod) else None
+        # O HTML original concede o peso inteiro enquanto o Farol ainda não
+        # foi disponibilizado. Quando existe, mede saída e retorno normalmente.
+        check = pct(chk_f[cod] / chk_e[cod] * 100) if chk_e.get(cod) else (100.0 if not has_farol else None)
         pts = {
             "saida": round(pesos["saida"] * faixa(pior_pct(psaida, float(METAS["saida_pct"]), menor=False)), 1) if psaida is not None else 0,
             "devol": round(pesos["devol"] * faixa(max(0, (pdev - float(METAS["devol"])) / float(METAS["devol"]) * 100)), 1) if pdev is not None else 0,
@@ -721,7 +755,8 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         measured = {"saida": psaida is not None, "devol": pdev is not None, "km": km is not None, "check": check is not None}
         sw = sum(w for k, w in pesos.items() if measured[k])
         sp = sum(float(pts[k]) for k in pesos if measured[k])
-        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "total": round(sp / sw * 100, 1) if sw else 0, "status": "ativo", "elegivel": int(g["rotas"]) >= MIN_ROTAS, "pos": None})
+        status = str(info.get("status") or CANONICAL_STATUS.get(cod, "ativo"))
+        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
     elig = [x for x in rows if x["elegivel"]]
     elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -int(x.get("rotas") or 0)))
     for i, row in enumerate(elig, 1):
@@ -797,6 +832,17 @@ def build_cobertura(rotas: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row["entregas_0805"] += int(r.get("entregas") or 0)
         row["mapas"].append(str(r.get("mapa") or ""))
     return [by[k] for k in sorted(by)]
+
+
+def is_first_week(rotas: list[dict[str, Any]]) -> bool:
+    """Até o dia 7, a Liga não aplica o corte mínimo de três rotas."""
+
+    dates = [
+        date.fromisoformat(str(item.get("data")))
+        for item in rotas
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(item.get("data") or ""))
+    ]
+    return bool(dates) and max(dates).day <= 7
 
 
 def manifest_summary(manifests: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
