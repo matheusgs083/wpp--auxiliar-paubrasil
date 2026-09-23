@@ -4800,7 +4800,7 @@
       }
 
       try {
-        state.ligaEntregaDashboard = await req(CONFIG.endpoints.ligaEntrega.dashboard, { timeoutMs: 20000 }) || {};
+        state.ligaEntregaDashboard = await req(CONFIG.endpoints.ligaEntrega.dashboard, { timeoutMs: 60000 }) || {};
       } catch (err) {
         state.ligaEntregaDashboard = {
           ok: false,

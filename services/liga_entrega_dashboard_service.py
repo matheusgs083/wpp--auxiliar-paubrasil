@@ -56,6 +56,10 @@ class LigaEntregaDashboardService:
         checklist: list[dict[str, str]] = []
         colab: dict[str, dict[str, str]] = {}
         warnings: list[str] = []
+        started_at = datetime.now().timestamp()
+
+        def should_skip_auxiliary() -> bool:
+            return datetime.now().timestamp() - started_at > 6.0
 
         def remember(cod: Any, *, nome: str = "", filial: str = "", funcao: str = "") -> str:
             c = norm_code(cod)
@@ -207,18 +211,24 @@ class LigaEntregaDashboardService:
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.11.29 {file['filename']}: {exc}")
 
-        for manifest in manifests.get(RESP, []):
-            for file in stored_files(manifest):
-                try:
-                    ponto.update(parse_espelho(file["path"]))
-                except Exception as exc:  # noqa: BLE001
-                    warnings.append(f"espelho {file['filename']}: {exc}")
-        for manifest in manifests.get(RCHK, []):
-            for file in stored_files(manifest):
-                try:
-                    checklist.extend(parse_checklist(file["path"], colab))
-                except Exception as exc:  # noqa: BLE001
-                    warnings.append(f"checklist {file['filename']}: {exc}")
+        if should_skip_auxiliary():
+            warnings.append("Espelho de ponto ignorado nesta leitura para evitar timeout do painel.")
+        else:
+            for manifest in manifests.get(RESP, []):
+                for file in stored_files(manifest):
+                    try:
+                        ponto.update(parse_espelho(file["path"]))
+                    except Exception as exc:  # noqa: BLE001
+                        warnings.append(f"espelho {file['filename']}: {exc}")
+        if should_skip_auxiliary():
+            warnings.append("Checklist Frota ignorado nesta leitura para evitar timeout do painel.")
+        else:
+            for manifest in manifests.get(RCHK, []):
+                for file in stored_files(manifest):
+                    try:
+                        checklist.extend(parse_checklist(file["path"], colab))
+                    except Exception as exc:  # noqa: BLE001
+                        warnings.append(f"checklist {file['filename']}: {exc}")
 
         for mapa, equipe in equipes.items():
             rota = rotas.setdefault(mapa, {"data": equipe.get("data") or "", "mapa": mapa, "filial": equipe.get("filial") or "", "mot": equipe.get("mot") or "0", "aju": [], "km_real": None, "km_prev": None, "tempo_prev": None, "hs0805": "", "he0805": "", "entregas": 0, "cidade": "", "src": "03.11.29"})
@@ -550,6 +560,7 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
     agg_m: dict[str, dict[str, float]] = defaultdict(blank)
     agg_a: dict[str, dict[str, float]] = defaultdict(blank)
     chk_set = {f"{c.get('cod')}|{c.get('data')}|{c.get('tipo')}" for c in checklist}
+    rotas_by_mapa = {str(item.get("mapa") or ""): item for item in rotas}
     chk_e: dict[str, int] = defaultdict(int)
     chk_f: dict[str, int] = defaultdict(int)
     for r in rotas:
@@ -593,7 +604,7 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
         mot = norm_code(p.get("mot"))
         if mot == "0" or not p.get("sai"):
             continue
-        rota = next((x for x in rotas if str(x.get("mapa") or "") == str(mapa)), {})
+        rota = rotas_by_mapa.get(str(mapa), {})
         if rota.get("expurgo_saida"):
             continue
         agg_m[mot]["saiTot"] += 1
