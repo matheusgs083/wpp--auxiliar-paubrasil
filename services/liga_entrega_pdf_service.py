@@ -106,7 +106,7 @@ def build_liga_entrega_dashboard_pdf(
     views = [normalized_view] if normalized_view != "completo" else ["motoristas", "ajudantes"]
     for role_view in views:
         role_rows = rankings.get(role_view)
-        role_rows = role_rows if isinstance(role_rows, list) else []
+        role_rows = [row for row in role_rows if isinstance(row, Mapping) and str(row.get("status") or "ativo") == "ativo"] if isinstance(role_rows, list) else []
         role_title = "Ranking de motoristas" if role_view == "motoristas" else "Ranking de ajudantes"
         story.extend([Paragraph(role_title, ParagraphStyle(
             f"LigaPdf{role_view}Heading", parent=styles["Heading2"], fontName="Helvetica-Bold",

@@ -180,13 +180,11 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         recalculated = client.get("/api/admin/liga-entrega/dashboard", params={"competencia": "2026-09"}).json()
         recalculated_driver = next(row for row in recalculated["rankings"]["motoristas"] if row["cod"] == "7302")
         recalculated_helper = next(row for row in recalculated["rankings"]["ajudantes"] if row["cod"] == "7218")
-        unknown_helper = next(row for row in recalculated["rankings"]["ajudantes"] if row["cod"] == "9999")
         self.assertEqual(recalculated_driver["km_desv"], 0.0)
         self.assertEqual(recalculated_driver["expurgos"]["km"], 1)
         self.assertEqual(recalculated_helper["km_desv"], 0.0)
         self.assertEqual(recalculated_helper["expurgos"]["km"], 1)
-        self.assertEqual(unknown_helper["status"], "desligado")
-        self.assertFalse(unknown_helper["elegivel"])
+        self.assertFalse(any(row["cod"] == "9999" for row in recalculated["rankings"]["ajudantes"]))
 
     def test_upsert_list_and_delete_expurgo(self) -> None:
         client, events = self.make_client()
