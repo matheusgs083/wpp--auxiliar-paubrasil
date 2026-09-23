@@ -25,7 +25,7 @@ PESOS_AJD = {"devol": 35, "saida": 25, "km": 15, "check": 25}
 MIN_ROTAS = 3
 TEMPO_PREV_MAX = 840
 MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
-CACHE_VERSION = 3
+CACHE_VERSION = 4
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -61,6 +61,33 @@ CANONICAL_MOTORISTAS = {
     "9083": ("JOSE MARCIO CORDEIRO DE SOUZA", "SUME"), "9085": ("VALDECI SOARES DE LIMA", "SUME"),
     "9087": ("JOSE ROBSON RIBEIRO DO NASCIMENTO", "SUME"), "9097": ("JOSE LUCAS DE OLIVEIRA DUARTE", "SUME"),
 }
+
+CANONICAL_AJUDANTES = {
+    "1771": ("JOSE ALUIZIO PAULO DE SOUZA", "PATOS"), "6046": ("WALDEMIR DE OLIVEIRA", "PATOS"),
+    "7077": ("ALEXSANDRO COSTA DE ARAUJO", "PATOS"), "7213": ("ROMARIO DA SILVA FERREIRA", "PATOS"),
+    "7218": ("MARCIO NUNES ALVES", "PATOS"), "7227": ("JUCIELSON DE SOUZA COSTA", "PATOS"),
+    "7272": ("UELSON NUNES ALVES", "PATOS"), "7282": ("MAURICIO APOLINARIO NOBREGA FILHO", "PATOS"),
+    "7316": ("AVANY NOBREGA ALVES", "PATOS"), "7328": ("ANGELO MARCIEL BARBOSA", "PATOS"),
+    "7343": ("JOSE ANTONIO DE MARIA NETO", "PATOS"), "7384": ("FABIO JUNHO MENDES FARIAS", "PATOS"),
+    "7387": ("FRANCILEUDO MENDES DA SILVA", "PATOS"), "7395": ("ALAN MORAIS DE SOUSA", "PATOS"),
+    "7401": ("MICHELL RODRIGO MACEDO DANTAS", "PATOS"), "7417": ("RONDINELY FELIX MARINHO", "PATOS"),
+    "7428": ("EXPEDITO ACASSIO DE ARAUJO ROQUE", "PATOS"), "7432": ("DIEGO BRUNO NOBREGA MATIAS", "PATOS"),
+    "7442": ("GABRIEL MORAIS BEZERRA", "PATOS"), "7443": ("ANTONIO DE MEDEIROS BATISTA", "PATOS"),
+    "7444": ("JOSE MARCELO GALDINO PEREIRA", "PATOS"), "7447": ("MARCELO BARBOSA LUCENA", "PATOS"),
+    "7451": ("RUAN VICTOR LEITE BATISTA", "PATOS"), "7454": ("IRLANDIR FERREIRA DE LIRA", "PATOS"),
+    "7461": ("LUAN VICTOR DE SOUSA DANTAS", "PATOS"), "7470": ("GABRIEL BORGES CAVALCANTI", "PATOS"),
+    "7472": ("NICOLLAS DA SILVA LUCENA", "PATOS"), "7477": ("MATHEUS DA SILVA ALMEIDA", "PATOS"),
+    "7480": ("CARLOS ALBERTO NASCIMENTO DE ARAUJO", "PATOS"), "7484": ("GILMAR SOARES FERREIRA", "PATOS"),
+    "7485": ("ANTONIO MARCIO DA SILVA  FILHO", "PATOS"), "7486": ("JOSE ANDERSON OLIVEIRA DOS SANTOS", "PATOS"),
+    "7487": ("JOSE HENRIQUE DOURADO DA SILVA", "PATOS"), "7489": ("PEDRO LOURENCO MEDEIROS", "PATOS"),
+    "7491": ("FRANCISCO SAMUEL SOARES DA SILVA ROCHA", "PATOS"), "9037": ("LUIZ CARLOS FERREIRA DA SILVA", "SUME"),
+    "9062": ("GENILSON JOSE DE SOUSA", "SUME"), "9070": ("LEONALDO NUNES DA SILVA", "SUME"),
+    "9076": ("IRISMARK CLEMENTE DE LIRA", "SUME"), "9080": ("CICERO EDUARDO GOMES DA SILVA", "SUME"),
+    "9088": ("FRANCISCO FLORENCIO DA SILVA JUNIOR", "SUME"), "9093": ("CASSIO CAUE SILVA OLIVEIRA", "SUME"),
+    "9094": ("JACKSON DE LIMA SILVA", "SUME"),
+}
+
+CANONICAL_ROSTER = set(CANONICAL_MOTORISTAS) | set(CANONICAL_AJUDANTES)
 
 
 # O painel consulta este endpoint mais de uma vez durante o carregamento. O
@@ -105,9 +132,13 @@ class LigaEntregaDashboardService:
         ponto: dict[str, str] = {}
         checklist: list[dict[str, str]] = []
         colab: dict[str, dict[str, str]] = {
-            code: {"cod": code, "nome": name, "filial": filial, "funcao": "MOTORISTA", "status": status_overrides.get(code, CANONICAL_STATUS.get(code, "ativo"))}
+            code: {"cod": code, "nome": name, "filial": filial, "funcao": "MOTORISTA", "status": canonical_status(code, status_overrides)}
             for code, (name, filial) in CANONICAL_MOTORISTAS.items()
         }
+        colab.update({
+            code: {"cod": code, "nome": name, "filial": filial, "funcao": "AJUDANTE", "status": canonical_status(code, status_overrides)}
+            for code, (name, filial) in CANONICAL_AJUDANTES.items()
+        })
         warnings: list[str] = []
         started_at = datetime.now().timestamp()
 
@@ -118,7 +149,7 @@ class LigaEntregaDashboardService:
             c = norm_code(cod)
             if c == "0":
                 return c
-            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": funcao, "status": status_overrides.get(c, CANONICAL_STATUS.get(c, "ativo"))})
+            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": funcao, "status": canonical_status(c, status_overrides)})
             if nome and str(row.get("nome") or "").startswith("COD "):
                 row["nome"] = clean_name(nome)
             if filial and not row.get("filial"):
@@ -426,6 +457,14 @@ def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: li
         for item in sorted(expurgos, key=lambda item: str(item.get("id") or ""))
     )
     return repr((CACHE_VERSION, batches, exclusions, tuple(sorted((statuses or {}).items()))))
+
+
+def canonical_status(cod: Any, overrides: dict[str, str] | None = None) -> str:
+    code = norm_code(cod)
+    if code not in CANONICAL_ROSTER:
+        return "desligado"
+    status = str((overrides or {}).get(code) or CANONICAL_STATUS.get(code) or "ativo").strip().lower()
+    return status if status in {"ativo", "ferias", "afastado", "desligado"} else "ativo"
 
 
 def _clean_comp(value: str | None) -> str:
@@ -808,7 +847,7 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         measured = {"saida": psaida is not None, "devol": pdev is not None, "km": km is not None, "check": check is not None}
         sw = sum(w for k, w in pesos.items() if measured[k])
         sp = sum(float(pts[k]) for k in pesos if measured[k])
-        status = str(info.get("status") or CANONICAL_STATUS.get(cod, "ativo"))
+        status = str(info.get("status") or canonical_status(cod))
         rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
     elig = [x for x in rows if x["elegivel"]]
     elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -int(x.get("rotas") or 0)))

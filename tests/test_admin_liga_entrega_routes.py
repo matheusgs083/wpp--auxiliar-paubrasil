@@ -97,9 +97,9 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
             files={
                 "PATOS_22_09.csv": (
                     "Data;Mapa;CdMot;CdAju1;CdAju2;KmEntr;KmSai;KmPrev;TempoPrev;HrSai;HrEntr;Entregas;CxCarreg;CxEntreg\n"
-                    "22092026;123;100;200;0;150;100;50;10:00;07:10;17:10;10;1;1\n"
-                    "22092026;124;100;200;0;340;200;120;10:00;07:20;17:20;10;1;1\n"
-                    "22092026;125;100;200;0;430;340;90;10:00;07:40;17:40;10;1;1\n"
+                    "22092026;123;7302;7218;9999;150;100;50;10:00;07:10;17:10;10;1;1\n"
+                    "22092026;124;7302;7218;0;340;200;120;10:00;07:20;17:20;10;1;1\n"
+                    "22092026;125;7302;7218;0;430;340;90;10:00;07:40;17:40;10;1;1\n"
                 ).encode("utf-8"),
             },
             reference_date="2026-09-22",
@@ -109,9 +109,9 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
             files={
                 "03.11.20_PATOS_SET.csv": (
                     "Fase;Mapa;DtOper;HrOper;Motorista\n"
-                    "Saida;123;22/09/2026;07:10;100\nEntrada;123;22/09/2026;17:10;100\n"
-                    "Saida;124;22/09/2026;07:20;100\nEntrada;124;22/09/2026;17:20;100\n"
-                    "Saida;125;22/09/2026;08:00;100\nEntrada;125;22/09/2026;18:00;100\n"
+                    "Saida;123;22/09/2026;07:10;7302\nEntrada;123;22/09/2026;17:10;7302\n"
+                    "Saida;124;22/09/2026;07:20;7302\nEntrada;124;22/09/2026;17:20;7302\n"
+                    "Saida;125;22/09/2026;08:00;7302\nEntrada;125;22/09/2026;18:00;7302\n"
                 ).encode("utf-8"),
             },
             reference_date="2026-09-22",
@@ -121,9 +121,9 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
             files={
                 "03.11.29_PATOS_SET.csv": (
                     "Data;Mapa;Motorista;Nome Motorista;Ajudante 1;Nome Ajudante 1;Ajudante 2;Nome Ajudante 2;Nome Superv. Rota;Placa\n"
-                    "22/09/2026;123;100;Motorista Teste;200;Ajudante Teste;0;;Sup;AAA1A11\n"
-                    "22/09/2026;124;100;Motorista Teste;200;Ajudante Teste;0;;Sup;AAA1A11\n"
-                    "22/09/2026;125;100;Motorista Teste;200;Ajudante Teste;0;;Sup;AAA1A11\n"
+                    "22/09/2026;123;7302;ADRIANO DINIZ PAULO;7218;MARCIO NUNES ALVES;9999;Fora da Liga;Sup;AAA1A11\n"
+                    "22/09/2026;124;7302;ADRIANO DINIZ PAULO;7218;MARCIO NUNES ALVES;0;;Sup;AAA1A11\n"
+                    "22/09/2026;125;7302;ADRIANO DINIZ PAULO;7218;MARCIO NUNES ALVES;0;;Sup;AAA1A11\n"
                 ).encode("utf-8"),
             },
             reference_date="2026-09-22",
@@ -133,19 +133,19 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
             files={
                 "03.02.37_PATOS_SET.csv": (
                     "Status;Cliente;Dt. Operacao;Motorista;ajudante-1;ajudante-2\n"
-                    "N;501;22/09/2026;100;200;0\nN;502;22/09/2026;100;200;0\n"
+                    "N;501;22/09/2026;7302;7218;0\nN;502;22/09/2026;7302;7218;0\n"
                 ).encode("utf-8"),
             },
             reference_date="2026-09-22",
         )
         store.store_batch(
             routine="030224_AJUDANTE_LIGA",
-            files={"03.02.24_PATOS_SET.csv": b"Nota;Serie;Data;Ajudante 1;Ajudante 2\n1;A;22/09/2026;200;0\n"},
+            files={"03.02.24_PATOS_SET.csv": b"Nota;Serie;Data;Ajudante 1;Ajudante 2\n1;A;22/09/2026;7218;0\n"},
             reference_date="2026-09-22",
         )
         store.store_batch(
             routine="030224_MOTORISTA_LIGA",
-            files={"03.02.24_PATOS_SET.csv": b"Nota;Serie;Data;Motorista;Cod. Cliente;Nome Cliente;Valor;Desc. Motivo;Cod. Motivo\n1;A;22/09/2026;100;501;Cliente Um;10;Motivo;1\n"},
+            files={"03.02.24_PATOS_SET.csv": b"Nota;Serie;Data;Motorista;Cod. Cliente;Nome Cliente;Valor;Desc. Motivo;Cod. Motivo\n1;A;22/09/2026;7302;501;Cliente Um;10;Motivo;1\n"},
             reference_date="2026-09-22",
         )
         exp = client.post(
@@ -162,7 +162,7 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(payload["summary"]["devolucoes_expurgadas"], 1)
         self.assertEqual(payload["expurgos"]["items"][0]["aplicados"], 1)
         motorista = payload["rankings"]["motoristas"][0]
-        self.assertEqual(motorista["cod"], "100")
+        self.assertEqual(motorista["cod"], "7302")
         self.assertEqual(motorista["pos"], 1)
         self.assertEqual(motorista["devol"], 0)
         self.assertEqual(motorista["expurgos"]["devolucao"], 1)
@@ -178,12 +178,15 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         )
         self.assertEqual(km_exp.status_code, 200, km_exp.text)
         recalculated = client.get("/api/admin/liga-entrega/dashboard", params={"competencia": "2026-09"}).json()
-        recalculated_driver = next(row for row in recalculated["rankings"]["motoristas"] if row["cod"] == "100")
-        recalculated_helper = next(row for row in recalculated["rankings"]["ajudantes"] if row["cod"] == "200")
+        recalculated_driver = next(row for row in recalculated["rankings"]["motoristas"] if row["cod"] == "7302")
+        recalculated_helper = next(row for row in recalculated["rankings"]["ajudantes"] if row["cod"] == "7218")
+        unknown_helper = next(row for row in recalculated["rankings"]["ajudantes"] if row["cod"] == "9999")
         self.assertEqual(recalculated_driver["km_desv"], 0.0)
         self.assertEqual(recalculated_driver["expurgos"]["km"], 1)
         self.assertEqual(recalculated_helper["km_desv"], 0.0)
         self.assertEqual(recalculated_helper["expurgos"]["km"], 1)
+        self.assertEqual(unknown_helper["status"], "desligado")
+        self.assertFalse(unknown_helper["elegivel"])
 
     def test_upsert_list_and_delete_expurgo(self) -> None:
         client, events = self.make_client()
