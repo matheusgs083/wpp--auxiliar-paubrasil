@@ -4788,24 +4788,31 @@
       }
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.disabled = true;
       try {
-        const [reportsResult, dashboardResult] = await Promise.allSettled([
-          req(CONFIG.endpoints.ligaEntrega.reports, { timeoutMs: 30000 }),
-          req(CONFIG.endpoints.ligaEntrega.dashboard, { timeoutMs: 60000 })
-        ]);
-        if (reportsResult.status === "fulfilled") state.ligaEntregaReports = reportsResult.value || { items: [], summary: {} };
-        else throw reportsResult.reason;
-        if (dashboardResult.status === "fulfilled") state.ligaEntregaDashboard = dashboardResult.value || {};
-        else state.ligaEntregaDashboard = { ok: false, summary: {}, warnings: [dashboardResult.reason && dashboardResult.reason.message ? dashboardResult.reason.message : "Falha ao calcular dashboard."] };
+        const reportsPayload = await req(CONFIG.endpoints.ligaEntrega.reports, { timeoutMs: 30000 });
+        state.ligaEntregaReports = reportsPayload || { items: [], summary: {} };
         renderLigaEntregaReports();
         if (!silent) addLog("Relatórios da Liga atualizados.", "ok");
-        return true;
       } catch (err) {
         if (E.entregaLigaReportsSummary) E.entregaLigaReportsSummary.textContent = `Falha ao carregar relatórios da Liga: ${err.message}`;
         if (!silent) addLog(`Falha ao carregar relatórios da Liga: ${err.message}`, "err");
+        if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.disabled = false;
         return false;
+      }
+
+      try {
+        state.ligaEntregaDashboard = await req(CONFIG.endpoints.ligaEntrega.dashboard, { timeoutMs: 20000 }) || {};
+      } catch (err) {
+        state.ligaEntregaDashboard = {
+          ok: false,
+          summary: {},
+          warnings: [err && err.message ? err.message : "Falha ao calcular dashboard."]
+        };
+        if (!silent) addLog(`Dashboard da Liga não calculou agora: ${err.message}`, "warn");
       } finally {
+        renderLigaEntregaReports();
         if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.disabled = false;
       }
+      return true;
     }
 
     async function openLigaEntregaPromax() {
