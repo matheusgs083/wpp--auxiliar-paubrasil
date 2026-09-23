@@ -190,7 +190,7 @@ def _prize_cell(position: Any, role_view: str, style: ParagraphStyle) -> Paragra
     if role_view == "motoristas":
         prizes = [700, 600, 500, 450, 400, 350, 300, 300, 250, 250, 250, "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE"]
     else:
-        prizes = [500, 400, 350, 300, 250, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 150, 150, "BRINDE"]
+        prizes = [500, 400, 350, 300, 250, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 150, 150, "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE"]
     index = int(_number(position)) - 1
     value = prizes[index] if 0 <= index < len(prizes) else None
     text = "Brinde" if value == "BRINDE" else f"R$ {_fmt(value)}" if value else "-"
