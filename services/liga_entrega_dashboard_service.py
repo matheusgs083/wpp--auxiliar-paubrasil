@@ -25,6 +25,7 @@ PESOS_AJD = {"devol": 35, "saida": 25, "km": 15, "check": 25}
 MIN_ROTAS = 3
 TEMPO_PREV_MAX = 840
 MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
+CACHE_VERSION = 2
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -300,11 +301,13 @@ class LigaEntregaDashboardService:
         for item in expurgos:
             if item.get("tipo") in exp_counts:
                 exp_counts[str(item["tipo"])] += 1
+            item["aplicados"] = 0
         for dev in devols:
             match = match_dev_exp(dev, expurgos)
             if match:
                 dev["excluida"] = True
                 dev["expurgo_id"] = str(match.get("id") or "")
+                match["aplicados"] = int(match.get("aplicados") or 0) + 1
             owner = colab.get(str(dev.get("cod") or ""), {})
             dev["motorista"] = str(owner.get("nome") or dev.get("cod") or "-")
             dev["ajudantes"] = [str(colab.get(code, {}).get("nome") or code) for code in dev.get("aju", [])]
@@ -323,6 +326,10 @@ class LigaEntregaDashboardService:
             exp_k = match_route_exp(r, expurgos, {"km", "dispersao"})
             r["expurgo_saida"] = bool(exp_s)
             r["expurgo_km"] = bool(exp_k)
+            if exp_s:
+                exp_s["aplicados"] = int(exp_s.get("aplicados") or 0) + 1
+            if exp_k:
+                exp_k["aplicados"] = int(exp_k.get("aplicados") or 0) + 1
             rotas_list.append(r)
         rotas_list.sort(key=lambda x: (str(x.get("data") or ""), to_int(x.get("mapa"))))
 
@@ -418,7 +425,7 @@ def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: li
         tuple(sorted((str(key), str(value)) for key, value in item.items()))
         for item in sorted(expurgos, key=lambda item: str(item.get("id") or ""))
     )
-    return repr((batches, exclusions, tuple(sorted((statuses or {}).items()))))
+    return repr((CACHE_VERSION, batches, exclusions, tuple(sorted((statuses or {}).items()))))
 
 
 def _clean_comp(value: str | None) -> str:
@@ -825,8 +832,9 @@ def match_dev_exp(dev: dict[str, Any], expurgos: list[dict[str, Any]]) -> dict[s
             continue
         if e.get("filial") and str(e.get("filial")).upper() != str(dev.get("filial")).upper():
             continue
-        cliente = str(e.get("cliente") or "").strip()
-        if cliente and cliente not in {str(dev.get("cliente_cod") or ""), str(dev.get("cliente") or "")}:
+        cliente = norm_code(e.get("cliente"))
+        cod_cliente = norm_code(dev.get("cliente_cod"))
+        if cliente != "0" and cliente != cod_cliente:
             continue
         return e
     return None

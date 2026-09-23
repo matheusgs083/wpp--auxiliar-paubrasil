@@ -150,7 +150,7 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         )
         exp = client.post(
             "/api/admin/liga-entrega/expurgos",
-            json={"tipo": "devolucao", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-22", "cliente": "501", "motivo": "teste"},
+            json={"tipo": "devolucao", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-22", "cliente": "000501", "motivo": "teste"},
         )
         self.assertEqual(exp.status_code, 200, exp.text)
 
@@ -160,6 +160,7 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(payload["summary"]["rotas"], 3)
         self.assertEqual(payload["summary"]["devolucoes"], 0)
         self.assertEqual(payload["summary"]["devolucoes_expurgadas"], 1)
+        self.assertEqual(payload["expurgos"]["items"][0]["aplicados"], 1)
         motorista = payload["rankings"]["motoristas"][0]
         self.assertEqual(motorista["cod"], "100")
         self.assertEqual(motorista["pos"], 1)

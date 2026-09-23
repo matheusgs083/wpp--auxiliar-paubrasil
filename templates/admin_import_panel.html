@@ -158,6 +158,18 @@
     .pill.warn { color: var(--warning); background: #fffbeb; border-color: rgba(180, 83, 9, 0.28); }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .table-scroll { max-height: 420px; overflow: auto; }
+    .liga-command-bar { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; justify-content: space-between; padding: 0.85rem 1rem; border: 1px solid var(--line); border-radius: 10px 10px 0 0; background: linear-gradient(110deg, var(--surface-raised), var(--soft-panel)); }
+    .liga-eyebrow { display: block; color: var(--primary); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; }
+    .liga-actions, .liga-filters { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+    .liga-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between; padding: 0.7rem 0; border-bottom: 1px solid var(--line); }
+    .liga-view-tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .liga-view-tabs .btn { border-radius: 999px; font-weight: 700; }
+    .liga-filters .form-select { min-width: 142px; }
+    .liga-filters .input-group { width: min(290px, 100%); }
+    .liga-operational-view { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 10px 10px; overflow: hidden; }
+    .liga-operational-view .table-scroll { max-height: 560px; }
+    .liga-operational-view .table tbody tr { transition: background-color 160ms ease; }
+    .liga-operational-view .table tbody tr:hover { background: color-mix(in srgb, var(--primary) 9%, transparent); }
     .table { --bs-table-color: var(--ink-900); --bs-table-bg: transparent; --bs-table-hover-bg: rgba(37, 99, 235, 0.07); margin-bottom: 0; }
     .table-scroll thead th, .table thead th { position: sticky; top: 0; z-index: 3; color: var(--ink-700); background: var(--surface-soft); border-bottom: 1px solid var(--line-strong); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
     .table td { color: var(--ink-900); font-size: 0.86rem; vertical-align: middle; border-color: var(--line); }
@@ -585,6 +597,9 @@
       .usage-bar-row { grid-template-columns: 64px 1fr 56px; }
       .dataset-grid { grid-template-columns: 1fr; }
       .table-scroll { max-height: 340px; }
+      .liga-toolbar { align-items: stretch; }
+      .liga-filters { width: 100%; }
+      .liga-filters .form-select, .liga-filters .input-group { flex: 1 1 150px; }
       pre#logPanel { height: 340px; max-height: 340px; }
       .nav-pills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .nav-fill .nav-item, .nav-fill > .nav-link { flex: initial; }
@@ -4831,7 +4846,9 @@
       if (view === "cobertura") content = `<div class="row g-2">${coverage.map(row => `<div class="col-md-4"><div class="border rounded p-2"><b>${escapeHtml(formatDate(row.data) || "-")}</b><div>${fmt(row.rotas)} rota(s) • ${fmt(row.motoristas || row.mot || 0)} motorista(s)</div><div class="small text-secondary">${escapeHtml(row.status || "Cobertura calculada")}</div></div></div>`).join("") || '<div class="text-secondary">Sem cobertura diária calculada.</div>'}</div>`;
       if (view === "regras") content = `<div class="row g-3"><div class="col-md-6"><h3 class="h6">Metas</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.metas || {}, null, 2))}</pre></div><div class="col-md-6"><h3 class="h6">Pesos do ranking</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.pesos || {}, null, 2))}</pre></div></div>`;
       const tabs = [["motoristas","Motoristas"],["ajudantes","Ajudantes"],["devolucoes","Devoluções"],["rotas","Rotas"],["equipe","Equipe"],["cobertura","Cobertura"],["regras","Regras"]].map(([key,label]) => `<button class="btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"} liga-view" data-liga-view="${key}" type="button">${label}</button>`).join(" ");
-      E.entregaLigaDashboardDetails.innerHTML += `<hr class="my-3"><div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3"><div class="btn-group flex-wrap" role="group">${tabs}</div><div class="d-flex gap-2"><button class="btn btn-outline-primary btn-sm liga-copy-summary" type="button">Copiar resumo</button><button class="btn btn-outline-secondary btn-sm liga-export-snapshot" type="button">Exportar visão</button><select class="form-select form-select-sm liga-filter-branch"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><input class="form-control form-control-sm liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar"></div></div><div id="ligaOperationalView">${content}</div>`;
+      const warnings = Array.isArray(dashboard.warnings) ? dashboard.warnings : [];
+      const applied = ((dashboard.expurgos || {}).items || []).reduce((sum, item) => sum + Number(item.aplicados || 0), 0);
+      E.entregaLigaDashboardDetails.innerHTML = `<div class="liga-command-bar"><div><span class="liga-eyebrow">CENTRAL OPERACIONAL</span><div class="fw-semibold">${escapeHtml(dashboard.competencia || "Liga Entrega")}</div><div class="small text-secondary">${fmt(routes.length)} rotas processadas · ${fmt(applied)} registro(s) expurgado(s)</div></div><div class="liga-actions"><button class="btn btn-outline-primary btn-sm liga-copy-summary" type="button"><i class="bi bi-clipboard me-1"></i>Copiar resumo</button><button class="btn btn-outline-secondary btn-sm liga-export-snapshot" type="button"><i class="bi bi-download me-1"></i>Exportar</button></div></div><div class="liga-toolbar"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small mt-3 mb-0"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}`;
     }
 
     function updateLigaEntregaExpurgoForm() {
@@ -4852,7 +4869,8 @@
       }
       E.entregaLigaExpurgosList.innerHTML = `<div class="small fw-bold mb-1">Expurgos ativos (${items.length})</div>${items.map(item => {
         const target = item.tipo === "devolucao" ? `cliente ${item.cliente || "-"}` : `mapa ${item.mapa || "-"}`;
-        return `<div class="d-flex justify-content-between gap-2 border-top pt-1 mt-1"><span><b>${escapeHtml(item.tipo || "-")}</b> · ${escapeHtml(item.filial || "-")} · ${escapeHtml(formatDate(item.data) || item.data || "-")} · ${escapeHtml(target)}<br><span class="text-secondary">${escapeHtml(item.motivo || "sem motivo")}</span></span><button class="btn btn-outline-danger btn-sm py-0 liga-expurgo-remove" type="button" data-expurgo-id="${escapeHtml(item.id || "")}" title="Remover expurgo"><i class="bi bi-x-lg"></i></button></div>`;
+        const applied = Number(item.aplicados || 0);
+        return `<div class="d-flex justify-content-between gap-2 border-top pt-2 mt-2"><span><b>${escapeHtml(item.tipo || "-")}</b> · ${escapeHtml(item.filial || "-")} · ${escapeHtml(formatDate(item.data) || item.data || "-")} · ${escapeHtml(target)}<br><span class="text-secondary">${escapeHtml(item.motivo || "sem motivo")}</span><br><span class="badge ${applied ? "text-bg-success" : "text-bg-warning"}">${applied ? `${applied} registro(s) expurgado(s)` : "Ainda não encontrou registro"}</span></span><button class="btn btn-outline-danger btn-sm py-0 liga-expurgo-remove" type="button" data-expurgo-id="${escapeHtml(item.id || "")}" title="Remover expurgo"><i class="bi bi-x-lg"></i></button></div>`;
       }).join("")}`;
     }
 
@@ -4861,7 +4879,9 @@
       const competencia = String((state.ligaEntregaDashboard || {}).competencia || "");
       const query = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
       const payload = await req(`${CONFIG.endpoints.ligaEntrega.expurgos}${query}`, { timeoutMs: 15000 });
-      state.ligaEntregaExpurgos = Array.isArray(payload && payload.items) ? payload.items : [];
+      const calculated = ((state.ligaEntregaDashboard || {}).expurgos || {}).items || [];
+      const appliedById = new Map(calculated.map(item => [String(item.id || ""), Number(item.aplicados || 0)]));
+      state.ligaEntregaExpurgos = (Array.isArray(payload && payload.items) ? payload.items : []).map(item => ({ ...item, aplicados: appliedById.get(String(item.id || "")) || 0 }));
       renderLigaEntregaExpurgos();
     }
 
