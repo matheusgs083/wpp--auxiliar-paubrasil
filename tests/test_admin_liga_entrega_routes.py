@@ -165,11 +165,22 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(motorista["cod"], "100")
         self.assertEqual(motorista["pos"], 1)
         self.assertEqual(motorista["devol"], 0)
+        self.assertEqual(motorista["expurgos"]["devolucao"], 1)
         self.assertEqual(motorista["check_pct"], 100.0)
         self.assertGreaterEqual(payload["summary"]["motoristas_ativos"], 1)
         self.assertGreaterEqual(payload["summary"]["motoristas_elegiveis"], 1)
         self.assertEqual(payload["operacao"]["rotas"], 3)
         self.assertEqual(events[-1]["event_type"], "admin_liga_dashboard")
+
+        km_exp = client.post(
+            "/api/admin/liga-entrega/expurgos",
+            json={"tipo": "km", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-22", "mapa": "124", "motivo": "km incorreto"},
+        )
+        self.assertEqual(km_exp.status_code, 200, km_exp.text)
+        recalculated = client.get("/api/admin/liga-entrega/dashboard", params={"competencia": "2026-09"}).json()
+        recalculated_driver = next(row for row in recalculated["rankings"]["motoristas"] if row["cod"] == "100")
+        self.assertEqual(recalculated_driver["km_desv"], 0.0)
+        self.assertEqual(recalculated_driver["expurgos"]["km"], 1)
 
     def test_upsert_list_and_delete_expurgo(self) -> None:
         client, events = self.make_client()

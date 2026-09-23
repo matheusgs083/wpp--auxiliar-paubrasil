@@ -25,7 +25,7 @@ PESOS_AJD = {"devol": 35, "saida": 25, "km": 15, "check": 25}
 MIN_ROTAS = 3
 TEMPO_PREV_MAX = 840
 MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -695,7 +695,7 @@ def pior_pct(value: float | None, meta: float, *, menor: bool) -> float:
 
 
 def blank() -> dict[str, float]:
-    return {"rotas": 0, "kmR": 0, "kmP": 0, "tR": 0, "tP": 0, "saiOk": 0, "saiTot": 0}
+    return {"rotas": 0, "kmR": 0, "kmP": 0, "tR": 0, "tP": 0, "saiOk": 0, "saiTot": 0, "exp_km": 0, "exp_tml": 0}
 
 
 def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]], devols: list[dict[str, Any]], ent_m: dict[str, int], ent_a: dict[str, int], checklist: list[dict[str, str]], colab: dict[str, dict[str, str]], *, has_farol: bool, first_week: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -709,6 +709,8 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
         mot = norm_code(r.get("mot"))
         if mot != "0":
             agg_m[mot]["rotas"] += 1
+            agg_m[mot]["exp_km"] += int(bool(r.get("expurgo_km")))
+            agg_m[mot]["exp_tml"] += int(bool(r.get("expurgo_saida")))
         km_ok = r.get("km_real") is not None and r.get("km_prev") is not None and not r.get("expurgo_km")
         if mot != "0" and km_ok:
             agg_m[mot]["kmR"] += float(r.get("km_real") or 0)
@@ -723,6 +725,8 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
             if a == "0":
                 continue
             agg_a[a]["rotas"] += 1
+            agg_a[a]["exp_km"] += int(bool(r.get("expurgo_km")))
+            agg_a[a]["exp_tml"] += int(bool(r.get("expurgo_saida")))
             if km_ok:
                 agg_a[a]["kmR"] += float(r.get("km_real") or 0)
                 agg_a[a]["kmP"] += float(r.get("km_prev") or 0)
@@ -752,20 +756,21 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
         agg_m[mot]["saiTot"] += 1
         agg_m[mot]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
     devol_m, devol_a = aggregate_devolucoes(devols)
+    exp_dev_m, exp_dev_a = aggregate_devolucoes(devols, only_expurgadas=True)
     return (
-        mount(colab, agg_m, ent_m, devol_m, chk_e, chk_f, "MOTORISTA", has_farol=has_farol, first_week=first_week),
-        mount(colab, agg_a, ent_a, devol_a, chk_e, chk_f, "AJUDANTE", has_farol=has_farol, first_week=first_week),
+        mount(colab, agg_m, ent_m, devol_m, exp_dev_m, chk_e, chk_f, "MOTORISTA", has_farol=has_farol, first_week=first_week),
+        mount(colab, agg_a, ent_a, devol_a, exp_dev_a, chk_e, chk_f, "AJUDANTE", has_farol=has_farol, first_week=first_week),
     )
 
 
 
-def aggregate_devolucoes(devols: list[dict[str, Any]]) -> tuple[dict[str, int], dict[str, int]]:
+def aggregate_devolucoes(devols: list[dict[str, Any]], *, only_expurgadas: bool = False) -> tuple[dict[str, int], dict[str, int]]:
     """Conta devoluções por pessoa uma vez, sem varrer a lista por colaborador."""
 
     motoristas: dict[str, set[str]] = defaultdict(set)
     ajudantes: dict[str, set[str]] = defaultdict(set)
     for item in devols:
-        if item.get("excluida"):
+        if bool(item.get("excluida")) != only_expurgadas:
             continue
         pair = f"{item.get('cliente_cod')}|{item.get('data')}"
         mot = norm_code(item.get("cod"))
@@ -778,7 +783,7 @@ def aggregate_devolucoes(devols: list[dict[str, Any]]) -> tuple[dict[str, int], 
     return ({code: len(pairs) for code, pairs in motoristas.items()}, {code: len(pairs) for code, pairs in ajudantes.items()})
 
 
-def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: dict[str, int], chk_e: dict[str, int], chk_f: dict[str, int], role: str, *, has_farol: bool, first_week: bool) -> list[dict[str, Any]]:
+def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: dict[str, int], devols_expurgadas: dict[str, int], chk_e: dict[str, int], chk_f: dict[str, int], role: str, *, has_farol: bool, first_week: bool) -> list[dict[str, Any]]:
     pesos = PESOS_MOT if role == "MOTORISTA" else PESOS_AJD
     codes = {k for k, v in colab.items() if v.get("funcao") == role} | set(agg) | set(entregas)
     rows: list[dict[str, Any]] = []
@@ -804,7 +809,7 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         sw = sum(w for k, w in pesos.items() if measured[k])
         sp = sum(float(pts[k]) for k in pesos if measured[k])
         status = str(info.get("status") or CANONICAL_STATUS.get(cod, "ativo"))
-        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
+        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
     elig = [x for x in rows if x["elegivel"]]
     elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -int(x.get("rotas") or 0)))
     for i, row in enumerate(elig, 1):
