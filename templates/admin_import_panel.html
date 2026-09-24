@@ -1538,7 +1538,7 @@
                 <h3 class="h6 fw-bold mb-2"><i class="bi bi-scissors me-2"></i>Expurgos mantidos</h3>
                 <ul class="small mb-3 ps-3">
                   <li><b>Devolução:</b> remove por cliente + data da entrega.</li>
-                  <li><b>TML:</b> remove por filial + data + mapa apenas da saída de toda a equipe da rota.</li>
+                  <li><b>TML:</b> remove por filial + data + mapa, ou da saída de toda a filial no dia.</li>
                   <li><b>Dispersão/KM:</b> remove por filial + data + mapa apenas do km de toda a equipe da rota.</li>
                 </ul>
                 <div class="source-box mb-3">
@@ -1552,6 +1552,7 @@
                     <div class="col-6"><label class="form-label small mb-1" for="entregaLigaExpurgoFilial">Filial</label><select class="form-select form-select-sm" id="entregaLigaExpurgoFilial"><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
                     <div class="col-6"><label class="form-label small mb-1" for="entregaLigaExpurgoData">Data</label><input class="form-control form-control-sm" id="entregaLigaExpurgoData" type="date" required></div>
                     <div class="col-6"><label class="form-label small mb-1" id="entregaLigaExpurgoAlvoLabel" for="entregaLigaExpurgoAlvo">Cliente</label><input class="form-control form-control-sm" id="entregaLigaExpurgoAlvo" placeholder="Código do cliente" required></div>
+                    <div class="col-12" id="entregaLigaExpurgoDiaInteiroWrap" hidden><div class="form-check"><input class="form-check-input" type="checkbox" id="entregaLigaExpurgoDiaInteiro"><label class="form-check-label small" for="entregaLigaExpurgoDiaInteiro">Expurgar TML do dia inteiro</label></div></div>
                     <div class="col-12"><label class="form-label small mb-1" for="entregaLigaExpurgoMotivo">Motivo</label><input class="form-control form-control-sm" id="entregaLigaExpurgoMotivo" maxlength="300" placeholder="Ex.: devolução não atribuída à entrega" required></div>
                     <div class="col-12 d-flex justify-content-between align-items-center gap-2"><span class="small text-secondary" id="entregaLigaExpurgoHint">Remove apenas devolução por cliente e data.</span><button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-scissors me-1"></i>Aplicar</button></div>
                   </div>
@@ -3530,6 +3531,8 @@
       entregaLigaExpurgoData: document.getElementById("entregaLigaExpurgoData"),
       entregaLigaExpurgoAlvo: document.getElementById("entregaLigaExpurgoAlvo"),
       entregaLigaExpurgoAlvoLabel: document.getElementById("entregaLigaExpurgoAlvoLabel"),
+      entregaLigaExpurgoDiaInteiro: document.getElementById("entregaLigaExpurgoDiaInteiro"),
+      entregaLigaExpurgoDiaInteiroWrap: document.getElementById("entregaLigaExpurgoDiaInteiroWrap"),
       entregaLigaExpurgoMotivo: document.getElementById("entregaLigaExpurgoMotivo"),
       entregaLigaExpurgoHint: document.getElementById("entregaLigaExpurgoHint"),
       entregaLigaExpurgosList: document.getElementById("entregaLigaExpurgosList"),
@@ -5007,12 +5010,24 @@
     }
 
     function updateLigaEntregaExpurgoForm() {
-      const isDevolucao = String(E.entregaLigaExpurgoTipo && E.entregaLigaExpurgoTipo.value || "devolucao") === "devolucao";
-      if (E.entregaLigaExpurgoAlvoLabel) E.entregaLigaExpurgoAlvoLabel.textContent = isDevolucao ? "Cliente" : "Mapa";
-      if (E.entregaLigaExpurgoAlvo) E.entregaLigaExpurgoAlvo.placeholder = isDevolucao ? "Código do cliente" : "Número do mapa";
+      const tipo = String(E.entregaLigaExpurgoTipo && E.entregaLigaExpurgoTipo.value || "devolucao");
+      const isDevolucao = tipo === "devolucao";
+      const isTml = tipo === "tml";
+      const diaInteiro = isTml && Boolean(E.entregaLigaExpurgoDiaInteiro && E.entregaLigaExpurgoDiaInteiro.checked);
+      if (E.entregaLigaExpurgoAlvoLabel) E.entregaLigaExpurgoAlvoLabel.textContent = isDevolucao ? "Cliente" : diaInteiro ? "Mapa (opcional)" : "Mapa";
+      if (E.entregaLigaExpurgoAlvo) {
+        E.entregaLigaExpurgoAlvo.placeholder = isDevolucao ? "Código do cliente" : "Número do mapa";
+        E.entregaLigaExpurgoAlvo.required = isDevolucao || !diaInteiro;
+        E.entregaLigaExpurgoAlvo.disabled = diaInteiro;
+        if (diaInteiro) E.entregaLigaExpurgoAlvo.value = "";
+      }
+      if (E.entregaLigaExpurgoDiaInteiroWrap) E.entregaLigaExpurgoDiaInteiroWrap.hidden = !isTml;
+      if (!isTml && E.entregaLigaExpurgoDiaInteiro) E.entregaLigaExpurgoDiaInteiro.checked = false;
       if (E.entregaLigaExpurgoHint) E.entregaLigaExpurgoHint.textContent = isDevolucao
         ? "Remove apenas devolução por cliente e data."
-        : "Remove este indicador para motorista e ajudantes da rota; os demais continuam contando.";
+        : diaInteiro
+          ? "Remove a saída/TML de todas as rotas da filial nesta data."
+          : "Remove este indicador para motorista e ajudantes da rota; os demais continuam contando.";
     }
 
     function renderLigaEntregaExpurgos() {
@@ -5023,7 +5038,7 @@
         return;
       }
       E.entregaLigaExpurgosList.innerHTML = `<div class="small fw-bold mb-1">Expurgos ativos (${items.length})</div>${items.map(item => {
-        const target = item.tipo === "devolucao" ? `cliente ${item.cliente || "-"}` : `mapa ${item.mapa || "-"}`;
+        const target = item.tipo === "devolucao" ? `cliente ${item.cliente || "-"}` : item.mapa ? `mapa ${item.mapa}` : "dia inteiro";
         const applied = Number(item.aplicados || 0);
         return `<div class="d-flex justify-content-between gap-2 border-top pt-2 mt-2"><span><b>${escapeHtml(item.tipo || "-")}</b> · ${escapeHtml(item.filial || "-")} · ${escapeHtml(formatDate(item.data) || item.data || "-")} · ${escapeHtml(target)}<br><span class="text-secondary">${escapeHtml(item.motivo || "sem motivo")}</span><br><span class="badge ${applied ? "text-bg-success" : "text-bg-warning"}">${applied ? `${applied} registro(s) expurgado(s)` : "Ainda não encontrou registro"}</span></span><button class="btn btn-outline-danger btn-sm py-0 liga-expurgo-remove" type="button" data-expurgo-id="${escapeHtml(item.id || "")}" title="Remover expurgo"><i class="bi bi-x-lg"></i></button></div>`;
       }).join("")}`;
@@ -5046,13 +5061,16 @@
       const data = String(E.entregaLigaExpurgoData && E.entregaLigaExpurgoData.value || "");
       const competencia = String((state.ligaEntregaDashboard || {}).competencia || data.slice(0, 7));
       const alvo = String(E.entregaLigaExpurgoAlvo && E.entregaLigaExpurgoAlvo.value || "").trim();
-      if (!competencia || !data || !alvo) throw new Error("Informe data e cliente ou mapa para aplicar o expurgo.");
+      const diaInteiro = tipo === "tml" && Boolean(E.entregaLigaExpurgoDiaInteiro && E.entregaLigaExpurgoDiaInteiro.checked);
+      if (!competencia || !data || (!alvo && !diaInteiro)) throw new Error("Informe data e cliente ou mapa para aplicar o expurgo.");
       const payload = { tipo, competencia, filial: String(E.entregaLigaExpurgoFilial && E.entregaLigaExpurgoFilial.value || ""), data, motivo: String(E.entregaLigaExpurgoMotivo && E.entregaLigaExpurgoMotivo.value || "") };
       if (tipo === "devolucao") payload.cliente = alvo;
-      else payload.mapa = alvo;
+      else if (!diaInteiro) payload.mapa = alvo;
       await req(CONFIG.endpoints.ligaEntrega.expurgos, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), timeoutMs: 20000 });
       E.entregaLigaExpurgoAlvo.value = "";
+      if (E.entregaLigaExpurgoDiaInteiro) E.entregaLigaExpurgoDiaInteiro.checked = false;
       E.entregaLigaExpurgoMotivo.value = "";
+      updateLigaEntregaExpurgoForm();
       state.ligaEntregaDashboard = null;
       await syncLigaEntregaReports({ silent: false, force: true });
       addLog("Expurgo aplicado e dashboard recalculado.", "ok");
@@ -9654,6 +9672,7 @@
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
       if (E.entregaLigaExpurgoTipo) E.entregaLigaExpurgoTipo.addEventListener("change", updateLigaEntregaExpurgoForm);
+      if (E.entregaLigaExpurgoDiaInteiro) E.entregaLigaExpurgoDiaInteiro.addEventListener("change", updateLigaEntregaExpurgoForm);
       if (E.entregaLigaExpurgoForm) E.entregaLigaExpurgoForm.addEventListener("submit", event => {
         saveLigaEntregaExpurgo(event).catch(err => addLog(`Falha ao aplicar expurgo: ${err.message}`, "err"));
       });

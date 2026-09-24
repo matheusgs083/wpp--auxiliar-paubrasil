@@ -109,7 +109,7 @@ class LigaEntregaExpurgoService:
         cliente = self._clean_text(payload.get("cliente"), max_len=80)
         motivo = self._clean_text(payload.get("motivo"), max_len=300)
         observacao = self._clean_text(payload.get("observacao"), max_len=500)
-        if tipo in {"km", "tml", "dispersao"} and not mapa:
+        if tipo in {"km", "dispersao"} and not mapa:
             raise ValueError("Mapa obrigatorio para expurgo de rota.")
         if tipo == "devolucao" and not cliente:
             raise ValueError("Cliente obrigatorio para expurgo de devolucao.")

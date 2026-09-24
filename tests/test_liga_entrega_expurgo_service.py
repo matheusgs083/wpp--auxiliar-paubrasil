@@ -52,6 +52,17 @@ class LigaEntregaExpurgoServiceTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 service.upsert_expurgo({"tipo": "devolucao", "competencia": "2026-09", "filial": "PATOS"})
 
+    def test_tml_can_be_registered_for_the_whole_day_without_map(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = LigaEntregaExpurgoService(Path(tmp) / "expurgos.json")
+            item = service.upsert_expurgo(
+                {"tipo": "tml", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-23", "motivo": "TML do dia inteiro"},
+                actor="admin",
+            )
+
+            self.assertEqual(item["mapa"], "")
+            self.assertEqual(service.list_expurgos(competencia="2026-09", tipo="tml")["total"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
