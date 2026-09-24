@@ -290,9 +290,9 @@
     #entregaPane .devolucao-trend-chart { min-height: 270px; }
     #entregaPane .devolucao-trend-chart svg { display: block; width: 100%; height: 205px; overflow: visible; }
     #entregaPane .devolucao-trend-chart .trend-grid { stroke: #2c3952; stroke-dasharray: 3 4; stroke-width: 1; }
-    #entregaPane .devolucao-trend-chart .trend-line { fill: none; stroke: #7158f5; stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; }
-    #entregaPane .devolucao-trend-chart .trend-area { fill: url(#devolucaoTrendFill); opacity: .26; }
-    #entregaPane .devolucao-trend-chart .trend-dot { fill: #8b7bff; stroke: #151d2c; stroke-width: 2; }
+    #entregaPane .devolucao-trend-chart .trend-line { fill: none; stroke: #38bdf8; stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; filter: drop-shadow(0 2px 5px rgba(56,189,248,.2)); }
+    #entregaPane .devolucao-trend-chart .trend-area { fill: url(#devolucaoTrendFill); opacity: .22; }
+    #entregaPane .devolucao-trend-chart .trend-dot { fill: #fbbf24; stroke: #0f1725; stroke-width: 2; }
     #entregaPane .devolucao-trend-chart text { fill: #8fa0bb; font-size: 10px; font-weight: 700; }
     #entregaPane .devolucao-bar-fill { will-change: width; }
     @media (prefers-reduced-motion: reduce) { #entregaPane .devolucao-bar-fill { transition: none; } }
@@ -5091,7 +5091,7 @@
       const metricFmt = value => metric === "valor" ? `R$ ${fmt(value)}` : metric === "registros" ? fmt(value) : `${fmt(value)} HL`;
       const totals = new Map();
       rows.forEach(row => {
-        const label = String(row[field] || "Não informado").trim() || "Não informado";
+        const label = String(row[field] || "Sem informação").trim() || "Sem informação";
         const item = totals.get(label) || { label, volume: 0, valor: 0, count: 0 };
         item.volume += Number(row.volume_hl || 0);
         item.valor += Number(row.valor || 0);
@@ -5129,7 +5129,7 @@
       const grid = [0, .5, 1].map(ratio => { const y = pad.top + innerH - ratio * innerH; return `<line class="trend-grid" x1="${pad.left}" x2="${pad.left + innerW}" y1="${y}" y2="${y}"/><text x="2" y="${y + 4}">${escapeHtml(fmt(max * ratio))}</text>`; }).join("");
       const dots = items.map((item, index) => { const [x, y] = point(item, index).split(","); return `<circle class="trend-dot" cx="${x}" cy="${y}" r="3.5"><title>${escapeHtml(formatDate(item.date))}: ${escapeHtml(metric === "valor" ? `R$ ${fmt(metricValue(item))}` : metric === "registros" ? `${fmt(metricValue(item))} registro(s)` : `${fmt(metricValue(item))} HL`)}</title></circle>`; }).join("");
       const labels = items.filter((_, index) => index === 0 || index === items.length - 1 || index === Math.floor((items.length - 1) / 2)).map(item => `<text x="${pad.left + items.indexOf(item) * innerW / Math.max(items.length - 1, 1)}" y="${height - 6}" text-anchor="middle">${escapeHtml(formatDate(item.date).slice(0, 5))}</text>`).join("");
-      return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">${metricLabel} acumulado no período · passe o mouse nos pontos</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Devolução por dia"><defs><linearGradient id="devolucaoTrendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7158f5"/><stop offset="1" stop-color="#7158f5" stop-opacity="0"/></linearGradient></defs>${grid}<polygon class="trend-area" points="${area}"/><polyline class="trend-line" points="${points}"/>${dots}${labels}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Data</th><th class="text-end">${escapeHtml(metricLabel)}</th><th class="text-end">Registros</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(formatDate(item.date))}</td><td class="text-end">${escapeHtml(metric === "valor" ? `R$ ${fmt(metricValue(item))}` : metric === "registros" ? fmt(metricValue(item)) : `${fmt(metricValue(item))} HL`)}</td><td class="text-end">${item.count}</td></tr>`).join("")}</tbody></table></details></article>`;
+      return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">${metricLabel} acumulado no período · passe o mouse nos pontos</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Devolução por dia"><defs><linearGradient id="devolucaoTrendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/></linearGradient></defs>${grid}<polygon class="trend-area" points="${area}"/><polyline class="trend-line" points="${points}"/>${dots}${labels}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Data</th><th class="text-end">${escapeHtml(metricLabel)}</th><th class="text-end">Registros</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(formatDate(item.date))}</td><td class="text-end">${escapeHtml(metric === "valor" ? `R$ ${fmt(metricValue(item))}` : metric === "registros" ? fmt(metricValue(item)) : `${fmt(metricValue(item))} HL`)}</td><td class="text-end">${item.count}</td></tr>`).join("")}</tbody></table></details></article>`;
     }
 
     function renderEntregaDevolucoes(dashboard = {}) {
@@ -5166,6 +5166,7 @@
       const charts = [
         renderEntregaDevolucaoChart("Devolução por GV", chartRows, "gv", topN, false, metric),
         renderEntregaDevolucaoChart("Devolução por motivo", chartRows, "motivo_operacional", topN, false, metric),
+        renderEntregaDevolucaoChart("Devolução por RN", chartRows, "rn", topN, false, metric),
         renderEntregaDevolucaoChart("Devolução por motorista", chartRows, "motorista", 8, false, metric),
         renderEntregaDevolucaoTrend(chartRows, metric),
         renderEntregaDevolucaoChart("Devolução por responsabilidade", chartRows, "motivo_responsabilidade", topN, false, metric)

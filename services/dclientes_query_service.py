@@ -307,6 +307,7 @@ class DClientesQueryService:
                 result[(filial_code, client_code)] = {
                     "cliente_nome": str(row.get("nome_fantasia") or row.get("razao_social") or "").strip(),
                     "setor": str(row.get("setor_vde") or "").strip(),
+                    "rn": str(row.get("setor_vde") or "").strip(),
                     "area": str(row.get("area_vde") or "").strip(),
                     "gv": str(row.get("gv_vde_resolved") or row.get("gv_vde") or "").strip(),
                 }
