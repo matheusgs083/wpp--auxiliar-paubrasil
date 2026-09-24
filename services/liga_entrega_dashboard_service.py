@@ -355,7 +355,10 @@ class LigaEntregaDashboardService:
             ) else []
             merged_aju = list(dict.fromkeys([*(rota.get("aju") or []), *(equipe.get("aju") or []), *auxiliary_aju]))
             rota.update({"mot": equipe.get("mot") or rota.get("mot"), "aju": merged_aju, "sup": equipe.get("sup") or "", "placa": equipe.get("placa") or ""})
-            if equipe.get("data") and not rota.get("data"):
+            # A escala é a fonte da data operacional da equipe. O 03.08.05
+            # pode registrar a execução no dia seguinte, então a data da
+            # equipe precisa prevalecer quando o mapa existe nos dois lotes.
+            if equipe.get("data"):
                 rota["data"] = equipe["data"]
             if equipe.get("filial") and not rota.get("filial"):
                 rota["filial"] = equipe["filial"]
