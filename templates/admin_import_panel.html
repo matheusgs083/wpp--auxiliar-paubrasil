@@ -262,8 +262,7 @@
     #entregaPane .devolucao-bar-row { display: grid; grid-template-columns: minmax(86px, 34%) minmax(80px, 1fr) auto; align-items: center; gap: .55rem; }
     #entregaPane .devolucao-bar-label { overflow: hidden; color: #c8d4e7; font-size: .72rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
     #entregaPane .devolucao-bar-track { height: 10px; overflow: hidden; border-radius: 999px; background: #202d42; }
-    #entregaPane .devolucao-bar-fill { display: block; height: 100%; min-width: 4px; border-radius: inherit; background: linear-gradient(90deg, #2563eb, #60a5fa); transition: width .25s ease; }
-    #entregaPane .devolucao-bar-row:nth-child(even) .devolucao-bar-fill { background: linear-gradient(90deg, #b7791f, #f5aa17); }
+    #entregaPane .devolucao-bar-fill { display: block; height: 100%; min-width: 4px; border-radius: inherit; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width .25s ease; }
     #entregaPane .devolucao-bar-value { color: #f4f7fc; font-size: .7rem; font-weight: 800; white-space: nowrap; }
     #entregaPane .entrega-devolucao-chart details { margin-top: .8rem; color: #91a0ba; font-size: .72rem; }
     #entregaPane .entrega-devolucao-chart details summary { cursor: pointer; color: #78aef8; font-weight: 700; }
@@ -5092,6 +5091,7 @@
       const totals = new Map();
       rows.forEach(row => {
         const label = String(row[field] || "Sem informação").trim() || "Sem informação";
+        if (["0", "9", "99"].includes(label)) return;
         const item = totals.get(label) || { label, volume: 0, valor: 0, count: 0 };
         item.volume += Number(row.volume_hl || 0);
         item.valor += Number(row.valor || 0);
