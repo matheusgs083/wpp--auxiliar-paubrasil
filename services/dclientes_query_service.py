@@ -252,6 +252,66 @@ class DClientesQueryService:
         query = self._details_query_from_base(base_query, order_by=sql.SQL("base.filial, base.cod_pdv"))
         return self._fetch(query, params)
 
+    def lookup_liga_clientes(self, keys: list[tuple[str, str]]) -> dict[tuple[str, str], dict[str, str]]:
+        """Lookup the light client fields needed by the Liga Entrega returns table.
+
+        This deliberately queries only ``dclientes_latest`` instead of calling the
+        full customer search (which also requires the inadimplencia/comodatos
+        views).  The dashboard can therefore enrich the report when the client
+        base is available without making the Liga depend on unrelated datasets.
+        """
+        normalized: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        filial_aliases = {"PATOS": "3", "SUME": "4", "SUMÉ": "4"}
+        for filial, cod_pdv in keys:
+            filial_text = str(filial or "").strip().upper()
+            filial_code = filial_aliases.get(filial_text, _normalize_filial(filial_text))
+            client_code = _normalize_cod_pdv(str(cod_pdv or ""))
+            if not filial_code or not client_code:
+                continue
+            item = (filial_code, client_code)
+            if item not in seen:
+                seen.add(item)
+                normalized.append(item)
+        if not normalized or not self.database_url:
+            return {}
+
+        predicates: list[sql.Composed] = []
+        params: list[Any] = []
+        for filial_code, client_code in normalized:
+            predicates.append(
+                sql.SQL("(COALESCE(NULLIF(LTRIM(REGEXP_REPLACE(COALESCE(filial, ''), '[^0-9]', '', 'g'), '0'), ''), '0') = %s AND COALESCE(NULLIF(LTRIM(REGEXP_REPLACE(COALESCE(cod_pdv, ''), '[^0-9]', '', 'g'), '0'), ''), '0') = %s)")
+            )
+            params.extend([filial_code, client_code])
+        query = sql.SQL(
+            """
+            SELECT filial, cod_pdv, nome_fantasia, razao_social,
+                   setor_vde, area_vde, gv_vde, gv_vde_resolved
+            FROM {schema}.dclientes_latest
+            WHERE {where}
+            """
+        ).format(schema=sql.Identifier(self.schema), where=sql.SQL(" OR ").join(predicates))
+        try:
+            with self._connect(row_factory=dict_row) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    rows = cur.fetchall()
+        except Exception:
+            return {}
+
+        result: dict[tuple[str, str], dict[str, str]] = {}
+        for row in rows:
+            filial_code = _normalize_filial(str(row.get("filial") or ""))
+            client_code = _normalize_cod_pdv(str(row.get("cod_pdv") or ""))
+            if filial_code and client_code:
+                result[(filial_code, client_code)] = {
+                    "cliente_nome": str(row.get("nome_fantasia") or row.get("razao_social") or "").strip(),
+                    "setor": str(row.get("setor_vde") or "").strip(),
+                    "area": str(row.get("area_vde") or "").strip(),
+                    "gv": str(row.get("gv_vde_resolved") or row.get("gv_vde") or "").strip(),
+                }
+        return result
+
     def get_payip_profile_by_registration(self, filial: str, cod_pdv: str) -> DClientePayipProfile | None:
         normalized_filial = _normalize_filial(filial)
         normalized_cod_pdv = _normalize_cod_pdv(cod_pdv)

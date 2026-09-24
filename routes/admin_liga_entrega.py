@@ -48,6 +48,7 @@ def create_admin_liga_entrega_router(
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     liga_entrega_expurgo_service: Any,
     liga_entrega_status_service: Any | None = None,
+    dclientes_query_service: Any | None = None,
     liga_entrega_report_store: Any | None = None,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
@@ -187,6 +188,7 @@ def create_admin_liga_entrega_router(
                 report_store=liga_entrega_report_store,
                 expurgo_service=liga_entrega_expurgo_service,
                 status_service=liga_entrega_status_service,
+                dclientes_query_service=dclientes_query_service,
             ).build_dashboard(competencia=competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -224,6 +226,7 @@ def create_admin_liga_entrega_router(
                 report_store=liga_entrega_report_store,
                 expurgo_service=liga_entrega_expurgo_service,
                 status_service=liga_entrega_status_service,
+                dclientes_query_service=dclientes_query_service,
             ).build_dashboard(competencia=competencia)
             content, filename = build_liga_entrega_dashboard_pdf(dashboard, view=view)
         except ValueError as exc:

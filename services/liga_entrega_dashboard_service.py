@@ -14,6 +14,8 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Iterable
 
+from bot_api.services.liga_entrega_motivos import MOTIVOS_DEVOLUCAO
+
 try:
     from openpyxl import load_workbook
 except Exception:  # pragma: no cover
@@ -98,10 +100,11 @@ _DASHBOARD_CACHE_LOCK = threading.Lock()
 
 
 class LigaEntregaDashboardService:
-    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None) -> None:
+    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None) -> None:
         self.report_store = report_store
         self.expurgo_service = expurgo_service
         self.status_service = status_service
+        self.dclientes_query_service = dclientes_query_service
 
     def build_dashboard(self, *, competencia: str | None = None) -> dict[str, Any]:
         comp = _clean_comp(competencia) if competencia else self._latest_competencia()
@@ -240,8 +243,16 @@ class LigaEntregaDashboardService:
                             "nota": nota, "serie": str(pick(row, "Serie", "Série") or "").strip(),
                             "cliente_cod": norm_code(pick(row, "Cod. Cliente", "Cod Cliente", "Cliente")),
                             "cliente": str(pick(row, "Nome Cliente", "Cliente Nome") or "").strip(),
-                            "valor": to_float(pick(row, "Valor")), "motivo": str(pick(row, "Desc. Motivo", "Motivo") or "").strip(),
-                            "resp": str(pick(row, "Cod. Motivo", "Cod Motivo") or "").strip(), "excluida": False,
+                            "cliente_nome_base": "", "area": str(pick(row, "Area") or "").strip(),
+                            "setor": str(pick(row, "Setor") or "").strip(), "gv": "",
+                            "valor": to_float(pick(row, "Valor")), "volume_hl": to_float(pick(row, "Volume", "Hectolitro", "HL")),
+                            "data_devolucao": to_iso(pick(row, "Data Devol.", "Data Devolucao", "Dt Devolucao"), fallback=data),
+                            "motivo": str(pick(row, "Desc. Motivo", "Motivo") or "").strip(),
+                            "resp": str(pick(row, "Cod. Motivo", "Cod Motivo") or "").strip(),
+                            "motivo_operacional": "", "motivo_responsabilidade": "",
+                            "placa": str(pick(row, "Placa") or "").strip(), "telefone": str(pick(row, "Telefone") or "").strip(),
+                            "usuario": str(pick(row, "Usuario") or "").strip(), "hora": str(pick(row, "Hora") or "").strip(),
+                            "excluida": False,
                         })
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.02.24 motorista {file['filename']}: {exc}")
@@ -328,6 +339,26 @@ class LigaEntregaDashboardService:
             if equipe.get("filial") and not rota.get("filial"):
                 rota["filial"] = equipe["filial"]
 
+        if self.dclientes_query_service is not None and devols:
+            keys = [(str(item.get("filial") or ""), str(item.get("cliente_cod") or "")) for item in devols]
+            try:
+                client_map = self.dclientes_query_service.lookup_liga_clientes(keys)
+            except Exception:
+                client_map = {}
+            for item in devols:
+                key = (filial_code_for_liga(item.get("filial")), norm_code(item.get("cliente_cod")))
+                base = client_map.get(key) or {}
+                item["cliente_nome_base"] = str(base.get("cliente_nome") or "").strip()
+                item["cliente"] = item["cliente_nome_base"] or item.get("cliente") or item.get("cliente_cod") or ""
+                item["setor"] = str(base.get("setor") or item.get("setor") or "").strip()
+                item["area"] = str(base.get("area") or item.get("area") or "").strip()
+                item["gv"] = str(base.get("gv") or "").strip()
+
+        for item in devols:
+            motivo = MOTIVOS_DEVOLUCAO.get(norm_code(item.get("resp")), {})
+            item["motivo_operacional"] = str(motivo.get("motivo") or item.get("motivo") or "").strip()
+            item["motivo_responsabilidade"] = str(motivo.get("responsabilidade") or "").strip()
+
         exp_counts = {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}
         for item in expurgos:
             if item.get("tipo") in exp_counts:
@@ -372,7 +403,9 @@ class LigaEntregaDashboardService:
         )
         operacao = build_operacao(rotas_list, devols, motoristas, ajudantes)
         cobertura = build_cobertura(rotas_list)
-        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len([d for d in devols if not d.get("excluida")]), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": sorted(devols, key=lambda x: (str(x.get("data") or ""), str(x.get("nota") or "")), reverse=True), "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50]}
+        devolucoes_auxiliares = sorted(devols, key=lambda x: (str(x.get("data_devolucao") or x.get("data") or ""), str(x.get("cliente") or ""), str(x.get("nota") or "")), reverse=True)
+        active_devols = [item for item in devols if not item.get("excluida")]
+        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50]}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
         self._write_persisted_cache(comp, cache_signature, result)
@@ -442,7 +475,7 @@ class LigaEntregaDashboardService:
 
 
 def _empty(comp: str) -> dict[str, Any]:
-    return {"ok": True, "competencia": comp, "summary": {"ready": False, "rotas": 0, "motoristas": 0, "ajudantes": 0, "devolucoes": 0, "devolucoes_expurgadas": 0, "expurgos": 0, "arquivos": 0, "warnings": 0}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": {}, "rankings": {"motoristas": [], "ajudantes": []}, "rotas": [], "devolucoes": [], "operacao": {}, "equipe": [], "cobertura": [], "expurgos": {"counts": {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}, "items": []}, "warnings": []}
+    return {"ok": True, "competencia": comp, "summary": {"ready": False, "rotas": 0, "motoristas": 0, "ajudantes": 0, "devolucoes": 0, "devolucoes_expurgadas": 0, "devolucoes_volume_hl": 0, "devolucoes_valor": 0, "expurgos": 0, "arquivos": 0, "warnings": 0}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": {}, "rankings": {"motoristas": [], "ajudantes": []}, "rotas": [], "devolucoes": [], "devolucoes_auxiliares": [], "operacao": {}, "equipe": [], "cobertura": [], "expurgos": {"counts": {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}, "items": []}, "warnings": []}
 
 
 def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: list[dict[str, Any]], statuses: dict[str, str] | None = None) -> str:
@@ -465,6 +498,16 @@ def canonical_status(cod: Any, overrides: dict[str, str] | None = None) -> str:
         return "desligado"
     status = str((overrides or {}).get(code) or CANONICAL_STATUS.get(code) or "ativo").strip().lower()
     return status if status in {"ativo", "ferias", "afastado", "desligado"} else "ativo"
+
+
+def filial_code_for_liga(value: Any) -> str:
+    text = str(value or "").strip().upper()
+    if "PATOS" in text or "0003" in text:
+        return "3"
+    if "SUME" in text or "SUMÉ" in text or "0004" in text:
+        return "4"
+    digits = re.sub(r"\D", "", text).lstrip("0")
+    return digits or text
 
 
 def _clean_comp(value: str | None) -> str:
