@@ -1509,6 +1509,11 @@
       </div>
 
       <div class="tab-pane fade" id="entregaPane" role="tabpanel" aria-labelledby="entregaTab" tabindex="0">
+        <div class="btn-group btn-group-sm mb-3" role="tablist" aria-label="Módulos de Entrega">
+          <button class="btn btn-primary entrega-module-tab" id="entregaLigaModuleTab" data-entrega-module="liga" type="button">Liga Entrega</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesModuleTab" data-entrega-module="devolucoes" type="button">Devoluções</button>
+        </div>
+        <div id="entregaLigaModule">
         <section class="panel-card p-3 mb-3">
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
             <div>
@@ -1578,6 +1583,21 @@
             <div class="source-path">O dashboard usa os lotes salvos no backend da Liga e mantém os expurgos separados dos relatórios.</div>
           </div>
         </section>
+        </div>
+
+        <div id="entregaDevolucoesModule" class="d-none">
+          <section class="panel-card p-3 mb-3" id="entregaDevolucoesSection">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div>
+                <h2 class="h6 fw-bold mb-1"><i class="bi bi-arrow-return-left me-2 text-primary"></i>Devoluções · Operacional</h2>
+                <div class="form-text" id="entregaDevolucoesStatus">Use o relatório 03.02.24 Motorista para consultar clientes, setor/GV, motivos e volume devolvido.</div>
+              </div>
+              <button class="btn btn-outline-primary btn-sm" type="button" id="entregaDevolucoesRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaDevolucoesCards"></div>
+            <div class="source-box" id="entregaDevolucoesDetails"><div class="small text-secondary">Fonte</div><div class="source-path">Aguardando a leitura do relatório de devoluções.</div></div>
+          </section>
+        </div>
       </div>
 
       <div class="tab-pane fade" id="promaxPane" role="tabpanel" aria-labelledby="promaxTab" tabindex="0">
@@ -3541,6 +3561,14 @@
       entregaLigaDashboardBadge: document.getElementById("entregaLigaDashboardBadge"),
       entregaLigaDashboardCards: document.getElementById("entregaLigaDashboardCards"),
       entregaLigaDashboardDetails: document.getElementById("entregaLigaDashboardDetails"),
+      entregaDevolucoesModule: document.getElementById("entregaDevolucoesModule"),
+      entregaDevolucoesStatus: document.getElementById("entregaDevolucoesStatus"),
+      entregaDevolucoesCards: document.getElementById("entregaDevolucoesCards"),
+      entregaDevolucoesDetails: document.getElementById("entregaDevolucoesDetails"),
+      entregaDevolucoesRefreshBtn: document.getElementById("entregaDevolucoesRefreshBtn"),
+      entregaLigaModule: document.getElementById("entregaLigaModule"),
+      entregaLigaModuleTab: document.getElementById("entregaLigaModuleTab"),
+      entregaDevolucoesModuleTab: document.getElementById("entregaDevolucoesModuleTab"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
@@ -4905,6 +4933,7 @@
           </div>
           ${warnings.length ? `<div class="alert alert-warning small mt-3 mb-0"><b>Avisos de leitura:</b><br>${warnings.slice(0, 5).map(w => escapeHtml(w)).join("<br>")}</div>` : ""}`;
         renderLigaEntregaOperationalViews(dashboard);
+        renderEntregaDevolucoes(dashboard);
       }
     }
 
@@ -4989,7 +5018,6 @@
       };
       let content = "";
       if (view === "motoristas" || view === "ajudantes") content = personRows(Array.isArray(rankings[view]) ? rankings[view] : [], view);
-      if (view === "devolucoes") content = table('<th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>GV</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th><th></th>', filter(devols).map(row => `<tr class="${row.excluida ? "opacity-50" : ""}"><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(formatDate(row.data_devolucao) || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml(row.motorista || row.cod || "-")}</td><td>${escapeHtml(row.nota || "-")}</td><td>${escapeHtml(row.cliente || row.cliente_cod || "-")}</td><td>${escapeHtml(row.setor || "-")}</td><td>${escapeHtml(row.gv || "-")}</td><td>${escapeHtml(row.motivo_operacional || row.motivo || row.resp || "-")}</td><td>${escapeHtml(row.motivo_responsabilidade || "-")}</td><td class="text-end">${fmt(row.volume_hl)}</td><td class="text-end">${fmt(row.valor)}</td><td>${row.excluida ? '<span class="badge text-bg-secondary">Expurgada</span>' : `<button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-dev" type="button" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-cliente="${escapeHtml(row.cliente_cod || "")}">Expurgar</button>`}</td></tr>`).join(""));
       if (view === "rotas") content = table('<th>Data</th><th>Mapa</th><th>Filial</th><th>Motorista</th><th>Cidade</th><th class="text-end">KM real/prev.</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th>Expurgos</th><th></th>', filter(routes).slice().reverse().map(row => { const suspect = Number(row.km_real || 0) && Math.abs(Number(row.km_real) - Number(row.km_prev || 0)) > 50; const late = String(row.hr_sai || "") > "12:00"; const expurgos = [row.expurgo_saida ? '<span class="badge text-bg-warning me-1">TML</span>' : "", row.expurgo_km ? '<span class="badge text-bg-warning">KM</span>' : ""].filter(Boolean).join("") || '<span class="text-secondary">—</span>'; return `<tr><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.mapa || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml((team.find(p => p.cod === row.mot) || {}).nome || row.mot || "-")}</td><td>${escapeHtml(row.cidade || "-")}</td><td class="text-end ${suspect ? "text-warning fw-bold" : ""}">${fmt(row.km_real)} / ${fmt(row.km_prev)}${suspect ? " ⚠" : ""}</td><td class="text-end ${late ? "text-warning fw-bold" : ""}">${escapeHtml(row.hr_sai || "-")}${late ? " ⚠" : ""}</td><td class="text-end">${pct(row.tempo_pct)}</td><td>${expurgos}</td><td><button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">KM</button></td></tr>`; }).join(""));
       if (view === "equipe") {
         const pending = state.ligaEntregaTeamChanges || {};
@@ -5005,9 +5033,38 @@
       }
       if (view === "cobertura") content = `<div class="row g-2">${coverage.map(row => `<div class="col-md-4"><div class="border rounded p-2"><b>${escapeHtml(formatDate(row.data) || "-")}</b><div>${fmt(row.rotas)} rota(s) • ${fmt(row.motoristas || row.mot || 0)} motorista(s)</div><div class="small text-secondary">${escapeHtml(row.status || "Cobertura calculada")}</div></div></div>`).join("") || '<div class="text-secondary">Sem cobertura diária calculada.</div>'}</div>`;
       if (view === "regras") content = `<div class="row g-3"><div class="col-md-6"><h3 class="h6">Metas</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.metas || {}, null, 2))}</pre></div><div class="col-md-6"><h3 class="h6">Pesos do ranking</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.pesos || {}, null, 2))}</pre></div></div>`;
-      const tabs = [["motoristas","Motoristas"],["ajudantes","Ajudantes"],["devolucoes","Devoluções"],["rotas","Rotas"],["equipe","Equipe"],["cobertura","Cobertura"],["regras","Regras"]].map(([key,label]) => `<button class="btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"} liga-view" data-liga-view="${key}" type="button">${label}</button>`).join(" ");
+      const tabs = [["motoristas","Motoristas"],["ajudantes","Ajudantes"],["rotas","Rotas"],["equipe","Equipe"],["cobertura","Cobertura"],["regras","Regras"]].map(([key,label]) => `<button class="btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"} liga-view" data-liga-view="${key}" type="button">${label}</button>`).join(" ");
       const warnings = Array.isArray(dashboard.warnings) ? dashboard.warnings : [];
       E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div><div class="liga-pdf-actions"><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="motoristas"><i class="bi bi-file-earmark-pdf me-1"></i>PDF motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-print" data-liga-print="motoristas"><i class="bi bi-printer me-1"></i>Imprimir motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="ajudantes"><i class="bi bi-file-earmark-pdf me-1"></i>PDF ajudantes</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-print" data-liga-print="ajudantes"><i class="bi bi-printer me-1"></i>Imprimir ajudantes</button></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
+    }
+
+    function renderEntregaDevolucoes(dashboard = {}) {
+      const rows = Array.isArray(dashboard.devolucoes_auxiliares) ? dashboard.devolucoes_auxiliares : (Array.isArray(dashboard.devolucoes) ? dashboard.devolucoes : []);
+      const summary = dashboard.summary || {};
+      const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      const cards = [
+        ["Registros ativos", fmt(summary.devolucoes), "devoluções no lote"],
+        ["Volume devolvido", `${fmt(summary.devolucoes_volume_hl)} HL`, "hectolitros"],
+        ["Valor devolvido", `R$ ${fmt(summary.devolucoes_valor)}`, "valor total"],
+        ["Expurgados", fmt(summary.devolucoes_expurgadas), "mantidos no histórico"]
+      ];
+      if (E.entregaDevolucoesCards) E.entregaDevolucoesCards.innerHTML = cards.map(([label, value, sub]) => `<article class="recolha-dashboard-card"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(value)}</span><span class="sub">${escapeHtml(sub)}</span></article>`).join("");
+      if (E.entregaDevolucoesStatus) E.entregaDevolucoesStatus.textContent = rows.length ? `${rows.length} registros lidos do 03.02.24 Motorista. A Liga e seus expurgos continuam em outra aba.` : "Nenhum relatório de devoluções carregado.";
+      if (!E.entregaDevolucoesDetails) return;
+      const q = String(state.entregaDevolucoesFilter || "").trim().toLowerCase();
+      const filtered = rows.filter(row => !q || JSON.stringify(row).toLowerCase().includes(q));
+      const escape = value => escapeHtml(value === null || value === undefined || value === "" ? "-" : value);
+      const body = filtered.map(row => `<tr class="${row.excluida ? "opacity-50" : ""}"><td>${escape(formatDate(row.data))}</td><td>${escape(formatDate(row.data_devolucao))}</td><td>${escape(row.filial)}</td><td>${escape(row.motorista || row.cod)}</td><td>${escape(row.nota)}</td><td>${escape(row.cliente || row.cliente_cod)}</td><td>${escape(row.setor)}</td><td>${escape(row.gv)}</td><td>${escape(row.motivo_operacional || row.motivo || row.resp)}</td><td>${escape(row.motivo_responsabilidade)}</td><td class="text-end">${fmt(row.volume_hl)}</td><td class="text-end">${fmt(row.valor)}</td><td>${row.excluida ? '<span class="badge text-bg-secondary">Expurgada</span>' : ""}</td></tr>`).join("");
+      E.entregaDevolucoesDetails.innerHTML = `<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3"><div><div class="small text-secondary">Tabela auxiliar operacional</div><div class="source-path">Cliente, revenda, setor/GV, motivo e volume em HL. A descrição e a responsabilidade vêm da tabela operacional de motivos.</div></div><div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control entrega-devolucoes-filter" value="${escapeHtml(state.entregaDevolucoesFilter || "")}" placeholder="Buscar cliente, setor ou motivo"></div></div><div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>GV</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th><th></th></tr></thead><tbody>${body || '<tr><td colspan="13" class="text-center text-secondary py-4">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div>`;
+    }
+
+    function setEntregaModule(module = "liga") {
+      const devolucoes = module === "devolucoes";
+      if (E.entregaLigaModule) E.entregaLigaModule.classList.toggle("d-none", devolucoes);
+      if (E.entregaDevolucoesModule) E.entregaDevolucoesModule.classList.toggle("d-none", !devolucoes);
+      if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.className = `btn ${devolucoes ? "btn-outline-primary" : "btn-primary"} entrega-module-tab`;
+      if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.className = `btn ${devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
+      if (devolucoes) renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
     }
 
     function updateLigaEntregaExpurgoForm() {
@@ -9668,6 +9725,18 @@
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
+      if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.addEventListener("click", () => setEntregaModule("liga"));
+      if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.addEventListener("click", () => setEntregaModule("devolucoes"));
+      if (E.entregaDevolucoesRefreshBtn) E.entregaDevolucoesRefreshBtn.addEventListener("click", async () => {
+        E.entregaDevolucoesRefreshBtn.disabled = true;
+        try {
+          state.ligaEntregaDashboard = null;
+          await syncLigaEntregaReports({ silent: false, force: true });
+          renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
+        } finally {
+          E.entregaDevolucoesRefreshBtn.disabled = false;
+        }
+      });
       if (E.entregaLigaExpurgoTipo) E.entregaLigaExpurgoTipo.addEventListener("change", updateLigaEntregaExpurgoForm);
       if (E.entregaLigaExpurgoEscopo) E.entregaLigaExpurgoEscopo.addEventListener("change", updateLigaEntregaExpurgoForm);
       if (E.entregaLigaExpurgoForm) E.entregaLigaExpurgoForm.addEventListener("submit", event => {
@@ -9762,7 +9831,13 @@
         state.ligaEntregaFilters = { ...(state.ligaEntregaFilters || {}), q: event.target.value || "" };
         renderLigaEntregaDashboard((state.ligaEntregaReports || {}).items || [], (state.ligaEntregaReports || {}).summary || {});
       });
+      if (E.entregaDevolucoesDetails) E.entregaDevolucoesDetails.addEventListener("input", event => {
+        if (!event.target.matches(".entrega-devolucoes-filter")) return;
+        state.entregaDevolucoesFilter = event.target.value || "";
+        renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
+      });
       updateLigaEntregaExpurgoForm();
+      setEntregaModule("liga");
       if (E.promaxJobStatusFilter) E.promaxJobStatusFilter.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobFromDate) E.promaxJobFromDate.addEventListener("change", applyPromaxJobFilters);
       if (E.promaxJobToDate) E.promaxJobToDate.addEventListener("change", applyPromaxJobFilters);
