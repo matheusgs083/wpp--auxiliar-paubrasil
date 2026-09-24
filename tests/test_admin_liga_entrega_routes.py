@@ -234,6 +234,24 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         payload = client.get("/api/admin/liga-entrega/dashboard", params={"competencia": "2026-09"}).json()
         self.assertNotIn("9076", payload["rotas"][0]["aju"])
 
+    def test_irismark_auxiliary_uses_plate_when_030805_route_is_missing(self) -> None:
+        client, _events = self.make_client()
+        store = LigaEntregaReportStore(Path(self.tmp.name) / "reports")
+        store.store_batch(
+            routine="031129_LIGA",
+            files={
+                "03.11.29_SUME_SET.csv": (
+                    "Data;Mapa;Motorista;Nome Motorista;Ajudante 1;Nome Ajudante 1;Ajudante 2;Nome Ajudante 2;Placa\n"
+                    "17/09/2026;28626;9087;JOSE ROBSON RIBEIRO DO NASCIMENTO;9070;LEONALDO NUNES DA SILVA;0;;SKZ8I57\n"
+                ).encode("utf-8"),
+            },
+            reference_date="2026-09-17",
+        )
+
+        payload = client.get("/api/admin/liga-entrega/dashboard", params={"competencia": "2026-09"}).json()
+        route = next(item for item in payload["rotas"] if item["mapa"] == "28626")
+        self.assertIn("9076", route["aju"])
+
     def test_upsert_list_and_delete_expurgo(self) -> None:
         client, events = self.make_client()
 

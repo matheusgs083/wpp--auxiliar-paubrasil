@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from bot_api.services.liga_entrega_motivos import MOTIVOS_DEVOLUCAO
-from bot_api.services.liga_entrega_irismark_aux import IRISMARK_AUXILIARY, IRISMARK_CODE
+from bot_api.services.liga_entrega_irismark_aux import IRISMARK_AUXILIARY, IRISMARK_AUXILIARY_PLATES, IRISMARK_CODE
 
 try:
     from openpyxl import load_workbook
@@ -181,7 +181,11 @@ class LigaEntregaDashboardService:
                         km_prev = to_float(pick(row, "KmPrev", "Km Previsto"))
                         km_ok = km_prev > 0 and km_real > 0 and km_real < 2000
                         route_data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
-                        if (comp, route_data, filial.upper(), mot) in IRISMARK_AUXILIARY and IRISMARK_CODE not in aju:
+                        placa = str(pick(row, "Placa") or "").strip().upper()
+                        if (
+                            (comp, route_data, filial.upper(), placa) in IRISMARK_AUXILIARY_PLATES
+                            or (comp, route_data, filial.upper(), mot) in IRISMARK_AUXILIARY
+                        ) and IRISMARK_CODE not in aju:
                             aju.append(IRISMARK_CODE)
                         rotas[mapa] = {
                             "data": route_data, "mapa": mapa, "filial": filial,
@@ -339,7 +343,15 @@ class LigaEntregaDashboardService:
 
         for mapa, equipe in equipes.items():
             rota = rotas.setdefault(mapa, {"data": equipe.get("data") or "", "mapa": mapa, "filial": equipe.get("filial") or "", "mot": equipe.get("mot") or "0", "aju": [], "km_real": None, "km_prev": None, "tempo_prev": None, "hs0805": "", "he0805": "", "entregas": 0, "cidade": "", "src": "03.11.29"})
-            merged_aju = list(dict.fromkeys([*(rota.get("aju") or []), *(equipe.get("aju") or [])]))
+            route_data = str(equipe.get("data") or rota.get("data") or "")
+            route_filial = str(equipe.get("filial") or rota.get("filial") or "").upper()
+            route_mot = str(equipe.get("mot") or rota.get("mot") or "")
+            route_plate = str(equipe.get("placa") or rota.get("placa") or "").strip().upper()
+            auxiliary_aju = [IRISMARK_CODE] if (
+                (comp, route_data, route_filial, route_plate) in IRISMARK_AUXILIARY_PLATES
+                or (comp, route_data, route_filial, norm_code(route_mot)) in IRISMARK_AUXILIARY
+            ) else []
+            merged_aju = list(dict.fromkeys([*(rota.get("aju") or []), *(equipe.get("aju") or []), *auxiliary_aju]))
             rota.update({"mot": equipe.get("mot") or rota.get("mot"), "aju": merged_aju, "sup": equipe.get("sup") or "", "placa": equipe.get("placa") or ""})
             if equipe.get("data") and not rota.get("data"):
                 rota["data"] = equipe["data"]
