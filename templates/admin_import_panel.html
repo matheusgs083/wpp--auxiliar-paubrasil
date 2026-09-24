@@ -273,7 +273,15 @@
     #entregaPane .devolucao-table-wrap > summary { cursor: pointer; padding: .85rem 1rem; color: #dbe7f8; font-weight: 800; list-style: none; }
     #entregaPane .devolucao-table-wrap > summary::-webkit-details-marker { display: none; }
     #entregaPane .devolucao-table-wrap[open] > summary { border-bottom: 1px solid #2a3850; background: #141d2d; }
+    #entregaPane .devolucao-analysis-toolbar { display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; padding: .8rem; border: 1px solid #2a3850; border-radius: 12px; background: #111a29; }
+    #entregaPane .devolucao-analysis-toolbar .form-label { display: block; margin-bottom: .25rem; color: #91a0ba; font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+    #entregaPane .devolucao-analysis-toolbar .form-select { min-width: 145px; border-color: #32425e; color: #dbe7f8; background-color: #0f1725; }
+    #entregaPane .devolucao-analysis-toolbar .form-select:focus { border-color: #60a5fa; box-shadow: 0 0 0 .18rem rgba(96,165,250,.16); }
+    #entregaPane .devolucao-analysis-note { color: #91a0ba; font-size: .72rem; line-height: 1.45; }
+    #entregaPane .devolucao-bar-fill { will-change: width; }
+    @media (prefers-reduced-motion: reduce) { #entregaPane .devolucao-bar-fill { transition: none; } }
     @media (max-width: 900px) { #entregaPane .entrega-devolucao-analytics-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) { #entregaPane .devolucao-analysis-toolbar > div { flex: 1 1 140px; } #entregaPane .devolucao-analysis-toolbar .form-select { width: 100%; min-width: 0; } #entregaPane .devolucao-bar-row { grid-template-columns: minmax(70px, 30%) minmax(60px, 1fr) auto; gap: .35rem; } #entregaPane .devolucao-bar-label, #entregaPane .devolucao-bar-value { font-size: .66rem; } }
     .liga-expurgo-mark { display: inline-flex; padding: 0.1rem 0.34rem; border-radius: 999px; background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; font-size: 0.65rem; font-weight: 800; }
     .table { --bs-table-color: var(--ink-900); --bs-table-bg: transparent; --bs-table-hover-bg: rgba(37, 99, 235, 0.07); margin-bottom: 0; }
     .table-scroll thead th, .table thead th { position: sticky; top: 0; z-index: 3; color: var(--ink-700); background: var(--surface-soft); border-bottom: 1px solid var(--line-strong); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -5059,21 +5067,25 @@
       E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div><div class="liga-pdf-actions"><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="motoristas"><i class="bi bi-file-earmark-pdf me-1"></i>PDF motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-print" data-liga-print="motoristas"><i class="bi bi-printer me-1"></i>Imprimir motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="ajudantes"><i class="bi bi-file-earmark-pdf me-1"></i>PDF ajudantes</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-print" data-liga-print="ajudantes"><i class="bi bi-printer me-1"></i>Imprimir ajudantes</button></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
     }
 
-    function renderEntregaDevolucaoChart(title, rows, field, limit = 8, featured = false) {
+    function renderEntregaDevolucaoChart(title, rows, field, limit = 8, featured = false, metric = "volume_hl") {
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      const metricLabel = metric === "valor" ? "Valor" : metric === "registros" ? "Registros" : "Volume";
+      const metricValue = item => metric === "valor" ? item.valor : metric === "registros" ? item.count : item.volume;
+      const metricFmt = value => metric === "valor" ? `R$ ${fmt(value)}` : metric === "registros" ? fmt(value) : `${fmt(value)} HL`;
       const totals = new Map();
       rows.forEach(row => {
         const label = String(row[field] || "Não informado").trim() || "Não informado";
-        const item = totals.get(label) || { label, volume: 0, count: 0 };
+        const item = totals.get(label) || { label, volume: 0, valor: 0, count: 0 };
         item.volume += Number(row.volume_hl || 0);
+        item.valor += Number(row.valor || 0);
         item.count += 1;
         totals.set(label, item);
       });
-      const items = [...totals.values()].sort((a, b) => b.volume - a.volume || b.count - a.count).slice(0, limit);
-      const max = Math.max(...items.map(item => item.volume), 1);
-      const bars = items.map(item => `<div class="devolucao-bar-row" title="${escapeHtml(item.label)}: ${fmt(item.volume)} HL em ${item.count} registro(s)"><span class="devolucao-bar-label">${escapeHtml(item.label)}</span><span class="devolucao-bar-track"><span class="devolucao-bar-fill" style="width:${Math.max(2, (item.volume / max) * 100)}%"></span></span><span class="devolucao-bar-value">${fmt(item.volume)} HL</span></div>`).join("");
-      const dataTable = items.map(item => `<tr><td>${escapeHtml(item.label)}</td><td class="text-end">${fmt(item.volume)} HL</td><td class="text-end">${item.count}</td></tr>`).join("");
-      return `<article class="entrega-devolucao-chart ${featured ? "featured" : ""}"><h3>${escapeHtml(title)}</h3><div class="chart-caption">Volume total em HL · registros no lote</div>${items.length ? `<div class="devolucao-bars" role="img" aria-label="${escapeHtml(title)} por volume em hectolitros">${bars}</div><details><summary>Ver dados</summary><table><thead><tr><th>Categoria</th><th class="text-end">Volume</th><th class="text-end">Registros</th></tr></thead><tbody>${dataTable}</tbody></table></details>` : '<div class="text-secondary small py-4">Sem dados para este gráfico.</div>'}</article>`;
+      const items = [...totals.values()].sort((a, b) => metricValue(b) - metricValue(a) || b.count - a.count).slice(0, limit);
+      const max = Math.max(...items.map(metricValue), 1);
+      const bars = items.map(item => `<div class="devolucao-bar-row" title="${escapeHtml(item.label)}: ${metricFmt(metricValue(item))} · ${item.count} registro(s)"><span class="devolucao-bar-label">${escapeHtml(item.label)}</span><span class="devolucao-bar-track"><span class="devolucao-bar-fill" style="width:${Math.max(2, (metricValue(item) / max) * 100)}%"></span></span><span class="devolucao-bar-value">${metricFmt(metricValue(item))}</span></div>`).join("");
+      const dataTable = items.map(item => `<tr><td>${escapeHtml(item.label)}</td><td class="text-end">${fmt(item.volume)} HL</td><td class="text-end">R$ ${fmt(item.valor)}</td><td class="text-end">${item.count}</td></tr>`).join("");
+      return `<article class="entrega-devolucao-chart ${featured ? "featured" : ""}"><h3>${escapeHtml(title)}</h3><div class="chart-caption">${metricLabel} por categoria · passe o mouse para o detalhe</div>${items.length ? `<div class="devolucao-bars" role="img" aria-label="${escapeHtml(title)} por ${escapeHtml(metricLabel.toLowerCase())}">${bars}</div><details><summary>Ver dados</summary><table><thead><tr><th>Categoria</th><th class="text-end">Volume</th><th class="text-end">Valor</th><th class="text-end">Registros</th></tr></thead><tbody>${dataTable}</tbody></table></details>` : '<div class="text-secondary small py-4">Sem dados para este gráfico.</div>'}</article>`;
     }
 
     function renderEntregaDevolucoes(dashboard = {}) {
@@ -5093,16 +5105,26 @@
       if (!E.entregaDevolucoesDetails) return;
       const q = String(state.entregaDevolucoesFilter || "").trim().toLowerCase();
       const filtered = rows.filter(row => !q || JSON.stringify(row).toLowerCase().includes(q));
+      const metric = ["volume_hl", "valor", "registros"].includes(state.entregaDevolucoesMetric) ? state.entregaDevolucoesMetric : "volume_hl";
+      const topN = [5, 8, 10, 15].includes(Number(state.entregaDevolucoesTopN)) ? Number(state.entregaDevolucoesTopN) : 10;
+      const period = ["all", "7", "30"].includes(String(state.entregaDevolucoesPeriod)) ? String(state.entregaDevolucoesPeriod) : "all";
+      const dateOf = row => String(row.data_devolucao || row.data || "").slice(0, 10);
+      const timestamps = rows.map(row => Date.parse(`${dateOf(row)}T00:00:00Z`)).filter(Number.isFinite);
+      const latest = timestamps.length ? Math.max(...timestamps) : NaN;
+      const chartRows = period === "all" || !Number.isFinite(latest) ? rows : rows.filter(row => {
+        const stamp = Date.parse(`${dateOf(row)}T00:00:00Z`);
+        return Number.isFinite(stamp) && latest - stamp <= Number(period) * 86400000;
+      });
       const escape = value => escapeHtml(value === null || value === undefined || value === "" ? "-" : value);
       const body = filtered.map(row => `<tr class="${row.excluida ? "opacity-50" : ""}"><td>${escape(formatDate(row.data))}</td><td>${escape(formatDate(row.data_devolucao))}</td><td>${escape(row.filial)}</td><td>${escape(row.motorista || row.cod)}</td><td>${escape(row.nota)}</td><td>${escape(row.cliente || row.cliente_cod)}</td><td>${escape(row.setor)}</td><td>${escape(row.gv)}</td><td>${escape(row.motivo_operacional || row.motivo || row.resp)}</td><td>${escape(row.motivo_responsabilidade)}</td><td class="text-end">${fmt(row.volume_hl)}</td><td class="text-end">${fmt(row.valor)}</td><td>${row.excluida ? '<span class="badge text-bg-secondary">Expurgada</span>' : ""}</td></tr>`).join("");
-      const featured = renderEntregaDevolucaoChart("Clientes com maior volume", rows, "cliente", 10, true);
+      const featured = renderEntregaDevolucaoChart("Clientes com maior concentração", chartRows, "cliente", topN, true, metric);
       const secondary = [
-        renderEntregaDevolucaoChart("Volume por GV", rows, "gv", 6),
-        renderEntregaDevolucaoChart("Volume por setor", rows, "setor", 6),
-        renderEntregaDevolucaoChart("Volume por motivo", rows, "motivo_operacional", 8),
-        renderEntregaDevolucaoChart("Volume por responsabilidade", rows, "motivo_responsabilidade", 6)
+        renderEntregaDevolucaoChart("Concentração por GV", chartRows, "gv", topN, false, metric),
+        renderEntregaDevolucaoChart("Concentração por setor", chartRows, "setor", topN, false, metric),
+        renderEntregaDevolucaoChart("Concentração por motivo", chartRows, "motivo_operacional", topN, false, metric),
+        renderEntregaDevolucaoChart("Concentração por responsabilidade", chartRows, "motivo_responsabilidade", topN, false, metric)
       ].join("");
-      E.entregaDevolucoesDetails.innerHTML = `<div class="devolucao-insight-head d-flex flex-wrap gap-3 align-items-center justify-content-between mb-3"><div><div class="small text-secondary">Análise operacional</div><div class="source-path">Compare concentração por cliente, GV, setor e responsabilidade. Passe o mouse nas barras para ver a contagem.</div></div><div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control entrega-devolucoes-filter" value="${escapeHtml(state.entregaDevolucoesFilter || "")}" placeholder="Filtrar a tabela"></div></div><div class="entrega-devolucao-analytics-grid mb-3">${featured}<div class="entrega-devolucao-analytics-grid">${secondary}</div></div><details class="devolucao-table-wrap"><summary><i class="bi bi-table me-2"></i>Ver registros detalhados (${filtered.length})</summary><div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>GV</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th><th></th></tr></thead><tbody>${body || '<tr><td colspan="13" class="text-center text-secondary py-4">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div></details>`;
+      E.entregaDevolucoesDetails.innerHTML = `<div class="devolucao-insight-head d-flex flex-wrap gap-3 align-items-center justify-content-between mb-3"><div><div class="small text-secondary">Análise operacional</div><div class="source-path">Use os filtros para comparar volume, valor ou quantidade. Os dados detalhados continuam disponíveis abaixo.</div></div><div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control entrega-devolucoes-filter" value="${escapeHtml(state.entregaDevolucoesFilter || "")}" placeholder="Filtrar registros"></div></div><div class="devolucao-analysis-toolbar mb-3"><div><label class="form-label" for="entregaDevolucoesMetric">Métrica dos gráficos</label><select id="entregaDevolucoesMetric" class="form-select form-select-sm entrega-devolucoes-control"><option value="volume_hl" ${metric === "volume_hl" ? "selected" : ""}>Volume (HL)</option><option value="valor" ${metric === "valor" ? "selected" : ""}>Valor (R$)</option><option value="registros" ${metric === "registros" ? "selected" : ""}>Registros</option></select></div><div><label class="form-label" for="entregaDevolucoesPeriod">Período dos gráficos</label><select id="entregaDevolucoesPeriod" class="form-select form-select-sm entrega-devolucoes-control"><option value="all" ${period === "all" ? "selected" : ""}>Todo o período</option><option value="7" ${period === "7" ? "selected" : ""}>Últimos 7 dias</option><option value="30" ${period === "30" ? "selected" : ""}>Últimos 30 dias</option></select></div><div><label class="form-label" for="entregaDevolucoesTopN">Categorias exibidas</label><select id="entregaDevolucoesTopN" class="form-select form-select-sm entrega-devolucoes-control"><option value="5" ${topN === 5 ? "selected" : ""}>Top 5</option><option value="8" ${topN === 8 ? "selected" : ""}>Top 8</option><option value="10" ${topN === 10 ? "selected" : ""}>Top 10</option><option value="15" ${topN === 15 ? "selected" : ""}>Top 15</option></select></div><div class="devolucao-analysis-note flex-grow-1">${chartRows.length} registro(s) no recorte visual · ${metric === "volume_hl" ? "hectolitros devolvidos" : metric === "valor" ? "valor financeiro" : "linhas do relatório"}. A tabela abaixo mantém o filtro textual independente.</div></div><div class="entrega-devolucao-analytics-grid mb-3">${featured}<div class="entrega-devolucao-analytics-grid">${secondary}</div></div><details class="devolucao-table-wrap"><summary><i class="bi bi-table me-2"></i>Ver registros detalhados (${filtered.length})</summary><div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>GV</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th><th></th></tr></thead><tbody>${body || '<tr><td colspan="13" class="text-center text-secondary py-4">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div></details>`;
     }
 
     function setEntregaModule(module = "liga") {
@@ -9881,6 +9903,13 @@
       if (E.entregaDevolucoesDetails) E.entregaDevolucoesDetails.addEventListener("input", event => {
         if (!event.target.matches(".entrega-devolucoes-filter")) return;
         state.entregaDevolucoesFilter = event.target.value || "";
+        renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
+      });
+      if (E.entregaDevolucoesDetails) E.entregaDevolucoesDetails.addEventListener("change", event => {
+        if (!event.target.matches(".entrega-devolucoes-control")) return;
+        if (event.target.id === "entregaDevolucoesMetric") state.entregaDevolucoesMetric = event.target.value || "volume_hl";
+        if (event.target.id === "entregaDevolucoesPeriod") state.entregaDevolucoesPeriod = event.target.value || "all";
+        if (event.target.id === "entregaDevolucoesTopN") state.entregaDevolucoesTopN = event.target.value || "10";
         renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
       });
       updateLigaEntregaExpurgoForm();
