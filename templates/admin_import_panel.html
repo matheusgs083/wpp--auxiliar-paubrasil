@@ -253,17 +253,26 @@
     #entregaPane .liga-person-meta, #entregaPane .liga-kpi small { color: #8492ab; }
     #entregaPane .liga-score { color: #f1f5f9; }
     #entregaPane .liga-score-bar { background: #202938; }
-    #entregaPane .entrega-devolucao-analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
-    #entregaPane .entrega-devolucao-chart { min-width: 0; padding: .8rem; border: 1px solid #26344c; border-radius: 12px; background: #101827; }
-    #entregaPane .entrega-devolucao-chart h3 { margin: 0 0 .55rem; color: #e8eef9; font-size: .83rem; font-weight: 800; }
-    #entregaPane .entrega-devolucao-chart svg { display: block; width: 100%; height: auto; min-height: 190px; overflow: visible; }
-    #entregaPane .entrega-devolucao-chart .chart-label { fill: #a9b7cc; font-size: 10px; font-weight: 700; }
-    #entregaPane .entrega-devolucao-chart .chart-value { fill: #e9effa; font-size: 10px; font-weight: 800; }
-    #entregaPane .entrega-devolucao-chart .chart-track { fill: #1d293c; }
-    #entregaPane .entrega-devolucao-chart .chart-bar { fill: #3b82f6; }
-    #entregaPane .entrega-devolucao-chart .chart-bar.alt { fill: #f5aa17; }
-    #entregaPane .entrega-devolucao-chart details { margin-top: .35rem; color: #91a0ba; font-size: .72rem; }
-    #entregaPane .entrega-devolucao-chart details table { width: 100%; margin-top: .35rem; color: #cbd5e1; }
+    #entregaPane .entrega-devolucao-analytics-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: .8rem; }
+    #entregaPane .entrega-devolucao-chart { min-width: 0; padding: 1rem; border: 1px solid #2a3850; border-radius: 14px; background: linear-gradient(145deg, #141d2d, #0f1725); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+    #entregaPane .entrega-devolucao-chart.featured { min-height: 100%; }
+    #entregaPane .entrega-devolucao-chart h3 { margin: 0; color: #edf3fc; font-size: .86rem; font-weight: 800; letter-spacing: .01em; }
+    #entregaPane .entrega-devolucao-chart .chart-caption { margin: .2rem 0 .85rem; color: #8090ab; font-size: .72rem; }
+    #entregaPane .devolucao-bars { display: grid; gap: .58rem; }
+    #entregaPane .devolucao-bar-row { display: grid; grid-template-columns: minmax(86px, 34%) minmax(80px, 1fr) auto; align-items: center; gap: .55rem; }
+    #entregaPane .devolucao-bar-label { overflow: hidden; color: #c8d4e7; font-size: .72rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    #entregaPane .devolucao-bar-track { height: 10px; overflow: hidden; border-radius: 999px; background: #202d42; }
+    #entregaPane .devolucao-bar-fill { display: block; height: 100%; min-width: 4px; border-radius: inherit; background: linear-gradient(90deg, #2563eb, #60a5fa); transition: width .25s ease; }
+    #entregaPane .devolucao-bar-row:nth-child(even) .devolucao-bar-fill { background: linear-gradient(90deg, #b7791f, #f5aa17); }
+    #entregaPane .devolucao-bar-value { color: #f4f7fc; font-size: .7rem; font-weight: 800; white-space: nowrap; }
+    #entregaPane .entrega-devolucao-chart details { margin-top: .8rem; color: #91a0ba; font-size: .72rem; }
+    #entregaPane .entrega-devolucao-chart details summary { cursor: pointer; color: #78aef8; font-weight: 700; }
+    #entregaPane .entrega-devolucao-chart details table { width: 100%; margin-top: .4rem; color: #cbd5e1; }
+    #entregaPane .entrega-devolucao-chart details th { color: #8fa1bd; font-size: .65rem; text-transform: uppercase; }
+    #entregaPane .devolucao-table-wrap { overflow: hidden; border: 1px solid #2a3850; border-radius: 14px; background: #0f1725; }
+    #entregaPane .devolucao-table-wrap > summary { cursor: pointer; padding: .85rem 1rem; color: #dbe7f8; font-weight: 800; list-style: none; }
+    #entregaPane .devolucao-table-wrap > summary::-webkit-details-marker { display: none; }
+    #entregaPane .devolucao-table-wrap[open] > summary { border-bottom: 1px solid #2a3850; background: #141d2d; }
     @media (max-width: 900px) { #entregaPane .entrega-devolucao-analytics-grid { grid-template-columns: 1fr; } }
     .liga-expurgo-mark { display: inline-flex; padding: 0.1rem 0.34rem; border-radius: 999px; background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; font-size: 0.65rem; font-weight: 800; }
     .table { --bs-table-color: var(--ink-900); --bs-table-bg: transparent; --bs-table-hover-bg: rgba(37, 99, 235, 0.07); margin-bottom: 0; }
@@ -5050,7 +5059,7 @@
       E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div><div class="liga-pdf-actions"><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="motoristas"><i class="bi bi-file-earmark-pdf me-1"></i>PDF motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-print" data-liga-print="motoristas"><i class="bi bi-printer me-1"></i>Imprimir motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="ajudantes"><i class="bi bi-file-earmark-pdf me-1"></i>PDF ajudantes</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-print" data-liga-print="ajudantes"><i class="bi bi-printer me-1"></i>Imprimir ajudantes</button></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
     }
 
-    function renderEntregaDevolucaoChart(title, rows, field, limit = 8) {
+    function renderEntregaDevolucaoChart(title, rows, field, limit = 8, featured = false) {
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
       const totals = new Map();
       rows.forEach(row => {
@@ -5062,19 +5071,9 @@
       });
       const items = [...totals.values()].sort((a, b) => b.volume - a.volume || b.count - a.count).slice(0, limit);
       const max = Math.max(...items.map(item => item.volume), 1);
-      const width = 560;
-      const rowHeight = 28;
-      const left = 142;
-      const barWidth = 300;
-      const height = Math.max(180, items.length * rowHeight + 36);
-      const svg = items.map((item, index) => {
-        const y = 22 + index * rowHeight;
-        const label = item.label.length > 22 ? `${item.label.slice(0, 21)}…` : item.label;
-        const bar = Math.max(3, Math.round((item.volume / max) * barWidth));
-        return `<g><title>${escapeHtml(item.label)}: ${fmt(item.volume)} HL em ${item.count} registro(s)</title><text class="chart-label" x="${left - 8}" y="${y + 10}" text-anchor="end">${escapeHtml(label)}</text><rect class="chart-track" x="${left}" y="${y}" width="${barWidth}" height="14" rx="7"></rect><rect class="chart-bar ${index % 2 ? "alt" : ""}" x="${left}" y="${y}" width="${bar}" height="14" rx="7"></rect><text class="chart-value" x="${left + barWidth + 10}" y="${y + 11}">${fmt(item.volume)} HL · ${item.count}</text></g>`;
-      }).join("");
+      const bars = items.map(item => `<div class="devolucao-bar-row" title="${escapeHtml(item.label)}: ${fmt(item.volume)} HL em ${item.count} registro(s)"><span class="devolucao-bar-label">${escapeHtml(item.label)}</span><span class="devolucao-bar-track"><span class="devolucao-bar-fill" style="width:${Math.max(2, (item.volume / max) * 100)}%"></span></span><span class="devolucao-bar-value">${fmt(item.volume)} HL</span></div>`).join("");
       const dataTable = items.map(item => `<tr><td>${escapeHtml(item.label)}</td><td class="text-end">${fmt(item.volume)} HL</td><td class="text-end">${item.count}</td></tr>`).join("");
-      return `<article class="entrega-devolucao-chart"><h3>${escapeHtml(title)}</h3>${items.length ? `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)} por volume em hectolitros">${svg}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Categoria</th><th class="text-end">Volume</th><th class="text-end">Registros</th></tr></thead><tbody>${dataTable}</tbody></table></details>` : '<div class="text-secondary small py-4">Sem dados para este gráfico.</div>'}</article>`;
+      return `<article class="entrega-devolucao-chart ${featured ? "featured" : ""}"><h3>${escapeHtml(title)}</h3><div class="chart-caption">Volume total em HL · registros no lote</div>${items.length ? `<div class="devolucao-bars" role="img" aria-label="${escapeHtml(title)} por volume em hectolitros">${bars}</div><details><summary>Ver dados</summary><table><thead><tr><th>Categoria</th><th class="text-end">Volume</th><th class="text-end">Registros</th></tr></thead><tbody>${dataTable}</tbody></table></details>` : '<div class="text-secondary small py-4">Sem dados para este gráfico.</div>'}</article>`;
     }
 
     function renderEntregaDevolucoes(dashboard = {}) {
@@ -5096,14 +5095,14 @@
       const filtered = rows.filter(row => !q || JSON.stringify(row).toLowerCase().includes(q));
       const escape = value => escapeHtml(value === null || value === undefined || value === "" ? "-" : value);
       const body = filtered.map(row => `<tr class="${row.excluida ? "opacity-50" : ""}"><td>${escape(formatDate(row.data))}</td><td>${escape(formatDate(row.data_devolucao))}</td><td>${escape(row.filial)}</td><td>${escape(row.motorista || row.cod)}</td><td>${escape(row.nota)}</td><td>${escape(row.cliente || row.cliente_cod)}</td><td>${escape(row.setor)}</td><td>${escape(row.gv)}</td><td>${escape(row.motivo_operacional || row.motivo || row.resp)}</td><td>${escape(row.motivo_responsabilidade)}</td><td class="text-end">${fmt(row.volume_hl)}</td><td class="text-end">${fmt(row.valor)}</td><td>${row.excluida ? '<span class="badge text-bg-secondary">Expurgada</span>' : ""}</td></tr>`).join("");
-      const charts = [
-        renderEntregaDevolucaoChart("Volume por GV", rows, "gv"),
-        renderEntregaDevolucaoChart("Volume por setor", rows, "setor"),
-        renderEntregaDevolucaoChart("Volume por motivo", rows, "motivo_operacional", 10),
-        renderEntregaDevolucaoChart("Volume por responsabilidade", rows, "motivo_responsabilidade"),
-        renderEntregaDevolucaoChart("Clientes com maior volume", rows, "cliente", 12)
+      const featured = renderEntregaDevolucaoChart("Clientes com maior volume", rows, "cliente", 10, true);
+      const secondary = [
+        renderEntregaDevolucaoChart("Volume por GV", rows, "gv", 6),
+        renderEntregaDevolucaoChart("Volume por setor", rows, "setor", 6),
+        renderEntregaDevolucaoChart("Volume por motivo", rows, "motivo_operacional", 8),
+        renderEntregaDevolucaoChart("Volume por responsabilidade", rows, "motivo_responsabilidade", 6)
       ].join("");
-      E.entregaDevolucoesDetails.innerHTML = `<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3"><div><div class="small text-secondary">Análise operacional</div><div class="source-path">Os gráficos usam todos os registros do 03.02.24 Motorista. Os expurgos são apenas identificados para consulta da Liga.</div></div><div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control entrega-devolucoes-filter" value="${escapeHtml(state.entregaDevolucoesFilter || "")}" placeholder="Buscar cliente, setor ou motivo"></div></div><div class="entrega-devolucao-analytics-grid mb-3">${charts}</div><div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>GV</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th><th></th></tr></thead><tbody>${body || '<tr><td colspan="13" class="text-center text-secondary py-4">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div>`;
+      E.entregaDevolucoesDetails.innerHTML = `<div class="devolucao-insight-head d-flex flex-wrap gap-3 align-items-center justify-content-between mb-3"><div><div class="small text-secondary">Análise operacional</div><div class="source-path">Compare concentração por cliente, GV, setor e responsabilidade. Passe o mouse nas barras para ver a contagem.</div></div><div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control entrega-devolucoes-filter" value="${escapeHtml(state.entregaDevolucoesFilter || "")}" placeholder="Filtrar a tabela"></div></div><div class="entrega-devolucao-analytics-grid mb-3">${featured}<div class="entrega-devolucao-analytics-grid">${secondary}</div></div><details class="devolucao-table-wrap"><summary><i class="bi bi-table me-2"></i>Ver registros detalhados (${filtered.length})</summary><div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>GV</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th><th></th></tr></thead><tbody>${body || '<tr><td colspan="13" class="text-center text-secondary py-4">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div></details>`;
     }
 
     function setEntregaModule(module = "liga") {
