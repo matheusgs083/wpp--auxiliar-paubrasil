@@ -288,6 +288,8 @@
     #entregaPane .devolucao-analysis-toolbar .form-select { min-width: 145px; border-color: #32425e; color: #dbe7f8; background-color: #0f1725; }
     #entregaPane .devolucao-analysis-toolbar .form-select:focus { border-color: #60a5fa; box-shadow: 0 0 0 .18rem rgba(96,165,250,.16); }
     #entregaPane .devolucao-analysis-note { color: #91a0ba; font-size: .72rem; line-height: 1.45; }
+    #entregaPane #entregaLigaModule.is-collapsed .entrega-liga-overview-body, #entregaPane #entregaLigaModule.is-collapsed #entregaLigaDashboardSection { display: none !important; }
+    #entregaPane .entrega-liga-collapse-btn { min-width: 108px; }
     #entregaPane .devolucao-kpi-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .65rem; }
     #entregaPane .devolucao-kpi-card { position: relative; min-height: 86px; padding: .8rem .9rem .75rem 3rem; border: 1px solid #2a3850; border-radius: 12px; background: #111a29; overflow: hidden; }
     #entregaPane .devolucao-kpi-card::before { content: ""; position: absolute; left: .75rem; top: .82rem; width: 1.55rem; height: 1.55rem; border-radius: 7px; background: linear-gradient(135deg, #4f46e5, #8b5cf6); box-shadow: 0 0 18px rgba(124,92,246,.22); }
@@ -1570,15 +1572,15 @@
           <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesModuleTab" data-entrega-module="devolucoes" type="button">Devoluções</button>
         </div>
         <div id="entregaLigaModule">
-        <section class="panel-card p-3 mb-3">
-          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+        <section class="panel-card p-3 mb-3" id="entregaLigaOverviewSection">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3" id="entregaLigaHeader">
             <div>
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-trophy me-2 text-primary"></i>Entrega · A Liga</h2>
               <div class="form-text">Central da Liga da Entrega dentro do painel do bot. Use somente as rotinas homologadas e mantenha os expurgos que ajustam o ranking sem mexer nas demais medições.</div>
             </div>
-            <span class="pill">Liga Entrega</span>
+            <div class="d-flex align-items-center gap-2"><span class="pill">Liga Entrega</span><button class="btn btn-outline-primary btn-sm entrega-liga-collapse-btn" id="entregaLigaCollapseBtn" type="button" aria-expanded="true"><i class="bi bi-chevron-up me-1"></i>Minimizar</button></div>
           </div>
-          <div class="row g-3">
+          <div class="row g-3 entrega-liga-overview-body">
             <div class="col-xl-7">
               <div class="border rounded-3 p-3 h-100 bg-light-subtle">
                 <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
@@ -3623,6 +3625,7 @@
       entregaDevolucoesDetails: document.getElementById("entregaDevolucoesDetails"),
       entregaDevolucoesRefreshBtn: document.getElementById("entregaDevolucoesRefreshBtn"),
       entregaLigaModule: document.getElementById("entregaLigaModule"),
+      entregaLigaCollapseBtn: document.getElementById("entregaLigaCollapseBtn"),
       entregaLigaModuleTab: document.getElementById("entregaLigaModuleTab"),
       entregaDevolucoesModuleTab: document.getElementById("entregaDevolucoesModuleTab"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
@@ -9864,6 +9867,13 @@
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
       if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.addEventListener("click", () => setEntregaModule("liga"));
+      if (E.entregaLigaCollapseBtn) E.entregaLigaCollapseBtn.addEventListener("click", () => {
+        const collapsed = E.entregaLigaModule && E.entregaLigaModule.classList.toggle("is-collapsed");
+        E.entregaLigaCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
+        E.entregaLigaCollapseBtn.innerHTML = collapsed
+          ? '<i class="bi bi-chevron-down me-1"></i>Restaurar'
+          : '<i class="bi bi-chevron-up me-1"></i>Minimizar';
+      });
       if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.addEventListener("click", () => setEntregaModule("devolucoes"));
       if (E.entregaDevolucoesRefreshBtn) E.entregaDevolucoesRefreshBtn.addEventListener("click", async () => {
         E.entregaDevolucoesRefreshBtn.disabled = true;
