@@ -265,12 +265,15 @@
     #entregaPane .liga-score { color: #f1f5f9; }
     #entregaPane .liga-score-bar { background: #202938; }
     #entregaPane .entrega-devolucao-analytics-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: .8rem; }
-    #entregaPane .entrega-devolucao-chart { min-width: 0; padding: 1rem; border: 1px solid #2a3850; border-radius: 14px; background: linear-gradient(145deg, #141d2d, #0f1725); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+    #entregaPane .entrega-devolucao-chart { min-width: 0; min-height: 278px; height: 278px; display: flex; flex-direction: column; padding: 1rem; border: 1px solid #2a3850; border-radius: 14px; background: linear-gradient(145deg, #141d2d, #0f1725); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
     #entregaPane .entrega-devolucao-chart.featured { min-height: 100%; }
     #entregaPane .entrega-devolucao-chart h3 { margin: 0; color: #edf3fc; font-size: .86rem; font-weight: 800; letter-spacing: .01em; }
     #entregaPane .entrega-devolucao-chart .chart-caption { margin: .2rem 0 .85rem; color: #8090ab; font-size: .72rem; }
-    #entregaPane .devolucao-bars { display: grid; gap: .58rem; }
-    #entregaPane .devolucao-bar-row { display: grid; grid-template-columns: minmax(86px, 34%) minmax(80px, 1fr) auto; align-items: center; gap: .55rem; }
+    #entregaPane .devolucao-bars { display: grid; flex: 1 1 auto; min-height: 0; max-height: 205px; gap: .58rem; overflow-y: auto; padding: .15rem .35rem .15rem 0; scrollbar-color: #526684 #0c1320; scrollbar-width: thin; }
+    #entregaPane .devolucao-bars::-webkit-scrollbar { width: 7px; }
+    #entregaPane .devolucao-bars::-webkit-scrollbar-thumb { border-radius: 99px; background: #526684; }
+    #entregaPane .devolucao-bars::-webkit-scrollbar-track { background: #0c1320; }
+    #entregaPane .devolucao-bar-row { display: grid; grid-template-columns: minmax(92px, 34%) minmax(70px, 1fr) max-content; align-items: center; gap: .55rem; min-width: 0; }
     #entregaPane .devolucao-bar-label { overflow: hidden; color: #c8d4e7; font-size: .72rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
     #entregaPane .devolucao-bar-track { height: 10px; overflow: hidden; border-radius: 999px; background: #202d42; }
     #entregaPane .devolucao-bar-fill { display: block; height: 100%; min-width: 4px; border-radius: inherit; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width .25s ease; }
@@ -297,20 +300,30 @@
     #entregaPane .devolucao-kpi-card .label { display: block; color: #93a2bd; font-size: .65rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
     #entregaPane .devolucao-kpi-card .value { display: block; margin-top: .18rem; color: #f7f8ff; font-size: 1.28rem; font-weight: 900; line-height: 1.05; }
     #entregaPane .devolucao-kpi-card .sub { display: block; margin-top: .28rem; color: #a9b5c9; font-size: .68rem; }
-    #entregaPane .devolucao-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: .7rem; }
+    #entregaPane .devolucao-dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; align-items: stretch; }
     #entregaPane .devolucao-dashboard-grid .devolucao-chart-wide { grid-column: span 2; }
-    #entregaPane .devolucao-trend-chart { min-height: 270px; }
+    #entregaPane .devolucao-trend-chart { min-height: 278px; height: 278px; }
     #entregaPane .devolucao-trend-chart svg { display: block; width: 100%; height: 205px; overflow: visible; }
     #entregaPane .devolucao-trend-chart .trend-grid { stroke: #2c3952; stroke-dasharray: 3 4; stroke-width: 1; }
-    #entregaPane .devolucao-trend-chart .trend-line { fill: none; stroke: #38bdf8; stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; filter: drop-shadow(0 2px 5px rgba(56,189,248,.2)); }
-    #entregaPane .devolucao-trend-chart .trend-area { fill: url(#devolucaoTrendFill); opacity: .22; }
+    #entregaPane .devolucao-trend-chart .trend-line { fill: none; stroke: #7c5cff; stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; filter: drop-shadow(0 2px 5px rgba(124,92,255,.25)); }
+    #entregaPane .devolucao-trend-chart .trend-area { fill: url(#devolucaoTrendFill); opacity: .2; }
+    #entregaPane .devolucao-trend-chart .trend-target { stroke: #7c5cff; stroke-dasharray: 2 4; stroke-width: 1.2; opacity: .7; }
+    #entregaPane .devolucao-trend-chart .trend-trigger { stroke: #94a3b8; stroke-dasharray: 6 4; stroke-width: 1.4; opacity: .85; }
+    #entregaPane .devolucao-trend-legend { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; margin: .15rem 0 .25rem; color: #cbd5e1; font-size: .68rem; font-weight: 800; }
+    #entregaPane .devolucao-trend-pill { padding: .2rem .42rem; border-radius: 4px; color: #f8fafc; background: #5b21b6; }
+    #entregaPane .devolucao-trend-key::before { content: ""; display: inline-block; width: 19px; margin: 0 .28rem .18rem 0; border-top: 2px solid currentColor; vertical-align: middle; }
+    #entregaPane .devolucao-trend-key.trigger { color: #aab4c6; }
+    #entregaPane .devolucao-trend-key.trigger::before { border-top-style: dashed; }
+    #entregaPane .devolucao-trend-key.target { color: #9a86ff; }
+    #entregaPane .devolucao-trend-chart .trend-line-label { fill: #9a86ff; font-size: 9px; }
     #entregaPane .devolucao-trend-chart .trend-dot { fill: #fbbf24; stroke: #0f1725; stroke-width: 2; }
     #entregaPane .devolucao-trend-chart text { fill: #8fa0bb; font-size: 10px; font-weight: 700; }
     #entregaPane .devolucao-bar-fill { will-change: width; }
     @media (prefers-reduced-motion: reduce) { #entregaPane .devolucao-bar-fill { transition: none; } }
     @media (max-width: 1100px) { #entregaPane .devolucao-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 900px) { #entregaPane .entrega-devolucao-analytics-grid, #entregaPane .devolucao-dashboard-grid { grid-template-columns: 1fr 1fr; } #entregaPane .devolucao-dashboard-grid .devolucao-chart-wide { grid-column: span 2; } }
-    @media (max-width: 600px) { #entregaPane .devolucao-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } #entregaPane .devolucao-analysis-toolbar > div { flex: 1 1 140px; } #entregaPane .devolucao-analysis-toolbar .form-select { width: 100%; min-width: 0; } #entregaPane .devolucao-bar-row { grid-template-columns: minmax(70px, 30%) minmax(60px, 1fr) auto; gap: .35rem; } #entregaPane .devolucao-bar-label, #entregaPane .devolucao-bar-value { font-size: .66rem; } #entregaPane .devolucao-dashboard-grid, #entregaPane .entrega-devolucao-analytics-grid { grid-template-columns: 1fr; } #entregaPane .devolucao-dashboard-grid .devolucao-chart-wide { grid-column: auto; } }
+    @media print { #entregaPane .entrega-devolucao-chart { height: auto; min-height: 278px; } #entregaPane .devolucao-bars { max-height: none; overflow: visible; } }
+    @media (max-width: 600px) { #entregaPane .devolucao-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } #entregaPane .devolucao-analysis-toolbar > div { flex: 1 1 140px; } #entregaPane .devolucao-analysis-toolbar .form-select { width: 100%; min-width: 0; } #entregaPane .devolucao-bar-row { grid-template-columns: minmax(70px, 30%) minmax(55px, 1fr) max-content; gap: .35rem; } #entregaPane .devolucao-bar-label, #entregaPane .devolucao-bar-value { font-size: .66rem; } #entregaPane .devolucao-dashboard-grid, #entregaPane .entrega-devolucao-analytics-grid { grid-template-columns: 1fr; } #entregaPane .devolucao-dashboard-grid .devolucao-chart-wide { grid-column: auto; } }
     .liga-expurgo-mark { display: inline-flex; padding: 0.1rem 0.34rem; border-radius: 999px; background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; font-size: 0.65rem; font-weight: 800; }
     .table { --bs-table-color: var(--ink-900); --bs-table-bg: transparent; --bs-table-hover-bg: rgba(37, 99, 235, 0.07); margin-bottom: 0; }
     .table-scroll thead th, .table thead th { position: sticky; top: 0; z-index: 3; color: var(--ink-700); background: var(--surface-soft); border-bottom: 1px solid var(--line-strong); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -5129,10 +5142,16 @@
       return `<article class="entrega-devolucao-chart ${featured ? "featured" : ""}"><h3>${escapeHtml(title)}</h3><div class="chart-caption">${metricLabel} por categoria · passe o mouse para o detalhe</div>${items.length ? `<div class="devolucao-bars" role="img" aria-label="${escapeHtml(title)} por ${escapeHtml(metricLabel.toLowerCase())}">${bars}</div><details><summary>Ver dados</summary><table><thead><tr><th>Categoria</th><th class="text-end">Volume</th><th class="text-end">Valor</th><th class="text-end">Registros</th></tr></thead><tbody>${dataTable}</tbody></table></details>` : '<div class="text-secondary small py-4">Sem dados para este gráfico.</div>'}</article>`;
     }
 
-    function renderEntregaDevolucaoTrend(rows, metric = "volume_hl") {
+    function renderEntregaDevolucaoTrend(rows, routes = [], metas = {}) {
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-      const metricLabel = metric === "valor" ? "Valor" : metric === "registros" ? "Registros" : "Volume (HL)";
-      const metricValue = item => metric === "valor" ? item.valor : metric === "registros" ? item.count : item.volume;
+      const trigger = 1.36;
+      const target = Number(metas.devol || 1.4);
+      const deliveriesByDate = new Map();
+      routes.forEach(route => {
+        const key = String(route.data || "").slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
+        deliveriesByDate.set(key, (deliveriesByDate.get(key) || 0) + Number(route.entregas || 0));
+      });
       const totals = new Map();
       rows.forEach(row => {
         const key = String(row.data_devolucao || row.data || "").slice(0, 10);
@@ -5143,21 +5162,24 @@
         item.count += 1;
         totals.set(key, item);
       });
-      const items = [...totals.values()].sort((a, b) => a.date.localeCompare(b.date));
-      if (!items.length) return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">${metricLabel} acumulado no período</div><div class="text-secondary small py-4">Sem datas válidas para este gráfico.</div></article>`;
+      const items = [...totals.values()].map(item => ({ ...item, pct: deliveriesByDate.get(item.date) ? item.count / deliveriesByDate.get(item.date) * 100 : null })).filter(item => item.pct !== null).sort((a, b) => a.date.localeCompare(b.date));
+      if (!items.length) return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">DEV total em porcentagem</div><div class="text-secondary small py-4">Sem datas válidas para este gráfico.</div></article>`;
       const width = 760; const height = 205; const pad = { left: 42, right: 14, top: 16, bottom: 30 };
-      const max = Math.max(...items.map(metricValue), 1); const innerW = width - pad.left - pad.right; const innerH = height - pad.top - pad.bottom;
-      const point = (item, index) => `${(pad.left + (items.length === 1 ? innerW / 2 : index * innerW / (items.length - 1))).toFixed(1)},${(pad.top + innerH - (metricValue(item) / max) * innerH).toFixed(1)}`;
+      const max = Math.max(...items.map(item => item.pct), target, trigger, 1); const innerW = width - pad.left - pad.right; const innerH = height - pad.top - pad.bottom;
+      const yFor = value => pad.top + innerH - (value / max) * innerH;
+      const point = (item, index) => `${(pad.left + (items.length === 1 ? innerW / 2 : index * innerW / (items.length - 1))).toFixed(1)},${yFor(item.pct).toFixed(1)}`;
       const points = items.map(point).join(" ");
       const area = `${pad.left},${pad.top + innerH} ${points} ${pad.left + innerW},${pad.top + innerH}`;
-      const grid = [0, .5, 1].map(ratio => { const y = pad.top + innerH - ratio * innerH; return `<line class="trend-grid" x1="${pad.left}" x2="${pad.left + innerW}" y1="${y}" y2="${y}"/><text x="2" y="${y + 4}">${escapeHtml(fmt(max * ratio))}</text>`; }).join("");
-      const dots = items.map((item, index) => { const [x, y] = point(item, index).split(","); return `<circle class="trend-dot" cx="${x}" cy="${y}" r="3.5"><title>${escapeHtml(formatDate(item.date))}: ${escapeHtml(metric === "valor" ? `R$ ${fmt(metricValue(item))}` : metric === "registros" ? `${fmt(metricValue(item))} registro(s)` : `${fmt(metricValue(item))} HL`)}</title></circle>`; }).join("");
+      const grid = [0, .5, 1].map(ratio => { const y = pad.top + innerH - ratio * innerH; return `<line class="trend-grid" x1="${pad.left}" x2="${pad.left + innerW}" y1="${y}" y2="${y}"/><text x="2" y="${y + 4}">${escapeHtml(fmt(max * ratio))}%</text>`; }).join("");
+      const targetLines = `<line class="trend-trigger" x1="${pad.left}" x2="${pad.left + innerW}" y1="${yFor(trigger)}" y2="${yFor(trigger)}"/><line class="trend-target" x1="${pad.left}" x2="${pad.left + innerW}" y1="${yFor(target)}" y2="${yFor(target)}"/><text class="trend-line-label" x="${pad.left + innerW * .5}" y="${yFor(trigger) - 4}" text-anchor="middle">Gatilho ${fmt(trigger)}%</text><text class="trend-line-label" x="${pad.left + innerW * .72}" y="${yFor(target) - 4}" text-anchor="middle">Meta ${fmt(target)}%</text>`;
+      const dots = items.map((item, index) => { const [x, y] = point(item, index).split(","); return `<circle class="trend-dot" cx="${x}" cy="${y}" r="3.5"><title>${escapeHtml(formatDate(item.date))}: ${escapeHtml(`${fmt(item.pct)}% (${item.count}/${deliveriesByDate.get(item.date)})`)}</title></circle>`; }).join("");
       const labels = items.filter((_, index) => index === 0 || index === items.length - 1 || index === Math.floor((items.length - 1) / 2)).map(item => `<text x="${pad.left + items.indexOf(item) * innerW / Math.max(items.length - 1, 1)}" y="${height - 6}" text-anchor="middle">${escapeHtml(formatDate(item.date).slice(0, 5))}</text>`).join("");
-      return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">${metricLabel} acumulado no período · passe o mouse nos pontos</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Devolução por dia"><defs><linearGradient id="devolucaoTrendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/></linearGradient></defs>${grid}<polygon class="trend-area" points="${area}"/><polyline class="trend-line" points="${points}"/>${dots}${labels}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Data</th><th class="text-end">${escapeHtml(metricLabel)}</th><th class="text-end">Registros</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(formatDate(item.date))}</td><td class="text-end">${escapeHtml(metric === "valor" ? `R$ ${fmt(metricValue(item))}` : metric === "registros" ? fmt(metricValue(item)) : `${fmt(metricValue(item))} HL`)}</td><td class="text-end">${item.count}</td></tr>`).join("")}</tbody></table></details></article>`;
+      return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">DEV total · percentual diário sobre as entregas · passe o mouse nos pontos</div><div class="devolucao-trend-legend"><span class="devolucao-trend-pill">Exibindo: DEV total</span><span class="devolucao-trend-key trigger">Gatilho ${fmt(trigger)}%</span><span class="devolucao-trend-key target">Meta ${fmt(target)}%</span></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Percentual de devolução por dia"><defs><linearGradient id="devolucaoTrendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#7c5cff" stop-opacity="0"/></linearGradient></defs>${grid}${targetLines}<polygon class="trend-area" points="${area}"/><polyline class="trend-line" points="${points}"/>${dots}${labels}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Data</th><th class="text-end">DEV total</th><th class="text-end">Devoluções/entregas</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(formatDate(item.date))}</td><td class="text-end">${escapeHtml(`${fmt(item.pct)}%`)}</td><td class="text-end">${item.count}/${deliveriesByDate.get(item.date)}</td></tr>`).join("")}</tbody></table></details></article>`;
     }
 
     function renderEntregaDevolucoes(dashboard = {}) {
       const allRows = Array.isArray(dashboard.devolucoes_auxiliares) ? dashboard.devolucoes_auxiliares : (Array.isArray(dashboard.devolucoes) ? dashboard.devolucoes : []);
+      const routes = Array.isArray(dashboard.rotas) ? dashboard.rotas : [];
       const branch = String(state.entregaDevolucoesBranch || "").toUpperCase();
       const rows = allRows.filter(row => !branch || String(row.filial || "").trim().toUpperCase() === branch);
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
@@ -5181,6 +5203,7 @@
       const topN = [5, 8, 10, 15].includes(Number(state.entregaDevolucoesTopN)) ? Number(state.entregaDevolucoesTopN) : 10;
       const period = ["all", "7", "30"].includes(String(state.entregaDevolucoesPeriod)) ? String(state.entregaDevolucoesPeriod) : "all";
       const dateOf = row => String(row.data_devolucao || row.data || "").slice(0, 10);
+      const chartRoutes = routes.filter(route => !branch || String(route.filial || "").trim().toUpperCase() === branch);
       const timestamps = rows.map(row => Date.parse(`${dateOf(row)}T00:00:00Z`)).filter(Number.isFinite);
       const latest = timestamps.length ? Math.max(...timestamps) : NaN;
       const chartRows = period === "all" || !Number.isFinite(latest) ? rows : rows.filter(row => {
@@ -5193,8 +5216,8 @@
         renderEntregaDevolucaoChart("Devolução por GV", chartRows, "gv", topN, false, metric),
         renderEntregaDevolucaoChart("Devolução por motivo", chartRows, "motivo_operacional", topN, false, metric),
         renderEntregaDevolucaoChart("Devolução por vendedor · Top 8", chartRows, "rn", 8, false, metric),
-        renderEntregaDevolucaoChart("Devolução por responsabilidade", chartRows, "motivo_responsabilidade", topN, false, metric),
-        renderEntregaDevolucaoTrend(chartRows, metric)
+        renderEntregaDevolucaoTrend(chartRows, chartRoutes, dashboard.metas || {}),
+        renderEntregaDevolucaoChart("Devolução por responsabilidade", chartRows, "motivo_responsabilidade", topN, false, metric)
       ].join("");
       E.entregaDevolucoesDetails.innerHTML = `<div class="devolucao-insight-head d-flex flex-wrap gap-3 align-items-center justify-content-between mb-3"><div><div class="small text-secondary">Análise operacional</div><div class="source-path">Concentração por GV, motivo, vendedor e responsabilidade. Os valores são calculados somente a partir dos registros importados.</div></div><div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control entrega-devolucoes-filter" value="${escapeHtml(state.entregaDevolucoesFilter || "")}" placeholder="Filtrar registros"></div></div><div class="devolucao-analysis-toolbar mb-3"><div><label class="form-label" for="entregaDevolucoesBranch">Filial</label><select id="entregaDevolucoesBranch" class="form-select form-select-sm entrega-devolucoes-control"><option value="" ${!branch ? "selected" : ""}>Todas as filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select></div><div><label class="form-label" for="entregaDevolucoesMetric">Métrica dos gráficos</label><select id="entregaDevolucoesMetric" class="form-select form-select-sm entrega-devolucoes-control"><option value="volume_hl" ${metric === "volume_hl" ? "selected" : ""}>Volume (HL)</option><option value="valor" ${metric === "valor" ? "selected" : ""}>Valor (R$)</option><option value="registros" ${metric === "registros" ? "selected" : ""}>Registros</option></select></div><div><label class="form-label" for="entregaDevolucoesPeriod">Período dos gráficos</label><select id="entregaDevolucoesPeriod" class="form-select form-select-sm entrega-devolucoes-control"><option value="all" ${period === "all" ? "selected" : ""}>Todo o período</option><option value="7" ${period === "7" ? "selected" : ""}>Últimos 7 dias</option><option value="30" ${period === "30" ? "selected" : ""}>Últimos 30 dias</option></select></div><div><label class="form-label" for="entregaDevolucoesTopN">Categorias exibidas</label><select id="entregaDevolucoesTopN" class="form-select form-select-sm entrega-devolucoes-control"><option value="5" ${topN === 5 ? "selected" : ""}>Top 5</option><option value="8" ${topN === 8 ? "selected" : ""}>Top 8</option><option value="10" ${topN === 10 ? "selected" : ""}>Top 10</option><option value="15" ${topN === 15 ? "selected" : ""}>Top 15</option></select></div><button type="button" class="btn btn-outline-primary btn-sm entrega-devolucoes-print"><i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF</button><div class="devolucao-analysis-note flex-grow-1">${chartRows.length} registro(s) no recorte visual · ${metric === "volume_hl" ? "hectolitros devolvidos" : metric === "valor" ? "valor financeiro" : "linhas do relatório"}. A tabela abaixo mantém o filtro textual independente.</div></div><div class="devolucao-dashboard-grid mb-3">${charts}</div><details class="devolucao-table-wrap"><summary><i class="bi bi-table me-2"></i>Ver registros detalhados (${filtered.length})</summary><div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>GV</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th><th></th></tr></thead><tbody>${body || '<tr><td colspan="13" class="text-center text-secondary py-4">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div></details>`;
     }
