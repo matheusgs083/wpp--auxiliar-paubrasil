@@ -26,6 +26,7 @@ LIGA_ENTREGA_REPORTS = (
 
 class LigaEntregaExpurgoRequest(BaseModel):
     tipo: str = Field(..., description="devolucao, km, tml ou dispersao")
+    escopo: str = Field(default="individual", description="individual ou equipe")
     competencia: str = Field(..., description="AAAA-MM")
     filial: str = ""
     data: str = ""

@@ -878,6 +878,8 @@ def match_dev_exp(dev: dict[str, Any], expurgos: list[dict[str, Any]]) -> dict[s
             continue
         if e.get("filial") and str(e.get("filial")).upper() != str(dev.get("filial")).upper():
             continue
+        if str(e.get("escopo") or "individual").lower() == "equipe":
+            return e
         cliente = norm_code(e.get("cliente"))
         cod_cliente = norm_code(dev.get("cliente_cod"))
         if cliente != "0" and cliente != cod_cliente:
@@ -890,7 +892,7 @@ def match_route_exp(rota: dict[str, Any], expurgos: list[dict[str, Any]], tipos:
     for e in expurgos:
         if e.get("tipo") not in tipos:
             continue
-        if e.get("mapa") and norm_mapa(e.get("mapa")) != norm_mapa(rota.get("mapa")):
+        if str(e.get("escopo") or "individual").lower() != "equipe" and e.get("mapa") and norm_mapa(e.get("mapa")) != norm_mapa(rota.get("mapa")):
             continue
         if e.get("data") and e.get("data") != rota.get("data"):
             continue

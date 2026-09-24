@@ -10,6 +10,7 @@ from threading import RLock
 from typing import Any
 
 _VALID_TYPES = {"devolucao", "km", "tml", "dispersao"}
+_VALID_SCOPES = {"individual", "equipe"}
 _DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _COMPETENCIA_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -102,6 +103,7 @@ class LigaEntregaExpurgoService:
 
     def _normalize_record(self, payload: dict[str, Any], *, actor: str) -> dict[str, Any]:
         tipo = self._clean_tipo(payload.get("tipo"))
+        raw_escopo = payload.get("escopo")
         competencia = self._clean_competencia(payload.get("competencia"))
         filial = self._clean_text(payload.get("filial"), max_len=40).upper()
         data = self._clean_optional_date(payload.get("data"))
@@ -109,19 +111,26 @@ class LigaEntregaExpurgoService:
         cliente = self._clean_text(payload.get("cliente"), max_len=80)
         motivo = self._clean_text(payload.get("motivo"), max_len=300)
         observacao = self._clean_text(payload.get("observacao"), max_len=500)
-        if tipo in {"km", "dispersao"} and not mapa:
+        # Compatibilidade com os expurgos TML de dia inteiro criados antes do
+        # campo escopo existir: mapa vazio significava toda a equipe.
+        escopo = self._clean_escopo("equipe" if raw_escopo in (None, "") and tipo == "tml" and not mapa else raw_escopo)
+        if escopo == "individual" and tipo in {"km", "tml", "dispersao"} and not mapa:
             raise ValueError("Mapa obrigatorio para expurgo de rota.")
-        if tipo == "devolucao" and not cliente:
+        if escopo == "individual" and tipo == "devolucao" and not cliente:
             raise ValueError("Cliente obrigatorio para expurgo de devolucao.")
         if tipo in {"km", "tml", "dispersao"} and not data:
             raise ValueError("Data obrigatoria para expurgo de rota.")
         if tipo == "devolucao" and not data:
             raise ValueError("Data obrigatoria para expurgo de devolucao.")
-        key = self._build_key(tipo=tipo, competencia=competencia, filial=filial, data=data, mapa=mapa, cliente=cliente)
+        if escopo == "equipe":
+            mapa = ""
+            cliente = ""
+        key = self._build_key(tipo=tipo, escopo=escopo, competencia=competencia, filial=filial, data=data, mapa=mapa, cliente=cliente)
         return {
             "id": self._id_from_key(key),
             "key": key,
             "tipo": tipo,
+            "escopo": escopo,
             "competencia": competencia,
             "filial": filial,
             "data": data,
@@ -172,6 +181,13 @@ class LigaEntregaExpurgoService:
         return tipo
 
     @classmethod
+    def _clean_escopo(cls, value: Any) -> str:
+        escopo = str(value or "individual").strip().lower()
+        if escopo not in _VALID_SCOPES:
+            raise ValueError("Escopo de expurgo invalido. Use individual ou equipe.")
+        return escopo
+
+    @classmethod
     def _clean_optional_tipo(cls, value: Any) -> str:
         raw = str(value or "").strip()
         return cls._clean_tipo(raw) if raw else ""
@@ -198,8 +214,8 @@ class LigaEntregaExpurgoService:
         return raw
 
     @staticmethod
-    def _build_key(*, tipo: str, competencia: str, filial: str, data: str, mapa: str, cliente: str) -> str:
-        return "|".join([tipo, competencia, filial, data, mapa, cliente])
+    def _build_key(*, tipo: str, escopo: str, competencia: str, filial: str, data: str, mapa: str, cliente: str) -> str:
+        return "|".join([tipo, escopo, competencia, filial, data, mapa, cliente])
 
     @staticmethod
     def _id_from_key(key: str) -> str:
