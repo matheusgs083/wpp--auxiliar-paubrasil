@@ -32,7 +32,7 @@ MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 7
+CACHE_VERSION = 8
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -101,6 +101,12 @@ CANONICAL_ROSTER = set(CANONICAL_MOTORISTAS) | set(CANONICAL_AJUDANTES)
 # CSVs grandes quando nada mudou.
 _DASHBOARD_CACHE: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
 _DASHBOARD_CACHE_LOCK = threading.Lock()
+# Os auxiliares não mudam a cada consulta do painel. Reaproveitamos o
+# resultado enquanto caminho, tamanho e data de alteração permanecerem iguais.
+# Isso evita reabrir o XLSX/CSV a cada atualização da tela.
+_AUXILIARY_CACHE_LOCK = threading.Lock()
+_ESPELHO_CACHE: dict[tuple[str, int, int], dict[str, str]] = {}
+_CHECKLIST_CACHE: dict[tuple[str, int, int, tuple[tuple[str, str], ...]], list[dict[str, str]]] = {}
 
 
 class LigaEntregaDashboardService:
@@ -318,30 +324,37 @@ class LigaEntregaDashboardService:
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.11.29 {file['filename']}: {exc}")
 
-        if should_skip_auxiliary():
-            warnings.append("Espelho de ponto ignorado nesta leitura para evitar timeout do painel.")
-        else:
-            for manifest in manifests.get(RESP, []):
-                for file in stored_files(manifest):
-                    if file["path"].stat().st_size > MAX_AUXILIARY_BYTES:
-                        warnings.append(f"Espelho de ponto {file['filename']} ignorado: arquivo acima de 25 MB.")
-                        continue
-                    try:
-                        ponto.update(parse_espelho(file["path"]))
-                    except Exception as exc:  # noqa: BLE001
-                        warnings.append(f"espelho {file['filename']}: {exc}")
-        if should_skip_auxiliary():
-            warnings.append("Checklist Frota ignorado nesta leitura para evitar timeout do painel.")
-        else:
-            for manifest in manifests.get(RCHK, []):
-                for file in stored_files(manifest):
-                    if file["path"].stat().st_size > MAX_AUXILIARY_BYTES:
-                        warnings.append(f"Checklist {file['filename']} ignorado: arquivo acima de 25 MB.")
-                        continue
-                    try:
-                        checklist.extend(parse_checklist(file["path"], colab))
-                    except Exception as exc:  # noqa: BLE001
-                        warnings.append(f"checklist {file['filename']}: {exc}")
+        for manifest in manifests.get(RESP, []):
+            for file in stored_files(manifest):
+                path = file["path"]
+                if path.stat().st_size > MAX_AUXILIARY_BYTES:
+                    warnings.append(f"Espelho de ponto {file['filename']} ignorado: arquivo acima de 25 MB.")
+                    continue
+                try:
+                    cached_ponto = cached_espelho(path)
+                    # Um arquivo já lido não participa do limite de tempo: a
+                    # atualização fica barata mesmo quando o restante do lote
+                    # demorou para ser processado.
+                    if cached_ponto is not None:
+                        ponto.update(cached_ponto)
+                    elif should_skip_auxiliary():
+                        warnings.append("Espelho de ponto ignorado nesta leitura para evitar timeout do painel.")
+                    else:
+                        ponto.update(cache_espelho(path))
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"espelho {file['filename']}: {exc}")
+        # O checklist é um XLSX pequeno e é a fonte direta da coluna
+        # Checklist. Ele não pode ser descartado pelo timeout reservado ao
+        # espelho de ponto, pois isso deixa todos os colaboradores em 0%.
+        for manifest in manifests.get(RCHK, []):
+            for file in stored_files(manifest):
+                if file["path"].stat().st_size > MAX_AUXILIARY_BYTES:
+                    warnings.append(f"Checklist {file['filename']} ignorado: arquivo acima de 25 MB.")
+                    continue
+                try:
+                    checklist.extend(cache_checklist(file["path"], colab))
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"checklist {file['filename']}: {exc}")
 
         for mapa, equipe in equipes.items():
             rota = rotas.setdefault(mapa, {"data": equipe.get("data") or "", "mapa": mapa, "filial": equipe.get("filial") or "", "mot": equipe.get("mot") or "0", "aju": [], "km_real": None, "km_prev": None, "tempo_prev": None, "hs0805": "", "he0805": "", "entregas": 0, "cidade": "", "src": "03.11.29"})
@@ -694,6 +707,45 @@ def filial_from_name(filename: str) -> str:
 
 def dev_key(nota: Any, serie: Any, data: Any) -> str:
     return f"{str(nota or '').strip()}|{str(serie or '').strip()}|{to_iso(data)}"
+
+
+def auxiliary_file_key(path: Path) -> tuple[str, int, int]:
+    stat = path.stat()
+    return (str(path.resolve()), int(stat.st_size), int(stat.st_mtime_ns))
+
+
+def cached_espelho(path: Path) -> dict[str, str] | None:
+    key = auxiliary_file_key(path)
+    with _AUXILIARY_CACHE_LOCK:
+        value = _ESPELHO_CACHE.get(key)
+    return dict(value) if value is not None else None
+
+
+def cache_espelho(path: Path) -> dict[str, str]:
+    key = auxiliary_file_key(path)
+    with _AUXILIARY_CACHE_LOCK:
+        value = _ESPELHO_CACHE.get(key)
+    if value is None:
+        value = parse_espelho(path)
+        with _AUXILIARY_CACHE_LOCK:
+            _ESPELHO_CACHE[key] = dict(value)
+    return dict(value)
+
+
+def cache_checklist(path: Path, colab: dict[str, dict[str, str]]) -> list[dict[str, str]]:
+    roster_key = tuple(sorted(
+        (str(code), norm_name(row.get("nome")))
+        for code, row in colab.items()
+        if row.get("nome") and not str(row.get("nome")).startswith("COD ")
+    ))
+    key = (*auxiliary_file_key(path), roster_key)
+    with _AUXILIARY_CACHE_LOCK:
+        value = _CHECKLIST_CACHE.get(key)
+    if value is None:
+        value = parse_checklist(path, colab)
+        with _AUXILIARY_CACHE_LOCK:
+            _CHECKLIST_CACHE[key] = [dict(row) for row in value]
+    return [dict(row) for row in value]
 
 
 
