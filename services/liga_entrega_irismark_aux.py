@@ -1,8 +1,9 @@
 """Vínculos excepcionais do terceiro ajudante de Sumé.
 
 O relatório 03.08.05 não possui uma coluna ``CdAju3``. Esta tabela registra
-somente as combinações confirmadas na escala de setembro de 2026 em que o
-Irismark deve ser acrescentado à equipe da rota.
+as combinações confirmadas na escala de setembro de 2026 em que o Irismark
+deve ser acrescentado à equipe da rota. A regra é por competência, data e
+placa; portanto continua válida mesmo quando o motorista troca.
 """
 
 IRISMARK_CODE = "9076"

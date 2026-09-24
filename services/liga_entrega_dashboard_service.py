@@ -30,7 +30,9 @@ TEMPO_PREV_MAX = 840
 MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # Increment when the serialized dashboard shape or enrichment fallback changes;
 # otherwise an older persisted payload can hide newly available report fields.
-CACHE_VERSION = 6
+# Increment when the enrichment rules change so a persisted dashboard built
+# with an older rule cannot hide newly linked routes or helpers.
+CACHE_VERSION = 7
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"

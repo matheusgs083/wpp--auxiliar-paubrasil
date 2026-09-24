@@ -252,6 +252,19 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         route = next(item for item in payload["rotas"] if item["mapa"] == "28626")
         self.assertIn("9076", route["aju"])
 
+    def test_irismark_auxiliary_covers_all_scale_dates(self) -> None:
+        from bot_api.services.liga_entrega_irismark_aux import IRISMARK_AUXILIARY_PLATES
+
+        expected = {
+            ("2026-09-02", "SKZ8I17"), ("2026-09-02", "RLS8A29"),
+            ("2026-09-03", "SKZ7H38"), ("2026-09-04", "RLR8F99"),
+            ("2026-09-17", "SKZ8I57"), ("2026-09-21", "SKZ8I57"),
+            ("2026-09-23", "SKZ7H38"), ("2026-09-25", "SKZ7H38"),
+            ("2026-09-25", "SKZ8I57"),
+        }
+        actual = {(data, plate) for comp, data, filial, plate in IRISMARK_AUXILIARY_PLATES if comp == "2026-09" and filial == "SUME"}
+        self.assertEqual(actual, expected)
+
     def test_upsert_list_and_delete_expurgo(self) -> None:
         client, events = self.make_client()
 
