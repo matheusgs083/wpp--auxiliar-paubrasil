@@ -890,7 +890,9 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         pdev = round(dev / ent * 100, 2) if ent else None
         psaida = pct(g["saiOk"] / g["saiTot"] * 100) if g["saiTot"] else None
         tempo = pct(g["tR"] / g["tP"] * 100) if g["tP"] else None
-        km = pct(abs(g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else None
+        # KM abaixo do previsto não é desvio negativo: somente o excedente
+        # realizado acima do previsto prejudica a pontuação.
+        km = pct(max(0, g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else None
         # O HTML original concede o peso inteiro enquanto o Farol ainda não
         # foi disponibilizado. Quando existe, mede saída e retorno normalmente.
         check = pct(chk_f[cod] / chk_e[cod] * 100) if chk_e.get(cod) else (100.0 if not has_farol else None)
@@ -971,7 +973,7 @@ def build_operacao(rotas: list[dict[str, Any]], devols: list[dict[str, Any]], mo
     kms = [r for r in rotas if r.get("km_real") is not None and r.get("km_prev") is not None and not r.get("expurgo_km")]
     kr = sum(float(r.get("km_real") or 0) for r in kms)
     kp = sum(float(r.get("km_prev") or 0) for r in kms)
-    return {"entregas": ent, "devolucoes": dev, "devolucao_pct": round(dev / ent * 100, 2) if ent else None, "saida_pct": pct(len(saidas_ok) / len(saidas) * 100) if saidas else None, "km_desv": pct(abs(kr - kp) / kp * 100) if kp else None, "rotas": len(rotas), "motoristas_elegiveis": len([x for x in motoristas if x.get("elegivel")]), "ajudantes_elegiveis": len([x for x in ajudantes if x.get("elegivel")])}
+    return {"entregas": ent, "devolucoes": dev, "devolucao_pct": round(dev / ent * 100, 2) if ent else None, "saida_pct": pct(len(saidas_ok) / len(saidas) * 100) if saidas else None, "km_desv": pct(max(0, kr - kp) / kp * 100) if kp else None, "rotas": len(rotas), "motoristas_elegiveis": len([x for x in motoristas if x.get("elegivel")]), "ajudantes_elegiveis": len([x for x in ajudantes if x.get("elegivel")])}
 
 
 def build_cobertura(rotas: list[dict[str, Any]]) -> list[dict[str, Any]]:
