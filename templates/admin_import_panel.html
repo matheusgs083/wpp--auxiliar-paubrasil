@@ -238,8 +238,9 @@
       body.entrega-devolucoes-print-mode #entregaPane { display: block !important; position: static !important; width: 100% !important; }
       body.entrega-devolucoes-print-mode #entregaPane > *:not(#entregaDevolucoesModule) { display: none !important; }
       body.entrega-devolucoes-print-mode #entregaDevolucoesModule, body.entrega-devolucoes-print-mode #entregaDevolucoesSection { display: block !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: #0c121e !important; color: #f8fafc !important; }
-      body.entrega-devolucoes-print-mode #entregaDevolucoesSection > *:not(#entregaDevolucoesCards):not(#entregaDevolucoesDetails) { display: none !important; }
-      body.entrega-devolucoes-print-mode .devolucao-insight-head, body.entrega-devolucoes-print-mode .devolucao-analysis-toolbar, body.entrega-devolucoes-print-mode .devolucao-table-wrap > summary { display: none !important; }
+      body.entrega-devolucoes-print-mode #entregaDevolucoesSection > *:not(#entregaDevolucoesHeader):not(#entregaDevolucoesCards):not(#entregaDevolucoesDetails) { display: none !important; }
+      body.entrega-devolucoes-print-mode #entregaDevolucoesHeader { margin-bottom: .8rem !important; padding: .65rem .8rem; border-bottom: 1px solid #2a3850; }
+      body.entrega-devolucoes-print-mode #entregaDevolucoesRefreshBtn, body.entrega-devolucoes-print-mode .devolucao-insight-head, body.entrega-devolucoes-print-mode .devolucao-analysis-toolbar, body.entrega-devolucoes-print-mode .devolucao-table-wrap > summary { display: none !important; }
       body.entrega-devolucoes-print-mode .devolucao-table-wrap { display: none !important; }
       body.entrega-devolucoes-print-mode .devolucao-bars { max-height: none !important; overflow: visible !important; }
       body.entrega-devolucoes-print-mode .entrega-devolucao-chart details { display: none !important; }
@@ -1642,7 +1643,7 @@
 
         <div id="entregaDevolucoesModule" class="d-none">
           <section class="panel-card p-3 mb-3" id="entregaDevolucoesSection">
-            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3" id="entregaDevolucoesHeader">
               <div>
                 <h2 class="h6 fw-bold mb-1"><i class="bi bi-arrow-return-left me-2 text-primary"></i>Devoluções · Operacional</h2>
                 <div class="form-text" id="entregaDevolucoesStatus">Use o relatório 03.02.24 Motorista para consultar clientes, setor/GV, motivos e volume devolvido.</div>
