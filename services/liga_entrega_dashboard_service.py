@@ -245,6 +245,7 @@ class LigaEntregaDashboardService:
                             "cliente": str(pick(row, "Nome Cliente", "Cliente Nome") or "").strip(),
                             "cliente_nome_base": "", "area": str(pick(row, "Area") or "").strip(), "rn": "",
                             "setor": str(pick(row, "Setor") or "").strip(), "gv": "",
+                            "rn": str(pick(row, "Setor") or "").strip(),
                             "valor": to_float(pick(row, "Valor")), "volume_hl": to_float(pick(row, "Volume", "Hectolitro", "HL")),
                             "data_devolucao": to_iso(pick(row, "Data Devol.", "Data Devolucao", "Dt Devolucao"), fallback=data),
                             "motivo": str(pick(row, "Desc. Motivo", "Motivo") or "").strip(),
@@ -351,7 +352,7 @@ class LigaEntregaDashboardService:
                 item["cliente_nome_base"] = str(base.get("cliente_nome") or "").strip()
                 item["cliente"] = item["cliente_nome_base"] or item.get("cliente") or item.get("cliente_cod") or ""
                 item["setor"] = str(base.get("setor") or item.get("setor") or "").strip()
-                item["rn"] = str(base.get("rn") or "").strip()
+                item["rn"] = str(base.get("rn") or item.get("rn") or item.get("setor") or "").strip()
                 item["area"] = str(base.get("area") or item.get("area") or "").strip()
                 item["gv"] = str(base.get("gv") or "").strip()
 
