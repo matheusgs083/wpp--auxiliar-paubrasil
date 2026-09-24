@@ -27,7 +27,9 @@ PESOS_AJD = {"devol": 35, "saida": 25, "km": 15, "check": 25}
 MIN_ROTAS = 3
 TEMPO_PREV_MAX = 840
 MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
-CACHE_VERSION = 4
+# Increment when the serialized dashboard shape or enrichment fallback changes;
+# otherwise an older persisted payload can hide newly available report fields.
+CACHE_VERSION = 5
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
