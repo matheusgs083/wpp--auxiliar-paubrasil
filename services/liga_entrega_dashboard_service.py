@@ -713,6 +713,15 @@ def parse_checklist(path: Path, colab: dict[str, dict[str, str]]) -> list[dict[s
     if idx_dt is None or idx_ex is None:
         return []
     name_to_cod = {norm_name(v.get("nome")): k for k, v in colab.items() if v.get("nome") and not str(v.get("nome")).startswith("COD ")}
+    # O export do Checklist já apresentou este erro de digitação no nome do
+    # colaborador. Mantemos o vínculo com o cadastro canônico sem alterar o
+    # arquivo original enviado pelo usuário.
+    checklist_name_aliases = {
+        "JOSE LUCAS DE OLIVEIRA DUARDA": "JOSE LUCAS DE OLIVEIRA DUARTE",
+    }
+    for alias, canonical in checklist_name_aliases.items():
+        if canonical in name_to_cod:
+            name_to_cod[alias] = name_to_cod[canonical]
     out: list[dict[str, str]] = []
     for row in rows:
         cod = name_to_cod.get(norm_name(row[idx_ex] if idx_ex < len(row) else ""))
