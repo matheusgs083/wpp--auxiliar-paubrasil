@@ -186,6 +186,54 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(recalculated_helper["expurgos"]["km"], 1)
         self.assertFalse(any(row["cod"] == "9999" for row in recalculated["rankings"]["ajudantes"]))
 
+    def test_dashboard_applies_irismark_auxiliary_sume_assignment(self) -> None:
+        client, _events = self.make_client()
+        store = LigaEntregaReportStore(Path(self.tmp.name) / "reports")
+        store.store_batch(
+            routine="030805_LIGA",
+            files={
+                "SUME_23_09.csv": (
+                    "Data;Mapa;CdMot;CdAju1;CdAju2;KmEntr;KmSai;KmPrev;TempoPrev;HrSai;HrEntr;Entregas\n"
+                    "23092026;123;9085;9062;9070;110;100;100;10:00;07:00;17:00;12\n"
+                ).encode("utf-8"),
+            },
+            reference_date="2026-09-23",
+        )
+        store.store_batch(
+            routine="031129_LIGA",
+            files={
+                "03.11.29_SUME_SET.csv": (
+                    "Data;Mapa;Motorista;Nome Motorista;Ajudante 1;Nome Ajudante 1;Ajudante 2;Nome Ajudante 2;Placa\n"
+                    "23/09/2026;123;9085;VALDECI SOARES DE LIMA;9062;GENILSON JOSE DE SOUSA;9070;LEONALDO NUNES DA SILVA;AAA5824\n"
+                ).encode("utf-8"),
+            },
+            reference_date="2026-09-23",
+        )
+
+        response = client.get("/api/admin/liga-entrega/dashboard", params={"competencia": "2026-09"})
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertIn("9076", payload["rotas"][0]["aju"])
+        irismark = next(row for row in payload["rankings"]["ajudantes"] if row["cod"] == "9076")
+        self.assertEqual(irismark["rotas"], 1)
+
+    def test_irismark_auxiliary_does_not_apply_to_other_filial_or_driver(self) -> None:
+        client, _events = self.make_client()
+        store = LigaEntregaReportStore(Path(self.tmp.name) / "reports")
+        store.store_batch(
+            routine="030805_LIGA",
+            files={
+                "PATOS_23_09.csv": (
+                    "Data;Mapa;CdMot;CdAju1;CdAju2;KmEntr;KmSai;KmPrev\n"
+                    "23092026;123;9085;9062;9070;110;100;100\n"
+                ).encode("utf-8"),
+            },
+            reference_date="2026-09-23",
+        )
+
+        payload = client.get("/api/admin/liga-entrega/dashboard", params={"competencia": "2026-09"}).json()
+        self.assertNotIn("9076", payload["rotas"][0]["aju"])
+
     def test_upsert_list_and_delete_expurgo(self) -> None:
         client, events = self.make_client()
 

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from bot_api.services.liga_entrega_motivos import MOTIVOS_DEVOLUCAO
+from bot_api.services.liga_entrega_irismark_aux import IRISMARK_AUXILIARY, IRISMARK_CODE
 
 try:
     from openpyxl import load_workbook
@@ -29,7 +30,7 @@ TEMPO_PREV_MAX = 840
 MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # Increment when the serialized dashboard shape or enrichment fallback changes;
 # otherwise an older persisted payload can hide newly available report fields.
-CACHE_VERSION = 5
+CACHE_VERSION = 6
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -92,7 +93,6 @@ CANONICAL_AJUDANTES = {
 }
 
 CANONICAL_ROSTER = set(CANONICAL_MOTORISTAS) | set(CANONICAL_AJUDANTES)
-
 
 # O painel consulta este endpoint mais de uma vez durante o carregamento. O
 # resultado depende dos lotes e expurgos; guardar o último cálculo evita reler
@@ -180,8 +180,11 @@ class LigaEntregaDashboardService:
                         km_real = to_float(pick(row, "KmEntr", "Km Entrada")) - to_float(pick(row, "KmSai", "Km Saida"))
                         km_prev = to_float(pick(row, "KmPrev", "Km Previsto"))
                         km_ok = km_prev > 0 and km_real > 0 and km_real < 2000
+                        route_data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
+                        if (comp, route_data, filial.upper(), mot) in IRISMARK_AUXILIARY and IRISMARK_CODE not in aju:
+                            aju.append(IRISMARK_CODE)
                         rotas[mapa] = {
-                            "data": to_iso(pick(row, "Data"), fallback=manifest_ref(manifest)), "mapa": mapa, "filial": filial,
+                            "data": route_data, "mapa": mapa, "filial": filial,
                             "mot": mot, "aju": aju, "km_real": round(km_real, 1) if km_ok else None,
                             "km_prev": round(km_prev, 1) if km_ok else None, "tempo_prev": to_min(pick(row, "TempoPrev", "Tempo Prev")),
                             "hs0805": to_time(pick(row, "HrSai", "Hora Saida")), "he0805": to_time(pick(row, "HrEntr", "Hora Entrada")),
@@ -336,7 +339,8 @@ class LigaEntregaDashboardService:
 
         for mapa, equipe in equipes.items():
             rota = rotas.setdefault(mapa, {"data": equipe.get("data") or "", "mapa": mapa, "filial": equipe.get("filial") or "", "mot": equipe.get("mot") or "0", "aju": [], "km_real": None, "km_prev": None, "tempo_prev": None, "hs0805": "", "he0805": "", "entregas": 0, "cidade": "", "src": "03.11.29"})
-            rota.update({"mot": equipe.get("mot") or rota.get("mot"), "aju": equipe.get("aju") or rota.get("aju") or [], "sup": equipe.get("sup") or "", "placa": equipe.get("placa") or ""})
+            merged_aju = list(dict.fromkeys([*(rota.get("aju") or []), *(equipe.get("aju") or [])]))
+            rota.update({"mot": equipe.get("mot") or rota.get("mot"), "aju": merged_aju, "sup": equipe.get("sup") or "", "placa": equipe.get("placa") or ""})
             if equipe.get("data") and not rota.get("data"):
                 rota["data"] = equipe["data"]
             if equipe.get("filial") and not rota.get("filial"):
