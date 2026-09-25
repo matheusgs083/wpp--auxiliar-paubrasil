@@ -13,6 +13,7 @@ from bot_api.services.liga_entrega_pdf_service import build_liga_entrega_dashboa
 
 LIGA_ENTREGA_REPORTS = (
     {"routine": "030805_LIGA", "code": "03.08.05", "label": "Rotas do dia", "kind": "Diario"},
+    {"routine": "030224_RESUMO_LIGA", "code": "03.02.24", "label": "Devolucoes - resumo", "kind": "Mensal"},
     {"routine": "031120_BOT", "code": "03.11.20", "label": "Portaria", "kind": "Mensal"},
     {"routine": "030224_MOTORISTA_LIGA", "code": "03.02.24", "label": "Devolucoes por motorista", "kind": "Mensal"},
     {"routine": "030224_AJUDANTE_LIGA", "code": "03.02.24", "label": "Devolucoes por ajudante", "kind": "Mensal"},

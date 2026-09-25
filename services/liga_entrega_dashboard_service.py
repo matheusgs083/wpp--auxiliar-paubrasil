@@ -32,10 +32,11 @@ MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 12
+CACHE_VERSION = 13
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
+R030224S = "030224_RESUMO_LIGA"
 R030224M = "030224_MOTORISTA_LIGA"
 R030224A = "030224_AJUDANTE_LIGA"
 R030237 = "030237"
@@ -43,7 +44,7 @@ R03114902 = "03114902_BOT"
 R031129 = "031129_LIGA"
 RESP = "PONTOMAIS_ESPELHO"
 RCHK = "CHECKLIST_FROTA"
-ROUTINES = (R030805, R031120, R030224M, R030224A, R030237, R03114902, R031129, RESP, RCHK)
+ROUTINES = (R030805, R031120, R030224S, R030224M, R030224A, R030237, R03114902, R031129, RESP, RCHK)
 
 # Mesmo status utilizado no painel Liga entregue em 22/09/2026. Quem estiver
 # de férias ou desligado continua monitorado, porém não ocupa posição nem prêmio.
@@ -149,6 +150,7 @@ class LigaEntregaDashboardService:
         entregas_por_filial: dict[str, dict[str, Any]] = defaultdict(
             lambda: {"pdvs": set(), "nfs": set(), "qtde_por_produto": defaultdict(float)}
         )
+        resumo_entregas_hl: dict[str, float] = {}
         ponto: dict[str, str] = {}
         checklist: list[dict[str, str]] = []
         colab: dict[str, dict[str, str]] = {
@@ -226,6 +228,20 @@ class LigaEntregaDashboardService:
                             item["mot"] = remember(pick(row, "Motorista", "CdMot"), filial=filial, funcao="MOTORISTA")
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.11.20 {file['filename']}: {exc}")
+
+        for manifest in manifests.get(R030224S, []):
+            for file in stored_files(manifest):
+                filial_code = filial_code_for_liga(filial_from_name(file["filename"]))
+                if filial_code not in {"3", "4"}:
+                    continue
+                try:
+                    for row in rows_from(file["path"]):
+                        responsabilidade = clean_name(pick(row, "Responsabilidade"))
+                        if "TOTAL GERAL FATURADO" in responsabilidade:
+                            resumo_entregas_hl[filial_code] = to_float(pick(row, "Volume"))
+                            break
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"03.02.24 resumo {file['filename']}: {exc}")
 
         for manifest in manifests.get(R030224A, []):
             for file in stored_files(manifest):
@@ -459,17 +475,22 @@ class LigaEntregaDashboardService:
                 fatores_hecto = self.dprodutos_import_service.lookup_fatores_hecto(set(entregas_qtde_por_produto))
             except Exception:
                 fatores_hecto = {}
-        entregas_hl = sum(entregas_qtde_por_produto[codigo] * float(fatores_hecto.get(codigo) or 0) for codigo in entregas_qtde_por_produto)
+        entregas_hl_por_filial = {
+            filial_code: sum(
+                float(quantidade) * float(fatores_hecto.get(codigo) or 0)
+                for codigo, quantidade in dados["qtde_por_produto"].items()
+            )
+            for filial_code, dados in entregas_por_filial.items()
+        }
+        entregas_hl_por_filial.update(resumo_entregas_hl)
+        entregas_hl = sum(entregas_hl_por_filial.values())
         operacao = build_operacao(
             rotas_list, devols, motoristas, ajudantes,
             entregas_hl=entregas_hl, entregas_pdvs=entregas_pdvs, entregas_nfs=entregas_nfs,
         )
         operacao["filiais"] = {}
         for filial_code, dados in entregas_por_filial.items():
-            filial_hl = sum(
-                float(quantidade) * float(fatores_hecto.get(codigo) or 0)
-                for codigo, quantidade in dados["qtde_por_produto"].items()
-            )
+            filial_hl = entregas_hl_por_filial.get(filial_code, 0)
             filial_name = "PATOS" if filial_code == "3" else "SUME" if filial_code == "4" else filial_code
             operacao["filiais"][filial_name] = build_operacao(
                 [], [item for item in devols if filial_code_for_liga(item.get("filial")) == filial_code], [], [],

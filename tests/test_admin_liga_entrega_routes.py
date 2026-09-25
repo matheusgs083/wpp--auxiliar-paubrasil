@@ -139,6 +139,11 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
             reference_date="2026-09-22",
         )
         store.store_batch(
+            routine="030224_RESUMO_LIGA",
+            files={"03.02.24_PATOS_SET.csv": b"Responsabilidade;Notas;Valor;Volume\nTOTAL GERAL FATURADO; ;1000;250\n"},
+            reference_date="2026-09-22",
+        )
+        store.store_batch(
             routine="030224_AJUDANTE_LIGA",
             files={"03.02.24_PATOS_SET.csv": b"Nota;Serie;Data;Ajudante 1;Ajudante 2\n1;A;22/09/2026;7218;0\n"},
             reference_date="2026-09-22",
@@ -170,6 +175,7 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertGreaterEqual(payload["summary"]["motoristas_ativos"], 1)
         self.assertGreaterEqual(payload["summary"]["motoristas_elegiveis"], 1)
         self.assertEqual(payload["operacao"]["rotas"], 3)
+        self.assertEqual(payload["operacao"]["entregas_hl"], 250.0)
         self.assertEqual(events[-1]["event_type"], "admin_liga_dashboard")
 
         km_exp = client.post(

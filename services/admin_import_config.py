@@ -288,6 +288,15 @@ def build_admin_import_datasets(
                 "accept_extensions": ".csv",
                 "patterns": (r"^03\.02\.24_(PATOS|SUME)_[A-Z]{3}\.csv$",),
             },
+            "liga_030224_resumo": {
+                "allow_default_source": False,
+                "label": "Liga Entrega - 03.02.24 Resumo",
+                "routine": "030224_RESUMO_LIGA",
+                "folder": entrega_reports_root / "03.02.24" / "Resumo",
+                "upload_mode": "multiple",
+                "accept_extensions": ".csv",
+                "patterns": (r"^03\.02\.24_(PATOS|SUME)_[A-Z]{3}\.csv$",),
+            },
             "liga_030224_ajudante": {
                 "allow_default_source": False,
                 "label": "Liga Entrega - 03.02.24 Devolucoes Ajudante",
