@@ -5108,7 +5108,7 @@
       };
       let content = "";
       if (view === "motoristas" || view === "ajudantes") content = personRows(Array.isArray(rankings[view]) ? rankings[view] : [], view);
-      if (view === "devolucoes") content = renderLigaDevolucoesExpurgoCard(dashboard);
+      if (view === "devolucoes") content = renderLigaDevolucoesExpurgoCard(dashboard, filter);
       if (view === "rotas") content = table('<th>Data</th><th>Mapa</th><th>Filial</th><th>Motorista</th><th>Cidade</th><th class="text-end">KM real/prev.</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th>Expurgos</th><th></th>', filter(routes).slice().reverse().map(row => { const suspect = Number(row.km_real || 0) > Number(row.km_prev || 0) + 50; const late = String(row.hr_sai || "") > "12:00"; const expurgos = [row.expurgo_saida ? '<span class="badge text-bg-warning me-1">TML</span>' : "", row.expurgo_km ? '<span class="badge text-bg-warning">KM</span>' : ""].filter(Boolean).join("") || '<span class="text-secondary">—</span>'; return `<tr><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.mapa || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml((team.find(p => p.cod === row.mot) || {}).nome || row.mot || "-")}</td><td>${escapeHtml(row.cidade || "-")}</td><td class="text-end ${suspect ? "text-warning fw-bold" : ""}">${fmt(row.km_real)} / ${fmt(row.km_prev)}${suspect ? " ⚠" : ""}</td><td class="text-end ${late ? "text-warning fw-bold" : ""}">${escapeHtml(row.hr_sai || "-")}${late ? " ⚠" : ""}</td><td class="text-end">${pct(row.tempo_pct)}</td><td>${expurgos}</td><td><button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">KM</button></td></tr>`; }).join(""));
       if (view === "equipe") {
         const pending = state.ligaEntregaTeamChanges || {};
@@ -5257,11 +5257,11 @@
         : (equipeInteira ? "Remove este indicador de todas as rotas da filial nesta data." : "Remove este indicador para motorista e ajudantes da rota; os demais continuam contando.");
     }
 
-    function renderLigaDevolucoesExpurgoCard(dashboard = {}) {
+    function renderLigaDevolucoesExpurgoCard(dashboard = {}, filterRows = rows => rows) {
       const devolucoes = Array.isArray(dashboard.devolucoes_auxiliares)
         ? dashboard.devolucoes_auxiliares
         : (Array.isArray(dashboard.devolucoes) ? dashboard.devolucoes : []);
-      const pending = devolucoes.filter(item => !item.excluida);
+      const pending = filterRows(devolucoes.filter(item => !item.excluida));
       if (!pending.length) return '<div class="liga-expurgo-pending-card"><b>Devoluções da Liga</b><span class="text-secondary">Nenhuma devolução ativa para expurgar.</span></div>';
       return `<div class="liga-expurgo-pending-card"><div class="d-flex justify-content-between align-items-center gap-2 mb-2"><b>Devoluções da Liga para expurgo (${pending.length})</b><span class="text-secondary small">Somente a Liga pode expurgar estes registros.</span></div><div class="liga-expurgo-pending-list">${pending.map(item => `<div class="d-flex justify-content-between align-items-center gap-2 border-top pt-2 mt-2"><span><b>${escapeHtml(item.cliente || item.cliente_cod || "Cliente sem código")}</b> · ${escapeHtml(item.filial || "-")} · ${escapeHtml(formatDate(item.data) || item.data || "-")}<br><span class="text-secondary">NF ${escapeHtml(item.nota || "-")} · ${escapeHtml(item.motivo_operacional || item.motivo || "Motivo não informado")} · ${Number(item.volume_hl || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} HL</span></span><button type="button" class="btn btn-outline-warning btn-sm py-0 liga-expurgo-dev" data-expurgo-data="${escapeHtml(item.data || "")}" data-expurgo-filial="${escapeHtml(item.filial || "")}" data-expurgo-cliente="${escapeHtml(item.cliente_cod || "")}" title="Abrir formulário de expurgo">Expurgar</button></div>`).join("")}</div></div>`;
     }
