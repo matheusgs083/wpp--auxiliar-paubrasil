@@ -32,7 +32,7 @@ MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 8
+CACHE_VERSION = 9
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -153,11 +153,6 @@ class LigaEntregaDashboardService:
             for code, (name, filial) in CANONICAL_AJUDANTES.items()
         })
         warnings: list[str] = []
-        started_at = datetime.now().timestamp()
-
-        def should_skip_auxiliary() -> bool:
-            return datetime.now().timestamp() - started_at > 6.0
-
         def remember(cod: Any, *, nome: str = "", filial: str = "", funcao: str = "") -> str:
             c = norm_code(cod)
             if c == "0":
@@ -332,15 +327,11 @@ class LigaEntregaDashboardService:
                     continue
                 try:
                     cached_ponto = cached_espelho(path)
-                    # Um arquivo já lido não participa do limite de tempo: a
-                    # atualização fica barata mesmo quando o restante do lote
-                    # demorou para ser processado.
-                    if cached_ponto is not None:
-                        ponto.update(cached_ponto)
-                    elif should_skip_auxiliary():
-                        warnings.append("Espelho de ponto ignorado nesta leitura para evitar timeout do painel.")
-                    else:
-                        ponto.update(cache_espelho(path))
+                    # O cache torna a atualização barata. Na primeira leitura,
+                    # o arquivo dentro do limite é processado integralmente;
+                    # não descartamos o Espelho só porque os lotes principais
+                    # demoraram mais que um limite global.
+                    ponto.update(cached_ponto if cached_ponto is not None else cache_espelho(path))
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"espelho {file['filename']}: {exc}")
         # O checklist é um XLSX pequeno e é a fonte direta da coluna
@@ -443,6 +434,7 @@ class LigaEntregaDashboardService:
         cobertura = build_cobertura(rotas_list)
         devolucoes_auxiliares = sorted(devols, key=lambda x: (str(x.get("data_devolucao") or x.get("data") or ""), str(x.get("cliente") or ""), str(x.get("nota") or "")), reverse=True)
         active_devols = [item for item in devols if not item.get("excluida")]
+        warnings = list(dict.fromkeys(warnings))
         result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50]}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
