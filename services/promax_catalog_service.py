@@ -99,6 +99,7 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
             "description": "Relatorios ja mapeados para apoiar a Liga Entrega.",
             "routines": [
                 {"id": "030805_LIGA", "name": "Rotina 030805 Liga Entrega"},
+                {"id": "030224_RESUMO_LIGA", "name": "Rotina 030224 Resumo Liga Entrega"},
                 {"id": "030224_MOTORISTA_LIGA", "name": "Rotina 030224 Motorista Liga Entrega"},
                 {"id": "030224_AJUDANTE_LIGA", "name": "Rotina 030224 Ajudante Liga Entrega"},
                 {"id": "031120_BOT", "name": "Rotina 031120 Bot"},
