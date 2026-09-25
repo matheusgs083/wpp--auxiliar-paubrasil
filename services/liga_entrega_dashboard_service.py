@@ -32,7 +32,7 @@ MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 9
+CACHE_VERSION = 11
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -110,11 +110,12 @@ _CHECKLIST_CACHE: dict[tuple[str, int, int, tuple[tuple[str, str], ...]], list[d
 
 
 class LigaEntregaDashboardService:
-    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None) -> None:
+    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None) -> None:
         self.report_store = report_store
         self.expurgo_service = expurgo_service
         self.status_service = status_service
         self.dclientes_query_service = dclientes_query_service
+        self.dprodutos_import_service = dprodutos_import_service
 
     def build_dashboard(self, *, competencia: str | None = None) -> dict[str, Any]:
         comp = _clean_comp(competencia) if competencia else self._latest_competencia()
@@ -142,6 +143,12 @@ class LigaEntregaDashboardService:
         ajud_devol: dict[str, list[str]] = {}
         ent_m: dict[str, set[str]] = defaultdict(set)
         ent_a: dict[str, set[str]] = defaultdict(set)
+        entregas_pdvs: set[str] = set()
+        entregas_nfs: set[str] = set()
+        entregas_qtde_por_produto: dict[str, float] = defaultdict(float)
+        entregas_por_filial: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {"pdvs": set(), "nfs": set(), "qtde_por_produto": defaultdict(float)}
+        )
         ponto: dict[str, str] = {}
         checklist: list[dict[str, str]] = []
         colab: dict[str, dict[str, str]] = {
@@ -277,7 +284,23 @@ class LigaEntregaDashboardService:
                     for row in rows_from(file["path"]):
                         if str(pick(row, "Status") or "").strip().upper() == "C":
                             continue
-                        pdv = f"{norm_code(pick(row, 'Cliente', 'Cod Cliente', 'Cod. Cliente'))}|{to_iso(pick(row, 'Dt. Operacao', 'Dt Operacao', 'Data'), fallback=manifest_ref(manifest))}"
+                        cliente = norm_code(pick(row, "Cliente", "Cod Cliente", "Cod. Cliente"))
+                        filial_code = filial_code_for_liga(filial)
+                        filial_entregas = entregas_por_filial[filial_code]
+                        if cliente != "0":
+                            entregas_pdvs.add(f"{filial_code}|{cliente}")
+                            filial_entregas["pdvs"].add(cliente)
+                        nota = norm_code(pick(row, "Nota"))
+                        if nota != "0":
+                            serie = str(pick(row, "Serie", "Série") or "").strip()
+                            entregas_nfs.add(f"{filial_code}|{nota}|{serie}")
+                            filial_entregas["nfs"].add(f"{nota}|{serie}")
+                        produto = norm_code(pick(row, "Produto", "Código Produto", "Cod Produto"))
+                        if produto != "0":
+                            quantidade = to_float(pick(row, "Qtde", "Quantidade", "Qtd"))
+                            entregas_qtde_por_produto[produto] += quantidade
+                            filial_entregas["qtde_por_produto"][produto] += quantidade
+                        pdv = f"{cliente}|{to_iso(pick(row, 'Dt. Operacao', 'Dt Operacao', 'Data'), fallback=manifest_ref(manifest))}"
                         mot = remember(pick(row, "Motorista", "CdMot"), filial=filial, funcao="MOTORISTA")
                         if mot != "0":
                             ent_m[mot].add(pdv)
@@ -430,7 +453,30 @@ class LigaEntregaDashboardService:
             rotas_list, port, devols, {k: len(v) for k, v in ent_m.items()}, {k: len(v) for k, v in ent_a.items()},
             checklist, colab, has_farol=has_farol, first_week=first_week,
         )
-        operacao = build_operacao(rotas_list, devols, motoristas, ajudantes)
+        fatores_hecto = {}
+        if self.dprodutos_import_service is not None and entregas_qtde_por_produto:
+            try:
+                fatores_hecto = self.dprodutos_import_service.lookup_fatores_hecto(set(entregas_qtde_por_produto))
+            except Exception:
+                fatores_hecto = {}
+        entregas_hl = sum(entregas_qtde_por_produto[codigo] * float(fatores_hecto.get(codigo) or 0) for codigo in entregas_qtde_por_produto)
+        operacao = build_operacao(
+            rotas_list, devols, motoristas, ajudantes,
+            entregas_hl=entregas_hl, entregas_pdvs=entregas_pdvs, entregas_nfs=entregas_nfs,
+        )
+        operacao["filiais"] = {}
+        for filial_code, dados in entregas_por_filial.items():
+            filial_hl = sum(
+                float(quantidade) * float(fatores_hecto.get(codigo) or 0)
+                for codigo, quantidade in dados["qtde_por_produto"].items()
+            )
+            filial_name = "PATOS" if filial_code == "3" else "SUME" if filial_code == "4" else filial_code
+            operacao["filiais"][filial_name] = build_operacao(
+                [], [item for item in devols if filial_code_for_liga(item.get("filial")) == filial_code], [], [],
+                entregas_hl=filial_hl,
+                entregas_pdvs={f"{filial_code}|{item}" for item in dados["pdvs"]},
+                entregas_nfs={f"{filial_code}|{item}" for item in dados["nfs"]},
+            )
         cobertura = build_cobertura(rotas_list)
         devolucoes_auxiliares = sorted(devols, key=lambda x: (str(x.get("data_devolucao") or x.get("data") or ""), str(x.get("cliente") or ""), str(x.get("nota") or "")), reverse=True)
         active_devols = [item for item in devols if not item.get("excluida")]
@@ -1030,7 +1076,16 @@ def next_day(value: Any) -> str:
     return (date.fromisoformat(iso) + timedelta(days=1)).isoformat() if iso else ""
 
 
-def build_operacao(rotas: list[dict[str, Any]], devols: list[dict[str, Any]], motoristas: list[dict[str, Any]], ajudantes: list[dict[str, Any]]) -> dict[str, Any]:
+def build_operacao(
+    rotas: list[dict[str, Any]],
+    devols: list[dict[str, Any]],
+    motoristas: list[dict[str, Any]],
+    ajudantes: list[dict[str, Any]],
+    *,
+    entregas_hl: float = 0,
+    entregas_pdvs: set[str] | None = None,
+    entregas_nfs: set[str] | None = None,
+) -> dict[str, Any]:
     ent = sum(int(r.get("entregas") or 0) for r in rotas)
     dev = len([d for d in devols if not d.get("excluida")])
     saidas = [r for r in rotas if r.get("hr_sai") and not r.get("expurgo_saida")]
@@ -1038,7 +1093,35 @@ def build_operacao(rotas: list[dict[str, Any]], devols: list[dict[str, Any]], mo
     kms = [r for r in rotas if r.get("km_real") is not None and r.get("km_prev") is not None and not r.get("expurgo_km")]
     kr = sum(float(r.get("km_real") or 0) for r in kms)
     kp = sum(float(r.get("km_prev") or 0) for r in kms)
-    return {"entregas": ent, "devolucoes": dev, "devolucao_pct": round(dev / ent * 100, 2) if ent else None, "saida_pct": pct(len(saidas_ok) / len(saidas) * 100) if saidas else None, "km_desv": pct(max(0, kr - kp) / kp * 100) if kp else None, "rotas": len(rotas), "motoristas_elegiveis": len([x for x in motoristas if x.get("elegivel")]), "ajudantes_elegiveis": len([x for x in ajudantes if x.get("elegivel")])}
+    devolucoes_volume_hl = sum(float(item.get("volume_hl") or 0) for item in devols)
+    devolucoes_pdvs = {
+        f"{filial_code_for_liga(item.get('filial'))}|{norm_code(item.get('cliente_cod'))}"
+        for item in devols if norm_code(item.get("cliente_cod")) != "0"
+    }
+    devolucoes_nfs = {
+        f"{filial_code_for_liga(item.get('filial'))}|{norm_code(item.get('nota'))}|{str(item.get('serie') or '').strip()}"
+        for item in devols if norm_code(item.get("nota")) != "0"
+    }
+    entregas_pdvs = entregas_pdvs or set()
+    entregas_nfs = entregas_nfs or set()
+    hl_pct = round(devolucoes_volume_hl / entregas_hl * 100, 2) if entregas_hl > 0 else None
+    pdv_pct = round(len(devolucoes_pdvs) / len(entregas_pdvs) * 100, 2) if entregas_pdvs else None
+    nf_pct = round(len(devolucoes_nfs) / len(entregas_nfs) * 100, 2) if entregas_nfs else None
+    raw_hl_pct = devolucoes_volume_hl / entregas_hl * 100 if entregas_hl > 0 else None
+    raw_pdv_pct = len(devolucoes_pdvs) / len(entregas_pdvs) * 100 if entregas_pdvs else None
+    total_pct = round((raw_hl_pct or 0) + (raw_pdv_pct or 0), 2) if raw_hl_pct is not None or raw_pdv_pct is not None else None
+    return {
+        "entregas": ent, "devolucoes": dev, "devolucao_pct": round(dev / ent * 100, 2) if ent else None,
+        "devolucoes_volume_hl": round(devolucoes_volume_hl, 2), "devolucoes_pdvs": len(devolucoes_pdvs),
+        "devolucoes_nfs": len(devolucoes_nfs), "entregas_hl": round(entregas_hl, 2),
+        "entregas_pdvs": len(entregas_pdvs), "entregas_nfs": len(entregas_nfs),
+        "devolucao_hl_pct": hl_pct, "devolucao_pdv_pct": pdv_pct, "devolucao_nf_pct": nf_pct,
+        "devolucao_total_pct": total_pct, "devolucoes_valor": round(sum(float(item.get("valor") or 0) for item in devols), 2),
+        "saida_pct": pct(len(saidas_ok) / len(saidas) * 100) if saidas else None,
+        "km_desv": pct(max(0, kr - kp) / kp * 100) if kp else None, "rotas": len(rotas),
+        "motoristas_elegiveis": len([x for x in motoristas if x.get("elegivel")]),
+        "ajudantes_elegiveis": len([x for x in ajudantes if x.get("elegivel")]),
+    }
 
 
 def build_cobertura(rotas: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -589,6 +589,28 @@ class DProdutosImportService:
         with conn.cursor() as cur:
             cur.execute(query)
 
+    def lookup_fatores_hecto(self, codigos: set[str] | list[str] | tuple[str, ...]) -> dict[str, float]:
+        """Retorna fatores HL em uma única consulta para os produtos informados."""
+        normalized = sorted({normalize_numeric_code(code) for code in codigos if str(code or "").strip()})
+        if not normalized:
+            return {}
+        placeholders = ", ".join("%s" for _ in normalized)
+        query = f"SELECT codigo, fator_hecto FROM {self.schema}.dprodutos_latest WHERE codigo IN ({placeholders})"
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, normalized)
+                    rows = cur.fetchall()
+        except Exception:
+            return {}
+        result: dict[str, float] = {}
+        for codigo, fator in rows:
+            try:
+                result[normalize_numeric_code(codigo)] = float(fator or 0)
+            except (TypeError, ValueError):
+                continue
+        return result
+
     def _connect(self) -> psycopg.Connection[Any]:
         return psycopg.connect(self.database_url, connect_timeout=self.connect_timeout_seconds)
 

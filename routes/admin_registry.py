@@ -262,6 +262,7 @@ def _register_admin_liga_entrega_routes(app: FastAPI, *, deps: dict[str, Any]) -
             liga_entrega_expurgo_service=deps["liga_entrega_expurgo_service"],
             liga_entrega_status_service=deps.get("liga_entrega_status_service"),
             dclientes_query_service=deps.get("dclientes_query_service"),
+            dprodutos_import_service=deps.get("dprodutos_import_service"),
             liga_entrega_report_store=deps["liga_entrega_report_store"],
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps["record_admin_panel_action"],

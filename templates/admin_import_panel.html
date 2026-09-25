@@ -5196,12 +5196,16 @@
       const totalValue = rows.reduce((sum, row) => sum + Number(row.valor || 0), 0);
       const expurgados = rows.filter(row => row.excluida).length;
       const unique = field => new Set(rows.map(row => String(row[field] || "").trim()).filter(Boolean)).size;
+      const operacaoGeral = dashboard.operacao && typeof dashboard.operacao === "object" ? dashboard.operacao : {};
+      const operacaoFilial = branch && operacaoGeral.filiais && typeof operacaoGeral.filiais === "object" ? operacaoGeral.filiais[branch] : null;
+      const operacao = operacaoFilial || operacaoGeral;
+      const fmtPct = value => value === null || value === undefined || value === "" ? "-" : `${fmt(value)}%`;
       const cards = [
-        ["HL devolvido", `${fmt(totalVolume)} HL`, "volume total", false],
-        ["PDVs devolvidos", fmt(unique("cliente_cod") || unique("cliente")), "clientes distintos", false],
-        ["NFs devolvidas", fmt(unique("nota")), "notas fiscais distintas", false],
-        ["Devolução total", fmt(rows.length), `${expurgados} expurgo(s) identificado(s)`, true],
-        ["Valor devolvido", `R$ ${fmt(totalValue)}`, "total em dinheiro", false]
+        ["HL devolvido", fmtPct(operacao.devolucao_hl_pct), `${fmt(operacao.devolucoes_volume_hl ?? totalVolume)} HL`, false],
+        ["PDVs devolvidos", fmtPct(operacao.devolucao_pdv_pct), `${fmt(operacao.devolucoes_pdvs ?? (unique("cliente_cod") || unique("cliente")))} PDVs`, false],
+        ["NFs devolvidas", fmtPct(operacao.devolucao_nf_pct), `${fmt(operacao.devolucoes_nfs ?? unique("nota"))} NFs`, false],
+        ["Devolução total", fmtPct(operacao.devolucao_total_pct), "HL% + PDV%", true],
+        ["Valor devolvido", `R$ ${fmt(operacao.devolucoes_valor ?? totalValue)}`, "Total em dinheiro", false]
       ];
       if (E.entregaDevolucoesCards) E.entregaDevolucoesCards.innerHTML = cards.map(([label, value, sub, highlight]) => `<article class="devolucao-kpi-card ${highlight ? "is-highlight" : ""}"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(value)}</span><span class="sub">${escapeHtml(sub)}</span></article>`).join("");
       if (E.entregaDevolucoesStatus) E.entregaDevolucoesStatus.textContent = rows.length ? `${rows.length} registros do 03.02.24 Motorista${branch ? ` · filial ${branch === "SUME" ? "Sumé" : "Patos"}` : ""}. Esta análise é operacional e independente do ranking da Liga.` : (branch ? `Nenhum registro de devoluções para ${branch === "SUME" ? "Sumé" : "Patos"}.` : "Nenhum relatório de devoluções carregado.");
