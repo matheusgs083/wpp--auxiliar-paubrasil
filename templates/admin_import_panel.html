@@ -5200,8 +5200,9 @@
       const operacaoFilial = branch && operacaoGeral.filiais && typeof operacaoGeral.filiais === "object" ? operacaoGeral.filiais[branch] : null;
       const operacao = operacaoFilial || operacaoGeral;
       const fmtPct = value => value === null || value === undefined || value === "" ? "-" : `${fmt(value)}%`;
+      const hlBaseDisponivel = Number(operacao.entregas_hl || 0) > 0;
       const cards = [
-        ["HL devolvido", fmtPct(operacao.devolucao_hl_pct), `${fmt(operacao.devolucoes_volume_hl ?? totalVolume)} HL`, false],
+        ["HL devolvido", fmtPct(operacao.devolucao_hl_pct), `${fmt(operacao.devolucoes_volume_hl ?? totalVolume)} HL${hlBaseDisponivel ? "" : " · base de entrega indisponível"}`, false],
         ["PDVs devolvidos", fmtPct(operacao.devolucao_pdv_pct), `${fmt(operacao.devolucoes_pdvs ?? (unique("cliente_cod") || unique("cliente")))} PDVs`, false],
         ["NFs devolvidas", fmtPct(operacao.devolucao_nf_pct), `${fmt(operacao.devolucoes_nfs ?? unique("nota"))} NFs`, false],
         ["Devolução total", fmtPct(operacao.devolucao_total_pct), "HL% + PDV%", true],

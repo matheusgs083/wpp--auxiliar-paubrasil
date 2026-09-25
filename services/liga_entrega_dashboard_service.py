@@ -32,7 +32,7 @@ MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 11
+CACHE_VERSION = 12
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -1109,7 +1109,7 @@ def build_operacao(
     nf_pct = round(len(devolucoes_nfs) / len(entregas_nfs) * 100, 2) if entregas_nfs else None
     raw_hl_pct = devolucoes_volume_hl / entregas_hl * 100 if entregas_hl > 0 else None
     raw_pdv_pct = len(devolucoes_pdvs) / len(entregas_pdvs) * 100 if entregas_pdvs else None
-    total_pct = round((raw_hl_pct or 0) + (raw_pdv_pct or 0), 2) if raw_hl_pct is not None or raw_pdv_pct is not None else None
+    total_pct = round(raw_hl_pct + raw_pdv_pct, 2) if raw_hl_pct is not None and raw_pdv_pct is not None else None
     return {
         "entregas": ent, "devolucoes": dev, "devolucao_pct": round(dev / ent * 100, 2) if ent else None,
         "devolucoes_volume_hl": round(devolucoes_volume_hl, 2), "devolucoes_pdvs": len(devolucoes_pdvs),
