@@ -3377,6 +3377,7 @@
         worker: null,
         workerAssignments: [],
         workerCredentials: [],
+        credentialUserDrafts: {},
         schedules: [],
         scheduleGroups: [],
         activeScheduleGroupKey: "",
@@ -6345,6 +6346,13 @@
     }
 
     function renderPromaxCredentials(workers) {
+      if (E.promaxCredentialsBody) {
+        E.promaxCredentialsBody.querySelectorAll("tr[data-worker-id]").forEach(row => {
+          const usernameInput = row.querySelector(".promax-credential-username");
+          const workerId = String(row.dataset.workerId || "").trim();
+          if (workerId && usernameInput) state.promax.credentialUserDrafts[workerId] = usernameInput.value;
+        });
+      }
       const credentials = Array.isArray(state.promax.workerCredentials) ? state.promax.workerCredentials : [];
       const byWorkerId = new Map(credentials.map(item => [String(item && item.worker_id || ""), item]));
       const allWorkers = new Map();
@@ -6364,11 +6372,13 @@
       E.promaxCredentialsBody.innerHTML = [...allWorkers.values()].map(worker => {
         const workerId = String(worker.worker_id || "");
         const credential = byWorkerId.get(workerId) || {};
+        const draftUsername = state.promax.credentialUserDrafts[workerId];
+        const username = draftUsername === undefined ? String(credential.username || "") : draftUsername;
         const online = Boolean(worker.online);
         return `<tr data-worker-id="${escapeHtml(workerId)}">
           <td><strong>${escapeHtml(workerId)}</strong></td>
           <td><span class="pill ${online ? "ok" : "warn"}">${online ? "Online" : "Offline"}</span></td>
-          <td><input class="form-control form-control-sm promax-credential-username" value="${escapeHtml(String(credential.username || ""))}" autocomplete="username"></td>
+          <td><input class="form-control form-control-sm promax-credential-username" value="${escapeHtml(username)}" autocomplete="username"></td>
           <td><input class="form-control form-control-sm promax-credential-password" type="password" placeholder="${credential.password_configured ? "Senha configurada" : "Informe a senha"}" autocomplete="new-password"></td>
           <td class="text-end"><button class="btn btn-primary btn-sm promax-save-credential" type="button"><i class="bi bi-lock-fill me-1"></i>Salvar</button></td>
         </tr>`;
@@ -6388,6 +6398,7 @@
         const result = await req(CONFIG.endpoints.promax.workerCredentials, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker_id, username, password }), timeoutMs: 20000 });
         const saved = result.credentials || {};
         state.promax.workerCredentials = [...(state.promax.workerCredentials || []).filter(item => item.worker_id !== saved.worker_id), saved];
+        delete state.promax.credentialUserDrafts[worker_id];
         if (passwordInput) passwordInput.value = "";
         renderPromaxCredentials(promaxWorkersFromPayload(state.promax.worker || {}));
         addLog(`Credenciais Promax salvas para ${worker_id}.`, "ok");
@@ -9998,6 +10009,12 @@
       if (E.promaxCredentialsBody) E.promaxCredentialsBody.addEventListener("click", event => {
         const button = event.target.closest(".promax-save-credential");
         if (button) savePromaxCredentials(button.closest("tr"));
+      });
+      if (E.promaxCredentialsBody) E.promaxCredentialsBody.addEventListener("input", event => {
+        const input = event.target.closest(".promax-credential-username");
+        const row = input && input.closest("tr");
+        const workerId = String(row && row.dataset.workerId || "").trim();
+        if (workerId) state.promax.credentialUserDrafts[workerId] = input.value;
       });
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
