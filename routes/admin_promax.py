@@ -562,6 +562,17 @@ class PromaxWorkerAssignmentsRequest(_StrictPayload):
     assignments: list[PromaxWorkerAssignmentItem] = Field(default_factory=list, max_length=300)
 
 
+class PromaxWorkerCredentialsRequest(_StrictPayload):
+    worker_id: str = Field(min_length=1, max_length=160)
+    username: str = Field(min_length=1, max_length=300)
+    password: str = Field(min_length=1, max_length=500)
+
+    @field_validator("worker_id", "username", "password")
+    @classmethod
+    def clean_credential_text(cls, value: str) -> str:
+        return str(value or "").strip()
+
+
 class PromaxWorkerHeartbeatRequest(_StrictPayload):
     worker_id: str = Field(min_length=1, max_length=120)
     pid: int = Field(gt=0, le=2_147_483_647)
@@ -1075,7 +1086,10 @@ def create_admin_promax_router(
 
     def worker_control(worker_id: str, job_id: str | None = None) -> dict[str, Any]:
         queue = service.get_queue_state()
-        cancel_jobs = service.list_jobs(statuses=["cancel_requested"], limit=500)
+        # A cancellation is final in the control plane immediately.  Keep
+        # notifying a worker that still owns the leased process so it can close
+        # the local browser/process tree as a cleanup action.
+        cancel_jobs = service.list_jobs(statuses=["cancel_requested", "cancelled"], limit=500)
         stop_job_ids = [
             str(job.get("id") if isinstance(job, Mapping) else getattr(job, "id", ""))
             for job in cancel_jobs
@@ -1140,6 +1154,34 @@ def create_admin_promax_router(
             metadata={"assignments": len(payload.assignments)},
         )
         return _mapping_or_value(assignments, key="assignments")
+
+    @router.get("/api/admin/promax/worker-credentials")
+    def api_admin_promax_worker_credentials(
+        request: Request,
+        _context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        credentials = service.list_worker_credentials()
+        record_admin_event(request, "admin_promax_worker_credentials_list")
+        return _item_response(credentials, key="credentials")
+
+    @router.put("/api/admin/promax/worker-credentials")
+    def api_admin_promax_set_worker_credentials(
+        request: Request,
+        payload: PromaxWorkerCredentialsRequest,
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        try:
+            credentials = service.set_worker_credentials(
+                worker_id=payload.worker_id,
+                username=payload.username,
+                password=payload.password,
+                updated_by=context_actor(context),
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        record_admin_event(request, "admin_promax_worker_credentials_set", reason=f"worker_id={payload.worker_id}")
+        record_panel_action(request, context, action="configurar_credenciais_promax", target_type="worker", target_id=payload.worker_id)
+        return _item_response(credentials, key="credentials")
 
     @router.post("/api/admin/promax/jobs", status_code=202)
     def api_admin_promax_create_job(
@@ -1701,6 +1743,14 @@ def create_admin_promax_router(
             worker_id=payload.worker_id,
             lease_seconds=payload.lease_seconds,
         )
+        # These values are transient: never persist them in the job payload or
+        # expose them through the admin job endpoints.
+        if isinstance(job, Mapping):
+            credentials_loader = getattr(service, "worker_credentials", None)
+            credentials = credentials_loader(payload.worker_id) if callable(credentials_loader) else None
+            if credentials:
+                job = dict(job)
+                job["promax_credentials"] = credentials
         return _item_response(job, key="job")
 
     @router.post("/api/internal/promax/heartbeat")

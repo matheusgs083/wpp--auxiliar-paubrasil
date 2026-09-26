@@ -57,6 +57,7 @@ SCHEDULES_TABLE = "schedules"
 WORKER_HEARTBEATS_TABLE = "worker_heartbeats"
 QUEUE_STATE_TABLE = "queue_state"
 WORKER_ASSIGNMENTS_TABLE = "worker_assignments"
+WORKER_CREDENTIALS_TABLE = "worker_credentials"
 
 
 class JobRecord(TypedDict):
@@ -256,12 +257,17 @@ class PromaxJobsService:
         schema: str = DEFAULT_SCHEMA,
         connect_timeout_seconds: float = 3.0,
         max_concurrent_jobs: int = 1,
+        credential_encryption_secret: str = "",
         pool: ConnectionPool[Any] | None = None,
     ) -> None:
         self.database_url = str(database_url or "").strip()
         self.schema = _normalize_schema(schema)
         self.connect_timeout_seconds = max(float(connect_timeout_seconds), 1.0)
         self.max_concurrent_jobs = max(1, int(max_concurrent_jobs))
+        # This secret is deliberately not persisted with the credentials.  The
+        # panel session secret is stable across container restarts and keeps the
+        # Promax password unreadable in PostgreSQL backups.
+        self.credential_encryption_secret = str(credential_encryption_secret or "").strip()
         self._pool = pool
         self._pool_lock = RLock()
         self._schema_lock = RLock()
@@ -449,6 +455,64 @@ class PromaxJobsService:
                 rows = cur.fetchall()
         return [_worker_assignment_record(row) for row in rows]
 
+    def list_worker_credentials(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(sql.SQL("SELECT worker_id, username_ciphertext, updated_by, updated_at FROM {schema}.{table} ORDER BY worker_id").format(schema=sql.Identifier(self.schema), table=sql.Identifier(WORKER_CREDENTIALS_TABLE)))
+                rows = cur.fetchall()
+        return [{"worker_id": str(row["worker_id"]), "username": self._decrypt_credential(str(row["username_ciphertext"])), "password_configured": True, "updated_by": str(row.get("updated_by") or ""), "updated_at": _iso(row.get("updated_at"))} for row in rows]
+
+    def set_worker_credentials(self, *, worker_id: str, username: str, password: str, updated_by: str = "") -> dict[str, Any]:
+        clean_worker_id = _required_text(worker_id, field_name="worker_id", max_length=160)
+        clean_username = _required_text(username, field_name="username", max_length=300)
+        clean_password = _required_text(password, field_name="password", max_length=500)
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(sql.SQL("""
+                    INSERT INTO {schema}.{table} (worker_id, username_ciphertext, password_ciphertext, updated_by)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (worker_id) DO UPDATE SET username_ciphertext = EXCLUDED.username_ciphertext,
+                        password_ciphertext = EXCLUDED.password_ciphertext, updated_by = EXCLUDED.updated_by, updated_at = NOW()
+                    RETURNING worker_id, username_ciphertext, updated_by, updated_at
+                """).format(schema=sql.Identifier(self.schema), table=sql.Identifier(WORKER_CREDENTIALS_TABLE)), (clean_worker_id, self._encrypt_credential(clean_username), self._encrypt_credential(clean_password), str(updated_by or "").strip()))
+                row = cur.fetchone()
+        assert row is not None
+        return {"worker_id": str(row["worker_id"]), "username": self._decrypt_credential(str(row["username_ciphertext"])), "password_configured": True, "updated_by": str(row.get("updated_by") or ""), "updated_at": _iso(row.get("updated_at"))}
+
+    def worker_credentials(self, worker_id: str) -> dict[str, str] | None:
+        clean_worker_id = _required_text(worker_id, field_name="worker_id", max_length=160)
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(sql.SQL("SELECT username_ciphertext, password_ciphertext FROM {schema}.{table} WHERE worker_id = %s").format(schema=sql.Identifier(self.schema), table=sql.Identifier(WORKER_CREDENTIALS_TABLE)), (clean_worker_id,))
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return {"username": self._decrypt_credential(str(row["username_ciphertext"])), "password": self._decrypt_credential(str(row["password_ciphertext"]))}
+
+    def _credential_fernet(self) -> Any:
+        if not self.credential_encryption_secret:
+            raise RuntimeError("ADMIN_PANEL_SESSION_SECRET is required to store Promax credentials.")
+        try:
+            from cryptography.fernet import Fernet
+            import base64
+            import hashlib
+        except ImportError as exc:
+            raise RuntimeError("cryptography is required to store Promax credentials.") from exc
+        key = base64.urlsafe_b64encode(hashlib.sha256(self.credential_encryption_secret.encode("utf-8")).digest())
+        return Fernet(key)
+
+    def _encrypt_credential(self, value: str) -> str:
+        return self._credential_fernet().encrypt(value.encode("utf-8")).decode("ascii")
+
+    def _decrypt_credential(self, value: str) -> str:
+        try:
+            return self._credential_fernet().decrypt(value.encode("ascii")).decode("utf-8")
+        except Exception as exc:
+            raise RuntimeError("Nao foi possivel descriptografar as credenciais Promax.") from exc
+
     def replace_worker_assignments(
         self,
         assignments: Sequence[Mapping[str, Any]],
@@ -555,7 +619,10 @@ class PromaxJobsService:
                                   SELECT COUNT(*)
                                   FROM {schema}.{jobs} AS active_job
                                   WHERE active_job.concurrency_key = j.concurrency_key
-                                    AND active_job.status IN ('running', 'cancel_requested')
+                                    AND (
+                                        active_job.status IN ('running', 'cancel_requested')
+                                        OR (active_job.status = 'cancelled' AND active_job.lease_expires_at > NOW())
+                                    )
                               ) < %s
                             ORDER BY j.priority DESC, j.available_at, j.created_at, j.id
                             FOR UPDATE OF q, j SKIP LOCKED
@@ -701,7 +768,7 @@ class PromaxJobsService:
                         """
                         UPDATE {schema}.{jobs}
                         SET
-                            status = %s,
+                            status = CASE WHEN status = 'cancelled' THEN 'cancelled' ELSE %s END,
                             result = %s,
                             error = %s,
                             finished_at = NOW(),
@@ -717,7 +784,7 @@ class PromaxJobsService:
                         WHERE id = %s
                           AND lease_token = %s
                           AND leased_by = %s
-                          AND status IN ('running', 'cancel_requested')
+                          AND status IN ('running', 'cancel_requested', 'cancelled')
                           AND lease_expires_at > NOW()
                         RETURNING *
                         """
@@ -908,10 +975,11 @@ class PromaxJobsService:
                             """
                             UPDATE {schema}.{jobs}
                             SET
-                                status = 'cancel_requested',
+                                status = 'cancelled',
                                 cancel_requested_at = NOW(),
                                 cancel_requested_by = %s,
                                 cancel_reason = %s,
+                                finished_at = NOW(),
                                 updated_at = NOW()
                             WHERE id = %s
                             RETURNING *
@@ -923,7 +991,7 @@ class PromaxJobsService:
                         (clean_requested_by, clean_reason, normalized_job_id),
                     )
                     row = cur.fetchone()
-                    log_message = "Cancelamento solicitado ao worker."
+                    log_message = "Job em execucao cancelado pelo painel; o worker recebera o sinal de parada se ainda estiver ativo."
                 else:
                     return _job_record(current)
                 self._append_log_cursor(
@@ -2284,6 +2352,22 @@ class PromaxJobsService:
                     ).format(
                         schema=schema,
                         schedules=sql.Identifier(SCHEDULES_TABLE),
+                    )
+                )
+                cur.execute(
+                    sql.SQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS {schema}.{worker_credentials} (
+                            worker_id VARCHAR(160) PRIMARY KEY,
+                            username_ciphertext TEXT NOT NULL,
+                            password_ciphertext TEXT NOT NULL,
+                            updated_by TEXT NOT NULL DEFAULT '',
+                            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        )
+                        """
+                    ).format(
+                        schema=schema,
+                        worker_credentials=sql.Identifier(WORKER_CREDENTIALS_TABLE),
                     )
                 )
                 cur.execute(

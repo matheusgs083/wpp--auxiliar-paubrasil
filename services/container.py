@@ -109,6 +109,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         schema=settings.promax_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
         max_concurrent_jobs=settings.promax_max_concurrent_jobs,
+        credential_encryption_secret=settings.admin_panel_session_secret,
     )
     conferencia_service = ConferenciaService(
         database_url=settings.reports_database_url,

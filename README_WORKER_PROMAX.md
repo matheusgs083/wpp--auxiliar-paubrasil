@@ -122,6 +122,7 @@ Regras importantes:
 - nao troque `PROMAX_WORKER_TOKEN` se o servidor ja esta funcionando;
 - o token do worker nao e a API key do webhook da Evolution;
 - `PROMAX_WORKER_ID` deve ser fixo para essa maquina;
+- o usuario e a senha do Promax sao configurados no painel, em `Promax Admin > Acesso ao Promax`, para esse mesmo `PROMAX_WORKER_ID`;
 - nao coloque tokens em atalhos, `.bat` novos ou Git.
 
 ## 5. Rebuild seguro do `bot_api`

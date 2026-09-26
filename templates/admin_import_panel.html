@@ -2016,6 +2016,20 @@
         </section>
 
         <section class="panel-card p-3 mb-3">
+          <div class="mb-2">
+            <h2 class="h6 fw-bold mb-1"><i class="bi bi-key me-2 text-primary"></i>Acesso ao Promax</h2>
+            <div class="form-text">A senha fica criptografada no servidor e e enviada apenas ao worker escolhido, no momento da execucao.</div>
+          </div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-4"><label class="form-label small mb-1" for="promaxCredentialWorker">Worker</label><input class="form-control form-control-sm" id="promaxCredentialWorker" list="promaxCredentialWorkers" placeholder="Ex.: promax-producao" autocomplete="off"><datalist id="promaxCredentialWorkers"></datalist></div>
+            <div class="col-md-3"><label class="form-label small mb-1" for="promaxCredentialUsername">Usuario</label><input class="form-control form-control-sm" id="promaxCredentialUsername" autocomplete="username"></div>
+            <div class="col-md-3"><label class="form-label small mb-1" for="promaxCredentialPassword">Senha</label><input class="form-control form-control-sm" id="promaxCredentialPassword" type="password" autocomplete="new-password"></div>
+            <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" id="promaxSaveCredentialsBtn" type="button"><i class="bi bi-lock-fill me-1"></i>Salvar acesso</button></div>
+          </div>
+          <div class="small text-secondary mt-2" id="promaxCredentialsStatus">Nenhuma credencial carregada.</div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
             <div>
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-sliders me-2 text-primary"></i>Configuracao dos workers</h2>
@@ -3227,6 +3241,7 @@
           jobsBatch: "/api/admin/promax/jobs/batch",
           worker: "/api/admin/promax/worker/status",
           workerAssignments: "/api/admin/promax/worker-assignments",
+          workerCredentials: "/api/admin/promax/worker-credentials",
           pause: "/api/admin/promax/queue/pause",
           resume: "/api/admin/promax/queue/resume",
           pending: "/api/admin/promax/queue/pending",
@@ -3361,6 +3376,7 @@
         jobs: [],
         worker: null,
         workerAssignments: [],
+        workerCredentials: [],
         schedules: [],
         scheduleGroups: [],
         activeScheduleGroupKey: "",
@@ -3654,6 +3670,12 @@
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
       promaxSaveWorkerAssignmentsBtn: document.getElementById("promaxSaveWorkerAssignmentsBtn"),
+      promaxCredentialWorker: document.getElementById("promaxCredentialWorker"),
+      promaxCredentialWorkers: document.getElementById("promaxCredentialWorkers"),
+      promaxCredentialUsername: document.getElementById("promaxCredentialUsername"),
+      promaxCredentialPassword: document.getElementById("promaxCredentialPassword"),
+      promaxSaveCredentialsBtn: document.getElementById("promaxSaveCredentialsBtn"),
+      promaxCredentialsStatus: document.getElementById("promaxCredentialsStatus"),
       promaxQueueState: document.getElementById("promaxQueueState"),
       promaxRefreshBtn: document.getElementById("promaxRefreshBtn"),
       promaxPauseBtn: document.getElementById("promaxPauseBtn"),
@@ -6326,6 +6348,31 @@
       }
     }
 
+    function renderPromaxCredentials(workers) {
+      const credentials = Array.isArray(state.promax.workerCredentials) ? state.promax.workerCredentials : [];
+      if (E.promaxCredentialWorkers) E.promaxCredentialWorkers.innerHTML = (workers || []).map(worker => `<option value="${escapeHtml(String(worker && worker.worker_id || ""))}"></option>`).join("");
+      if (E.promaxCredentialsStatus) E.promaxCredentialsStatus.textContent = credentials.length
+        ? credentials.map(item => `${item.worker_id}: ${item.username} (senha configurada)`).join(" | ")
+        : "Nenhuma credencial configurada no painel.";
+    }
+
+    async function savePromaxCredentials() {
+      const worker_id = String(E.promaxCredentialWorker && E.promaxCredentialWorker.value || "").trim();
+      const username = String(E.promaxCredentialUsername && E.promaxCredentialUsername.value || "").trim();
+      const password = String(E.promaxCredentialPassword && E.promaxCredentialPassword.value || "");
+      if (!worker_id || !username || !password) { addLog("Informe worker, usuario e senha do Promax.", "warn"); return; }
+      if (E.promaxSaveCredentialsBtn) E.promaxSaveCredentialsBtn.disabled = true;
+      try {
+        const result = await req(CONFIG.endpoints.promax.workerCredentials, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker_id, username, password }), timeoutMs: 20000 });
+        const saved = result.credentials || {};
+        state.promax.workerCredentials = [...(state.promax.workerCredentials || []).filter(item => item.worker_id !== saved.worker_id), saved];
+        if (E.promaxCredentialPassword) E.promaxCredentialPassword.value = "";
+        renderPromaxCredentials(promaxWorkersFromPayload(state.promax.worker || {}));
+        addLog(`Credenciais Promax salvas para ${worker_id}.`, "ok");
+      } catch (err) { addLog(`Falha ao salvar credenciais Promax: ${err.message}`, "err"); }
+      finally { if (E.promaxSaveCredentialsBtn) E.promaxSaveCredentialsBtn.disabled = false; }
+    }
+
     function renderFinanceiroFechamentoWorker(payload) {
       const els = financeiroElements();
       const workers = promaxWorkersFromPayload(payload || state.financeiro.worker || state.promax.worker || {});
@@ -6398,6 +6445,7 @@
       }
       renderPromaxWorkers(workers);
       renderPromaxWorkerAssignments(workers);
+      renderPromaxCredentials(workers);
       renderFinanceiroFechamentoWorker(workerPayload);
       if (E.promaxQueueState) {
         const queueLabel = queue.paused ? "Fila pausada" : "Fila liberada";
@@ -6500,7 +6548,8 @@
         req(`${CONFIG.endpoints.promax.jobs}?${params.toString()}`, { timeoutMs: 30000 }),
         req(CONFIG.endpoints.promax.worker, { timeoutMs: 20000 }),
         req(`${CONFIG.endpoints.promax.schedules}?limit=1000`, { timeoutMs: 20000 }),
-        req(CONFIG.endpoints.promax.workerAssignments, { timeoutMs: 20000 })
+        req(CONFIG.endpoints.promax.workerAssignments, { timeoutMs: 20000 }),
+        req(CONFIG.endpoints.promax.workerCredentials, { timeoutMs: 20000 })
       ];
       const results = await Promise.allSettled(requests);
       state.promax.catalog = results[0].status === "fulfilled"
@@ -6510,6 +6559,7 @@
       if (results[2].status === "fulfilled") state.promax.worker = results[2].value || null;
       if (results[3].status === "fulfilled") state.promax.schedules = Array.isArray(results[3].value.schedules) ? results[3].value.schedules : [];
       if (results[4].status === "fulfilled") state.promax.workerAssignments = Array.isArray(results[4].value.assignments) ? results[4].value.assignments : [];
+      if (results[5].status === "fulfilled") state.promax.workerCredentials = Array.isArray(results[5].value.credentials) ? results[5].value.credentials : [];
       renderPromax();
       const failed = results.filter(result => result.status === "rejected");
       if (failed.length && !silent) addLog(`Promax: ${failed.length} consulta(s) falharam.`, "err");
@@ -9923,6 +9973,7 @@
       if (E.promaxClearBtn) E.promaxClearBtn.addEventListener("click", () => promaxQueueAction("pending"));
       if (E.promaxReprocessPublicationsBtn) E.promaxReprocessPublicationsBtn.addEventListener("click", promaxReprocessPublications);
       if (E.promaxSaveWorkerAssignmentsBtn) E.promaxSaveWorkerAssignmentsBtn.addEventListener("click", savePromaxWorkerAssignments);
+      if (E.promaxSaveCredentialsBtn) E.promaxSaveCredentialsBtn.addEventListener("click", savePromaxCredentials);
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));

@@ -109,8 +109,7 @@ PROMAX_API_BASE_URL=http://IP-DO-SERVIDOR:8080
 PROMAX_WORKER_TOKEN=mesmo-token-configurado-na-api
 PROMAX_WORKER_ID=worker-sousa
 
-PROMAX_USER=usuario_promax_do_segundo_pc
-PROMAX_PASS=senha_do_segundo_pc
+# Usuario e senha: configure no painel Promax, em Acesso ao Promax.
 ```
 
 Depois inicie no segundo PC:

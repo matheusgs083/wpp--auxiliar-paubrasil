@@ -268,6 +268,16 @@ class PromaxRunner:
     ) -> PromaxRunResult:
         command = self.build_command(job)
         on_line("stdout", f"Comando Promax: {subprocess.list2cmdline(command)}")
+        environment = os.environ.copy()
+        credentials = job.get("promax_credentials")
+        if isinstance(credentials, Mapping):
+            username = str(credentials.get("username") or "").strip()
+            password = str(credentials.get("password") or "")
+            if username and password:
+                # The driver already reads these names.  They are passed only
+                # to this child process and never rendered in the command/log.
+                environment["PROMAX_USER"] = username
+                environment["PROMAX_PASS"] = password
         run_started_at_epoch = self._wall_time()
         process = self._popen_factory(
             command,
@@ -280,6 +290,7 @@ class PromaxRunner:
             errors="replace",
             bufsize=1,
             shell=False,
+            env=environment,
         )
         if process.stdout is None or process.stderr is None:
             raise RuntimeError("Promax subprocess did not expose stdout and stderr.")
