@@ -6386,6 +6386,18 @@
       if (E.promaxCredentialsStatus) E.promaxCredentialsStatus.textContent = `${allWorkers.size} worker(s) disponivel(is) para configurar.`;
     }
 
+    function mergePromaxWorkerCredentials(credentials) {
+      const merged = new Map(
+        (Array.isArray(state.promax.workerCredentials) ? state.promax.workerCredentials : [])
+          .map(item => [String(item && item.worker_id || ""), item])
+      );
+      (Array.isArray(credentials) ? credentials : []).forEach(item => {
+        const workerId = String(item && item.worker_id || "").trim();
+        if (workerId) merged.set(workerId, item);
+      });
+      state.promax.workerCredentials = [...merged.values()];
+    }
+
     async function savePromaxCredentials(row) {
       const worker_id = String(row && row.dataset.workerId || "").trim();
       const username = String(row && row.querySelector(".promax-credential-username")?.value || "").trim();
@@ -6397,8 +6409,8 @@
       try {
         const result = await req(CONFIG.endpoints.promax.workerCredentials, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker_id, username, password }), timeoutMs: 20000 });
         const saved = result.credentials || {};
-        state.promax.workerCredentials = [...(state.promax.workerCredentials || []).filter(item => item.worker_id !== saved.worker_id), saved];
-        delete state.promax.credentialUserDrafts[worker_id];
+        mergePromaxWorkerCredentials([saved]);
+        state.promax.credentialUserDrafts[worker_id] = String(saved.username || username);
         if (passwordInput) passwordInput.value = "";
         renderPromaxCredentials(promaxWorkersFromPayload(state.promax.worker || {}));
         addLog(`Credenciais Promax salvas para ${worker_id}.`, "ok");
@@ -6592,7 +6604,7 @@
       if (results[2].status === "fulfilled") state.promax.worker = results[2].value || null;
       if (results[3].status === "fulfilled") state.promax.schedules = Array.isArray(results[3].value.schedules) ? results[3].value.schedules : [];
       if (results[4].status === "fulfilled") state.promax.workerAssignments = Array.isArray(results[4].value.assignments) ? results[4].value.assignments : [];
-      if (results[5].status === "fulfilled") state.promax.workerCredentials = Array.isArray(results[5].value.credentials) ? results[5].value.credentials : [];
+      if (results[5].status === "fulfilled") mergePromaxWorkerCredentials(results[5].value.credentials);
       renderPromax();
       const failed = results.filter(result => result.status === "rejected");
       if (failed.length && !silent) addLog(`Promax: ${failed.length} consulta(s) falharam.`, "err");
