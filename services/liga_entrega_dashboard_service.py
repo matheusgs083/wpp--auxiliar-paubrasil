@@ -1068,11 +1068,11 @@ def match_dev_exp(dev: dict[str, Any], expurgos: list[dict[str, Any]]) -> dict[s
             continue
         if e.get("filial") and str(e.get("filial")).upper() != str(dev.get("filial")).upper():
             continue
-        if str(e.get("escopo") or "individual").lower() == "equipe":
-            return e
         cliente = norm_code(e.get("cliente"))
         cod_cliente = norm_code(dev.get("cliente_cod"))
-        if cliente != "0" and cliente != cod_cliente:
+        # Expurgos antigos de equipe sem cliente eram amplos por data/filial.
+        # Nao os aplique: devolucao sempre precisa identificar o cliente.
+        if cliente == "0" or cliente != cod_cliente:
             continue
         return e
     return None

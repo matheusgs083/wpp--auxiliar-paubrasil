@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from bot_api.services.liga_entrega_expurgo_service import LigaEntregaExpurgoService
+from bot_api.services.liga_entrega_dashboard_service import match_dev_exp
 
 
 class LigaEntregaExpurgoServiceTest(unittest.TestCase):
@@ -51,6 +52,26 @@ class LigaEntregaExpurgoServiceTest(unittest.TestCase):
             service = LigaEntregaExpurgoService(Path(tmp) / "expurgos.json")
             with self.assertRaises(ValueError):
                 service.upsert_expurgo({"tipo": "devolucao", "competencia": "2026-09", "filial": "PATOS"})
+
+    def test_team_devolucao_keeps_cliente_and_never_becomes_daily_expurgo(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = LigaEntregaExpurgoService(Path(tmp) / "expurgos.json")
+            with self.assertRaisesRegex(ValueError, "Cliente obrigatorio"):
+                service.upsert_expurgo(
+                    {"tipo": "devolucao", "escopo": "equipe", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-23"}
+                )
+            item = service.upsert_expurgo(
+                {"tipo": "devolucao", "escopo": "equipe", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-23", "cliente": "501"}
+            )
+            self.assertEqual(item["cliente"], "501")
+
+    def test_legacy_team_devolucao_without_cliente_is_not_applied_broadly(self) -> None:
+        dev = {"data": "2026-09-23", "filial": "PATOS", "cliente_cod": "502"}
+        legacy = {"tipo": "devolucao", "escopo": "equipe", "data": "2026-09-23", "filial": "PATOS", "cliente": ""}
+        targeted = {"tipo": "devolucao", "escopo": "equipe", "data": "2026-09-23", "filial": "PATOS", "cliente": "502"}
+
+        self.assertIsNone(match_dev_exp(dev, [legacy]))
+        self.assertEqual(match_dev_exp(dev, [targeted]), targeted)
 
     def test_tml_can_be_registered_for_the_whole_day_without_map(self) -> None:
         with TemporaryDirectory() as tmp:

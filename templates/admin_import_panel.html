@@ -5273,12 +5273,12 @@
       if (E.entregaLigaExpurgoAlvoLabel) E.entregaLigaExpurgoAlvoLabel.textContent = isDevolucao ? "Cliente" : "Mapa";
       if (E.entregaLigaExpurgoAlvo) {
         E.entregaLigaExpurgoAlvo.placeholder = isDevolucao ? "Código do cliente" : "Número do mapa";
-        E.entregaLigaExpurgoAlvo.required = !equipeInteira;
-        E.entregaLigaExpurgoAlvo.disabled = equipeInteira;
-        if (equipeInteira) E.entregaLigaExpurgoAlvo.value = "";
+        E.entregaLigaExpurgoAlvo.required = isDevolucao || !equipeInteira;
+        E.entregaLigaExpurgoAlvo.disabled = equipeInteira && !isDevolucao;
+        if (equipeInteira && !isDevolucao) E.entregaLigaExpurgoAlvo.value = "";
       }
       if (E.entregaLigaExpurgoHint) E.entregaLigaExpurgoHint.textContent = isDevolucao
-        ? (equipeInteira ? "Remove todas as devoluções da filial nesta data." : "Remove apenas devolução por cliente e data.")
+        ? (equipeInteira ? "Remove somente a devolução do cliente informado, para motorista e ajudantes vinculados a ela." : "Remove apenas devolução por cliente e data.")
         : (equipeInteira ? "Remove este indicador de todas as rotas da filial nesta data." : "Remove este indicador para motorista e ajudantes da rota; os demais continuam contando.");
     }
 
@@ -5336,9 +5336,9 @@
       const data = String(E.entregaLigaExpurgoData && E.entregaLigaExpurgoData.value || "");
       const competencia = String((state.ligaEntregaDashboard || {}).competencia || data.slice(0, 7));
       const alvo = String(E.entregaLigaExpurgoAlvo && E.entregaLigaExpurgoAlvo.value || "").trim();
-      if (!competencia || !data || (escopo === "individual" && !alvo)) throw new Error("Informe data e cliente ou mapa para um expurgo individual.");
+      if (!competencia || !data || (tipo === "devolucao" && !alvo) || (escopo === "individual" && !alvo)) throw new Error("Informe data e cliente para devolução, ou mapa para expurgo individual.");
       const payload = { tipo, escopo, competencia, filial: String(E.entregaLigaExpurgoFilial && E.entregaLigaExpurgoFilial.value || ""), data, motivo: String(E.entregaLigaExpurgoMotivo && E.entregaLigaExpurgoMotivo.value || "") };
-      if (escopo === "individual" && tipo === "devolucao") payload.cliente = alvo;
+      if (tipo === "devolucao") payload.cliente = alvo;
       else if (escopo === "individual") payload.mapa = alvo;
       await req(CONFIG.endpoints.ligaEntrega.expurgos, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), timeoutMs: 20000 });
       E.entregaLigaExpurgoAlvo.value = "";

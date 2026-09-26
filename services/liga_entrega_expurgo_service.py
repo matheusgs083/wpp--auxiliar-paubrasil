@@ -116,7 +116,7 @@ class LigaEntregaExpurgoService:
         escopo = self._clean_escopo("equipe" if raw_escopo in (None, "") and tipo == "tml" and not mapa else raw_escopo)
         if escopo == "individual" and tipo in {"km", "tml", "dispersao"} and not mapa:
             raise ValueError("Mapa obrigatorio para expurgo de rota.")
-        if escopo == "individual" and tipo == "devolucao" and not cliente:
+        if tipo == "devolucao" and not cliente:
             raise ValueError("Cliente obrigatorio para expurgo de devolucao.")
         if tipo in {"km", "tml", "dispersao"} and not data:
             raise ValueError("Data obrigatoria para expurgo de rota.")
@@ -124,7 +124,12 @@ class LigaEntregaExpurgoService:
             raise ValueError("Data obrigatoria para expurgo de devolucao.")
         if escopo == "equipe":
             mapa = ""
-            cliente = ""
+            # Uma devolucao pertence ao motorista e aos ajudantes informados
+            # no proprio registro. "Equipe inteira" so amplia quem recebe o
+            # ajuste daquele registro; nunca pode remover todas as devolucoes
+            # da filial em uma data.
+            if tipo != "devolucao":
+                cliente = ""
         key = self._build_key(tipo=tipo, escopo=escopo, competencia=competencia, filial=filial, data=data, mapa=mapa, cliente=cliente)
         return {
             "id": self._id_from_key(key),
