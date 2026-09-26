@@ -2020,13 +2020,13 @@
             <h2 class="h6 fw-bold mb-1"><i class="bi bi-key me-2 text-primary"></i>Acesso ao Promax</h2>
             <div class="form-text">A senha fica criptografada no servidor e e enviada apenas ao worker escolhido, no momento da execucao.</div>
           </div>
-          <div class="row g-2 align-items-end">
-            <div class="col-md-4"><label class="form-label small mb-1" for="promaxCredentialWorker">Worker</label><input class="form-control form-control-sm" id="promaxCredentialWorker" list="promaxCredentialWorkers" placeholder="Ex.: promax-producao" autocomplete="off"><datalist id="promaxCredentialWorkers"></datalist></div>
-            <div class="col-md-3"><label class="form-label small mb-1" for="promaxCredentialUsername">Usuario</label><input class="form-control form-control-sm" id="promaxCredentialUsername" autocomplete="username"></div>
-            <div class="col-md-3"><label class="form-label small mb-1" for="promaxCredentialPassword">Senha</label><input class="form-control form-control-sm" id="promaxCredentialPassword" type="password" autocomplete="new-password"></div>
-            <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" id="promaxSaveCredentialsBtn" type="button"><i class="bi bi-lock-fill me-1"></i>Salvar acesso</button></div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th>Worker</th><th>Status</th><th>Usuario</th><th>Senha</th><th></th></tr></thead>
+              <tbody id="promaxCredentialsBody"><tr><td colspan="5" class="text-secondary">Carregando workers.</td></tr></tbody>
+            </table>
           </div>
-          <div class="small text-secondary mt-2" id="promaxCredentialsStatus">Nenhuma credencial carregada.</div>
+          <div class="small text-secondary mt-2" id="promaxCredentialsStatus">Use a linha de cada worker para salvar ou trocar seu acesso.</div>
         </section>
 
         <section class="panel-card p-3 mb-3">
@@ -3670,11 +3670,7 @@
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
       promaxSaveWorkerAssignmentsBtn: document.getElementById("promaxSaveWorkerAssignmentsBtn"),
-      promaxCredentialWorker: document.getElementById("promaxCredentialWorker"),
-      promaxCredentialWorkers: document.getElementById("promaxCredentialWorkers"),
-      promaxCredentialUsername: document.getElementById("promaxCredentialUsername"),
-      promaxCredentialPassword: document.getElementById("promaxCredentialPassword"),
-      promaxSaveCredentialsBtn: document.getElementById("promaxSaveCredentialsBtn"),
+      promaxCredentialsBody: document.getElementById("promaxCredentialsBody"),
       promaxCredentialsStatus: document.getElementById("promaxCredentialsStatus"),
       promaxQueueState: document.getElementById("promaxQueueState"),
       promaxRefreshBtn: document.getElementById("promaxRefreshBtn"),
@@ -6350,27 +6346,53 @@
 
     function renderPromaxCredentials(workers) {
       const credentials = Array.isArray(state.promax.workerCredentials) ? state.promax.workerCredentials : [];
-      if (E.promaxCredentialWorkers) E.promaxCredentialWorkers.innerHTML = (workers || []).map(worker => `<option value="${escapeHtml(String(worker && worker.worker_id || ""))}"></option>`).join("");
-      if (E.promaxCredentialsStatus) E.promaxCredentialsStatus.textContent = credentials.length
-        ? credentials.map(item => `${item.worker_id}: ${item.username} (senha configurada)`).join(" | ")
-        : "Nenhuma credencial configurada no painel.";
+      const byWorkerId = new Map(credentials.map(item => [String(item && item.worker_id || ""), item]));
+      const allWorkers = new Map();
+      (workers || []).forEach(worker => {
+        const workerId = String(worker && worker.worker_id || "").trim();
+        if (workerId) allWorkers.set(workerId, worker);
+      });
+      credentials.forEach(item => {
+        const workerId = String(item && item.worker_id || "").trim();
+        if (workerId && !allWorkers.has(workerId)) allWorkers.set(workerId, { worker_id: workerId, online: false });
+      });
+      if (!E.promaxCredentialsBody) return;
+      if (!allWorkers.size) {
+        E.promaxCredentialsBody.innerHTML = '<tr><td colspan="5" class="text-secondary">Nenhum worker registrado ainda. Inicie o worker para ele aparecer aqui.</td></tr>';
+        return;
+      }
+      E.promaxCredentialsBody.innerHTML = [...allWorkers.values()].map(worker => {
+        const workerId = String(worker.worker_id || "");
+        const credential = byWorkerId.get(workerId) || {};
+        const online = Boolean(worker.online);
+        return `<tr data-worker-id="${escapeHtml(workerId)}">
+          <td><strong>${escapeHtml(workerId)}</strong></td>
+          <td><span class="pill ${online ? "ok" : "warn"}">${online ? "Online" : "Offline"}</span></td>
+          <td><input class="form-control form-control-sm promax-credential-username" value="${escapeHtml(String(credential.username || ""))}" autocomplete="username"></td>
+          <td><input class="form-control form-control-sm promax-credential-password" type="password" placeholder="${credential.password_configured ? "Senha configurada" : "Informe a senha"}" autocomplete="new-password"></td>
+          <td class="text-end"><button class="btn btn-primary btn-sm promax-save-credential" type="button"><i class="bi bi-lock-fill me-1"></i>Salvar</button></td>
+        </tr>`;
+      }).join("");
+      if (E.promaxCredentialsStatus) E.promaxCredentialsStatus.textContent = `${allWorkers.size} worker(s) disponivel(is) para configurar.`;
     }
 
-    async function savePromaxCredentials() {
-      const worker_id = String(E.promaxCredentialWorker && E.promaxCredentialWorker.value || "").trim();
-      const username = String(E.promaxCredentialUsername && E.promaxCredentialUsername.value || "").trim();
-      const password = String(E.promaxCredentialPassword && E.promaxCredentialPassword.value || "");
+    async function savePromaxCredentials(row) {
+      const worker_id = String(row && row.dataset.workerId || "").trim();
+      const username = String(row && row.querySelector(".promax-credential-username")?.value || "").trim();
+      const passwordInput = row && row.querySelector(".promax-credential-password");
+      const password = String(passwordInput && passwordInput.value || "");
       if (!worker_id || !username || !password) { addLog("Informe worker, usuario e senha do Promax.", "warn"); return; }
-      if (E.promaxSaveCredentialsBtn) E.promaxSaveCredentialsBtn.disabled = true;
+      const saveButton = row.querySelector(".promax-save-credential");
+      if (saveButton) saveButton.disabled = true;
       try {
         const result = await req(CONFIG.endpoints.promax.workerCredentials, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker_id, username, password }), timeoutMs: 20000 });
         const saved = result.credentials || {};
         state.promax.workerCredentials = [...(state.promax.workerCredentials || []).filter(item => item.worker_id !== saved.worker_id), saved];
-        if (E.promaxCredentialPassword) E.promaxCredentialPassword.value = "";
+        if (passwordInput) passwordInput.value = "";
         renderPromaxCredentials(promaxWorkersFromPayload(state.promax.worker || {}));
         addLog(`Credenciais Promax salvas para ${worker_id}.`, "ok");
       } catch (err) { addLog(`Falha ao salvar credenciais Promax: ${err.message}`, "err"); }
-      finally { if (E.promaxSaveCredentialsBtn) E.promaxSaveCredentialsBtn.disabled = false; }
+      finally { if (saveButton) saveButton.disabled = false; }
     }
 
     function renderFinanceiroFechamentoWorker(payload) {
@@ -9973,7 +9995,10 @@
       if (E.promaxClearBtn) E.promaxClearBtn.addEventListener("click", () => promaxQueueAction("pending"));
       if (E.promaxReprocessPublicationsBtn) E.promaxReprocessPublicationsBtn.addEventListener("click", promaxReprocessPublications);
       if (E.promaxSaveWorkerAssignmentsBtn) E.promaxSaveWorkerAssignmentsBtn.addEventListener("click", savePromaxWorkerAssignments);
-      if (E.promaxSaveCredentialsBtn) E.promaxSaveCredentialsBtn.addEventListener("click", savePromaxCredentials);
+      if (E.promaxCredentialsBody) E.promaxCredentialsBody.addEventListener("click", event => {
+        const button = event.target.closest(".promax-save-credential");
+        if (button) savePromaxCredentials(button.closest("tr"));
+      });
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
