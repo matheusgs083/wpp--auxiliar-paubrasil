@@ -6350,7 +6350,13 @@
         E.promaxCredentialsBody.querySelectorAll("tr[data-worker-id]").forEach(row => {
           const usernameInput = row.querySelector(".promax-credential-username");
           const workerId = String(row.dataset.workerId || "").trim();
-          if (workerId && usernameInput) state.promax.credentialUserDrafts[workerId] = usernameInput.value;
+          if (!workerId || !usernameInput) return;
+          // A credencial salva e devolvida pela API e a fonte de verdade. Nao
+          // deixe um campo vazio de uma renderizacao anterior esconder o
+          // usuario persistido quando o painel atualiza automaticamente.
+          const draftUsername = String(usernameInput.value || "").trim();
+          if (draftUsername) state.promax.credentialUserDrafts[workerId] = draftUsername;
+          else delete state.promax.credentialUserDrafts[workerId];
         });
       }
       const credentials = Array.isArray(state.promax.workerCredentials) ? state.promax.workerCredentials : [];
