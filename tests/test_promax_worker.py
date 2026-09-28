@@ -147,6 +147,17 @@ class PromaxClientTests(unittest.TestCase):
             captured[3][0],
         )
 
+    def test_client_rejects_whitespace_only_log_message(self) -> None:
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+        )
+
+        with self.assertRaisesRegex(ValueError, "must not be empty"):
+            client.log("job-1", "lease-token", " \r\n")
+
     def test_client_uploads_boleto_pdf_to_internal_import_route(self) -> None:
         captured: list[tuple[str, dict[str, object], float]] = []
 

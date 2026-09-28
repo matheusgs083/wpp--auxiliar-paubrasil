@@ -7,7 +7,7 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bot_api.routes.admin_promax import create_admin_promax_router
+from bot_api.services.promax_jobs_service import LeaseLostError
 
 
 class FakePromaxService:
@@ -969,6 +970,24 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         worker_auth_events = [event for event in events if event["event_type"] == "promax_worker_auth"]
         self.assertEqual(len(worker_auth_events), len(responses))
         self.assertTrue(all(event["decision"] == "allowed" for event in worker_auth_events))
+
+    def test_internal_job_log_returns_conflict_when_lease_is_lost(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+        service.append_job_log = Mock(side_effect=LeaseLostError("Lease invalido ou expirado para o job job-1."))
+
+        response = client.post(
+            "/api/internal/promax/jobs/job-1/log",
+            headers=self.worker_headers,
+            json={
+                "worker_id": "worker-1",
+                "lease_token": "lease-token",
+                "level": "warning",
+                "message": "linha de log",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("Lease invalido", response.json()["detail"])
 
     def test_internal_finish_auto_retries_only_failed_units_once(self) -> None:
         client, service, _events, _auth_calls = self.make_client()

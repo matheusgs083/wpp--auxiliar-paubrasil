@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
-from .promax_client import PromaxApiUnavailable, PromaxClient, PromaxClientError, normalize_status
+from .promax_client import PromaxApiError, PromaxApiUnavailable, PromaxClient, PromaxClientError, normalize_status
 from .promax_catalog import discover_report_catalog
 from .promax_runner import (
     PromaxRunResult,
@@ -418,7 +418,9 @@ class PromaxWorker:
         level: str,
         data: Mapping[str, Any],
     ) -> None:
-        clean_message = redact_log_message(str(message or "").rstrip("\r\n")) or " "
+        clean_message = redact_log_message(str(message or "").strip())
+        if not clean_message:
+            return
         for offset in range(0, len(clean_message), 8000):
             self._send_log_entry(
                 job_id,
@@ -524,6 +526,28 @@ class PromaxWorker:
                     self.logger.warning("API indisponivel ao finalizar job %s: %s", job_id, exc)
                     time.sleep(backoff)
                     backoff = min(backoff * 2, self.config.backoff_max_seconds)
+                except PromaxApiError as exc:
+                    if exc.status_code == 409:
+                        self.logger.warning("Lease perdida ao finalizar job %s; encerrando a tentativa.", job_id)
+                        return final_result
+                    self.logger.error("Sincronizacao/finalizacao rejeitada para job %s: %s", job_id, exc)
+                    if sync_completed:
+                        return final_result
+                    original_status = normalize_status(result.status)
+                    final_status = "partial_success" if original_status == "success" else original_status
+                    final_result = PromaxRunResult(
+                        status=final_status,
+                        return_code=result.return_code,
+                        child_pid=result.child_pid,
+                        cancelled=result.cancelled,
+                        stopped=result.stopped,
+                        error=result.error if final_status == "failed" else None,
+                        message=(
+                            f"{result.message or 'Execucao concluida.'} "
+                            f"Falha ao sincronizar/finalizar: {exc}"
+                        ),
+                        details=dict(result.details or {}),
+                    )
                 except (PromaxClientError, ValueError) as exc:
                     self.logger.error("Sincronizacao/finalizacao rejeitada para job %s: %s", job_id, exc)
                     if sync_completed:

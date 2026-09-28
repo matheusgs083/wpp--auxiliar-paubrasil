@@ -18,6 +18,8 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
+from bot_api.services.promax_jobs_service import LeaseLostError
+
 
 _CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
@@ -1779,13 +1781,16 @@ def create_admin_promax_router(
             worker_id=payload.worker_id,
             provided_lease_token=payload.lease_token,
         )
-        result = service.heartbeat_job(
-            job_id=job_id,
-            worker_id=payload.worker_id,
-            lease_token=lease_token,
-            lease_seconds=payload.lease_seconds,
-            worker_metadata={"pid": payload.pid},
-        )
+        try:
+            result = service.heartbeat_job(
+                job_id=job_id,
+                worker_id=payload.worker_id,
+                lease_token=lease_token,
+                lease_seconds=payload.lease_seconds,
+                worker_metadata={"pid": payload.pid},
+            )
+        except LeaseLostError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         return _mapping_or_value(result, key="job")
 
     @router.post("/api/internal/promax/jobs/{job_id}/log")
@@ -1799,14 +1804,17 @@ def create_admin_promax_router(
             worker_id=payload.worker_id,
             provided_lease_token=payload.lease_token,
         )
-        result = service.append_job_log(
-            job_id=job_id,
-            worker_id=payload.worker_id,
-            lease_token=lease_token,
-            level=payload.level,
-            message=payload.message,
-            data=payload.data,
-        )
+        try:
+            result = service.append_job_log(
+                job_id=job_id,
+                worker_id=payload.worker_id,
+                lease_token=lease_token,
+                level=payload.level,
+                message=payload.message,
+                data=payload.data,
+            )
+        except LeaseLostError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         return _mapping_or_value(result, key="log")
 
     @router.post("/api/internal/promax/jobs/{job_id}/finish")
@@ -1820,14 +1828,17 @@ def create_admin_promax_router(
             worker_id=payload.worker_id,
             provided_lease_token=payload.lease_token,
         )
-        result = service.finish_job(
-            job_id=job_id,
-            worker_id=payload.worker_id,
-            lease_token=lease_token,
-            status=final_service_status(payload.status),
-            result={"pid": payload.pid, **(payload.result or {})},
-            error=payload.error or "",
-        )
+        try:
+            result = service.finish_job(
+                job_id=job_id,
+                worker_id=payload.worker_id,
+                lease_token=lease_token,
+                status=final_service_status(payload.status),
+                result={"pid": payload.pid, **(payload.result or {})},
+                error=payload.error or "",
+            )
+        except LeaseLostError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         auto_retry = enqueue_auto_retry_if_needed(result, worker_id=payload.worker_id)
         response = _mapping_or_value(result, key="job")
         if auto_retry:

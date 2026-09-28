@@ -157,7 +157,7 @@ class PromaxClient:
         level: str = "info",
         data: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        clean_message = str(message or "").rstrip("\r\n")
+        clean_message = str(message or "").strip()
         if not clean_message:
             raise ValueError("Promax log message must not be empty.")
         if len(clean_message) > 8000:
