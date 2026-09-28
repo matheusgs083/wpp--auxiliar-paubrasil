@@ -203,12 +203,14 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
                     "TOTAL GERAL DEVOLUCOES;125;85477,03;109,09\n"
                     "TOTAL GERAL DEVOLUCOES AGEND.;0;0;0\n"
                     "TOTAL GERAL FATURADO;7072;10110068,92;13084,45\n"
+                    "TOTAL GERAL FATURADO AGENDADOS;1723;0;0\n"
                 ).encode("utf-8"),
                 "03.02.24_SUME_SET.csv": (
                     "Responsabilidade;PDVs;Valor;Volume\n"
                     "TOTAL GERAL DEVOLUCOES;34;36514,02;64,18\n"
                     "TOTAL GERAL DEVOLUCOES AGEND.;0;0;0\n"
                     "TOTAL GERAL FATURADO;2058;3086067,28;4198,04\n"
+                    "TOTAL GERAL FATURADO AGENDADOS;610;0;0\n"
                 ).encode("utf-8"),
             },
             reference_date="2026-09-22",
@@ -236,6 +238,9 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(operacao["devolucoes_pdvs"], 159)
         self.assertEqual(operacao["entregas_pdvs"], 9130)
         self.assertEqual(operacao["devolucao_pdv_pct"], 1.74)
+        self.assertEqual(operacao["devolucoes_volume_hl"], 173.27)
+        self.assertEqual(operacao["devolucao_hl_pct"], 1.0)
+        self.assertEqual(operacao["devolucoes_valor"], 121991.05)
         self.assertEqual(operacao["filiais"]["PATOS"]["devolucoes_pdvs"], 125)
         self.assertEqual(operacao["filiais"]["SUME"]["devolucoes_pdvs"], 34)
 

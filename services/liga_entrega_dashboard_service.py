@@ -32,7 +32,7 @@ MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 14
+CACHE_VERSION = 15
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -155,6 +155,8 @@ class LigaEntregaDashboardService:
         # O resumo 03.02.24 consolida PDVs por ocorrência de devolução. Esse
         # total é diferente de clientes únicos do detalhamento do motorista.
         resumo_devolucoes_pdvs: dict[str, int] = {}
+        resumo_devolucoes_hl: dict[str, float] = {}
+        resumo_devolucoes_valor: dict[str, float] = {}
         ponto: dict[str, str] = {}
         checklist: list[dict[str, str]] = []
         colab: dict[str, dict[str, str]] = {
@@ -242,10 +244,12 @@ class LigaEntregaDashboardService:
                     for row in rows_from(file["path"]):
                         responsabilidade = clean_name(pick(row, "Responsabilidade"))
                         if responsabilidade == "TOTAL GERAL DEVOLUCOES":
-                            resumo_devolucoes_pdvs[filial_code] = to_int(pick(row, "PDVs", "PDV"))
-                        elif "TOTAL GERAL FATURADO" in responsabilidade:
+                            resumo_devolucoes_pdvs[filial_code] = int(to_float(pick(row, "PDVs", "PDV")))
+                            resumo_devolucoes_valor[filial_code] = to_float(pick(row, "Valor"))
+                            resumo_devolucoes_hl[filial_code] = to_float(pick(row, "Volume", "Hectolitro", "HL"))
+                        elif responsabilidade == "TOTAL GERAL FATURADO":
                             resumo_entregas_hl[filial_code] = to_float(pick(row, "Volume"))
-                            resumo_entregas_pdvs[filial_code] = to_int(pick(row, "PDVs", "PDV"))
+                            resumo_entregas_pdvs[filial_code] = int(to_float(pick(row, "PDVs", "PDV")))
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.02.24 resumo {file['filename']}: {exc}")
 
@@ -495,6 +499,8 @@ class LigaEntregaDashboardService:
             entregas_hl=entregas_hl, entregas_pdvs=entregas_pdvs, entregas_nfs=entregas_nfs,
             devolucoes_pdvs_resumo=sum(resumo_devolucoes_pdvs.values()) if resumo_devolucoes_pdvs else None,
             entregas_pdvs_resumo=sum(resumo_entregas_pdvs.values()) if resumo_entregas_pdvs else None,
+            devolucoes_volume_hl_resumo=sum(resumo_devolucoes_hl.values()) if resumo_devolucoes_hl else None,
+            devolucoes_valor_resumo=sum(resumo_devolucoes_valor.values()) if resumo_devolucoes_valor else None,
         )
         operacao["filiais"] = {}
         for filial_code, dados in entregas_por_filial.items():
@@ -507,6 +513,8 @@ class LigaEntregaDashboardService:
                 entregas_nfs={f"{filial_code}|{item}" for item in dados["nfs"]},
                 devolucoes_pdvs_resumo=resumo_devolucoes_pdvs.get(filial_code),
                 entregas_pdvs_resumo=resumo_entregas_pdvs.get(filial_code),
+                devolucoes_volume_hl_resumo=resumo_devolucoes_hl.get(filial_code),
+                devolucoes_valor_resumo=resumo_devolucoes_valor.get(filial_code),
             )
         cobertura = build_cobertura(rotas_list)
         devolucoes_auxiliares = sorted(devols, key=lambda x: (str(x.get("data_devolucao") or x.get("data") or ""), str(x.get("cliente") or ""), str(x.get("nota") or "")), reverse=True)
@@ -1118,6 +1126,8 @@ def build_operacao(
     entregas_nfs: set[str] | None = None,
     devolucoes_pdvs_resumo: int | None = None,
     entregas_pdvs_resumo: int | None = None,
+    devolucoes_volume_hl_resumo: float | None = None,
+    devolucoes_valor_resumo: float | None = None,
 ) -> dict[str, Any]:
     ent = sum(int(r.get("entregas") or 0) for r in rotas)
     dev = len([d for d in devols if not d.get("excluida")])
@@ -1126,7 +1136,8 @@ def build_operacao(
     kms = [r for r in rotas if r.get("km_real") is not None and r.get("km_prev") is not None and not r.get("expurgo_km")]
     kr = sum(float(r.get("km_real") or 0) for r in kms)
     kp = sum(float(r.get("km_prev") or 0) for r in kms)
-    devolucoes_volume_hl = sum(float(item.get("volume_hl") or 0) for item in devols)
+    devolucoes_volume_hl_detalhe = sum(float(item.get("volume_hl") or 0) for item in devols)
+    devolucoes_volume_hl = devolucoes_volume_hl_resumo if devolucoes_volume_hl_resumo is not None else devolucoes_volume_hl_detalhe
     devolucoes_pdvs_detalhe = {
         f"{filial_code_for_liga(item.get('filial'))}|{norm_code(item.get('cliente_cod'))}"
         for item in devols if norm_code(item.get("cliente_cod")) != "0"
@@ -1151,7 +1162,7 @@ def build_operacao(
         "devolucoes_nfs": len(devolucoes_nfs), "entregas_hl": round(entregas_hl, 2),
         "entregas_pdvs": entregas_pdvs_count, "entregas_nfs": len(entregas_nfs),
         "devolucao_hl_pct": hl_pct, "devolucao_pdv_pct": pdv_pct, "devolucao_nf_pct": nf_pct,
-        "devolucao_total_pct": total_pct, "devolucoes_valor": round(sum(float(item.get("valor") or 0) for item in devols), 2),
+        "devolucao_total_pct": total_pct, "devolucoes_valor": round(devolucoes_valor_resumo if devolucoes_valor_resumo is not None else sum(float(item.get("valor") or 0) for item in devols), 2),
         "saida_pct": pct(len(saidas_ok) / len(saidas) * 100) if saidas else None,
         "km_desv": pct(max(0, kr - kp) / kp * 100) if kp else None, "rotas": len(rotas),
         "motoristas_elegiveis": len([x for x in motoristas if x.get("elegivel")]),
