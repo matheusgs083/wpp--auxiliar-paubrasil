@@ -282,7 +282,7 @@ class AdminPayipBatchService:
                 batch_id=normalized_batch_id,
                 payment_shape=str(action["payment_shape"]),
                 payment_method=str(action.get("payment_method") or ""),
-                sort_invoice="desc",
+                sort_invoice="asc",
             )
         except PayipMfaRequired as exc:
             raise HTTPException(status_code=400, detail="PayIP pediu MFA. Atualize a sessao PayIP e tente novamente.") from exc

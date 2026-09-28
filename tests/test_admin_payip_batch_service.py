@@ -97,7 +97,7 @@ class AdminPayipBatchServiceTests(unittest.TestCase):
                 "batch_id": "50cb5371-8218-41b3-aab7-1d2f32332ed0",
                 "payment_shape": "6f0d7915-96c6-42ed-8441-ab6fecce85a8",
                 "payment_method": "f2a3d1c0-5eb9-4939-a5a9-c4853ca79549",
-                "sort_invoice": "desc",
+                "sort_invoice": "asc",
             },
         )
 
