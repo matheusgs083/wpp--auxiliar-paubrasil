@@ -32,7 +32,7 @@ MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 13
+CACHE_VERSION = 14
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -151,6 +151,10 @@ class LigaEntregaDashboardService:
             lambda: {"pdvs": set(), "nfs": set(), "qtde_por_produto": defaultdict(float)}
         )
         resumo_entregas_hl: dict[str, float] = {}
+        resumo_entregas_pdvs: dict[str, int] = {}
+        # O resumo 03.02.24 consolida PDVs por ocorrência de devolução. Esse
+        # total é diferente de clientes únicos do detalhamento do motorista.
+        resumo_devolucoes_pdvs: dict[str, int] = {}
         ponto: dict[str, str] = {}
         checklist: list[dict[str, str]] = []
         colab: dict[str, dict[str, str]] = {
@@ -237,9 +241,11 @@ class LigaEntregaDashboardService:
                 try:
                     for row in rows_from(file["path"]):
                         responsabilidade = clean_name(pick(row, "Responsabilidade"))
-                        if "TOTAL GERAL FATURADO" in responsabilidade:
+                        if responsabilidade == "TOTAL GERAL DEVOLUCOES":
+                            resumo_devolucoes_pdvs[filial_code] = to_int(pick(row, "PDVs", "PDV"))
+                        elif "TOTAL GERAL FATURADO" in responsabilidade:
                             resumo_entregas_hl[filial_code] = to_float(pick(row, "Volume"))
-                            break
+                            resumo_entregas_pdvs[filial_code] = to_int(pick(row, "PDVs", "PDV"))
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.02.24 resumo {file['filename']}: {exc}")
 
@@ -487,6 +493,8 @@ class LigaEntregaDashboardService:
         operacao = build_operacao(
             rotas_list, devols, motoristas, ajudantes,
             entregas_hl=entregas_hl, entregas_pdvs=entregas_pdvs, entregas_nfs=entregas_nfs,
+            devolucoes_pdvs_resumo=sum(resumo_devolucoes_pdvs.values()) if resumo_devolucoes_pdvs else None,
+            entregas_pdvs_resumo=sum(resumo_entregas_pdvs.values()) if resumo_entregas_pdvs else None,
         )
         operacao["filiais"] = {}
         for filial_code, dados in entregas_por_filial.items():
@@ -497,6 +505,8 @@ class LigaEntregaDashboardService:
                 entregas_hl=filial_hl,
                 entregas_pdvs={f"{filial_code}|{item}" for item in dados["pdvs"]},
                 entregas_nfs={f"{filial_code}|{item}" for item in dados["nfs"]},
+                devolucoes_pdvs_resumo=resumo_devolucoes_pdvs.get(filial_code),
+                entregas_pdvs_resumo=resumo_entregas_pdvs.get(filial_code),
             )
         cobertura = build_cobertura(rotas_list)
         devolucoes_auxiliares = sorted(devols, key=lambda x: (str(x.get("data_devolucao") or x.get("data") or ""), str(x.get("cliente") or ""), str(x.get("nota") or "")), reverse=True)
@@ -1106,6 +1116,8 @@ def build_operacao(
     entregas_hl: float = 0,
     entregas_pdvs: set[str] | None = None,
     entregas_nfs: set[str] | None = None,
+    devolucoes_pdvs_resumo: int | None = None,
+    entregas_pdvs_resumo: int | None = None,
 ) -> dict[str, Any]:
     ent = sum(int(r.get("entregas") or 0) for r in rotas)
     dev = len([d for d in devols if not d.get("excluida")])
@@ -1115,27 +1127,29 @@ def build_operacao(
     kr = sum(float(r.get("km_real") or 0) for r in kms)
     kp = sum(float(r.get("km_prev") or 0) for r in kms)
     devolucoes_volume_hl = sum(float(item.get("volume_hl") or 0) for item in devols)
-    devolucoes_pdvs = {
+    devolucoes_pdvs_detalhe = {
         f"{filial_code_for_liga(item.get('filial'))}|{norm_code(item.get('cliente_cod'))}"
         for item in devols if norm_code(item.get("cliente_cod")) != "0"
     }
+    devolucoes_pdvs = devolucoes_pdvs_resumo if devolucoes_pdvs_resumo is not None else len(devolucoes_pdvs_detalhe)
     devolucoes_nfs = {
         f"{filial_code_for_liga(item.get('filial'))}|{norm_code(item.get('nota'))}|{str(item.get('serie') or '').strip()}"
         for item in devols if norm_code(item.get("nota")) != "0"
     }
     entregas_pdvs = entregas_pdvs or set()
     entregas_nfs = entregas_nfs or set()
+    entregas_pdvs_count = entregas_pdvs_resumo if entregas_pdvs_resumo is not None else len(entregas_pdvs)
     hl_pct = round(devolucoes_volume_hl / entregas_hl * 100, 2) if entregas_hl > 0 else None
-    pdv_pct = round(len(devolucoes_pdvs) / len(entregas_pdvs) * 100, 2) if entregas_pdvs else None
+    pdv_pct = round(devolucoes_pdvs / entregas_pdvs_count * 100, 2) if entregas_pdvs_count else None
     nf_pct = round(len(devolucoes_nfs) / len(entregas_nfs) * 100, 2) if entregas_nfs else None
     raw_hl_pct = devolucoes_volume_hl / entregas_hl * 100 if entregas_hl > 0 else None
-    raw_pdv_pct = len(devolucoes_pdvs) / len(entregas_pdvs) * 100 if entregas_pdvs else None
+    raw_pdv_pct = devolucoes_pdvs / entregas_pdvs_count * 100 if entregas_pdvs_count else None
     total_pct = round(raw_hl_pct + raw_pdv_pct, 2) if raw_hl_pct is not None and raw_pdv_pct is not None else None
     return {
         "entregas": ent, "devolucoes": dev, "devolucao_pct": round(dev / ent * 100, 2) if ent else None,
-        "devolucoes_volume_hl": round(devolucoes_volume_hl, 2), "devolucoes_pdvs": len(devolucoes_pdvs),
+        "devolucoes_volume_hl": round(devolucoes_volume_hl, 2), "devolucoes_pdvs": devolucoes_pdvs,
         "devolucoes_nfs": len(devolucoes_nfs), "entregas_hl": round(entregas_hl, 2),
-        "entregas_pdvs": len(entregas_pdvs), "entregas_nfs": len(entregas_nfs),
+        "entregas_pdvs": entregas_pdvs_count, "entregas_nfs": len(entregas_nfs),
         "devolucao_hl_pct": hl_pct, "devolucao_pdv_pct": pdv_pct, "devolucao_nf_pct": nf_pct,
         "devolucao_total_pct": total_pct, "devolucoes_valor": round(sum(float(item.get("valor") or 0) for item in devols), 2),
         "saida_pct": pct(len(saidas_ok) / len(saidas) * 100) if saidas else None,
