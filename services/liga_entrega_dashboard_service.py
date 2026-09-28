@@ -1100,7 +1100,7 @@ def match_route_exp(rota: dict[str, Any], expurgos: list[dict[str, Any]], tipos:
     for e in expurgos:
         if e.get("tipo") not in tipos:
             continue
-        if str(e.get("escopo") or "individual").lower() != "equipe" and e.get("mapa") and norm_mapa(e.get("mapa")) != norm_mapa(rota.get("mapa")):
+        if e.get("mapa") and norm_mapa(e.get("mapa")) != norm_mapa(rota.get("mapa")):
             continue
         if e.get("data") and e.get("data") != rota.get("data"):
             continue

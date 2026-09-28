@@ -180,7 +180,7 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
 
         km_exp = client.post(
             "/api/admin/liga-entrega/expurgos",
-            json={"tipo": "km", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-22", "mapa": "124", "motivo": "km incorreto"},
+            json={"tipo": "km", "escopo": "equipe", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-22", "mapa": "124", "motivo": "km incorreto"},
         )
         self.assertEqual(km_exp.status_code, 200, km_exp.text)
         recalculated = client.get("/api/admin/liga-entrega/dashboard", params={"competencia": "2026-09"}).json()

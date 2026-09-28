@@ -5284,12 +5284,11 @@
       if (E.entregaLigaExpurgoAlvo) {
         E.entregaLigaExpurgoAlvo.placeholder = isDevolucao ? "Código do cliente" : "Número do mapa";
         E.entregaLigaExpurgoAlvo.required = isDevolucao || !equipeInteira;
-        E.entregaLigaExpurgoAlvo.disabled = equipeInteira && !isDevolucao;
-        if (equipeInteira && !isDevolucao) E.entregaLigaExpurgoAlvo.value = "";
+        E.entregaLigaExpurgoAlvo.disabled = false;
       }
       if (E.entregaLigaExpurgoHint) E.entregaLigaExpurgoHint.textContent = isDevolucao
         ? (equipeInteira ? "Remove somente a devolução do cliente informado, para motorista e ajudantes vinculados a ela." : "Remove apenas devolução por cliente e data.")
-        : (equipeInteira ? "Remove este indicador de todas as rotas da filial nesta data." : "Remove este indicador para motorista e ajudantes da rota; os demais continuam contando.");
+        : (equipeInteira ? "Opcional: informe o mapa para remover o indicador de toda a equipe daquela rota; se vazio, remove todas as rotas da filial nesta data." : "Remove este indicador para motorista e ajudantes da rota; os demais continuam contando.");
     }
 
     function renderLigaDevolucoesExpurgoCard(dashboard = {}, filterRows = rows => rows) {
@@ -5322,7 +5321,9 @@
         return;
       }
       E.entregaLigaExpurgosList.innerHTML = `<div class="small fw-bold mb-1">Expurgos ativos (${items.length})</div>${items.map(item => {
-        const target = item.escopo === "equipe" || (!item.escopo && !item.mapa) ? "equipe inteira" : item.tipo === "devolucao" ? `cliente ${item.cliente || "-"}` : `mapa ${item.mapa}`;
+        const target = item.tipo === "devolucao"
+          ? `cliente ${item.cliente || "-"}`
+          : item.mapa ? (item.escopo === "equipe" ? `equipe do mapa ${item.mapa}` : `mapa ${item.mapa}`) : "equipe inteira";
         const applied = Number(item.aplicados || 0);
         return `<div class="d-flex justify-content-between gap-2 border-top pt-2 mt-2"><span><b>${escapeHtml(item.tipo || "-")}</b> · ${escapeHtml(item.filial || "-")} · ${escapeHtml(formatDate(item.data) || item.data || "-")} · ${escapeHtml(target)}<br><span class="text-secondary">${escapeHtml(item.motivo || "sem motivo")}</span><br><span class="badge ${applied ? "text-bg-success" : "text-bg-warning"}">${applied ? `${applied} registro(s) expurgado(s)` : "Ainda não encontrou registro"}</span></span><button class="btn btn-outline-danger btn-sm py-0 liga-expurgo-remove" type="button" data-expurgo-id="${escapeHtml(item.id || "")}" title="Remover expurgo"><i class="bi bi-x-lg"></i></button></div>`;
       }).join("")}`;
@@ -5349,7 +5350,7 @@
       if (!competencia || !data || (tipo === "devolucao" && !alvo) || (escopo === "individual" && !alvo)) throw new Error("Informe data e cliente para devolução, ou mapa para expurgo individual.");
       const payload = { tipo, escopo, competencia, filial: String(E.entregaLigaExpurgoFilial && E.entregaLigaExpurgoFilial.value || ""), data, motivo: String(E.entregaLigaExpurgoMotivo && E.entregaLigaExpurgoMotivo.value || "") };
       if (tipo === "devolucao") payload.cliente = alvo;
-      else if (escopo === "individual") payload.mapa = alvo;
+      else if (alvo) payload.mapa = alvo;
       await req(CONFIG.endpoints.ligaEntrega.expurgos, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), timeoutMs: 20000 });
       E.entregaLigaExpurgoAlvo.value = "";
       if (E.entregaLigaExpurgoEscopo) E.entregaLigaExpurgoEscopo.value = "individual";

@@ -122,14 +122,14 @@ class LigaEntregaExpurgoService:
             raise ValueError("Data obrigatoria para expurgo de rota.")
         if tipo == "devolucao" and not data:
             raise ValueError("Data obrigatoria para expurgo de devolucao.")
-        if escopo == "equipe":
+        if escopo == "equipe" and tipo == "devolucao":
             mapa = ""
             # Uma devolucao pertence ao motorista e aos ajudantes informados
             # no proprio registro. "Equipe inteira" so amplia quem recebe o
             # ajuste daquele registro; nunca pode remover todas as devolucoes
             # da filial em uma data.
-            if tipo != "devolucao":
-                cliente = ""
+        if tipo != "devolucao":
+            cliente = ""
         key = self._build_key(tipo=tipo, escopo=escopo, competencia=competencia, filial=filial, data=data, mapa=mapa, cliente=cliente)
         return {
             "id": self._id_from_key(key),

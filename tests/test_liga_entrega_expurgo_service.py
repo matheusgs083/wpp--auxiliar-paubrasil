@@ -84,7 +84,7 @@ class LigaEntregaExpurgoServiceTest(unittest.TestCase):
             self.assertEqual(item["mapa"], "")
             self.assertEqual(service.list_expurgos(competencia="2026-09", tipo="tml")["total"], 1)
 
-    def test_team_scope_clears_target_and_accepts_all_indicators(self) -> None:
+    def test_team_scope_preserves_optional_route_target_for_operational_indicators(self) -> None:
         with TemporaryDirectory() as tmp:
             service = LigaEntregaExpurgoService(Path(tmp) / "expurgos.json")
             item = service.upsert_expurgo(
@@ -95,13 +95,13 @@ class LigaEntregaExpurgoServiceTest(unittest.TestCase):
                     "filial": "PATOS",
                     "data": "2026-09-23",
                     "mapa": "999",
-                    "motivo": "KM geral do dia",
+                    "motivo": "KM da equipe do mapa",
                 },
                 actor="admin",
             )
 
             self.assertEqual(item["escopo"], "equipe")
-            self.assertEqual(item["mapa"], "")
+            self.assertEqual(item["mapa"], "999")
             self.assertEqual(item["cliente"], "")
 
     def test_invalid_scope_is_rejected(self) -> None:
