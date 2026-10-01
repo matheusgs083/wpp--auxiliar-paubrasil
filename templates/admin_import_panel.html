@@ -1588,6 +1588,7 @@
       <div class="tab-pane fade" id="entregaPane" role="tabpanel" aria-labelledby="entregaTab" tabindex="0">
         <div class="btn-group btn-group-sm mb-3" role="tablist" aria-label="Módulos de Entrega">
           <button class="btn btn-primary entrega-module-tab" id="entregaLigaModuleTab" data-entrega-module="liga" type="button">Liga Entrega</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaIndicadoresModuleTab" data-entrega-module="indicadores" type="button">Indicadores BI</button>
           <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesModuleTab" data-entrega-module="devolucoes" type="button">Devoluções</button>
         </div>
         <div id="entregaLigaModule">
@@ -1661,6 +1662,17 @@
             <div class="source-path">O dashboard usa os lotes salvos no backend da Liga e mantém os expurgos separados dos relatórios.</div>
           </div>
         </section>
+        </div>
+
+        <div id="entregaIndicadoresModule" class="d-none">
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-speedometer2 me-2 text-primary"></i>Indicadores operacionais</h2><div class="form-text" id="entregaIndicadoresStatus">Caixas por viagem e ocupação, consolidadas a partir do BI 17.06.</div></div>
+              <button class="btn btn-outline-primary btn-sm" id="entregaIndicadoresRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaIndicadoresCards"></div>
+            <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Operação</th><th>Puxada</th><th class="text-end">Caixas / viagem</th><th class="text-end">Ocupação</th></tr></thead><tbody id="entregaIndicadoresBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando importação do BI 17.06.</td></tr></tbody></table></div>
+          </section>
         </div>
 
         <div id="entregaDevolucoesModule" class="d-none">
@@ -3165,6 +3177,7 @@
           equipe: "/api/admin/liga-entrega/equipe",
           reports: "/api/admin/liga-entrega/relatorios",
           dashboard: "/api/admin/liga-entrega/dashboard",
+          indicadores: "/api/admin/liga-entrega/indicadores",
           dashboardPdf: "/api/admin/liga-entrega/dashboard/pdf"
         },
         usage: {
@@ -3658,6 +3671,12 @@
       entregaLigaDashboardBadge: document.getElementById("entregaLigaDashboardBadge"),
       entregaLigaDashboardCards: document.getElementById("entregaLigaDashboardCards"),
       entregaLigaDashboardDetails: document.getElementById("entregaLigaDashboardDetails"),
+      entregaIndicadoresModule: document.getElementById("entregaIndicadoresModule"),
+      entregaIndicadoresModuleTab: document.getElementById("entregaIndicadoresModuleTab"),
+      entregaIndicadoresRefreshBtn: document.getElementById("entregaIndicadoresRefreshBtn"),
+      entregaIndicadoresStatus: document.getElementById("entregaIndicadoresStatus"),
+      entregaIndicadoresCards: document.getElementById("entregaIndicadoresCards"),
+      entregaIndicadoresBody: document.getElementById("entregaIndicadoresBody"),
       entregaDevolucoesModule: document.getElementById("entregaDevolucoesModule"),
       entregaDevolucoesStatus: document.getElementById("entregaDevolucoesStatus"),
       entregaDevolucoesCards: document.getElementById("entregaDevolucoesCards"),
@@ -5266,12 +5285,40 @@
       }
     }
 
+    function renderIndicadores(payload = {}) {
+      const branches = Array.isArray(payload.branches) ? payload.branches : [];
+      const fmtNumber = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      const fmtPercent = value => `${Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+      if (E.entregaIndicadoresStatus) E.entregaIndicadoresStatus.textContent = branches.length ? `${payload.competencia || ""} · ${branches.length} operação(ões) · última importação ${payload.summary && payload.summary.stored_at || ""}` : ((payload.warnings || ["Nenhum lote importado."])[0]);
+      if (E.entregaIndicadoresCards) E.entregaIndicadoresCards.innerHTML = branches.map(item => `<article class="metric-card"><span>${escapeHtml(item.filial || item.puxada)}</span><b>${fmtNumber(item.metrics && item.metrics.caixas_por_viagem)}</b><small>caixas por viagem · ocupação ${fmtPercent(item.metrics && item.metrics.ocupacao)}</small></article>`).join("") || '<div class="text-secondary">Nenhum indicador disponível.</div>';
+      if (E.entregaIndicadoresBody) E.entregaIndicadoresBody.innerHTML = branches.map(item => `<tr><td>${escapeHtml(item.filial || "-")}</td><td>${escapeHtml(item.puxada || "-")}</td><td class="text-end">${fmtNumber(item.metrics && item.metrics.caixas_por_viagem)}</td><td class="text-end">${fmtPercent(item.metrics && item.metrics.ocupacao)}</td></tr>`).join("") || '<tr><td colspan="4" class="text-center text-secondary py-4">Nenhum lote 17.06 importado ainda.</td></tr>';
+    }
+
+    async function syncIndicadores({ silent = true } = {}) {
+      if (!hasPanelAuth()) return;
+      if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.disabled = true;
+      try {
+        state.ligaIndicadores = await req(CONFIG.endpoints.ligaEntrega.indicadores, { timeoutMs: 30000 }) || {};
+        renderIndicadores(state.ligaIndicadores);
+        if (!silent) addLog("Indicadores BI atualizados.", "ok");
+      } catch (err) {
+        if (E.entregaIndicadoresStatus) E.entregaIndicadoresStatus.textContent = `Falha ao carregar indicadores: ${err.message}`;
+        if (!silent) addLog(`Falha ao carregar indicadores: ${err.message}`, "err");
+      } finally {
+        if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.disabled = false;
+      }
+    }
+
     function setEntregaModule(module = "liga") {
+      const indicadores = module === "indicadores";
       const devolucoes = module === "devolucoes";
-      if (E.entregaLigaModule) E.entregaLigaModule.classList.toggle("d-none", devolucoes);
+      if (E.entregaLigaModule) E.entregaLigaModule.classList.toggle("d-none", indicadores || devolucoes);
+      if (E.entregaIndicadoresModule) E.entregaIndicadoresModule.classList.toggle("d-none", !indicadores);
       if (E.entregaDevolucoesModule) E.entregaDevolucoesModule.classList.toggle("d-none", !devolucoes);
-      if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.className = `btn ${devolucoes ? "btn-outline-primary" : "btn-primary"} entrega-module-tab`;
+      if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.className = `btn ${!indicadores && !devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
+      if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.className = `btn ${indicadores ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.className = `btn ${devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
+      if (indicadores) syncIndicadores({ silent: true });
       if (devolucoes) renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
     }
 
@@ -10049,6 +10096,8 @@
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
       if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.addEventListener("click", () => setEntregaModule("liga"));
+      if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.addEventListener("click", () => setEntregaModule("indicadores"));
+      if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.addEventListener("click", () => syncIndicadores({ silent: false }));
       if (E.entregaLigaCollapseBtn) E.entregaLigaCollapseBtn.addEventListener("click", () => {
         const collapsed = E.entregaLigaModule && E.entregaLigaModule.classList.toggle("is-collapsed");
         E.entregaLigaCollapseBtn.setAttribute("aria-expanded", String(!collapsed));

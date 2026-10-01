@@ -64,6 +64,7 @@ class WorkerConfig:
     job_timeout_seconds: float = 1500.0
     visual_lock_enabled: bool = True
     visual_lock_file: str = ""
+    liga_bi_indicators_dir: str = ""
 
     @classmethod
     def from_env(cls) -> WorkerConfig:
@@ -104,6 +105,7 @@ class WorkerConfig:
             job_timeout_seconds=_env_float("PROMAX_WORKER_JOB_TIMEOUT_SECONDS", 1500.0),
             visual_lock_enabled=_env_bool("PROMAX_VISUAL_LOCK_ENABLED", True),
             visual_lock_file=os.environ.get("PROMAX_VISUAL_LOCK_FILE", ""),
+            liga_bi_indicators_dir=os.environ.get("PROMAX_LIGA_BI_INDICATORS_DIR", ""),
         )
 
     def validate(self) -> None:
@@ -304,9 +306,13 @@ class PromaxWorker:
         lease_token = _job_lease_token(job)
         self._pending_partial_results[job_id] = []
         self.logger.info("Executando job Promax %s.", job_id)
+        driver_job = _job_without_bi_indicators_routine(job)
         try:
-            result = self.runner.run(
-                job,
+            if driver_job is None:
+                result = PromaxRunResult(status="success", return_code=0, child_pid=0, message="Coleta 17.06 preparada para importação automática.")
+            else:
+                result = self.runner.run(
+                driver_job,
                 on_line=lambda stream, line: self._send_log(
                     job_id,
                     lease_token,
@@ -317,8 +323,8 @@ class PromaxWorker:
                 on_event=lambda event: self._handle_partial_result_event(job, job_id, lease_token, event),
                 heartbeat=lambda: self._heartbeat_active_job(job_id, lease_token),
                 cancel_requested=lambda: self._control_requested(job_id, "cancel_requested"),
-                stop_requested=lambda: self.stop_event.is_set(),
-            )
+                    stop_requested=lambda: self.stop_event.is_set(),
+                )
         except (OSError, RuntimeError, ValueError, PromaxRunnerConfigurationError) as exc:
             self.logger.exception("Falha ao executar job Promax %s.", job_id)
             result = PromaxRunResult(
@@ -487,6 +493,7 @@ class PromaxWorker:
                         # quando alguma importacao legada (031120/03114902 etc.)
                         # falhar. Essas importacoes sao complementares e nao
                         # podem bloquear os cards da Liga.
+                        self._import_liga_bi_indicators_if_needed(job, job_id, lease_token, result)
                         self._upload_liga_entrega_reports_if_needed(job, job_id, lease_token, result)
                         self._import_030206_boletos_if_needed(job, job_id, lease_token, result)
                         self._import_020304_estoque_if_needed(job, job_id, lease_token, result)
@@ -1509,6 +1516,37 @@ class PromaxWorker:
             },
         )
 
+    def _import_liga_bi_indicators_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) not in {"success", "partial_success"}:
+            return
+        payload = job.get("payload") if isinstance(job.get("payload"), Mapping) else {}
+        if not _routine_selected(payload, "1706_BI_INDICADORES") or payload.get("publish", True) is False:
+            return
+        source_dir = Path(self.config.liga_bi_indicators_dir).expanduser()
+        if not self.config.liga_bi_indicators_dir.strip() or not source_dir.is_dir():
+            self._send_log(job_id, lease_token, "Importação automática 17.06 ignorada: configure PROMAX_LIGA_BI_INDICATORS_DIR no worker.", "warning", {"event": "promax_liga_bi_indicators_missing_dir"})
+            return
+        files = [source_dir / name for name in ("PATOS_SET.csv", "SUME_SET.csv") if (source_dir / name).is_file()]
+        if not files:
+            self._send_log(job_id, lease_token, f"Importação automática 17.06 sem PATOS_SET.csv ou SUME_SET.csv em {source_dir}.", "warning", {"event": "promax_liga_bi_indicators_missing_files", "source_dir": str(source_dir)})
+            return
+        try:
+            self._heartbeat_active_job(job_id, lease_token)
+            response = self.client.import_liga_entrega_files(
+                job_id=job_id, lease_token=lease_token, routine="1706_BI_INDICADORES",
+                files={path.name: path.read_bytes() for path in files}, reference_date=_current_reference_date(),
+            )
+            self._heartbeat_active_job(job_id, lease_token)
+            self._send_log(job_id, lease_token, f"Indicadores BI 17.06 importados automaticamente: {len(files)} arquivo(s).", "info", {"event": "promax_liga_bi_indicators_done", "source_dir": str(source_dir), "result": response.get("result", {}) if isinstance(response, Mapping) else {}})
+        except (OSError, PromaxClientError) as exc:
+            self._send_log(job_id, lease_token, f"Falha na importação automática 17.06: {exc}", "error", {"event": "promax_liga_bi_indicators_failed"})
+
     def _upload_liga_entrega_reports_if_needed(
         self,
         job: Mapping[str, Any],
@@ -1535,6 +1573,8 @@ class PromaxWorker:
         )
         selected_specs = [spec for spec in specs if _routine_selected(payload, spec[0])]
         if not selected_specs:
+            if _routine_selected(payload, "1706_BI_INDICADORES"):
+                return
             self._send_log(
                 job_id,
                 lease_token,
@@ -2028,7 +2068,7 @@ def build_worker(config: WorkerConfig) -> PromaxWorker:
         config=config,
         client=client,
         runner=PromaxRunner(runner_config),
-        catalog_provider=lambda: discover_report_catalog(config.driver_dir),
+        catalog_provider=lambda: _catalog_with_bi_indicators(discover_report_catalog(config.driver_dir)),
     )
 
 
@@ -2041,6 +2081,25 @@ def _string_list(value: Any) -> list[str]:
         if text and text not in normalized:
             normalized.append(text)
     return normalized
+
+
+def _catalog_with_bi_indicators(catalog: Mapping[str, Any]) -> dict[str, Any]:
+    """Acrescenta a coleta local do BI ao catálogo descoberto no Web Driver."""
+    result = dict(catalog)
+    raw_categories = catalog.get("categories")
+    categories = dict(raw_categories) if isinstance(raw_categories, Mapping) else {}
+    liga = dict(categories.get("liga_entrega") or {})
+    routines = list(liga.get("routines") or [])
+    if not any(str(item.get("id") if isinstance(item, Mapping) else item) == "1706_BI_INDICADORES" for item in routines):
+        routines.append({"id": "1706_BI_INDICADORES", "name": "17.06 - Indicadores BI (importação automática)"})
+    liga.setdefault("key", "liga_entrega")
+    liga.setdefault("name", "Liga Entrega")
+    liga.setdefault("section", "Entrega")
+    liga["routines"] = routines
+    liga.setdefault("units", [])
+    categories["liga_entrega"] = liga
+    result["categories"] = categories
+    return result
 
 
 def _current_reference_date() -> str:
@@ -2060,6 +2119,22 @@ def _routine_selected(payload: Mapping[str, Any], routine_id: str) -> bool:
         accepted.add(f"{target_base}_BOT")
 
     return any(_normalize_routine_id(routine) in accepted for routine in routines)
+
+
+def _job_without_bi_indicators_routine(job: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Remove a coleta local 17.06 do payload enviado ao Web Driver."""
+    payload = job.get("payload")
+    if not isinstance(payload, Mapping) or not _routine_selected(payload, "1706_BI_INDICADORES"):
+        return dict(job)
+    routines = [item for item in _payload_routines(payload) if _normalize_routine_id(item) != "1706_BI_INDICADORES"]
+    if not routines:
+        return None
+    clean_payload = dict(payload)
+    clean_payload["routines"] = routines
+    clean_payload.pop("groups", None)
+    clean_job = dict(job)
+    clean_job["payload"] = clean_payload
+    return clean_job
 
 
 def _payload_routines(payload: Mapping[str, Any]) -> list[str]:

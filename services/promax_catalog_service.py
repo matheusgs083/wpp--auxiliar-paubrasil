@@ -18,6 +18,7 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
             "description": "Relatorios de dados para o ADF.",
             "routines": [
                 {"id": "030237", "name": "Rotina 030237"},
+                {"id": "1706_BI_INDICADORES", "name": "17.06 - Indicadores BI (importação automática)"},
             ],
             "units": [],
         },

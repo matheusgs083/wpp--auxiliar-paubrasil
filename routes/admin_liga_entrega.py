@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService
 from bot_api.services.liga_entrega_pdf_service import build_liga_entrega_dashboard_pdf
+from bot_api.services.operational_indicators_service import OperationalIndicatorsService
 
 
 LIGA_ENTREGA_REPORTS = (
@@ -20,6 +21,7 @@ LIGA_ENTREGA_REPORTS = (
     {"routine": "030237", "code": "03.02.37", "label": "Entregas", "kind": "Mensal"},
     {"routine": "03114902_BOT", "code": "03.11.49.02", "label": "Cidades por mapa", "kind": "Mensal"},
     {"routine": "031129_LIGA", "code": "03.11.29", "label": "Equipe do dia por mapa", "kind": "Mensal"},
+    {"routine": "1706_BI_INDICADORES", "code": "17.06", "label": "Indicadores BI: caixas por viagem e ocupação", "kind": "Mensal"},
     {"routine": "PONTOMAIS_ESPELHO", "code": "PONTO", "label": "Espelho de ponto", "kind": "Mensal"},
     {"routine": "CHECKLIST_FROTA", "code": "XLSX", "label": "Checklist Frota", "kind": "Mensal"},
 )
@@ -51,6 +53,7 @@ def create_admin_liga_entrega_router(
     liga_entrega_status_service: Any | None = None,
     dclientes_query_service: Any | None = None,
     dprodutos_import_service: Any | None = None,
+    drevendas_import_service: Any | None = None,
     liga_entrega_report_store: Any | None = None,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
@@ -203,6 +206,27 @@ def create_admin_liga_entrega_router(
             decision="allowed",
             reason=f"rotas={summary.get('rotas', 0)}",
         )
+        return result
+
+    @router.get("/api/admin/liga-entrega/indicadores")
+    def api_admin_liga_entrega_indicadores(
+        request: Request,
+        competencia: str | None = Query(default=None),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_report_store is None:
+            raise HTTPException(status_code=503, detail="Armazenamento da Liga Entrega indisponível.")
+        try:
+            result = OperationalIndicatorsService(
+                report_store=liga_entrega_report_store,
+                drevendas_import_service=drevendas_import_service,
+            ).build_dashboard(competencia=competencia)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_security_event(request, channel="api", event_type="admin_liga_indicadores", decision="allowed", reason=f"filiais={result['summary']['branches']}")
         return result
 
     @router.get("/api/admin/liga-entrega/dashboard/pdf")
