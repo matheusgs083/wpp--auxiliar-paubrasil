@@ -306,13 +306,9 @@ class PromaxWorker:
         lease_token = _job_lease_token(job)
         self._pending_partial_results[job_id] = []
         self.logger.info("Executando job Promax %s.", job_id)
-        driver_job = _job_without_bi_indicators_routine(job)
         try:
-            if driver_job is None:
-                result = PromaxRunResult(status="success", return_code=0, child_pid=0, message="Coleta 17.06 preparada para importação automática.")
-            else:
-                result = self.runner.run(
-                driver_job,
+            result = self.runner.run(
+                job,
                 on_line=lambda stream, line: self._send_log(
                     job_id,
                     lease_token,
@@ -323,8 +319,8 @@ class PromaxWorker:
                 on_event=lambda event: self._handle_partial_result_event(job, job_id, lease_token, event),
                 heartbeat=lambda: self._heartbeat_active_job(job_id, lease_token),
                 cancel_requested=lambda: self._control_requested(job_id, "cancel_requested"),
-                    stop_requested=lambda: self.stop_event.is_set(),
-                )
+                stop_requested=lambda: self.stop_event.is_set(),
+            )
         except (OSError, RuntimeError, ValueError, PromaxRunnerConfigurationError) as exc:
             self.logger.exception("Falha ao executar job Promax %s.", job_id)
             result = PromaxRunResult(
@@ -1532,9 +1528,23 @@ class PromaxWorker:
         if not self.config.liga_bi_indicators_dir.strip() or not source_dir.is_dir():
             self._send_log(job_id, lease_token, "Importação automática 17.06 ignorada: configure PROMAX_LIGA_BI_INDICATORS_DIR no worker.", "warning", {"event": "promax_liga_bi_indicators_missing_dir"})
             return
-        files = [source_dir / name for name in ("PATOS_SET.csv", "SUME_SET.csv") if (source_dir / name).is_file()]
+        run_started_at_epoch = self._run_started_at_for_auto_import(
+            job_id,
+            lease_token,
+            result,
+            routine_id="1706_BI_INDICADORES",
+            event_prefix="promax_liga_bi_indicators",
+        )
+        if run_started_at_epoch is None:
+            return
+        files = [
+            source_dir / name
+            for name in ("PATOS_SET.csv", "SUME_SET.csv")
+            if (source_dir / name).is_file()
+            and _arquivo_pertence_execucao_atual(source_dir / name, run_started_at_epoch)
+        ]
         if not files:
-            self._send_log(job_id, lease_token, f"Importação automática 17.06 sem PATOS_SET.csv ou SUME_SET.csv em {source_dir}.", "warning", {"event": "promax_liga_bi_indicators_missing_files", "source_dir": str(source_dir)})
+            self._send_log(job_id, lease_token, f"Importação automática 17.06 aguardando CSV novo em {source_dir}; lote anterior não será reutilizado.", "warning", {"event": "promax_liga_bi_indicators_no_current_files", "source_dir": str(source_dir)})
             return
         try:
             self._heartbeat_active_job(job_id, lease_token)
@@ -2119,22 +2129,6 @@ def _routine_selected(payload: Mapping[str, Any], routine_id: str) -> bool:
         accepted.add(f"{target_base}_BOT")
 
     return any(_normalize_routine_id(routine) in accepted for routine in routines)
-
-
-def _job_without_bi_indicators_routine(job: Mapping[str, Any]) -> dict[str, Any] | None:
-    """Remove a coleta local 17.06 do payload enviado ao Web Driver."""
-    payload = job.get("payload")
-    if not isinstance(payload, Mapping) or not _routine_selected(payload, "1706_BI_INDICADORES"):
-        return dict(job)
-    routines = [item for item in _payload_routines(payload) if _normalize_routine_id(item) != "1706_BI_INDICADORES"]
-    if not routines:
-        return None
-    clean_payload = dict(payload)
-    clean_payload["routines"] = routines
-    clean_payload.pop("groups", None)
-    clean_job = dict(job)
-    clean_job["payload"] = clean_payload
-    return clean_job
 
 
 def _payload_routines(payload: Mapping[str, Any]) -> list[str]:
