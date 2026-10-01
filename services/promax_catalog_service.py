@@ -52,6 +52,7 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
                 {"id": "120606", "name": "Rotina 120606"},
                 {"id": "020502_FLUXO_DE_CAIXA", "name": "Rotina 020502 Fluxo de Caixa"},
                 {"id": "150501_FLUXO_DE_CAIXA", "name": "Rotina 150501 Fluxo de Caixa"},
+                {"id": "03114902_MENSAL_LIGA", "name": "03.11.49.02 - Cidades por mapa (fechamento)"},
             ],
             "units": [],
         },
