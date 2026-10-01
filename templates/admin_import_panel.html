@@ -1673,6 +1673,11 @@
             <div class="recolha-dashboard-grid mb-3" id="entregaIndicadoresCards"></div>
             <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Operação</th><th>Puxada</th><th class="text-end">Caixas / viagem</th><th class="text-end">Ocupação</th></tr></thead><tbody id="entregaIndicadoresBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando importação do BI 17.06.</td></tr></tbody></table></div>
           </section>
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-geo-alt me-2 text-primary"></i>Cidades por mapa · mensal</h2><div class="form-text" id="entregaMapasMensaisStatus">Card independente da 03.11.49.02 já usada pela Liga.</div></div><button class="btn btn-outline-primary btn-sm" id="entregaMapasMensaisRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaMapasMensaisCards"></div>
+            <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Filial</th><th>Mapa</th><th>Cidade</th><th>Data</th></tr></thead><tbody id="entregaMapasMensaisBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando o lote mensal.</td></tr></tbody></table></div>
+          </section>
         </div>
 
         <div id="entregaDevolucoesModule" class="d-none">
@@ -3178,6 +3183,7 @@
           reports: "/api/admin/liga-entrega/relatorios",
           dashboard: "/api/admin/liga-entrega/dashboard",
           indicadores: "/api/admin/liga-entrega/indicadores",
+          mapasMensais: "/api/admin/liga-entrega/mapas-mensais",
           dashboardPdf: "/api/admin/liga-entrega/dashboard/pdf"
         },
         usage: {
@@ -3677,6 +3683,10 @@
       entregaIndicadoresStatus: document.getElementById("entregaIndicadoresStatus"),
       entregaIndicadoresCards: document.getElementById("entregaIndicadoresCards"),
       entregaIndicadoresBody: document.getElementById("entregaIndicadoresBody"),
+      entregaMapasMensaisRefreshBtn: document.getElementById("entregaMapasMensaisRefreshBtn"),
+      entregaMapasMensaisStatus: document.getElementById("entregaMapasMensaisStatus"),
+      entregaMapasMensaisCards: document.getElementById("entregaMapasMensaisCards"),
+      entregaMapasMensaisBody: document.getElementById("entregaMapasMensaisBody"),
       entregaDevolucoesModule: document.getElementById("entregaDevolucoesModule"),
       entregaDevolucoesStatus: document.getElementById("entregaDevolucoesStatus"),
       entregaDevolucoesCards: document.getElementById("entregaDevolucoesCards"),
@@ -5309,6 +5319,29 @@
       }
     }
 
+    function renderMapasMensais(payload = {}) {
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      const summary = payload.summary || {};
+      if (E.entregaMapasMensaisStatus) E.entregaMapasMensaisStatus.textContent = rows.length ? `${payload.competencia || ""} · ${summary.mapas || 0} mapa(s) · ${summary.cidades || 0} cidade(s)` : ((payload.warnings || ["Nenhum lote mensal importado."])[0]);
+      if (E.entregaMapasMensaisCards) E.entregaMapasMensaisCards.innerHTML = `<article class="metric-card"><span>Mapas</span><b>${Number(summary.mapas || 0).toLocaleString("pt-BR")}</b><small>lote mensal 03.11.49.02</small></article><article class="metric-card"><span>Cidades</span><b>${Number(summary.cidades || 0).toLocaleString("pt-BR")}</b><small>cidades vinculadas aos mapas</small></article>`;
+      if (E.entregaMapasMensaisBody) E.entregaMapasMensaisBody.innerHTML = rows.map(row => `<tr><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml(row.mapa || "-")}</td><td>${escapeHtml(row.cidade || "-")}</td><td>${escapeHtml(formatDate(row.data) || row.data || "-")}</td></tr>`).join("") || '<tr><td colspan="4" class="text-center text-secondary py-4">Nenhum lote mensal importado ainda.</td></tr>';
+    }
+
+    async function syncMapasMensais({ silent = true } = {}) {
+      if (!hasPanelAuth()) return;
+      if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.disabled = true;
+      try {
+        state.ligaMapasMensais = await req(CONFIG.endpoints.ligaEntrega.mapasMensais, { timeoutMs: 30000 }) || {};
+        renderMapasMensais(state.ligaMapasMensais);
+        if (!silent) addLog("Cidades por mapa mensais atualizadas.", "ok");
+      } catch (err) {
+        if (E.entregaMapasMensaisStatus) E.entregaMapasMensaisStatus.textContent = `Falha ao carregar cidades por mapa: ${err.message}`;
+        if (!silent) addLog(`Falha ao carregar cidades por mapa: ${err.message}`, "err");
+      } finally {
+        if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.disabled = false;
+      }
+    }
+
     function setEntregaModule(module = "liga") {
       const indicadores = module === "indicadores";
       const devolucoes = module === "devolucoes";
@@ -5318,7 +5351,7 @@
       if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.className = `btn ${!indicadores && !devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.className = `btn ${indicadores ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.className = `btn ${devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
-      if (indicadores) syncIndicadores({ silent: true });
+      if (indicadores) { syncIndicadores({ silent: true }); syncMapasMensais({ silent: true }); }
       if (devolucoes) renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
     }
 
@@ -10098,6 +10131,7 @@
       if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.addEventListener("click", () => setEntregaModule("liga"));
       if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.addEventListener("click", () => setEntregaModule("indicadores"));
       if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.addEventListener("click", () => syncIndicadores({ silent: false }));
+      if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.addEventListener("click", () => syncMapasMensais({ silent: false }));
       if (E.entregaLigaCollapseBtn) E.entregaLigaCollapseBtn.addEventListener("click", () => {
         const collapsed = E.entregaLigaModule && E.entregaLigaModule.classList.toggle("is-collapsed");
         E.entregaLigaCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
