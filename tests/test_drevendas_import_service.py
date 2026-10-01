@@ -33,8 +33,24 @@ class DRevendasImportServiceTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0].codigo, "1")
         self.assertEqual(rows[0].nome, "Sousa")
+        self.assertEqual(rows[0].puxada, "")
         self.assertEqual(rows[1].codigo, "4")
         self.assertEqual(rows[1].nome, "Sume")
+
+    def test_load_rows_from_workbook_normalizes_puxada_to_eight_digits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "dRevendas.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["UNB", "NOME", "PUXADA"])
+            worksheet.append([3, "Patos", 747530])
+            worksheet.append([4, "Sume", "00747548"])
+            workbook.save(path)
+
+            rows = _load_drevendas_rows(path)
+
+        self.assertEqual(rows[0].puxada, "00747530")
+        self.assertEqual(rows[1].puxada, "00747548")
 
     def test_validate_source_reads_csv_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

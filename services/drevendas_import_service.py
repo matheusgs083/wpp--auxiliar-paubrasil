@@ -60,6 +60,7 @@ class DRevendasImportSummary:
 class DRevendasRow:
     codigo: str
     nome: str
+    puxada: str
     source_row_number: int
 
 
@@ -180,6 +181,25 @@ class DRevendasImportService:
             return {}
         return {str(row["codigo"]): str(row["nome"]) for row in rows if row.get("codigo") and row.get("nome")}
 
+    def latest_labels_by_puxada(self) -> dict[str, str]:
+        if not self.database_url:
+            return {}
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                self._create_latest_view(conn)
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute(
+                        sql.SQL("SELECT puxada, nome FROM {}.drevendas_latest WHERE puxada IS NOT NULL AND puxada <> '' ORDER BY puxada").format(
+                            sql.Identifier(self.schema)
+                        )
+                    )
+                    rows = cur.fetchall()
+                conn.commit()
+        except Exception:
+            return {}
+        return {str(row["puxada"]): str(row["nome"]) for row in rows if row.get("puxada") and row.get("nome")}
+
     def _ensure_schema(self, conn: psycopg.Connection[Any]) -> None:
         with conn.cursor() as cur:
             cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(self.schema)))
@@ -206,6 +226,7 @@ class DRevendasImportService:
                         row_number BIGINT NOT NULL,
                         codigo VARCHAR(32) NOT NULL,
                         nome TEXT NOT NULL,
+                        puxada VARCHAR(32),
                         imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         PRIMARY KEY (batch_id, row_number)
                     )
@@ -213,8 +234,18 @@ class DRevendasImportService:
                 ).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
             )
             cur.execute(
+                sql.SQL("ALTER TABLE {}.drevendas_snapshot ADD COLUMN IF NOT EXISTS puxada VARCHAR(32)").format(
+                    sql.Identifier(self.schema)
+                )
+            )
+            cur.execute(
                 sql.SQL(
                     "CREATE INDEX IF NOT EXISTS drevendas_snapshot_batch_codigo_idx ON {}.drevendas_snapshot (batch_id, codigo)"
+                ).format(sql.Identifier(self.schema))
+            )
+            cur.execute(
+                sql.SQL(
+                    "CREATE INDEX IF NOT EXISTS drevendas_snapshot_batch_puxada_idx ON {}.drevendas_snapshot (batch_id, puxada)"
                 ).format(sql.Identifier(self.schema))
             )
             cur.execute(
@@ -251,12 +282,13 @@ class DRevendasImportService:
                 batch_id,
                 row_number,
                 codigo,
-                nome
+                nome,
+                puxada
             )
-            VALUES (%s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s)
             """
         ).format(sql.Identifier(self.schema))
-        params = [(batch_id, index, row.codigo, row.nome) for index, row in enumerate(rows, start=1)]
+        params = [(batch_id, index, row.codigo, row.nome, row.puxada or None) for index, row in enumerate(rows, start=1)]
         with conn.cursor() as cur:
             cur.executemany(query, params)
 
@@ -271,6 +303,7 @@ class DRevendasImportService:
                 s.row_number,
                 s.codigo,
                 s.nome,
+                s.puxada,
                 s.imported_at,
                 b.reference_date,
                 b.source_file,
@@ -339,15 +372,16 @@ def _load_drevendas_rows_from_csv(path: Path) -> list[DRevendasRow]:
     return rows
 
 
-def _header_indexes(header: list[Any]) -> tuple[int, int]:
+def _header_indexes(header: list[Any]) -> tuple[int, int, int | None]:
     normalized = [_normalize_header(value) for value in header]
     codigo_index = _first_index(normalized, {"unb", "filial", "revenda", "codigo", "codigorevenda", "cod"})
     nome_index = _first_index(normalized, {"nome", "revenda", "nomerevenda", "descricao", "operacao"})
     if codigo_index is None or nome_index is None or codigo_index == nome_index:
         if len(header) < 2:
             raise ValueError("Arquivo invalido. Informe pelo menos as colunas UNB e NOME.")
-        return 0, 1
-    return codigo_index, nome_index
+        return 0, 1, None
+    puxada_index = _first_index(normalized, {"puxada", "codigopuxada", "codpuxada"})
+    return codigo_index, nome_index, puxada_index
 
 
 def _first_index(values: list[str], candidates: set[str]) -> int | None:
@@ -357,16 +391,27 @@ def _first_index(values: list[str], candidates: set[str]) -> int | None:
     return None
 
 
-def _parse_row(row: Any, row_number: int, indexes: tuple[int, int]) -> DRevendasRow | None:
+def _parse_row(row: Any, row_number: int, indexes: tuple[int, int, int | None]) -> DRevendasRow | None:
     values = list(row or [])
-    codigo_index, nome_index = indexes
+    codigo_index, nome_index, puxada_index = indexes
     codigo = normalize_numeric_code(str(values[codigo_index] if codigo_index < len(values) else "").strip())
     nome = _clean_text(values[nome_index] if nome_index < len(values) else "")
     if not codigo and not nome:
         return None
     if not codigo or not nome:
         return None
-    return DRevendasRow(codigo=codigo, nome=nome, source_row_number=row_number)
+    puxada = _normalize_puxada(values[puxada_index] if puxada_index is not None and puxada_index < len(values) else "")
+    return DRevendasRow(codigo=codigo, nome=nome, puxada=puxada, source_row_number=row_number)
+
+
+def _normalize_puxada(value: Any) -> str:
+    raw = str(value or "").strip()
+    if raw.endswith(".0"):
+        raw = raw[:-2]
+    digits = "".join(char for char in raw if char.isdigit())
+    if not digits:
+        return ""
+    return digits.zfill(8) if len(digits) <= 8 else digits
 
 
 def _read_text_with_fallback(path: Path) -> str:
