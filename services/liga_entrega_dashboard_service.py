@@ -120,13 +120,13 @@ class LigaEntregaDashboardService:
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
         period = "fechado" if str(period).lower() == "fechado" else "atual"
-        comp = _clean_comp(competencia) if competencia else self._latest_competencia()
+        comp = _clean_comp(competencia) if competencia else self._latest_competencia(period=period)
         if not comp:
             return _empty("")
         manifests = self._select_manifests(comp, period=period)
         expurgos = self._active_expurgos(comp)
         status_overrides = self._status_overrides(comp)
-        cache_key = (str(getattr(self.report_store, "root_dir", id(self.report_store))), comp)
+        cache_key = (str(getattr(self.report_store, "root_dir", id(self.report_store))), f"{period}:{comp}")
         cache_signature = dashboard_signature(manifests, expurgos, status_overrides)
         with _DASHBOARD_CACHE_LOCK:
             cached = _DASHBOARD_CACHE.get(cache_key)
@@ -550,7 +550,7 @@ class LigaEntregaDashboardService:
         except OSError:
             return
 
-    def _latest_competencia(self) -> str:
+    def _latest_competencia(self, *, period: str = "atual") -> str:
         latest = ""
         for routine in ROUTINES:
             try:
@@ -559,6 +559,9 @@ class LigaEntregaDashboardService:
                 continue
             ref = str((manifest or {}).get("reference_date") or "")
             if len(ref) >= 7 and ref[:7] > latest:
+                metadata = manifest.get("metadata") if isinstance(manifest, dict) else {}
+                if str((metadata or {}).get("period") or "atual") != period:
+                    continue
                 latest = ref[:7]
         return latest
 
