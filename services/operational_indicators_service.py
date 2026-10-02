@@ -22,8 +22,8 @@ class OperationalIndicatorsService:
         self.report_store = report_store
         self.drevendas_import_service = drevendas_import_service
 
-    def build_dashboard(self, *, competencia: str | None = None) -> dict[str, Any]:
-        manifests = self.report_store.list_manifests(BI_INDICATORS_ROUTINE, competencia=competencia)
+    def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
+        manifests = [m for m in self.report_store.list_manifests(BI_INDICATORS_ROUTINE, competencia=competencia) if str((m.get("metadata") or {}).get("period") or "atual") == ("fechado" if period == "fechado" else "atual")]
         if not manifests:
             return self._empty(competencia or "")
 

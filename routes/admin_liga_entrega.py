@@ -178,6 +178,7 @@ def create_admin_liga_entrega_router(
     def api_admin_liga_entrega_dashboard(
         request: Request,
         competencia: str | None = Query(default=None),
+        period: str = Query(default="atual", pattern="^(atual|fechado)$"),
         authorization: str | None = Header(default=None),
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
@@ -197,7 +198,7 @@ def create_admin_liga_entrega_router(
                 status_service=liga_entrega_status_service,
                 dclientes_query_service=dclientes_query_service,
                 dprodutos_import_service=dprodutos_import_service,
-            ).build_dashboard(competencia=competencia)
+            ).build_dashboard(competencia=competencia, period=period)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
@@ -214,6 +215,7 @@ def create_admin_liga_entrega_router(
     def api_admin_liga_entrega_indicadores(
         request: Request,
         competencia: str | None = Query(default=None),
+        period: str = Query(default="atual", pattern="^(atual|fechado)$"),
         authorization: str | None = Header(default=None),
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
@@ -225,7 +227,7 @@ def create_admin_liga_entrega_router(
             result = OperationalIndicatorsService(
                 report_store=liga_entrega_report_store,
                 drevendas_import_service=drevendas_import_service,
-            ).build_dashboard(competencia=competencia)
+            ).build_dashboard(competencia=competencia, period=period)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         record_security_event(request, channel="api", event_type="admin_liga_indicadores", decision="allowed", reason=f"filiais={result['summary']['branches']}")
@@ -235,6 +237,7 @@ def create_admin_liga_entrega_router(
     def api_admin_liga_entrega_mapas_mensais(
         request: Request,
         competencia: str | None = Query(default=None),
+        period: str = Query(default="atual", pattern="^(atual|fechado)$"),
         authorization: str | None = Header(default=None),
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
@@ -242,7 +245,7 @@ def create_admin_liga_entrega_router(
         require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
         if liga_entrega_report_store is None:
             raise HTTPException(status_code=503, detail="Armazenamento da Liga Entrega indisponível.")
-        result = MonthlyMapCitiesService(report_store=liga_entrega_report_store).build_dashboard(competencia=competencia)
+        result = MonthlyMapCitiesService(report_store=liga_entrega_report_store).build_dashboard(competencia=competencia, period=period)
         record_security_event(request, channel="api", event_type="admin_liga_mapas_mensais", decision="allowed", reason=f"mapas={result['summary']['mapas']}")
         return result
 

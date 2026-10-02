@@ -1654,7 +1654,7 @@
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Dashboard da Liga</h2>
               <div class="form-text" id="entregaLigaDashboardStatus">Aguardando relatórios carregados para montar o dashboard.</div>
             </div>
-            <span class="pill" id="entregaLigaDashboardBadge">Pendente</span>
+            <div class="d-flex gap-2 align-items-center"><select class="form-select form-select-sm" id="entregaLigaPeriodo" aria-label="Período da Liga" style="width:auto"><option value="atual">Atual</option><option value="fechado">Fechamento</option></select><span class="pill" id="entregaLigaDashboardBadge">Pendente</span></div>
           </div>
           <div class="recolha-dashboard-grid mb-3" id="entregaLigaDashboardCards"></div>
           <div class="source-box" id="entregaLigaDashboardDetails">
@@ -5308,7 +5308,8 @@
       if (!hasPanelAuth()) return;
       if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.disabled = true;
       try {
-        state.ligaIndicadores = await req(CONFIG.endpoints.ligaEntrega.indicadores, { timeoutMs: 30000 }) || {};
+        const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
+        state.ligaIndicadores = await req(`${CONFIG.endpoints.ligaEntrega.indicadores}?period=${encodeURIComponent(period)}`, { timeoutMs: 30000 }) || {};
         renderIndicadores(state.ligaIndicadores);
         if (!silent) addLog("Indicadores BI atualizados.", "ok");
       } catch (err) {
@@ -5331,7 +5332,8 @@
       if (!hasPanelAuth()) return;
       if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.disabled = true;
       try {
-        state.ligaMapasMensais = await req(CONFIG.endpoints.ligaEntrega.mapasMensais, { timeoutMs: 30000 }) || {};
+        const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
+        state.ligaMapasMensais = await req(`${CONFIG.endpoints.ligaEntrega.mapasMensais}?period=${encodeURIComponent(period)}`, { timeoutMs: 30000 }) || {};
         renderMapasMensais(state.ligaMapasMensais);
         if (!silent) addLog("Cidades por mapa mensais atualizadas.", "ok");
       } catch (err) {
@@ -5485,7 +5487,8 @@
       }
 
       try {
-        state.ligaEntregaDashboard = await req(CONFIG.endpoints.ligaEntrega.dashboard, { timeoutMs: 60000 }) || {};
+        const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
+        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}?period=${encodeURIComponent(period)}`, { timeoutMs: 60000 }) || {};
       } catch (err) {
         state.ligaEntregaDashboard = {
           ok: false,
@@ -10128,6 +10131,7 @@
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
+      if (E.entregaLigaPeriodo) E.entregaLigaPeriodo.addEventListener("change", () => syncLigaEntregaReports({ silent: false, force: true }));
       if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.addEventListener("click", () => setEntregaModule("liga"));
       if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.addEventListener("click", () => setEntregaModule("indicadores"));
       if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.addEventListener("click", () => syncIndicadores({ silent: false }));

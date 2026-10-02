@@ -18,8 +18,8 @@ class MonthlyMapCitiesService:
     def __init__(self, *, report_store: Any) -> None:
         self.report_store = report_store
 
-    def build_dashboard(self, *, competencia: str | None = None) -> dict[str, Any]:
-        manifests = self.report_store.list_manifests(MONTHLY_MAP_CITIES_ROUTINE, competencia=competencia)
+    def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
+        manifests = [m for m in self.report_store.list_manifests(MONTHLY_MAP_CITIES_ROUTINE, competencia=competencia) if str((m.get("metadata") or {}).get("period") or "atual") == ("fechado" if period == "fechado" else "atual")]
         if not manifests:
             return self._empty(competencia or "")
         manifest = manifests[-1]

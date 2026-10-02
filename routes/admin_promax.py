@@ -729,6 +729,15 @@ class PromaxLigaEntregaImportRequest(_StrictPayload):
     routine: str = Field(min_length=1, max_length=64)
     files: list[PromaxLigaEntregaImportFile] = Field(min_length=1, max_length=300)
     reference_date: date | None = None
+    period: str = "atual"
+
+    @field_validator("period")
+    @classmethod
+    def validate_period(cls, value: str) -> str:
+        period = str(value or "").strip().lower()
+        if period not in {"atual", "fechado"}:
+            raise ValueError("period deve ser atual ou fechado")
+        return period
 
     @field_validator("routine")
     @classmethod
@@ -2127,7 +2136,7 @@ def create_admin_promax_router(
                 routine=payload.routine,
                 files=decoded,
                 reference_date=payload.reference_date,
-                metadata={"job_id": payload.job_id, "worker_id": payload.worker_id},
+                metadata={"job_id": payload.job_id, "worker_id": payload.worker_id, "period": payload.period},
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -118,11 +118,12 @@ class LigaEntregaDashboardService:
         self.dclientes_query_service = dclientes_query_service
         self.dprodutos_import_service = dprodutos_import_service
 
-    def build_dashboard(self, *, competencia: str | None = None) -> dict[str, Any]:
+    def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
+        period = "fechado" if str(period).lower() == "fechado" else "atual"
         comp = _clean_comp(competencia) if competencia else self._latest_competencia()
         if not comp:
             return _empty("")
-        manifests = self._select_manifests(comp)
+        manifests = self._select_manifests(comp, period=period)
         expurgos = self._active_expurgos(comp)
         status_overrides = self._status_overrides(comp)
         cache_key = (str(getattr(self.report_store, "root_dir", id(self.report_store))), comp)
@@ -561,16 +562,16 @@ class LigaEntregaDashboardService:
                 latest = ref[:7]
         return latest
 
-    def _select_manifests(self, comp: str) -> dict[str, list[dict[str, Any]]]:
-        out: dict[str, list[dict[str, Any]]] = {R030805: self._list(R030805, comp)}
+    def _select_manifests(self, comp: str, *, period: str = "atual") -> dict[str, list[dict[str, Any]]]:
+        out: dict[str, list[dict[str, Any]]] = {R030805: self._list(R030805, comp, period=period)}
         for routine in ROUTINES[1:]:
-            items = self._list(routine, comp)
+            items = self._list(routine, comp, period=period)
             out[routine] = [items[-1]] if items else []
         return out
 
-    def _list(self, routine: str, comp: str) -> list[dict[str, Any]]:
+    def _list(self, routine: str, comp: str, *, period: str = "atual") -> list[dict[str, Any]]:
         if hasattr(self.report_store, "list_manifests"):
-            return list(self.report_store.list_manifests(routine, competencia=comp))
+            return [m for m in self.report_store.list_manifests(routine, competencia=comp) if str((m.get("metadata") or {}).get("period") or "atual") == period]
         manifest = self.report_store.latest_manifest(routine)
         return [manifest] if manifest and str(manifest.get("reference_date") or "").startswith(comp + "-") else []
 

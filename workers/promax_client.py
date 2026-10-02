@@ -259,6 +259,7 @@ class PromaxClient:
         lease_token: str,
         files: Mapping[str, bytes],
         reference_date: str | None = None,
+        period: str = "atual",
     ) -> dict[str, Any]:
         if not files:
             raise ValueError("CSV files must not be empty.")
@@ -280,6 +281,7 @@ class PromaxClient:
         }
         if reference_date:
             payload["reference_date"] = str(reference_date)
+        payload["period"] = str(period or "atual")
         return self._request(
             "POST",
             "/api/internal/promax/inadimplencia/import",
