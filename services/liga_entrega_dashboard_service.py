@@ -554,15 +554,18 @@ class LigaEntregaDashboardService:
         latest = ""
         for routine in ROUTINES:
             try:
-                manifest = self.report_store.latest_manifest(routine)
+                manifests = self.report_store.list_manifests(routine)
             except Exception:
                 continue
-            ref = str((manifest or {}).get("reference_date") or "")
-            if len(ref) >= 7 and ref[:7] > latest:
-                metadata = manifest.get("metadata") if isinstance(manifest, dict) else {}
-                if str((metadata or {}).get("period") or "atual") != period:
+            for manifest in manifests:
+                if not isinstance(manifest, dict):
                     continue
-                latest = ref[:7]
+                metadata = manifest.get("metadata") or {}
+                if str(metadata.get("period") or "atual") != period:
+                    continue
+                ref = str(manifest.get("reference_date") or "")
+                if len(ref) >= 7 and ref[:7] > latest:
+                    latest = ref[:7]
         return latest
 
     def _select_manifests(self, comp: str, *, period: str = "atual") -> dict[str, list[dict[str, Any]]]:

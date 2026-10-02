@@ -10,6 +10,7 @@ from typing import Any
 
 
 MONTHLY_MAP_CITIES_ROUTINE = "03114902_MENSAL_LIGA"
+CURRENT_MAP_CITIES_ROUTINE = "03114902_BOT"
 
 
 class MonthlyMapCitiesService:
@@ -19,7 +20,14 @@ class MonthlyMapCitiesService:
         self.report_store = report_store
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
-        manifests = [m for m in self.report_store.list_manifests(MONTHLY_MAP_CITIES_ROUTINE, competencia=competencia) if str((m.get("metadata") or {}).get("period") or "atual") == ("fechado" if period == "fechado" else "atual")]
+        normalized_period = "fechado" if str(period).lower() == "fechado" else "atual"
+        routine = MONTHLY_MAP_CITIES_ROUTINE if normalized_period == "fechado" else CURRENT_MAP_CITIES_ROUTINE
+        manifests = []
+        for manifest in self.report_store.list_manifests(routine, competencia=competencia):
+            metadata = manifest.get("metadata") or {}
+            stored_period = str(metadata.get("period") or ("fechado" if routine == MONTHLY_MAP_CITIES_ROUTINE else "atual"))
+            if stored_period == normalized_period:
+                manifests.append(manifest)
         if not manifests:
             return self._empty(competencia or "")
         manifest = manifests[-1]
