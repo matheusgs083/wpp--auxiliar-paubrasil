@@ -41,3 +41,20 @@ class MonthlyMapCitiesServiceTests(unittest.TestCase):
             )
         self.assertEqual(result["summary"]["mapas"], 1)
         self.assertEqual(result["rows"][0]["mapa"], "125")
+
+    def test_falls_back_when_latest_monthly_batch_has_no_valid_maps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = LigaEntregaReportStore(temp_dir)
+            store.store_batch(
+                routine=MONTHLY_MAP_CITIES_ROUTINE,
+                files={"mapas_validos.csv": b"Mapa;Cidade;Data\n000123;Patos;30/09/2026\n"},
+                reference_date="2026-09-29",
+            )
+            store.store_batch(
+                routine=MONTHLY_MAP_CITIES_ROUTINE,
+                files={"mapas_incompletos.csv": b"arquivo;sem;coluna\n1;2;3\n"},
+                reference_date="2026-09-30",
+            )
+            result = MonthlyMapCitiesService(report_store=store).build_dashboard(competencia="2026-09", period="fechado")
+        self.assertEqual(result["summary"]["mapas"], 1)
+        self.assertEqual(result["rows"][0]["mapa"], "123")

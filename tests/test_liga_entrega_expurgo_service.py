@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from bot_api.services.liga_entrega_expurgo_service import LigaEntregaExpurgoService
-from bot_api.services.liga_entrega_dashboard_service import match_dev_exp
+from bot_api.services.liga_entrega_dashboard_service import match_dev_exp, matching_route_expurgos
 
 
 class LigaEntregaExpurgoServiceTest(unittest.TestCase):
@@ -111,6 +111,25 @@ class LigaEntregaExpurgoServiceTest(unittest.TestCase):
                 service.upsert_expurgo(
                     {"tipo": "tml", "escopo": "todos", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-23"}
                 )
+
+    def test_route_matching_respects_scope_and_competence(self) -> None:
+        route = {"data": "2026-09-23", "filial": "PATOS", "mapa": "999"}
+        individual_without_map = {"tipo": "km", "escopo": "individual", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-23", "mapa": ""}
+        team_day = {"tipo": "km", "escopo": "equipe", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-23", "mapa": ""}
+        wrong_competence = {"tipo": "km", "escopo": "equipe", "competencia": "2026-10", "filial": "PATOS", "data": "2026-09-23", "mapa": ""}
+
+        matches = matching_route_expurgos(route, [individual_without_map, team_day, wrong_competence], {"km"})
+
+        self.assertEqual(matches, [team_day])
+
+    def test_multiple_matching_route_expurgos_are_counted(self) -> None:
+        route = {"data": "2026-09-23", "filial": "PATOS", "mapa": "999"}
+        km = {"tipo": "km", "escopo": "equipe", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-23", "mapa": "999"}
+        dispersao = {"tipo": "dispersao", "escopo": "equipe", "competencia": "2026-09", "filial": "PATOS", "data": "2026-09-23", "mapa": "999"}
+
+        matches = matching_route_expurgos(route, [km, dispersao], {"km", "dispersao"})
+
+        self.assertEqual(matches, [km, dispersao])
 
 
 if __name__ == "__main__":

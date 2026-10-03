@@ -254,6 +254,7 @@ def create_admin_liga_entrega_router(
         request: Request,
         view: str = Query(default="completo"),
         competencia: str | None = Query(default=None),
+        period: str = Query(default="atual", pattern="^(atual|fechado)$"),
         authorization: str | None = Header(default=None),
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
@@ -275,7 +276,7 @@ def create_admin_liga_entrega_router(
                 status_service=liga_entrega_status_service,
                 dclientes_query_service=dclientes_query_service,
                 dprodutos_import_service=dprodutos_import_service,
-            ).build_dashboard(competencia=competencia)
+            ).build_dashboard(competencia=competencia, period=period)
             content, filename = build_liga_entrega_dashboard_pdf(dashboard, view=view)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -33,6 +33,45 @@ def test_closed_dashboard_competence_follows_daily_030805_filename():
     assert service._latest_competencia(period="fechado") == "2026-09"
 
 
+def test_current_dashboard_competence_also_follows_daily_030805_filename():
+    service = LigaEntregaDashboardService.__new__(LigaEntregaDashboardService)
+    service.report_store = _Store()
+    assert service._latest_competencia(period="atual") == "2026-09"
+
+
+def test_auxiliary_manifest_matches_operational_csv_date_when_uploaded_next_month(tmp_path):
+    from bot_api.services.liga_entrega_dashboard_service import _manifest_covers_operational_competencia
+
+    path = tmp_path / "031120_PATOS.csv"
+    path.write_text("Mapa;DtOper;Fase;HrOper\n123;30/09/2026;Saida;07:00\n", encoding="cp1252")
+    manifest = {
+        "reference_date": "2026-10-02",
+        "metadata": {"period": "fechado"},
+        "files": [{"filename": path.name, "path": str(path)}],
+    }
+    assert _manifest_covers_operational_competencia(manifest, "2026-09")
+
+
+def test_auxiliary_list_does_not_require_reference_date_directory(tmp_path):
+    from bot_api.services.liga_entrega_dashboard_service import R031120
+
+    path = tmp_path / "031120_PATOS.csv"
+    path.write_text("Mapa;DtOper;Fase;HrOper\n123;30/09/2026;Saida;07:00\n", encoding="cp1252")
+
+    class Store:
+        def list_manifests(self, routine, *, competencia=None):
+            return [{
+                "routine": routine,
+                "reference_date": "2026-10-02",
+                "metadata": {"period": "fechado"},
+                "files": [{"filename": path.name, "path": str(path)}],
+            }]
+
+    service = LigaEntregaDashboardService.__new__(LigaEntregaDashboardService)
+    service.report_store = Store()
+    assert len(service._list(R031120, "2026-09", period="fechado")) == 1
+
+
 def test_030805_uses_km_desloc_when_odometer_is_zero():
     actual, planned = route_km_values(
         {

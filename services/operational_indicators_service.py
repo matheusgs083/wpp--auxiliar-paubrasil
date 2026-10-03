@@ -23,40 +23,76 @@ class OperationalIndicatorsService:
         self.drevendas_import_service = drevendas_import_service
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
-        manifests = [m for m in self.report_store.list_manifests(BI_INDICATORS_ROUTINE, competencia=competencia) if str((m.get("metadata") or {}).get("period") or "atual") == ("fechado" if period == "fechado" else "atual")]
+        normalized_period = "fechado" if str(period).lower() == "fechado" else "atual"
+        manifests = [m for m in self.report_store.list_manifests(BI_INDICATORS_ROUTINE, competencia=competencia) if str((m.get("metadata") or {}).get("period") or "atual") == normalized_period]
         if not manifests:
             return self._empty(competencia or "")
 
-        latest = manifests[-1]
         labels = self._labels_by_puxada()
-        branches: dict[str, dict[str, Any]] = {}
         warnings: list[str] = []
         selected_competencia = str(competencia or "")
-        for file_info in latest.get("files") or []:
-            raw_path = str(file_info.get("path") or "")
-            path = Path(raw_path)
-            try:
-                rows = self._read_csv(path)
-            except (OSError, UnicodeError, csv.Error) as exc:
-                warnings.append(f"{path.name}: não foi possível ler ({exc}).")
-                continue
-            for row in rows:
-                puxada = self._clean_puxada(row.get("Puxada"))
-                base = str(row.get("Base") or "").strip().zfill(4)
-                metric = _INDICATOR_BASES.get(base)
-                if not puxada or metric is None:
+        latest: dict[str, Any] | None = None
+        branches: dict[str, dict[str, Any]] = {}
+        recognized_competencias: set[str] = set()
+        # A newer, incomplete upload must not hide the last valid BI card.
+        # Keep scanning newest-to-oldest until at least one recognized row is found.
+        for candidate in reversed(manifests):
+            candidate_branches: dict[str, dict[str, Any]] = {}
+            candidate_competencias: set[str] = set()
+            candidate_warnings: list[str] = []
+            for file_info in candidate.get("files") or []:
+                raw_path = str(file_info.get("path") or "")
+                path = Path(raw_path)
+                try:
+                    rows = self._read_csv(path)
+                except (OSError, UnicodeError, csv.Error) as exc:
+                    candidate_warnings.append(f"{path.name}: não foi possível ler ({exc}).")
                     continue
-                year = str(row.get("Ano") or "").strip()
-                month = str(row.get("Mês") or row.get("Mes") or "").strip().zfill(2)
-                row_competencia = f"{year}-{month}" if year.isdigit() and month.isdigit() else ""
-                if selected_competencia and row_competencia and row_competencia != selected_competencia:
-                    continue
-                selected_competencia = selected_competencia or row_competencia
-                branch = branches.setdefault(
-                    puxada,
-                    {"puxada": puxada, "filial": labels.get(puxada) or _BRANCH_FALLBACKS.get(puxada) or str(row.get("Nome Revenda") or puxada).strip(), "metrics": {}},
-                )
-                branch["metrics"][metric] = self._number(row.get("Valor Mes"))
+                for row in rows:
+                    puxada = self._clean_puxada(row.get("Puxada"))
+                    base = str(row.get("Base") or "").strip().zfill(4)
+                    metric = _INDICATOR_BASES.get(base)
+                    if not puxada or metric is None:
+                        continue
+                    year = str(row.get("Ano") or "").strip()
+                    month = str(row.get("Mês") or row.get("Mes") or "").strip().zfill(2)
+                    row_competencia = f"{year}-{month}" if year.isdigit() and month.isdigit() else ""
+                    if row_competencia:
+                        candidate_competencias.add(row_competencia)
+                    if selected_competencia and row_competencia and row_competencia != selected_competencia:
+                        continue
+                    branch = candidate_branches.setdefault(
+                        puxada,
+                        {"puxada": puxada, "filial": labels.get(puxada) or _BRANCH_FALLBACKS.get(puxada) or str(row.get("Nome Revenda") or puxada).strip(), "metrics": {}},
+                    )
+                    raw_value = row.get("Valor Mes")
+                    if metric in branch["metrics"]:
+                        candidate_warnings.append(f"Métrica duplicada no 17.06: {puxada}/{metric}; foi mantido o último valor válido.")
+                    branch["metrics"][metric] = self._number(raw_value) if str(raw_value or "").strip() else None
+            if candidate_branches:
+                latest = candidate
+                branches = candidate_branches
+                recognized_competencias = candidate_competencias
+                warnings.extend(candidate_warnings)
+                break
+            warnings.extend(candidate_warnings)
+        if latest is None:
+            return self._empty(competencia or "") | {"warnings": warnings or ["Nenhum registro reconhecido no lote 17.06."]}
+        if not selected_competencia and recognized_competencias:
+            selected_competencia = max(recognized_competencias)
+            if len(recognized_competencias) > 1:
+                warnings.append("O lote 17.06 contém múltiplas competências; foi selecionada a mais recente: " + selected_competencia + ".")
+            # Rebuild using the selected competence so a multi-month CSV does not mix cards.
+            result = self.build_dashboard(competencia=selected_competencia, period=normalized_period)
+            result["warnings"] = warnings + list(result.get("warnings") or [])
+            return result
+        missing: list[str] = []
+        for branch in branches.values():
+            for metric in _INDICATOR_BASES.values():
+                if branch["metrics"].get(metric) is None:
+                    missing.append(f"{branch['filial']}: {metric}")
+        if missing:
+            warnings.append("Valores ausentes no 17.06: " + ", ".join(missing[:20]) + ("." if len(missing) <= 20 else "; ..."))
 
         items = sorted(branches.values(), key=lambda item: str(item["filial"]).casefold())
         return {
@@ -88,12 +124,12 @@ class OperationalIndicatorsService:
         return digits.zfill(8) if digits else ""
 
     @staticmethod
-    def _number(value: Any) -> float:
+    def _number(value: Any) -> float | None:
         text = str(value or "").replace(".", "").replace(",", ".").strip()
         try:
             return float(text)
         except ValueError:
-            return 0.0
+            return None
 
     @staticmethod
     def _empty(competencia: str) -> dict[str, Any]:

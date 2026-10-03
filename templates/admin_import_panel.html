@@ -5071,6 +5071,7 @@
       const normalizedView = view === "ajudantes" ? "ajudantes" : "motoristas";
       const dashboard = state.ligaEntregaDashboard || {};
       const query = new URLSearchParams({ view: normalizedView });
+      query.set("period", String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual"));
       if (dashboard.competencia) query.set("competencia", dashboard.competencia);
       const headers = {};
       if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
@@ -5414,7 +5415,12 @@
     async function syncLigaEntregaExpurgos() {
       if (!hasPanelAuth()) return;
       const competencia = String((state.ligaEntregaDashboard || {}).competencia || "");
-      const query = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
+      if (!competencia) {
+        state.ligaEntregaExpurgos = [];
+        renderLigaEntregaExpurgos();
+        return;
+      }
+      const query = `?competencia=${encodeURIComponent(competencia)}`;
       const payload = await req(`${CONFIG.endpoints.ligaEntrega.expurgos}${query}`, { timeoutMs: 15000 });
       const calculated = ((state.ligaEntregaDashboard || {}).expurgos || {}).items || [];
       const appliedById = new Map(calculated.map(item => [String(item.id || ""), Number(item.aplicados || 0)]));

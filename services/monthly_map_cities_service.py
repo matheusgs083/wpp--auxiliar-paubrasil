@@ -30,26 +30,35 @@ class MonthlyMapCitiesService:
                 manifests.append(manifest)
         if not manifests:
             return self._empty(competencia or "")
-        manifest = manifests[-1]
-        maps: dict[tuple[str, str], dict[str, str]] = {}
         warnings: list[str] = []
-        for item in manifest.get("files") or []:
-            path = Path(str(item.get("path") or ""))
-            filial = "SUME" if "SUME" in path.name.upper() else "PATOS" if "PATOS" in path.name.upper() else ""
-            try:
-                for row in self._rows(path):
-                    mapa = self._mapa(self._pick(row, "Mapa"))
-                    cidade = self._pick(row, "Cidade", "Municipio", "Município", "Nome Cidade")
-                    if not mapa:
-                        continue
-                    maps[(filial, mapa)] = {
-                        "filial": filial or "-",
-                        "mapa": mapa,
-                        "cidade": cidade or "Não informada",
-                        "data": self._pick(row, "Data", "Data Movimento"),
-                    }
-            except (OSError, UnicodeError, csv.Error) as exc:
-                warnings.append(f"{path.name}: {exc}")
+        manifest = None
+        maps: dict[tuple[str, str], dict[str, str]] = {}
+        # Do not let a newer empty/corrupt upload hide the last valid monthly card.
+        for candidate in reversed(manifests):
+            candidate_maps: dict[tuple[str, str], dict[str, str]] = {}
+            for item in candidate.get("files") or []:
+                path = Path(str(item.get("path") or ""))
+                filial = "SUME" if "SUME" in path.name.upper() else "PATOS" if "PATOS" in path.name.upper() else ""
+                try:
+                    for row in self._rows(path):
+                        mapa = self._mapa(self._pick(row, "Mapa"))
+                        cidade = self._pick(row, "Cidade", "Municipio", "Município", "Nome Cidade")
+                        if not mapa:
+                            continue
+                        candidate_maps[(filial, mapa)] = {
+                            "filial": filial or "-",
+                            "mapa": mapa,
+                            "cidade": cidade or "Não informada",
+                            "data": self._pick(row, "Data", "Data Movimento"),
+                        }
+                except (OSError, UnicodeError, csv.Error) as exc:
+                    warnings.append(f"{path.name}: {exc}")
+            if candidate_maps:
+                manifest = candidate
+                maps = candidate_maps
+                break
+        if manifest is None:
+            return self._empty(competencia or "") | {"warnings": warnings or ["Nenhum registro reconhecido no lote mensal da 03.11.49.02."]}
         rows = sorted(maps.values(), key=lambda item: (item["filial"], int(item["mapa"]) if item["mapa"].isdigit() else item["mapa"]))
         return {
             "ok": True,

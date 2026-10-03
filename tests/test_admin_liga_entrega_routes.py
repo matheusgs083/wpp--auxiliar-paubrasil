@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -87,6 +88,17 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         checklist = next(item for item in payload["items"] if item["routine"] == "CHECKLIST_FROTA")
         self.assertTrue(espelho["loaded"])
         self.assertTrue(checklist["loaded"])
+
+    def test_dashboard_pdf_preserves_selected_period(self) -> None:
+        client, _events = self.make_client()
+        with patch("bot_api.routes.admin_liga_entrega.LigaEntregaDashboardService") as service_cls, patch(
+            "bot_api.routes.admin_liga_entrega.build_liga_entrega_dashboard_pdf",
+            return_value=(b"pdf", "liga.pdf"),
+        ):
+            service_cls.return_value.build_dashboard.return_value = {"summary": {}}
+            response = client.get("/api/admin/liga-entrega/dashboard/pdf", params={"period": "fechado", "competencia": "2026-09"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(service_cls.return_value.build_dashboard.call_args.kwargs["period"], "fechado")
 
 
     def test_dashboard_calculates_rankings_and_applies_expurgos(self) -> None:

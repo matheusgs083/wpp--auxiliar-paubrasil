@@ -205,7 +205,9 @@ class LigaEntregaDashboardService:
                             or (comp, route_data, filial.upper(), mot) in IRISMARK_AUXILIARY
                         ) and IRISMARK_CODE not in aju:
                             aju.append(IRISMARK_CODE)
-                        rotas[mapa] = {
+                        route_key = route_identity(route_data, filial, mapa)
+                        rotas[route_key] = {
+                            "_route_key": route_key,
                             "data": route_data, "mapa": mapa, "filial": filial,
                             "mot": mot, "aju": aju, "km_real": round(km_real, 1) if km_ok else None,
                             "km_prev": round(km_prev, 1) if km_ok else None, "tempo_prev": to_min(pick(row, "TempoPrev", "Tempo Prev")),
@@ -225,8 +227,8 @@ class LigaEntregaDashboardService:
                         fase = str(pick(row, "Fase") or "").lower()
                         if not mapa:
                             continue
-                        item = port.setdefault(mapa, {})
                         event = [to_iso(pick(row, "DtOper", "Data"), fallback=manifest_ref(manifest)), to_time(pick(row, "HrOper", "Hora"))]
+                        item = port.setdefault(route_identity(event[0], filial, mapa), {})
                         if fase.startswith("entrada"):
                             item["ent"] = event
                         elif fase.startswith("saida") and event[1]:
@@ -344,7 +346,9 @@ class LigaEntregaDashboardService:
                         mapa = norm_mapa(pick(row, "Mapa"))
                         cidade = str(pick(row, "Cidade", "Municipio", "Município", "Nome Cidade") or "").strip()
                         if mapa and cidade:
-                            cidades[mapa] = cidade
+                            data = to_iso(pick(row, "Data", "Data Movimento"), fallback="")
+                            filial = filial_from_name(file["filename"])
+                            cidades[route_identity(data, filial, mapa) if data else f"|{filial.upper()}|{mapa}"] = cidade
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.11.49.02 {file['filename']}: {exc}")
 
@@ -364,7 +368,8 @@ class LigaEntregaDashboardService:
                             a = remember(pick(row, code_col), nome=pick(row, name_col), filial=filial, funcao="AJUDANTE")
                             if a != "0" and a not in aju:
                                 aju.append(a)
-                        equipes[mapa] = {"data": to_iso(pick(row, "Data"), fallback=manifest_ref(manifest)), "filial": filial, "mot": mot, "aju": aju, "sup": str(pick(row, "Nome Superv. Rota", "Supervisor") or "").strip(), "placa": str(pick(row, "Placa") or "").strip()}
+                        data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
+                        equipes[route_identity(data, filial, mapa)] = {"data": data, "filial": filial, "mapa": mapa, "mot": mot, "aju": aju, "sup": str(pick(row, "Nome Superv. Rota", "Supervisor") or "").strip(), "placa": str(pick(row, "Placa") or "").strip()}
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.11.29 {file['filename']}: {exc}")
 
@@ -396,8 +401,14 @@ class LigaEntregaDashboardService:
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"checklist {file['filename']}: {exc}")
 
-        for mapa, equipe in equipes.items():
-            rota = rotas.setdefault(mapa, {"data": equipe.get("data") or "", "mapa": mapa, "filial": equipe.get("filial") or "", "mot": equipe.get("mot") or "0", "aju": [], "km_real": None, "km_prev": None, "tempo_prev": None, "hs0805": "", "he0805": "", "entregas": 0, "cidade": "", "src": "03.11.29"})
+        for key, equipe in equipes.items():
+            mapa = str(equipe.get("mapa") or key.rsplit("|", 1)[-1])
+            route_key = route_identity(equipe.get("data"), equipe.get("filial"), mapa)
+            if route_key not in rotas:
+                same_route = [candidate for candidate in rotas.values() if str(candidate.get("filial") or "").upper() == str(equipe.get("filial") or "").upper() and norm_mapa(candidate.get("mapa")) == mapa]
+                if len(same_route) == 1:
+                    route_key = str(same_route[0].get("_route_key") or route_key)
+            rota = rotas.setdefault(route_key, {"_route_key": route_key, "data": equipe.get("data") or "", "mapa": mapa, "filial": equipe.get("filial") or "", "mot": equipe.get("mot") or "0", "aju": [], "km_real": None, "km_prev": None, "tempo_prev": None, "hs0805": "", "he0805": "", "entregas": 0, "cidade": "", "src": "03.11.29"})
             route_data = str(equipe.get("data") or rota.get("data") or "")
             route_filial = str(equipe.get("filial") or rota.get("filial") or "").upper()
             route_mot = str(equipe.get("mot") or rota.get("mot") or "")
@@ -443,33 +454,38 @@ class LigaEntregaDashboardService:
                 exp_counts[str(item["tipo"])] += 1
             item["aplicados"] = 0
         for dev in devols:
-            match = match_dev_exp(dev, expurgos)
+            matches = matching_dev_expurgos(dev, expurgos)
+            match = matches[0] if matches else None
             if match:
                 dev["excluida"] = True
                 dev["expurgo_id"] = str(match.get("id") or "")
-                match["aplicados"] = int(match.get("aplicados") or 0) + 1
+                for applied in matches:
+                    applied["aplicados"] = int(applied.get("aplicados") or 0) + 1
             owner = colab.get(str(dev.get("cod") or ""), {})
             dev["motorista"] = str(owner.get("nome") or dev.get("cod") or "-")
             dev["ajudantes"] = [str(colab.get(code, {}).get("nome") or code) for code in dev.get("aju", [])]
 
         rotas_list: list[dict[str, Any]] = []
-        for mapa, r0 in rotas.items():
+        for key, r0 in rotas.items():
             r = dict(r0)
-            p = port.get(mapa, {})
+            mapa = str(r.get("mapa") or "")
+            p = lookup_route_aux(port, r)
             r["hr_sai"] = (p.get("sai") or [None, r.get("hs0805") or ""])[1]
-            if mapa in cidades:
-                r["cidade"] = cidades[mapa]
+            r["cidade"] = lookup_route_city(cidades, r)
             r["pernoite"] = bool(r.get("tempo_prev") and float(r["tempo_prev"]) > TEMPO_PREV_MAX)
             r["tempo_real"] = tempo_real(r, p, ponto)
             r["tempo_pct"] = pct(float(r["tempo_real"]) / float(r["tempo_prev"]) * 100) if r.get("tempo_real") and r.get("tempo_prev") else None
-            exp_s = match_route_exp(r, expurgos, {"tml"})
-            exp_k = match_route_exp(r, expurgos, {"km", "dispersao"})
+            exp_s_matches = matching_route_expurgos(r, expurgos, {"tml"})
+            exp_k_matches = matching_route_expurgos(r, expurgos, {"km", "dispersao"})
+            exp_s = exp_s_matches[0] if exp_s_matches else None
+            exp_k = exp_k_matches[0] if exp_k_matches else None
             r["expurgo_saida"] = bool(exp_s)
             r["expurgo_km"] = bool(exp_k)
-            if exp_s:
-                exp_s["aplicados"] = int(exp_s.get("aplicados") or 0) + 1
-            if exp_k:
-                exp_k["aplicados"] = int(exp_k.get("aplicados") or 0) + 1
+            for applied in exp_s_matches:
+                applied["aplicados"] = int(applied.get("aplicados") or 0) + 1
+            for applied in exp_k_matches:
+                applied["aplicados"] = int(applied.get("aplicados") or 0) + 1
+            r.pop("_route_key", None)
             rotas_list.append(r)
         rotas_list.sort(key=lambda x: (str(x.get("data") or ""), to_int(x.get("mapa"))))
 
@@ -569,29 +585,41 @@ class LigaEntregaDashboardService:
                 ref = str(manifest.get("reference_date") or "")
                 if len(ref) >= 7 and ref[:7] > latest:
                     latest = ref[:7]
-        if period == "fechado" and daily_competencias:
+        # O 03.08.05 é a fonte operacional diária.  Os demais relatórios
+        # podem ser enviados em outro dia (especialmente no fechamento), por
+        # isso a competência do painel nunca deve ser escolhida apenas pela
+        # data de upload/referencia dos auxiliares.
+        if daily_competencias:
             return max(daily_competencias)
         return latest
 
     def _select_manifests(self, comp: str, *, period: str = "atual") -> dict[str, list[dict[str, Any]]]:
         out: dict[str, list[dict[str, Any]]] = {R030805: self._list(R030805, comp, period=period)}
+        # Daily operational auxiliaries must be merged across all batches of
+        # the competence. A closing upload commonly contains one file per
+        # day; selecting only the last manifest silently drops the month.
+        daily_aux = {R031120, R031129, R030224M, R030224A, R030237}
         for routine in ROUTINES[1:]:
             items = self._list(routine, comp, period=period)
-            out[routine] = [items[-1]] if items else []
+            out[routine] = items if routine in daily_aux else ([items[-1]] if items else [])
         return out
 
     def _list(self, routine: str, comp: str, *, period: str = "atual") -> list[dict[str, Any]]:
         if hasattr(self.report_store, "list_manifests"):
-            manifests = self.report_store.list_manifests(
-                routine,
-                competencia=None if routine == R030805 else comp,
-            )
+            # Não limitar a busca pelo diretório de reference_date: no
+            # fechamento ele é a data de envio e pode não ser a competência
+            # operacional contida no arquivo.
+            manifests = self.report_store.list_manifests(routine, competencia=None)
             # 03.08.05 is a daily source shared by current and closed views.
             # Its historical batches are already stored by competence and do
             # not need to be uploaded again with a second period metadata.
             if routine == R030805:
                 return [m for m in manifests if _manifest_covers_030805_competencia(m, comp)]
-            return [m for m in manifests if str((m.get("metadata") or {}).get("period") or "atual") == period]
+            return [
+                m for m in manifests
+                if str((m.get("metadata") or {}).get("period") or "atual") == period
+                and _manifest_covers_operational_competencia(m, comp)
+            ]
         manifest = self.report_store.latest_manifest(routine)
         return [manifest] if manifest and str(manifest.get("reference_date") or "").startswith(comp + "-") else []
 
@@ -618,7 +646,10 @@ def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: li
     """Assinatura barata dos únicos dados que alteram o resultado calculado."""
 
     batches = tuple(
-        (routine, tuple((str(item.get("batch_id") or ""), str(item.get("stored_at") or "")) for item in items))
+        (routine, tuple((str(item.get("batch_id") or ""), str(item.get("stored_at") or ""), tuple(
+            (str(file.get("path") or ""), _file_fingerprint(file.get("path")))
+            for file in item.get("files") or [] if isinstance(file, dict)
+        )) for item in items))
         for routine, items in sorted(manifests.items())
     )
     exclusions = tuple(
@@ -626,6 +657,14 @@ def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: li
         for item in sorted(expurgos, key=lambda item: str(item.get("id") or ""))
     )
     return repr((CACHE_VERSION, batches, exclusions, tuple(sorted((statuses or {}).items()))))
+
+
+def _file_fingerprint(value: Any) -> tuple[int, int] | tuple[int, int, str]:
+    try:
+        stat = Path(str(value or "")).stat()
+        return (int(stat.st_size), int(stat.st_mtime_ns))
+    except OSError:
+        return (0, 0, "missing")
 
 
 def canonical_status(cod: Any, overrides: dict[str, str] | None = None) -> str:
@@ -939,12 +978,38 @@ def norm_name(value: Any) -> str:
     return " ".join(text.upper().split())
 
 
+def route_identity(data: Any, filial: Any, mapa: Any) -> str:
+    """Stable route identity; map numbers repeat across days and branches."""
+    return f"{to_iso(data, fallback='')}|{str(filial or '').strip().upper()}|{norm_mapa(mapa)}"
+
+
+def lookup_route_aux(index: dict[str, dict[str, Any]], route: dict[str, Any]) -> dict[str, Any]:
+    exact = index.get(route_identity(route.get("data"), route.get("filial"), route.get("mapa")))
+    if exact is not None:
+        return exact
+    candidates = [value for key, value in index.items() if key.endswith(f"|{norm_mapa(route.get('mapa'))}")]
+    return candidates[0] if len(candidates) == 1 else {}
+
+
+def lookup_route_city(index: dict[str, str], route: dict[str, Any]) -> str:
+    exact = index.get(route_identity(route.get("data"), route.get("filial"), route.get("mapa")))
+    if exact:
+        return exact
+    prefix = f"|{str(route.get('filial') or '').strip().upper()}|{norm_mapa(route.get('mapa'))}"
+    candidates = [value for key, value in index.items() if key.endswith(prefix)]
+    return candidates[0] if len(candidates) == 1 else ""
+
+
 def _competencias_from_030805_manifest(manifest: dict[str, Any]) -> set[str]:
     result: set[str] = set()
+    reference_year = str(manifest.get("reference_date") or "")[:4]
+    year = reference_year if re.fullmatch(r"\d{4}", reference_year) else f"{datetime.now().year:04d}"
     for item in manifest.get("files") or []:
-        filename = str(item.get("filename") or "") if isinstance(item, dict) else ""
+        filename = str(item.get("filename") or Path(str(item.get("path") or "")).name) if isinstance(item, dict) else ""
         for day, month in re.findall(r"(?:^|[_-])(\d{2})[_-](\d{2})(?:\D|$)", filename):
-            result.add(f"{datetime.now().year:04d}-{month}")
+            result.add(f"{year}-{month}")
+        for value in re.findall(r"(?:^|\D)(\d{4})[-_](0[1-9]|1[0-2])(?:\D|$)", filename):
+            result.add(f"{value[0]}-{value[1]}")
     return result
 
 
@@ -952,6 +1017,61 @@ def _manifest_covers_030805_competencia(manifest: dict[str, Any], competencia: s
     return str(competencia or "") in _competencias_from_030805_manifest(manifest) or str(
         manifest.get("reference_date") or ""
     ).startswith(f"{competencia}-")
+
+
+def _manifest_covers_operational_competencia(manifest: dict[str, Any], competencia: str) -> bool:
+    """Match an auxiliary batch by its operational data, not only upload date.
+
+    Closing imports are commonly stored under the previous month's
+    ``reference_date`` while the worker sends the files on the first days of
+    the next month.  Prefer explicit metadata/name dates, then inspect CSV
+    date columns as a compatibility fallback for older manifests.
+    """
+    target = str(competencia or "")
+    if not target:
+        return False
+    metadata = manifest.get("metadata") or {}
+    for key in ("competencia", "competence", "operational_competencia", "periodo_operacional"):
+        value = str(metadata.get(key) or "")
+        if value.startswith(target):
+            return True
+    if str(manifest.get("reference_date") or "").startswith(f"{target}-"):
+        return True
+    if _competencias_from_manifest_filenames(manifest, target):
+        return True
+    return _manifest_contains_csv_competencia(manifest, target)
+
+
+def _competencias_from_manifest_filenames(manifest: dict[str, Any], target: str = "") -> bool:
+    for item in manifest.get("files") or []:
+        if not isinstance(item, dict):
+            continue
+        filename = str(item.get("filename") or Path(str(item.get("path") or "")).name)
+        # Accept YYYY-MM, YYYY_MM and the daily DD_MM naming used by 030805.
+        if re.search(rf"(?:^|\D){re.escape(target)}(?:\D|$)", filename):
+            return True
+        for day, month in re.findall(r"(?:^|[_-])(\d{2})[_-](\d{2})(?:\D|$)", filename):
+            if target[-2:] == month:
+                return True
+    return False
+
+
+def _manifest_contains_csv_competencia(manifest: dict[str, Any], target: str) -> bool:
+    for item in manifest.get("files") or []:
+        if not isinstance(item, dict):
+            continue
+        path = Path(str(item.get("path") or ""))
+        if path.suffix.lower() not in {".csv", ".txt"} or not path.is_file():
+            continue
+        try:
+            for row in rows_from(path):
+                for name in ("Data", "Data Movimento", "DtOper", "Dt Operacao", "Data Operacao", "Data Entrega"):
+                    value = to_iso(pick(row, name))
+                    if value.startswith(f"{target}-"):
+                        return True
+        except (OSError, UnicodeError, csv.Error):
+            continue
+    return False
 
 
 def tempo_real(rota: dict[str, Any], port: dict[str, Any], ponto: dict[str, str]) -> int | None:
@@ -1008,7 +1128,6 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
     agg_m: dict[str, dict[str, float]] = defaultdict(blank)
     agg_a: dict[str, dict[str, float]] = defaultdict(blank)
     chk_set = {f"{c.get('cod')}|{c.get('data')}|{c.get('tipo')}" for c in checklist}
-    rotas_by_mapa = {str(item.get("mapa") or ""): item for item in rotas}
     chk_e: dict[str, int] = defaultdict(int)
     chk_f: dict[str, int] = defaultdict(int)
     for r in rotas:
@@ -1039,12 +1158,12 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
             if t_ok:
                 agg_a[a]["tR"] += float(r.get("tempo_real") or 0)
                 agg_a[a]["tP"] += target
-            p = port.get(str(r.get("mapa") or ""))
+            p = lookup_route_aux(port, r)
             if p and p.get("sai") and not r.get("expurgo_saida"):
                 agg_a[a]["saiTot"] += 1
                 agg_a[a]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
         if has_farol and str(r.get("data") or "") >= str(METAS["check_inicio"]) and mot != "0":
-            p = port.get(str(r.get("mapa") or ""), {})
+            p = lookup_route_aux(port, r)
             ds = (p.get("sai") or [r.get("data")])[0]
             de = (p.get("ent") or [r.get("data")])[0]
             fez_s = f"{mot}|{ds}|S" in chk_set
@@ -1056,7 +1175,8 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
         mot = norm_code(p.get("mot"))
         if mot == "0" or not p.get("sai"):
             continue
-        rota = rotas_by_mapa.get(str(mapa), {})
+        candidates = [r for r in rotas if route_identity(r.get("data"), r.get("filial"), r.get("mapa")) == mapa]
+        rota = candidates[0] if len(candidates) == 1 else {}
         if rota.get("expurgo_saida"):
             continue
         agg_m[mot]["saiTot"] += 1
@@ -1140,8 +1260,18 @@ def count_devols(devols: list[dict[str, Any]], cod: str, role: str) -> int:
 
 
 def match_dev_exp(dev: dict[str, Any], expurgos: list[dict[str, Any]]) -> dict[str, Any] | None:
+    matches = matching_dev_expurgos(dev, expurgos)
+    return matches[0] if matches else None
+
+
+def matching_dev_expurgos(dev: dict[str, Any], expurgos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return every devolucao expurgo that targets this occurrence."""
+    competencia = _record_competencia(dev.get("data"))
+    matches: list[dict[str, Any]] = []
     for e in expurgos:
         if e.get("tipo") != "devolucao":
+            continue
+        if e.get("competencia") and competencia and str(e.get("competencia")) != competencia:
             continue
         if e.get("data") and e.get("data") != dev.get("data"):
             continue
@@ -1153,13 +1283,25 @@ def match_dev_exp(dev: dict[str, Any], expurgos: list[dict[str, Any]]) -> dict[s
         # Nao os aplique: devolucao sempre precisa identificar o cliente.
         if cliente == "0" or cliente != cod_cliente:
             continue
-        return e
-    return None
+        matches.append(e)
+    return matches
 
 
 def match_route_exp(rota: dict[str, Any], expurgos: list[dict[str, Any]], tipos: set[str]) -> dict[str, Any] | None:
+    matches = matching_route_expurgos(rota, expurgos, tipos)
+    return matches[0] if matches else None
+
+
+def matching_route_expurgos(rota: dict[str, Any], expurgos: list[dict[str, Any]], tipos: set[str]) -> list[dict[str, Any]]:
+    """Return route expurgos with explicit scope and competence matching."""
+    competencia = _record_competencia(rota.get("data"))
+    matches: list[dict[str, Any]] = []
     for e in expurgos:
         if e.get("tipo") not in tipos:
+            continue
+        if not _expurgo_scope(e):
+            continue
+        if e.get("competencia") and competencia and str(e.get("competencia")) != competencia:
             continue
         if e.get("mapa") and norm_mapa(e.get("mapa")) != norm_mapa(rota.get("mapa")):
             continue
@@ -1167,8 +1309,23 @@ def match_route_exp(rota: dict[str, Any], expurgos: list[dict[str, Any]], tipos:
             continue
         if e.get("filial") and str(e.get("filial")).upper() != str(rota.get("filial")).upper():
             continue
-        return e
-    return None
+        if str(e.get("escopo") or "").strip().lower() == "individual" and not e.get("mapa"):
+            continue
+        matches.append(e)
+    return matches
+
+
+def _expurgo_scope(expurgo: dict[str, Any]) -> bool:
+    scope = str(expurgo.get("escopo") or "").strip().lower()
+    if scope in {"individual", "equipe"}:
+        return True
+    # Legacy TML records without scope and without map represented a whole day.
+    return expurgo.get("tipo") == "tml" and not expurgo.get("mapa")
+
+
+def _record_competencia(value: Any) -> str:
+    text = str(value or "").strip()
+    return text[:7] if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) else ""
 
 
 def next_day(value: Any) -> str:
