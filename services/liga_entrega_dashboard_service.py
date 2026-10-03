@@ -34,7 +34,7 @@ MAX_COMPETENCE_SCAN_ROWS = 5000
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 15
+CACHE_VERSION = 16
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -377,7 +377,11 @@ class LigaEntregaDashboardService:
                             a = remember(pick(row, code_col), nome=pick(row, name_col), filial=filial, funcao="AJUDANTE")
                             if a != "0" and a not in aju:
                                 aju.append(a)
-                        data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
+                        # O 03.11.29 pode ser mensal e frequentemente não traz
+                        # a data operacional. Nunca use a data de upload do
+                        # lote como se fosse a data da rota: o 03.08.05 é a
+                        # fonte oficial da data quando a rota existe.
+                        data = to_iso(pick(row, "Data"), fallback="")
                         equipes[route_identity(data, filial, mapa)] = {"data": data, "filial": filial, "mapa": mapa, "mot": mot, "aju": aju, "sup": str(pick(row, "Nome Superv. Rota", "Supervisor") or "").strip(), "placa": str(pick(row, "Placa") or "").strip()}
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.11.29 {file['filename']}: {exc}")
@@ -428,11 +432,10 @@ class LigaEntregaDashboardService:
             ) else []
             merged_aju = list(dict.fromkeys([*(rota.get("aju") or []), *(equipe.get("aju") or []), *auxiliary_aju]))
             rota.update({"mot": equipe.get("mot") or rota.get("mot"), "aju": merged_aju, "sup": equipe.get("sup") or "", "placa": equipe.get("placa") or ""})
-            # A escala é a fonte da data operacional da equipe. O 03.08.05
-            # pode registrar a execução no dia seguinte, então a data da
-            # equipe precisa prevalecer quando o mapa existe nos dois lotes.
-            if equipe.get("data"):
-                rota["data"] = equipe["data"]
+            # O 03.08.05 é a fonte oficial da data operacional. O 03.11.29
+            # apenas completa a equipe; sua data pode ser de exportação ou
+            # estar ausente e nunca deve substituir a data diária da rota.
+            preserve_operational_route_date(rota, equipe)
             if equipe.get("filial") and not rota.get("filial"):
                 rota["filial"] = equipe["filial"]
 
@@ -997,6 +1000,13 @@ def norm_name(value: Any) -> str:
 def route_identity(data: Any, filial: Any, mapa: Any) -> str:
     """Stable route identity; map numbers repeat across days and branches."""
     return f"{to_iso(data, fallback='')}|{str(filial or '').strip().upper()}|{norm_mapa(mapa)}"
+
+
+def preserve_operational_route_date(route: dict[str, Any], equipe: dict[str, Any]) -> None:
+    """Use 03.11.29's date only when 03.08.05 did not provide one."""
+
+    if not route.get("data") and equipe.get("data"):
+        route["data"] = equipe["data"]
 
 
 def lookup_route_aux(index: dict[str, dict[str, Any]], route: dict[str, Any]) -> dict[str, Any]:

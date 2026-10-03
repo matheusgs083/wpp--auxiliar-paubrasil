@@ -1,4 +1,8 @@
-from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService, route_km_values
+from bot_api.services.liga_entrega_dashboard_service import (
+    LigaEntregaDashboardService,
+    preserve_operational_route_date,
+    route_km_values,
+)
 
 
 class _Store:
@@ -96,3 +100,15 @@ def test_030805_keeps_odometer_calculation_when_available():
     )
     assert actual == 286
     assert planned == 286.74
+
+
+def test_031129_never_replaces_operational_date_from_030805():
+    route = {"data": "2026-09-30"}
+    preserve_operational_route_date(route, {"data": "2026-10-02"})
+    assert route["data"] == "2026-09-30"
+
+
+def test_031129_date_can_fill_route_created_without_030805():
+    route = {"data": ""}
+    preserve_operational_route_date(route, {"data": "2026-09-30"})
+    assert route["data"] == "2026-09-30"
