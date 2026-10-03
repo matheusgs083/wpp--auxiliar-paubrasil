@@ -577,7 +577,13 @@ class LigaEntregaDashboardService:
 
     def _list(self, routine: str, comp: str, *, period: str = "atual") -> list[dict[str, Any]]:
         if hasattr(self.report_store, "list_manifests"):
-            return [m for m in self.report_store.list_manifests(routine, competencia=comp) if str((m.get("metadata") or {}).get("period") or "atual") == period]
+            manifests = self.report_store.list_manifests(routine, competencia=comp)
+            # 03.08.05 is a daily source shared by current and closed views.
+            # Its historical batches are already stored by competence and do
+            # not need to be uploaded again with a second period metadata.
+            if routine == R030805:
+                return manifests
+            return [m for m in manifests if str((m.get("metadata") or {}).get("period") or "atual") == period]
         manifest = self.report_store.latest_manifest(routine)
         return [manifest] if manifest and str(manifest.get("reference_date") or "").startswith(comp + "-") else []
 
