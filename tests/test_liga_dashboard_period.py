@@ -4,7 +4,12 @@ from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboard
 class _Store:
     def list_manifests(self, routine, *, competencia=None):
         return [
-            {"routine": routine, "reference_date": "2026-09-30", "metadata": {"period": "atual"}},
+            {
+                "routine": routine,
+                "reference_date": "2026-10-02",
+                "metadata": {"period": "atual"},
+                "files": [{"filename": "PATOS_30_09.csv"}],
+            },
         ]
 
 

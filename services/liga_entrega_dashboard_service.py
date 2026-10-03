@@ -551,6 +551,7 @@ class LigaEntregaDashboardService:
             return
 
     def _latest_competencia(self, *, period: str = "atual") -> str:
+        daily_competencias: set[str] = set()
         latest = ""
         for routine in ROUTINES:
             try:
@@ -561,11 +562,16 @@ class LigaEntregaDashboardService:
                 if not isinstance(manifest, dict):
                     continue
                 metadata = manifest.get("metadata") or {}
+                if routine == R030805:
+                    daily_competencias.update(_competencias_from_030805_manifest(manifest))
+                    continue
                 if str(metadata.get("period") or "atual") != period:
                     continue
                 ref = str(manifest.get("reference_date") or "")
                 if len(ref) >= 7 and ref[:7] > latest:
                     latest = ref[:7]
+        if period == "fechado" and daily_competencias:
+            return max(daily_competencias)
         return latest
 
     def _select_manifests(self, comp: str, *, period: str = "atual") -> dict[str, list[dict[str, Any]]]:
@@ -577,12 +583,15 @@ class LigaEntregaDashboardService:
 
     def _list(self, routine: str, comp: str, *, period: str = "atual") -> list[dict[str, Any]]:
         if hasattr(self.report_store, "list_manifests"):
-            manifests = self.report_store.list_manifests(routine, competencia=comp)
+            manifests = self.report_store.list_manifests(
+                routine,
+                competencia=None if routine == R030805 else comp,
+            )
             # 03.08.05 is a daily source shared by current and closed views.
             # Its historical batches are already stored by competence and do
             # not need to be uploaded again with a second period metadata.
             if routine == R030805:
-                return manifests
+                return [m for m in manifests if _manifest_covers_030805_competencia(m, comp)]
             return [m for m in manifests if str((m.get("metadata") or {}).get("period") or "atual") == period]
         manifest = self.report_store.latest_manifest(routine)
         return [manifest] if manifest and str(manifest.get("reference_date") or "").startswith(comp + "-") else []
@@ -904,6 +913,21 @@ def norm_name(value: Any) -> str:
     text = unicodedata.normalize("NFD", str(value or ""))
     text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
     return " ".join(text.upper().split())
+
+
+def _competencias_from_030805_manifest(manifest: dict[str, Any]) -> set[str]:
+    result: set[str] = set()
+    for item in manifest.get("files") or []:
+        filename = str(item.get("filename") or "") if isinstance(item, dict) else ""
+        for day, month in re.findall(r"(?:^|[_-])(\d{2})[_-](\d{2})(?:\D|$)", filename):
+            result.add(f"{datetime.now().year:04d}-{month}")
+    return result
+
+
+def _manifest_covers_030805_competencia(manifest: dict[str, Any], competencia: str) -> bool:
+    return str(competencia or "") in _competencias_from_030805_manifest(manifest) or str(
+        manifest.get("reference_date") or ""
+    ).startswith(f"{competencia}-")
 
 
 def tempo_real(rota: dict[str, Any], port: dict[str, Any], ponto: dict[str, str]) -> int | None:
