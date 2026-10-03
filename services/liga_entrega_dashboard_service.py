@@ -229,7 +229,11 @@ class LigaEntregaDashboardService:
                         fase = str(pick(row, "Fase") or "").lower()
                         if not mapa:
                             continue
-                        event = [to_iso(pick(row, "DtOper", "Data"), fallback=manifest_ref(manifest)), to_time(pick(row, "HrOper", "Hora"))]
+                        # A data de referência do lote é a data de upload, não
+                        # necessariamente a data operacional da rota. Quando
+                        # o export não traz data, deixamos vazia para o
+                        # vínculo posterior pelo mapa, sem inventar 02/10.
+                        event = [to_iso(pick(row, "DtOper", "Data"), fallback=""), to_time(pick(row, "HrOper", "Hora"))]
                         item = port.setdefault(route_identity(event[0], filial, mapa), {})
                         if fase.startswith("entrada"):
                             item["ent"] = event
@@ -265,7 +269,10 @@ class LigaEntregaDashboardService:
                         nota = str(pick(row, "Nota") or "").strip()
                         if not nota:
                             continue
-                        data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
+                        # 03.11.29_SET frequentemente não possui coluna Data.
+                        # Nesse caso a data oficial continua vindo do 03.08.05;
+                        # reference_date seria apenas a data de upload.
+                        data = to_iso(pick(row, "Data"), fallback="")
                         key = dev_key(nota, pick(row, "Serie", "Série"), data)
                         ajus: list[str] = []
                         for col in ("Ajudante 1", "Ajudante1", "CdAju1", "Ajudante 2", "Ajudante2", "CdAju2"):
