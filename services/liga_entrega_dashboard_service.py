@@ -196,8 +196,7 @@ class LigaEntregaDashboardService:
                             a = remember(pick(row, key), filial=filial, funcao="AJUDANTE")
                             if a != "0" and a not in aju:
                                 aju.append(a)
-                        km_real = to_float(pick(row, "KmEntr", "Km Entrada")) - to_float(pick(row, "KmSai", "Km Saida"))
-                        km_prev = to_float(pick(row, "KmPrev", "Km Previsto"))
+                        km_real, km_prev = route_km_values(row)
                         km_ok = km_prev > 0 and km_real > 0 and km_real < 2000
                         route_data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
                         placa = str(pick(row, "Placa") or "").strip().upper()
@@ -753,6 +752,31 @@ def to_float(value: Any) -> float:
         return float(text or 0)
     except ValueError:
         return 0.0
+
+
+def route_km_values(row: dict[str, str]) -> tuple[float, float]:
+    """Return actual/planned KM from a 03.08.05 row.
+
+    Promax normally exposes the odometer pair (``KmSai``/``KmEntr``). For
+    routes without odometer readings it still exports the travelled distance
+    in ``KmDesloc`` as an integer in hundredths of a kilometre (for example,
+    ``002055`` means 20.55 km). Keep the odometer calculation as the primary
+    source and use that fallback only when both odometer values are zero.
+    """
+    km_sai = to_float(pick(row, "KmSai", "Km Saida"))
+    km_entr = to_float(pick(row, "KmEntr", "Km Entrada"))
+    km_real = km_entr - km_sai
+    if km_sai == 0 and km_entr == 0:
+        raw_desloc = str(pick(row, "KmDesloc", "Km Deslocamento") or "").strip()
+        if raw_desloc:
+            km_desloc = to_float(raw_desloc)
+            # The CSV uses an integer hundredths representation. If a future
+            # export already contains a decimal separator, preserve it.
+            if re.fullmatch(r"[+-]?\d+", raw_desloc):
+                km_desloc /= 100
+            if km_desloc > 0:
+                km_real = km_desloc
+    return km_real, to_float(pick(row, "KmPrev", "Km Previsto"))
 
 
 def to_int(value: Any) -> int:

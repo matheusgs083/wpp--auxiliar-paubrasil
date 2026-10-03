@@ -1,4 +1,4 @@
-from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService
+from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService, route_km_values
 
 
 class _Store:
@@ -25,3 +25,29 @@ def test_other_closed_routines_still_require_closed_period_metadata():
     service.report_store = _Store()
     result = service._list("031120_BOT", "2026-09", period="fechado")
     assert result == []
+
+
+def test_030805_uses_km_desloc_when_odometer_is_zero():
+    actual, planned = route_km_values(
+        {
+            "kmsai": "0000000",
+            "kmentr": "0000000",
+            "kmdesloc": "002055",
+            "kmprev": "00023,42",
+        }
+    )
+    assert actual == 20.55
+    assert planned == 23.42
+
+
+def test_030805_keeps_odometer_calculation_when_available():
+    actual, planned = route_km_values(
+        {
+            "kmsai": "0082526",
+            "kmentr": "0082812",
+            "kmdesloc": "0028675",
+            "kmprev": "00286,74",
+        }
+    )
+    assert actual == 286
+    assert planned == 286.74
