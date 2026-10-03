@@ -617,11 +617,18 @@ class LigaEntregaDashboardService:
             # not need to be uploaded again with a second period metadata.
             if routine == R030805:
                 return [m for m in manifests if _manifest_covers_030805_competencia(m, comp)]
-            return [
+            candidates = [
                 m for m in manifests
                 if str((m.get("metadata") or {}).get("period") or "atual") == period
-                and _manifest_covers_operational_competencia(m, comp)
             ]
+            # The normal installation has one current/closing batch per
+            # routine. Do not rescan large CSVs just to rediscover a
+            # competence already established by 03.08.05. The expensive
+            # content fallback is needed only when competing historical
+            # batches exist.
+            if len(candidates) <= 1:
+                return candidates
+            return [m for m in candidates if _manifest_covers_operational_competencia(m, comp)]
         manifest = self.report_store.latest_manifest(routine)
         return [manifest] if manifest and str(manifest.get("reference_date") or "").startswith(comp + "-") else []
 
