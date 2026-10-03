@@ -10,6 +10,7 @@ import threading
 import unicodedata
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from itertools import chain
 from pathlib import Path
 from typing import Any, Iterable
@@ -28,6 +29,7 @@ PESOS_AJD = {"devol": 35, "saida": 25, "km": 15, "check": 25}
 MIN_ROTAS = 3
 TEMPO_PREV_MAX = 840
 MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
+MAX_COMPETENCE_SCAN_ROWS = 5000
 # Increment when the serialized dashboard shape or enrichment fallback changes;
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
@@ -1064,14 +1066,37 @@ def _manifest_contains_csv_competencia(manifest: dict[str, Any], target: str) ->
         if path.suffix.lower() not in {".csv", ".txt"} or not path.is_file():
             continue
         try:
-            for row in rows_from(path):
-                for name in ("Data", "Data Movimento", "DtOper", "Dt Operacao", "Data Operacao", "Data Entrega"):
-                    value = to_iso(pick(row, name))
-                    if value.startswith(f"{target}-"):
-                        return True
-        except (OSError, UnicodeError, csv.Error):
+            stat = path.stat()
+            if target in _csv_competencias_cached(str(path), int(stat.st_size), int(stat.st_mtime_ns)):
+                return True
+        except OSError:
             continue
     return False
+
+
+@lru_cache(maxsize=256)
+def _csv_competencias_cached(path_text: str, size: int, mtime_ns: int) -> frozenset[str]:
+    """Read only a bounded prefix and cache the result for repeated requests.
+
+    Auxiliary files are often large daily exports.  The old fallback reread
+    every CSV once per routine and made the dashboard exceed the browser
+    timeout.  Files are ordered by operational date, so a bounded prefix is
+    sufficient to identify their competence while the stat tuple invalidates
+    the cache after a new import.
+    """
+    result: set[str] = set()
+    path = Path(path_text)
+    try:
+        for index, row in enumerate(rows_from(path)):
+            if index >= MAX_COMPETENCE_SCAN_ROWS:
+                break
+            for name in ("Data", "Data Movimento", "DtOper", "Dt Operacao", "Data Operacao", "Data Entrega"):
+                value = to_iso(pick(row, name))
+                if value:
+                    result.add(value[:7])
+    except (OSError, UnicodeError, csv.Error):
+        return frozenset()
+    return frozenset(result)
 
 
 def tempo_real(rota: dict[str, Any], port: dict[str, Any], ponto: dict[str, str]) -> int | None:
