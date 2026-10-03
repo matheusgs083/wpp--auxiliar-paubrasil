@@ -3422,7 +3422,8 @@
       recolhasFilter: { start: "", end: "" },
       datasetValidation: {},
       datasetBusy: {},
-      lazyTabs: {}
+      lazyTabs: {},
+      ligaEntregaSyncPromise: null
     };
 
     let DATASET_MAP = {};
@@ -5473,7 +5474,18 @@
       addLog(`${changes.length} status da equipe salvo(s).`, "ok");
     }
 
-    async function syncLigaEntregaReports({ silent = true, force = false } = {}) {
+    async function syncLigaEntregaReports(options = {}) {
+      if (state.ligaEntregaSyncPromise) return state.ligaEntregaSyncPromise;
+      const promise = syncLigaEntregaReportsInternal(options);
+      state.ligaEntregaSyncPromise = promise;
+      try {
+        return await promise;
+      } finally {
+        if (state.ligaEntregaSyncPromise === promise) state.ligaEntregaSyncPromise = null;
+      }
+    }
+
+    async function syncLigaEntregaReportsInternal({ silent = true, force = false } = {}) {
       if (!hasPanelAuth()) return false;
       if (!force && state.ligaEntregaReports && Array.isArray(state.ligaEntregaReports.items) && state.ligaEntregaDashboard) {
         renderLigaEntregaReports();
