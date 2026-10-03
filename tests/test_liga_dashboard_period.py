@@ -27,6 +27,12 @@ def test_other_closed_routines_still_require_closed_period_metadata():
     assert result == []
 
 
+def test_closed_dashboard_competence_follows_daily_030805_filename():
+    service = LigaEntregaDashboardService.__new__(LigaEntregaDashboardService)
+    service.report_store = _Store()
+    assert service._latest_competencia(period="fechado") == "2026-09"
+
+
 def test_030805_uses_km_desloc_when_odometer_is_zero():
     actual, planned = route_km_values(
         {
