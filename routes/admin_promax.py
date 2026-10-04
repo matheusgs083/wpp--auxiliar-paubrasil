@@ -886,6 +886,7 @@ def create_admin_promax_router(
     documentacao_pendente_import_service: Any | None = None,
     critica_operacao_import_services: Mapping[str, Any] | None = None,
     liga_entrega_report_store: Any | None = None,
+    liga_entrega_raw_sql_import_service: Any | None = None,
     after_critica_operacao_import: Callable[[str], Mapping[str, Any] | None] | None = None,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
@@ -2140,6 +2141,13 @@ def create_admin_promax_router(
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if liga_entrega_raw_sql_import_service is not None:
+            try:
+                liga_entrega_raw_sql_import_service.enqueue_manifests({payload.routine: [result]})
+            except Exception:
+                # A carga assíncrona pode ser repetida pelo importador one-shot;
+                # não falhe o upload do worker por indisponibilidade transitória.
+                pass
 
         service.append_job_log(
             job_id=payload.job_id,

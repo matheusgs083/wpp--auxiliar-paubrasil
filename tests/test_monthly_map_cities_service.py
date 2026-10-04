@@ -12,6 +12,29 @@ from bot_api.services.monthly_map_cities_service import (
 
 
 class MonthlyMapCitiesServiceTests(unittest.TestCase):
+    def test_sql_rows_are_used_without_reading_report_store(self) -> None:
+        class SqlRows:
+            def rows_for_routine(self, *, routine: str, competencia: str | None = None):
+                self.called = (routine, competencia)
+                return [
+                    {
+                        "source_key": "file-1",
+                        "filename": "03114902_PATOS.csv",
+                        "payload": {"Mapa": "000777", "Cidade": "Patos", "Data": "02/10/2026"},
+                    }
+                ]
+
+        class NoCsvStore:
+            def list_manifests(self, *args, **kwargs):
+                raise AssertionError("o endpoint SQL nao deve ler manifestos/CSV")
+
+        result = MonthlyMapCitiesService(
+            report_store=NoCsvStore(),
+            raw_sql_import_service=SqlRows(),
+        ).build_dashboard(competencia="2026-10", period="atual")
+        self.assertEqual(result["rows"][0]["mapa"], "777")
+        self.assertEqual(result["summary"]["files"], 1)
+
     def test_reads_monthly_maps_without_using_liga_dashboard_batch(self) -> None:
         content = b"Mapa;Cidade;Data\n000123;Patos;30/09/2026\n000124;Sume;30/09/2026\n"
         with tempfile.TemporaryDirectory() as temp_dir:

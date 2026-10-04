@@ -229,6 +229,7 @@ def create_admin_liga_entrega_router(
             result = OperationalIndicatorsService(
                 report_store=liga_entrega_report_store,
                 drevendas_import_service=drevendas_import_service,
+                raw_sql_import_service=liga_entrega_raw_sql_import_service,
             ).build_dashboard(competencia=competencia, period=period)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -247,7 +248,10 @@ def create_admin_liga_entrega_router(
         require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
         if liga_entrega_report_store is None:
             raise HTTPException(status_code=503, detail="Armazenamento da Liga Entrega indisponível.")
-        result = MonthlyMapCitiesService(report_store=liga_entrega_report_store).build_dashboard(competencia=competencia, period=period)
+        result = MonthlyMapCitiesService(
+            report_store=liga_entrega_report_store,
+            raw_sql_import_service=liga_entrega_raw_sql_import_service,
+        ).build_dashboard(competencia=competencia, period=period)
         record_security_event(request, channel="api", event_type="admin_liga_mapas_mensais", decision="allowed", reason=f"mapas={result['summary']['mapas']}")
         return result
 

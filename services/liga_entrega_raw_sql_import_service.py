@@ -63,6 +63,7 @@ class LigaEntregaRawSqlImportService:
                         source_key TEXT NOT NULL,
                         routine VARCHAR(80) NOT NULL,
                         reference_date DATE,
+                        period VARCHAR(12) NOT NULL DEFAULT 'atual',
                         filename TEXT NOT NULL,
                         row_number INTEGER NOT NULL,
                         payload JSONB NOT NULL,
@@ -74,8 +75,14 @@ class LigaEntregaRawSqlImportService:
             )
             cur.execute(
                 sql.SQL(
+                    "ALTER TABLE {}.liga_entrega_raw_rows "
+                    "ADD COLUMN IF NOT EXISTS period VARCHAR(12) NOT NULL DEFAULT 'atual'"
+                ).format(sql.Identifier(self.schema))
+            )
+            cur.execute(
+                sql.SQL(
                     "CREATE INDEX IF NOT EXISTS liga_entrega_raw_rows_routine_idx "
-                    "ON {}.liga_entrega_raw_rows (routine, reference_date)"
+                    "ON {}.liga_entrega_raw_rows (routine, period, reference_date)"
                 ).format(sql.Identifier(self.schema))
             )
         conn.commit()
@@ -104,12 +111,93 @@ class LigaEntregaRawSqlImportService:
             return {"files": files, "rows": rows, "skipped": skipped}
         return {"files": files, "rows": rows, "skipped": skipped}
 
+    def rows_for_routine(self, *, routine: str, competencia: str | None = None, period: str = "atual") -> list[dict[str, Any]]:
+        """Retorna linhas importadas para uma rotina, sem tocar nos arquivos de origem.
+
+        Este método é usado pelos endpoints de leitura da Liga. A carga dos CSVs
+        acontece separadamente; a requisição do painel consulta apenas o SQL.
+        """
+        if not self.database_url:
+            return []
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                clauses = ["routine = %s", "period = %s"]
+                params: list[Any] = [str(routine), self._normalize_period(period)]
+                if competencia:
+                    clauses.append("reference_date >= (%s || '-01')::date")
+                    clauses.append("reference_date < ((%s || '-01')::date + INTERVAL '1 month')")
+                    params.extend([str(competencia), str(competencia)])
+                query = sql.SQL(
+                    """
+                    SELECT source_key, filename, imported_at, payload
+                    FROM {}.liga_entrega_raw_rows
+                    WHERE {}
+                    ORDER BY imported_at DESC, source_key DESC, row_number
+                    """
+                ).format(sql.Identifier(self.schema), sql.SQL(" AND ").join(sql.SQL(item) for item in clauses))
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    return [
+                        {
+                            "source_key": row[0],
+                            "filename": row[1],
+                            "imported_at": row[2],
+                            "payload": row[3] if isinstance(row[3], dict) else {},
+                        }
+                        for row in cur.fetchall()
+                    ]
+        except Exception:
+            # A leitura SQL indisponível não deve reabrir o caminho CSV durante
+            # uma requisição. O endpoint devolve o estado vazio e o alerta.
+            return []
+
+    def fetch_rows(self, *, routine: str, competencia: str | None = None, period: str = "atual") -> list[dict[str, Any]]:
+        """Retorna linhas persistidas para uma rotina, sem tocar nos arquivos de origem.
+
+        A consulta privilegia a versão mais recente de cada arquivo/linha.  Isso
+        evita que cargas repetidas do mesmo relatório misturem competências no
+        painel, mantendo o CSV apenas como entrada da etapa de importação.
+        """
+        if not self.database_url:
+            return []
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                with conn.cursor() as cur:
+                    query = sql.SQL(
+                        """
+                        SELECT payload
+                        FROM (
+                            SELECT DISTINCT ON (filename, row_number)
+                                   filename, row_number, payload, imported_at
+                            FROM {}.liga_entrega_raw_rows
+                            WHERE routine = %s AND period = %s
+                            ORDER BY filename, row_number, imported_at DESC
+                        ) latest
+                        ORDER BY filename, row_number
+                        """
+                    ).format(sql.Identifier(self.schema))
+                    cur.execute(query, (routine, self._normalize_period(period)))
+                    rows = [dict(item[0]) for item in cur.fetchall() if isinstance(item[0], dict)]
+        except Exception:
+            return []
+        if competencia:
+            selected = str(competencia).strip()
+            rows = [
+                row for row in rows
+                if f"{str(row.get('Ano') or '').strip()}-{str(row.get('Mês') or row.get('Mes') or '').strip().zfill(2)}" == selected
+                or not str(row.get('Ano') or '').strip()
+            ]
+        return rows
+
     def _import_file(self, conn: psycopg.Connection[Any], routine: str, manifest: dict[str, Any], item: dict[str, Any]) -> tuple[bool, int]:
         path = Path(str(item.get("path") or ""))
         if not path.is_file():
             return False, 0
         stat = path.stat()
-        source_key = f"{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}"
+        period = self._manifest_period(routine, manifest)
+        source_key = f"{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|{period}"
         with conn.cursor() as cur:
             cur.execute(
                 sql.SQL("SELECT 1 FROM {}.liga_entrega_raw_rows WHERE source_key = %s LIMIT 1").format(sql.Identifier(self.schema)),
@@ -127,17 +215,30 @@ class LigaEntregaRawSqlImportService:
                 sql.SQL(
                     """
                     INSERT INTO {}.liga_entrega_raw_rows
-                        (source_key, routine, reference_date, filename, row_number, payload)
-                    VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+                        (source_key, routine, reference_date, period, filename, row_number, payload)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
                     ON CONFLICT (source_key, row_number) DO NOTHING
                     """
                 ).format(sql.Identifier(self.schema)),
                 [
-                    (source_key, routine, reference_date, filename, index, json.dumps(row, ensure_ascii=False, separators=(",", ":")))
+                    (source_key, routine, reference_date, period, filename, index, json.dumps(row, ensure_ascii=False, separators=(",", ":")))
                     for index, row in enumerate(rows, start=1)
                 ],
             )
         return True, len(rows)
+
+    @staticmethod
+    def _normalize_period(value: Any) -> str:
+        return "fechado" if str(value or "").strip().lower() == "fechado" else "atual"
+
+    def _manifest_period(self, routine: str, manifest: dict[str, Any]) -> str:
+        metadata = manifest.get("metadata") if isinstance(manifest, dict) else {}
+        value = metadata.get("period") if isinstance(metadata, dict) else None
+        if value:
+            return self._normalize_period(value)
+        # Rotinas mensais e de fechamento já têm semântica própria mesmo nos
+        # manifestos antigos que não gravavam metadata.period.
+        return "fechado" if str(routine) in {"03114902_MENSAL_LIGA", "1706_BI_INDICADORES_FECHAMENTO"} else "atual"
 
     def _read_rows(self, path: Path) -> Iterable[dict[str, Any]]:
         suffix = path.suffix.lower()

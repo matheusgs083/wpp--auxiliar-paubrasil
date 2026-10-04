@@ -135,14 +135,33 @@ class LigaEntregaDashboardService:
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
         period = "fechado" if str(period).lower() == "fechado" else "atual"
-        if self.snapshot_store is not None:
-            try:
-                latest = self.snapshot_store.get_latest(competencia=(_clean_comp(competencia) if competencia else None), period=period)
-                if latest is not None:
-                    return latest[1]
-            except Exception:
-                pass
-        comp = _clean_comp(competencia) if competencia else self._latest_competencia(period=period)
+        # A requisicao do painel nunca deve voltar a ler os CSVs. Eles sao
+        # apenas a origem da carga/importacao SQL executada fora deste fluxo.
+        # Alem de evitar o timeout, isso garante que um expurgo seja aplicado
+        # sobre o mesmo conjunto de fatos persistido no snapshot.
+        requested_comp = _clean_comp(competencia) if competencia else None
+        if self.snapshot_store is None:
+            return _sql_snapshot_unavailable(requested_comp or "", period, "Armazenamento SQL da Liga indisponivel.")
+        try:
+            latest = self.snapshot_store.get_latest(competencia=requested_comp, period=period)
+            if latest is not None:
+                return latest[1]
+        except Exception:
+            return _sql_snapshot_unavailable(requested_comp or "", period, "Nao foi possivel consultar o snapshot SQL da Liga.")
+
+        # Nao tente descobrir a competencia lendo manifests/arquivos: se nao
+        # existe snapshot, a carga especial precisa ser executada antes de
+        # abrir o painel. Retornar um estado explicito evita uma leitura
+        # silenciosa de CSV e permite que a UI mostre uma mensagem acionavel.
+        return _sql_snapshot_unavailable(
+            requested_comp or "",
+            period,
+            "Dados da Liga ainda nao foram carregados no SQL. Execute a carga inicial dos relatorios.",
+        )
+
+        # Mantido abaixo apenas como referencia para o calculo historico da
+        # carga offline; este trecho nao e alcancado por requisicoes do painel.
+        comp = requested_comp or self._latest_competencia(period=period)
         if not comp:
             return _empty("")
         manifests = self._select_manifests(comp, period=period)
@@ -736,6 +755,23 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
 
 def _empty(comp: str) -> dict[str, Any]:
     return {"ok": True, "competencia": comp, "summary": {"ready": False, "rotas": 0, "motoristas": 0, "ajudantes": 0, "devolucoes": 0, "devolucoes_expurgadas": 0, "devolucoes_volume_hl": 0, "devolucoes_valor": 0, "expurgos": 0, "arquivos": 0, "warnings": 0}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": {}, "rankings": {"motoristas": [], "ajudantes": []}, "rotas": [], "devolucoes": [], "devolucoes_auxiliares": [], "operacao": {}, "equipe": [], "cobertura": [], "expurgos": {"counts": {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}, "items": []}, "warnings": []}
+
+
+def _sql_snapshot_unavailable(comp: str, period: str, warning: str) -> dict[str, Any]:
+    """Retorna estado explicito quando a carga SQL ainda nao foi concluida.
+
+    O endpoint do painel nao deve fazer fallback para os arquivos de origem:
+    isso bloqueia a requisicao e faz o usuario ver dados diferentes do banco.
+    O formato continua compativel com a tela para que ela possa renderizar o
+    ultimo estado vazio e o aviso sem quebrar os filtros/PDF.
+    """
+
+    result = _empty(comp)
+    result["ok"] = False
+    result["period"] = period
+    result["warnings"] = [warning]
+    result["summary"]["warnings"] = 1
+    return result
 
 
 def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: list[dict[str, Any]], statuses: dict[str, str] | None = None) -> str:

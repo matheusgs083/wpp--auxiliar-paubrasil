@@ -18,12 +18,17 @@ _INDICATOR_BASES = {"0649": "ocupacao", "0652": "caixas_por_viagem"}
 class OperationalIndicatorsService:
     """Consolida os indicadores oficiais exportados pelo BI (relatório 17.06)."""
 
-    def __init__(self, *, report_store: Any, drevendas_import_service: Any | None = None) -> None:
+    def __init__(self, *, report_store: Any, drevendas_import_service: Any | None = None, raw_sql_import_service: Any | None = None) -> None:
         self.report_store = report_store
         self.drevendas_import_service = drevendas_import_service
+        self.raw_sql_import_service = raw_sql_import_service
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
         normalized_period = "fechado" if str(period).lower() == "fechado" else "atual"
+        # A Liga em produção deve consultar apenas a carga SQL. Os arquivos
+        # são usados exclusivamente pelo importador, fora da requisição.
+        if self.raw_sql_import_service is not None:
+            return self._build_from_sql(competencia=competencia, period=normalized_period)
         manifests = [m for m in self.report_store.list_manifests(BI_INDICATORS_ROUTINE, competencia=competencia) if str((m.get("metadata") or {}).get("period") or "atual") == normalized_period]
         if not manifests:
             return self._empty(competencia or "")
@@ -103,6 +108,42 @@ class OperationalIndicatorsService:
             "summary": {"branches": len(items), "files": int(latest.get("file_count") or 0), "stored_at": str(latest.get("stored_at") or "")},
             "warnings": warnings,
         }
+
+    def _build_from_sql(self, *, competencia: str | None, period: str) -> dict[str, Any]:
+        try:
+            rows = self.raw_sql_import_service.fetch_rows(routine=BI_INDICATORS_ROUTINE, competencia=competencia, period=period)
+        except Exception:
+            rows = []
+        if not rows:
+            return self._empty(competencia or "") | {"warnings": ["Nenhum registro 17.06 persistido no SQL para esta competência."]}
+        labels = self._labels_by_puxada()
+        warnings: list[str] = []
+        selected = str(competencia or "")
+        recognized: set[str] = set()
+        branches: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            puxada = self._clean_puxada(row.get("Puxada"))
+            metric = _INDICATOR_BASES.get(str(row.get("Base") or "").strip().zfill(4))
+            if not puxada or metric is None:
+                continue
+            year = str(row.get("Ano") or "").strip()
+            month = str(row.get("Mês") or row.get("Mes") or "").strip().zfill(2)
+            row_competencia = f"{year}-{month}" if year.isdigit() and month.isdigit() else ""
+            if row_competencia:
+                recognized.add(row_competencia)
+            if selected and row_competencia and row_competencia != selected:
+                continue
+            branch = branches.setdefault(puxada, {"puxada": puxada, "filial": labels.get(puxada) or _BRANCH_FALLBACKS.get(puxada) or str(row.get("Nome Revenda") or puxada).strip(), "metrics": {}})
+            if metric in branch["metrics"]:
+                warnings.append(f"Métrica duplicada no SQL: {puxada}/{metric}; foi mantido o último valor válido.")
+            branch["metrics"][metric] = self._number(row.get("Valor Mes")) if str(row.get("Valor Mes") or "").strip() else None
+        if not selected and recognized:
+            selected = max(recognized)
+            branches = {key: value for key, value in branches.items() if any(str(row.get("Puxada") or "") == key for row in rows)}
+        if not branches:
+            return self._empty(selected) | {"warnings": warnings or ["Nenhum registro reconhecido no SQL."]}
+        items = sorted(branches.values(), key=lambda item: str(item["filial"]).casefold())
+        return {"ok": True, "competencia": selected, "operation": {"routine": BI_INDICATORS_ROUTINE, "code": "17.06", "label": "Indicadores BI"}, "branches": items, "summary": {"branches": len(items), "files": 0, "stored_at": "sql"}, "warnings": warnings}
 
     def _labels_by_puxada(self) -> dict[str, str]:
         service = self.drevendas_import_service
