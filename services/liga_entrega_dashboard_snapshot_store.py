@@ -8,7 +8,7 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
-SNAPSHOT_VERSION = 4
+SNAPSHOT_VERSION = 5
 
 
 class LigaEntregaDashboardSnapshotStore:

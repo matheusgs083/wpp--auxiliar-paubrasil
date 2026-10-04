@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService, invalidate_dashboard_cache
+from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService, invalidate_dashboard_cache, refresh_snapshot_from_sql
 from bot_api.services.liga_entrega_pdf_service import build_liga_entrega_dashboard_pdf
 from bot_api.services.operational_indicators_service import OperationalIndicatorsService
 from bot_api.services.monthly_map_cities_service import MonthlyMapCitiesService
@@ -344,7 +344,9 @@ def create_admin_liga_entrega_router(
                 actor=actor_from_context(context),
             )
             if liga_entrega_snapshot_store is not None:
-                liga_entrega_snapshot_store.invalidate(competencia=payload.competencia)
+                refreshed = refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, payload.competencia)
+                if not refreshed:
+                    liga_entrega_snapshot_store.invalidate(competencia=payload.competencia)
             invalidate_dashboard_cache(payload.competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -392,7 +394,10 @@ def create_admin_liga_entrega_router(
         try:
             item = liga_entrega_expurgo_service.delete_expurgo(expurgo_id, actor=actor_from_context(context))
             if liga_entrega_snapshot_store is not None:
-                liga_entrega_snapshot_store.invalidate(competencia=str(item.get("competencia") or ""))
+                competencia_item = str(item.get("competencia") or "")
+                refreshed = refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, competencia_item)
+                if not refreshed:
+                    liga_entrega_snapshot_store.invalidate(competencia=competencia_item)
             invalidate_dashboard_cache(str(item.get("competencia") or ""))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

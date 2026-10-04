@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import math
@@ -34,7 +35,7 @@ MAX_COMPETENCE_SCAN_ROWS = 5000
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 18
+CACHE_VERSION = 19
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -568,7 +569,7 @@ class LigaEntregaDashboardService:
         devolucoes_auxiliares = sorted(devols, key=lambda x: (str(x.get("data_devolucao") or x.get("data") or ""), str(x.get("cliente") or ""), str(x.get("nota") or "")), reverse=True)
         active_devols = [item for item in devols if not item.get("excluida")]
         warnings = list(dict.fromkeys(warnings))
-        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50]}
+        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50], "_liga_facts": {"ent_m": ent_m, "ent_a": ent_a, "checklist": checklist, "first_week": first_week, "has_farol": has_farol}}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
         self._write_persisted_cache(comp, period, cache_signature, result)
@@ -686,6 +687,50 @@ class LigaEntregaDashboardService:
             return dict(self.status_service.statuses(comp)) if self.status_service is not None else {}
         except Exception:
             return {}
+
+
+def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, competencia: str) -> bool:
+    """Reaplica expurgos usando somente os fatos do snapshot persistido."""
+    if snapshot_store is None:
+        return False
+    for period in ("atual", "fechado"):
+        try:
+            latest = snapshot_store.get_latest(competencia=competencia, period=period)
+            if latest is None:
+                continue
+            _, payload = latest
+            facts = payload.get("_liga_facts") or {}
+            routes = [dict(item) for item in payload.get("rotas") or [] if isinstance(item, dict)]
+            devols = [dict(item) for item in payload.get("devolucoes_auxiliares") or [] if isinstance(item, dict)]
+            expurgos = [dict(item) for item in expurgo_service.list_expurgos(competencia=competencia, active_only=True).get("items", [])]
+            for route in routes:
+                route["expurgo_saida"] = bool(matching_route_expurgos(route, expurgos, {"tml"}))
+                route["expurgo_km"] = bool(matching_route_expurgos(route, expurgos, {"km", "dispersao"}))
+            for dev in devols:
+                dev["excluida"] = bool(matching_dev_expurgos(dev, expurgos))
+            colab = {str(item.get("cod")): dict(item) for item in payload.get("equipe") or [] if isinstance(item, dict) and item.get("cod")}
+            motoristas, ajudantes = build_rankings(
+                routes, {}, devols,
+                facts.get("ent_m") or {}, facts.get("ent_a") or {}, facts.get("checklist") or [],
+                colab,
+                has_farol=bool(facts.get("has_farol")), first_week=bool(facts.get("first_week")),
+            )
+            counts = {"devolucao": 0, "tml": 0, "km": 0, "dispersao": 0}
+            for item in expurgos:
+                if item.get("tipo") in counts:
+                    counts[item["tipo"]] += 1
+            payload["rankings"] = {"motoristas": motoristas, "ajudantes": ajudantes}
+            payload["rotas"] = routes
+            payload["devolucoes"] = devols
+            payload["devolucoes_auxiliares"] = devols
+            payload["expurgos"] = {"counts": counts, "items": expurgos}
+            payload["summary"]["devolucoes"] = sum(not item.get("excluida") for item in devols)
+            payload["summary"]["devolucoes_expurgadas"] = sum(bool(item.get("excluida")) for item in devols)
+            signature = hashlib.sha256(json.dumps(expurgos, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+            snapshot_store.put(competencia=competencia, period=period, signature=f"sql-expurgo:{signature}", payload=payload)
+        except Exception:
+            return False
+    return True
 
 
 
