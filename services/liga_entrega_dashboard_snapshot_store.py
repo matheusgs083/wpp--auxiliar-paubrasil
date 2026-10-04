@@ -76,6 +76,48 @@ class LigaEntregaDashboardSnapshotStore:
         except Exception:
             return None
 
+    def get_latest(self, *, competencia: str | None = None, period: str) -> tuple[str, dict[str, Any]] | None:
+        """Retorna o snapshot pronto sem recalcular a assinatura dos arquivos."""
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                with conn.cursor(row_factory=dict_row) as cur:
+                    if competencia:
+                        cur.execute(
+                            sql.SQL(
+                                "SELECT competencia, payload FROM {}.liga_entrega_dashboard_snapshots "
+                                "WHERE competencia = %s AND period = %s"
+                            ).format(sql.Identifier(self.schema)),
+                            (competencia, period),
+                        )
+                    else:
+                        cur.execute(
+                            sql.SQL(
+                                "SELECT competencia, payload FROM {}.liga_entrega_dashboard_snapshots "
+                                "WHERE period = %s ORDER BY generated_at DESC LIMIT 1"
+                            ).format(sql.Identifier(self.schema)),
+                            (period,),
+                        )
+                    row = cur.fetchone()
+                if row and isinstance(row.get("payload"), dict):
+                    return str(row["competencia"]), dict(row["payload"])
+        except Exception:
+            return None
+        return None
+
+    def invalidate(self, *, competencia: str) -> None:
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        sql.SQL("DELETE FROM {}.liga_entrega_dashboard_snapshots WHERE competencia = %s").format(sql.Identifier(self.schema)),
+                        (competencia,),
+                    )
+                conn.commit()
+        except Exception:
+            return
+
     def put(self, *, competencia: str, period: str, signature: str, payload: dict[str, Any]) -> None:
         try:
             with self._connect() as conn:

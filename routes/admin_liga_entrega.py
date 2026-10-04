@@ -343,6 +343,8 @@ def create_admin_liga_entrega_router(
                 payload.model_dump(),
                 actor=actor_from_context(context),
             )
+            if liga_entrega_snapshot_store is not None:
+                liga_entrega_snapshot_store.invalidate(competencia=payload.competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         record_security_event(request, channel="api", event_type="admin_liga_expurgo_upsert", decision="allowed", reason=str(item.get("id") or ""))
@@ -363,6 +365,8 @@ def create_admin_liga_entrega_router(
             raise HTTPException(status_code=503, detail="Status da equipe indisponível.")
         try:
             item = liga_entrega_status_service.set_status(competencia=payload.competencia, cod=cod, status=payload.status, actor=actor_from_context(context))
+            if liga_entrega_snapshot_store is not None:
+                liga_entrega_snapshot_store.invalidate(competencia=payload.competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         record_security_event(request, channel="api", event_type="admin_liga_equipe_status", decision="allowed", reason=str(item.get("cod") or ""))
@@ -385,6 +389,8 @@ def create_admin_liga_entrega_router(
         )
         try:
             item = liga_entrega_expurgo_service.delete_expurgo(expurgo_id, actor=actor_from_context(context))
+            if liga_entrega_snapshot_store is not None:
+                liga_entrega_snapshot_store.invalidate(competencia=str(item.get("competencia") or ""))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except KeyError as exc:

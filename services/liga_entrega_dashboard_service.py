@@ -124,6 +124,13 @@ class LigaEntregaDashboardService:
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
         period = "fechado" if str(period).lower() == "fechado" else "atual"
+        if self.snapshot_store is not None:
+            try:
+                latest = self.snapshot_store.get_latest(competencia=(_clean_comp(competencia) if competencia else None), period=period)
+                if latest is not None:
+                    return latest[1]
+            except Exception:
+                pass
         comp = _clean_comp(competencia) if competencia else self._latest_competencia(period=period)
         if not comp:
             return _empty("")
