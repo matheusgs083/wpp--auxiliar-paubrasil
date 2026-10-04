@@ -113,13 +113,14 @@ _CHECKLIST_CACHE: dict[tuple[str, int, int, tuple[tuple[str, str], ...]], list[d
 
 
 class LigaEntregaDashboardService:
-    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None, snapshot_store: Any | None = None) -> None:
+    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None, snapshot_store: Any | None = None, raw_sql_import_service: Any | None = None) -> None:
         self.report_store = report_store
         self.expurgo_service = expurgo_service
         self.status_service = status_service
         self.dclientes_query_service = dclientes_query_service
         self.dprodutos_import_service = dprodutos_import_service
         self.snapshot_store = snapshot_store
+        self.raw_sql_import_service = raw_sql_import_service
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
         period = "fechado" if str(period).lower() == "fechado" else "atual"
@@ -127,6 +128,11 @@ class LigaEntregaDashboardService:
         if not comp:
             return _empty("")
         manifests = self._select_manifests(comp, period=period)
+        if self.raw_sql_import_service is not None:
+            try:
+                self.raw_sql_import_service.import_manifests(manifests)
+            except Exception:
+                pass
         expurgos = self._active_expurgos(comp)
         status_overrides = self._status_overrides(comp)
         cache_key = (str(getattr(self.report_store, "root_dir", id(self.report_store))), f"{period}:{comp}")

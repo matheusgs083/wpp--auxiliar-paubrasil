@@ -35,6 +35,7 @@ from bot_api.services.promax_catalog_service import DEFAULT_PROMAX_CATALOG, Prom
 from bot_api.services.liga_entrega_expurgo_service import LigaEntregaExpurgoService
 from bot_api.services.liga_entrega_report_store import LigaEntregaReportStore
 from bot_api.services.liga_entrega_dashboard_snapshot_store import LigaEntregaDashboardSnapshotStore
+from bot_api.services.liga_entrega_raw_sql_import_service import LigaEntregaRawSqlImportService
 from bot_api.services.liga_entrega_status_service import LigaEntregaStatusService
 from bot_api.services.promax_scheduler import PromaxScheduler
 from bot_api.services.webhook_runtime import WebhookRuntime
@@ -112,6 +113,11 @@ def configure_app_runtime(
     LIGA_ENTREGA_STATUS_PATH = PROJECT_ROOT / "exports" / "liga_entrega_status.json"
     liga_entrega_report_store = LigaEntregaReportStore(LIGA_ENTREGA_REPORTS_ROOT)
     liga_entrega_snapshot_store = LigaEntregaDashboardSnapshotStore(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    liga_entrega_raw_sql_import_service = LigaEntregaRawSqlImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -654,6 +660,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "critica_operacao_import_services": runtime["services"].critica_operacao_import_services,
         "liga_entrega_report_store": runtime["liga_entrega_report_store"],
         "liga_entrega_snapshot_store": runtime["liga_entrega_snapshot_store"],
+        "liga_entrega_raw_sql_import_service": runtime["liga_entrega_raw_sql_import_service"],
         "liga_entrega_expurgo_service": runtime["liga_entrega_expurgo_service"],
         "liga_entrega_status_service": runtime["liga_entrega_status_service"],
         "dclientes_query_service": runtime["services"].dclientes_query_service,
