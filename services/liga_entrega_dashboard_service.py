@@ -130,7 +130,11 @@ class LigaEntregaDashboardService:
         manifests = self._select_manifests(comp, period=period)
         if self.raw_sql_import_service is not None:
             try:
-                self.raw_sql_import_service.import_manifests(manifests)
+                enqueue = getattr(self.raw_sql_import_service, "enqueue_manifests", None)
+                if callable(enqueue):
+                    enqueue(manifests)
+                else:
+                    self.raw_sql_import_service.import_manifests(manifests)
             except Exception:
                 pass
         expurgos = self._active_expurgos(comp)

@@ -4,7 +4,9 @@ import csv
 import io
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Lock
 from typing import Any, Iterable
 
 import psycopg
@@ -23,6 +25,26 @@ class LigaEntregaRawSqlImportService:
         self.schema = str(schema or "reports")
         self.connect_timeout_seconds = max(float(connect_timeout_seconds or 3), 1.0)
         self._schema_ready = False
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="liga-sql-import")
+        self._pending_lock = Lock()
+        self._pending = False
+
+    def enqueue_manifests(self, manifests: dict[str, list[dict[str, Any]]]) -> None:
+        """Agenda a conversao sem bloquear a resposta do painel."""
+        if not self.database_url:
+            return
+        with self._pending_lock:
+            if self._pending:
+                return
+            self._pending = True
+        self._executor.submit(self._run_pending, manifests)
+
+    def _run_pending(self, manifests: dict[str, list[dict[str, Any]]]) -> None:
+        try:
+            self.import_manifests(manifests)
+        finally:
+            with self._pending_lock:
+                self._pending = False
 
     def _connect(self) -> psycopg.Connection[Any]:
         if not self.database_url:
