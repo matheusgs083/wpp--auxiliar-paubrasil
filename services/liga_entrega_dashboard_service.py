@@ -458,6 +458,7 @@ class LigaEntregaDashboardService:
             if equipe.get("filial") and not rota.get("filial"):
                 rota["filial"] = equipe["filial"]
 
+        devols = deduplicate_devolucoes(devols)
         if self.dclientes_query_service is not None and devols:
             keys = [(str(item.get("filial") or ""), str(item.get("cliente_cod") or "")) for item in devols]
             try:
@@ -1287,6 +1288,30 @@ def aggregate_devolucoes(devols: list[dict[str, Any]], *, only_expurgadas: bool 
             if cod != "0":
                 ajudantes[cod].add(pair)
     return ({code: len(pairs) for code, pairs in motoristas.items()}, {code: len(pairs) for code, pairs in ajudantes.items()})
+
+
+def deduplicate_devolucoes(devols: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove a mesma NF repetida em lotes/arquivos da mesma filial e data."""
+    unique: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
+    for item in devols:
+        key = (
+            str(item.get("filial") or "").strip().upper(),
+            str(item.get("nota") or "").strip(),
+            str(item.get("serie") or "").strip(),
+            str(item.get("data") or "").strip(),
+            norm_code(item.get("cliente_cod")),
+        )
+        current = unique.get(key)
+        if current is None:
+            unique[key] = item
+            continue
+        # Mantém o registro mais completo e não perde ajudantes encontrados
+        # em um segundo arquivo exportado pelo Promax.
+        if sum(value not in (None, "", "0", []) for value in item.values()) > sum(value not in (None, "", "0", []) for value in current.values()):
+            current, item = item, current
+            unique[key] = current
+        current["aju"] = list(dict.fromkeys([*(current.get("aju") or []), *(item.get("aju") or [])]))
+    return list(unique.values())
 
 
 def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: dict[str, int], devols_expurgadas: dict[str, int], chk_e: dict[str, int], chk_f: dict[str, int], role: str, *, has_farol: bool, first_week: bool) -> list[dict[str, Any]]:
