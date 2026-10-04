@@ -8,6 +8,8 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
+SNAPSHOT_VERSION = 2
+
 
 class LigaEntregaDashboardSnapshotStore:
     """Persiste o resultado normalizado do painel da Liga no PostgreSQL.
@@ -72,7 +74,7 @@ class LigaEntregaDashboardSnapshotStore:
                         (competencia, period, signature),
                     )
                     row = cur.fetchone()
-                return dict(row["payload"]) if row and isinstance(row.get("payload"), dict) else None
+                return self._payload_from_row(row)
         except Exception:
             return None
 
@@ -99,8 +101,9 @@ class LigaEntregaDashboardSnapshotStore:
                             (period,),
                         )
                     row = cur.fetchone()
-                if row and isinstance(row.get("payload"), dict):
-                    return str(row["competencia"]), dict(row["payload"])
+                payload = self._payload_from_row(row)
+                if payload is not None:
+                    return str(row["competencia"]), payload
         except Exception:
             return None
         return None
@@ -135,9 +138,18 @@ class LigaEntregaDashboardSnapshotStore:
                                           generated_at = NOW()
                             """
                         ).format(sql.Identifier(self.schema)),
-                        (competencia, period, signature, json.dumps(payload, ensure_ascii=False, separators=(",", ":"))),
+                        (competencia, period, signature, json.dumps({**payload, "_snapshot_version": SNAPSHOT_VERSION}, ensure_ascii=False, separators=(",", ":"))),
                     )
                 conn.commit()
         except Exception:
             # O cache SQL nunca pode impedir o painel de usar a fonte original.
             return
+
+    @staticmethod
+    def _payload_from_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
+        payload = row.get("payload") if row else None
+        if not isinstance(payload, dict) or payload.get("_snapshot_version") != SNAPSHOT_VERSION:
+            return None
+        result = dict(payload)
+        result.pop("_snapshot_version", None)
+        return result
