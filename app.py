@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI
+from starlette.middleware.gzip import GZipMiddleware
 
 from bot_api.config import get_settings
 from bot_api.services.app_runtime import configure_app_runtime
@@ -21,6 +22,7 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 configure_app_runtime(
     app=app,
