@@ -34,7 +34,7 @@ MAX_COMPETENCE_SCAN_ROWS = 5000
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 16
+CACHE_VERSION = 17
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -1226,6 +1226,9 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
         if mot != "0" and t_ok:
             agg_m[mot]["tR"] += float(r.get("tempo_real") or 0)
             agg_m[mot]["tP"] += target
+        if mot != "0" and r.get("hr_sai") and not r.get("expurgo_saida"):
+            agg_m[mot]["saiTot"] += 1
+            agg_m[mot]["saiOk"] += int(str(r["hr_sai"]) <= str(METAS["saida"]))
         for a0 in r.get("aju") or []:
             a = norm_code(a0)
             if a == "0":
@@ -1239,10 +1242,9 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
             if t_ok:
                 agg_a[a]["tR"] += float(r.get("tempo_real") or 0)
                 agg_a[a]["tP"] += target
-            p = lookup_route_aux(port, r)
-            if p and p.get("sai") and not r.get("expurgo_saida"):
+            if r.get("hr_sai") and not r.get("expurgo_saida"):
                 agg_a[a]["saiTot"] += 1
-                agg_a[a]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
+                agg_a[a]["saiOk"] += int(str(r["hr_sai"]) <= str(METAS["saida"]))
         if has_farol and str(r.get("data") or "") >= str(METAS["check_inicio"]) and mot != "0":
             p = lookup_route_aux(port, r)
             ds = (p.get("sai") or [r.get("data")])[0]
@@ -1252,16 +1254,6 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
             for c in [mot] + [norm_code(x) for x in (r.get("aju") or []) if norm_code(x) != "0"]:
                 chk_e[c] += 2
                 chk_f[c] += int(fez_s) + int(fez_r)
-    for mapa, p in port.items():
-        mot = norm_code(p.get("mot"))
-        if mot == "0" or not p.get("sai"):
-            continue
-        candidates = [r for r in rotas if route_identity(r.get("data"), r.get("filial"), r.get("mapa")) == mapa]
-        rota = candidates[0] if len(candidates) == 1 else {}
-        if rota.get("expurgo_saida"):
-            continue
-        agg_m[mot]["saiTot"] += 1
-        agg_m[mot]["saiOk"] += 1 if str(p["sai"][1]) <= str(METAS["saida"]) else 0
     devol_m, devol_a = aggregate_devolucoes(devols)
     exp_dev_m, exp_dev_a = aggregate_devolucoes(devols, only_expurgadas=True)
     return (
