@@ -113,12 +113,13 @@ _CHECKLIST_CACHE: dict[tuple[str, int, int, tuple[tuple[str, str], ...]], list[d
 
 
 class LigaEntregaDashboardService:
-    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None) -> None:
+    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None, snapshot_store: Any | None = None) -> None:
         self.report_store = report_store
         self.expurgo_service = expurgo_service
         self.status_service = status_service
         self.dclientes_query_service = dclientes_query_service
         self.dprodutos_import_service = dprodutos_import_service
+        self.snapshot_store = snapshot_store
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
         period = "fechado" if str(period).lower() == "fechado" else "atual"
@@ -134,7 +135,7 @@ class LigaEntregaDashboardService:
             cached = _DASHBOARD_CACHE.get(cache_key)
         if cached and cached[0] == cache_signature:
             return cached[1]
-        persisted = self._read_persisted_cache(comp, cache_signature)
+        persisted = self._read_persisted_cache(comp, period, cache_signature)
         if persisted is not None:
             with _DASHBOARD_CACHE_LOCK:
                 _DASHBOARD_CACHE[cache_key] = (cache_signature, persisted)
@@ -551,7 +552,7 @@ class LigaEntregaDashboardService:
         result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50]}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
-        self._write_persisted_cache(comp, cache_signature, result)
+        self._write_persisted_cache(comp, period, cache_signature, result)
         return result
 
     def _cache_path(self, comp: str) -> Path:
@@ -559,7 +560,14 @@ class LigaEntregaDashboardService:
         safe_comp = re.sub(r"[^0-9-]", "", comp)
         return root / f"{safe_comp}.json"
 
-    def _read_persisted_cache(self, comp: str, signature: str) -> dict[str, Any] | None:
+    def _read_persisted_cache(self, comp: str, period: str, signature: str) -> dict[str, Any] | None:
+        if self.snapshot_store is not None:
+            try:
+                result = self.snapshot_store.get(competencia=comp, period=period, signature=signature)
+                if result is not None:
+                    return result
+            except Exception:
+                pass
         try:
             payload = json.loads(self._cache_path(comp).read_text(encoding="utf-8"))
             result = payload.get("result") if isinstance(payload, dict) else None
@@ -567,7 +575,12 @@ class LigaEntregaDashboardService:
         except (OSError, ValueError, json.JSONDecodeError):
             return None
 
-    def _write_persisted_cache(self, comp: str, signature: str, result: dict[str, Any]) -> None:
+    def _write_persisted_cache(self, comp: str, period: str, signature: str, result: dict[str, Any]) -> None:
+        if self.snapshot_store is not None:
+            try:
+                self.snapshot_store.put(competencia=comp, period=period, signature=signature, payload=result)
+            except Exception:
+                pass
         try:
             path = self._cache_path(comp)
             path.parent.mkdir(parents=True, exist_ok=True)

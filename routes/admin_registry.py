@@ -265,6 +265,7 @@ def _register_admin_liga_entrega_routes(app: FastAPI, *, deps: dict[str, Any]) -
             dprodutos_import_service=deps.get("dprodutos_import_service"),
             drevendas_import_service=deps.get("drevendas_import_service"),
             liga_entrega_report_store=deps["liga_entrega_report_store"],
+            liga_entrega_snapshot_store=deps.get("liga_entrega_snapshot_store"),
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps["record_admin_panel_action"],
         )

@@ -55,6 +55,7 @@ def create_admin_liga_entrega_router(
     dprodutos_import_service: Any | None = None,
     drevendas_import_service: Any | None = None,
     liga_entrega_report_store: Any | None = None,
+    liga_entrega_snapshot_store: Any | None = None,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
@@ -196,6 +197,7 @@ def create_admin_liga_entrega_router(
                 status_service=liga_entrega_status_service,
                 dclientes_query_service=dclientes_query_service,
                 dprodutos_import_service=dprodutos_import_service,
+                snapshot_store=liga_entrega_snapshot_store,
             ).build_dashboard(competencia=competencia, period=period)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -274,6 +276,7 @@ def create_admin_liga_entrega_router(
                 status_service=liga_entrega_status_service,
                 dclientes_query_service=dclientes_query_service,
                 dprodutos_import_service=dprodutos_import_service,
+                snapshot_store=liga_entrega_snapshot_store,
             ).build_dashboard(competencia=competencia, period=period)
             content, filename = build_liga_entrega_dashboard_pdf(dashboard, view=view)
         except ValueError as exc:
