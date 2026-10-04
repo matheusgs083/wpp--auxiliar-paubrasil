@@ -128,15 +128,6 @@ class LigaEntregaDashboardService:
         if not comp:
             return _empty("")
         manifests = self._select_manifests(comp, period=period)
-        if self.raw_sql_import_service is not None:
-            try:
-                enqueue = getattr(self.raw_sql_import_service, "enqueue_manifests", None)
-                if callable(enqueue):
-                    enqueue(manifests)
-                else:
-                    self.raw_sql_import_service.import_manifests(manifests)
-            except Exception:
-                pass
         expurgos = self._active_expurgos(comp)
         status_overrides = self._status_overrides(comp)
         cache_key = (str(getattr(self.report_store, "root_dir", id(self.report_store))), f"{period}:{comp}")
