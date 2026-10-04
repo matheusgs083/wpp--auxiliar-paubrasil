@@ -590,7 +590,7 @@ class LigaEntregaDashboardService:
         try:
             payload = json.loads(self._cache_path(comp).read_text(encoding="utf-8"))
             result = payload.get("result") if isinstance(payload, dict) else None
-            return result if payload.get("signature") == signature and isinstance(result, dict) else None
+            return result if payload.get("signature") == signature and payload.get("cache_version") == CACHE_VERSION and isinstance(result, dict) else None
         except (OSError, ValueError, json.JSONDecodeError):
             return None
 
@@ -604,7 +604,7 @@ class LigaEntregaDashboardService:
             path = self._cache_path(comp)
             path.parent.mkdir(parents=True, exist_ok=True)
             temp = path.with_suffix(".tmp")
-            temp.write_text(json.dumps({"signature": signature, "result": result}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+            temp.write_text(json.dumps({"cache_version": CACHE_VERSION, "signature": signature, "result": result}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
             temp.replace(path)
         except OSError:
             return
