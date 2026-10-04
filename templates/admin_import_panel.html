@@ -3423,7 +3423,8 @@
       datasetValidation: {},
       datasetBusy: {},
       lazyTabs: {},
-      ligaEntregaSyncPromise: null
+      ligaEntregaSyncPromise: null,
+      ligaEntregaSyncNeedsRefresh: false
     };
 
     let DATASET_MAP = {};
@@ -5475,13 +5476,25 @@
     }
 
     async function syncLigaEntregaReports(options = {}) {
-      if (state.ligaEntregaSyncPromise) return state.ligaEntregaSyncPromise;
+      const force = !!(options && options.force);
+      if (state.ligaEntregaSyncPromise) {
+        if (force) state.ligaEntregaSyncNeedsRefresh = true;
+        const result = await state.ligaEntregaSyncPromise;
+        if (force && state.ligaEntregaSyncNeedsRefresh) {
+          state.ligaEntregaSyncNeedsRefresh = false;
+          return syncLigaEntregaReports({ ...options, force: true });
+        }
+        return result;
+      }
       const promise = syncLigaEntregaReportsInternal(options);
       state.ligaEntregaSyncPromise = promise;
       try {
         return await promise;
       } finally {
         if (state.ligaEntregaSyncPromise === promise) state.ligaEntregaSyncPromise = null;
+        if (!state.ligaEntregaSyncPromise && !state.ligaEntregaSyncNeedsRefresh) {
+          state.ligaEntregaSyncNeedsRefresh = false;
+        }
       }
     }
 
