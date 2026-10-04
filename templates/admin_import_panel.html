@@ -5446,7 +5446,6 @@
       if (E.entregaLigaExpurgoEscopo) E.entregaLigaExpurgoEscopo.value = "individual";
       E.entregaLigaExpurgoMotivo.value = "";
       updateLigaEntregaExpurgoForm();
-      state.ligaEntregaDashboard = null;
       await syncLigaEntregaReports({ silent: false, force: true });
       addLog("Expurgo aplicado e dashboard recalculado.", "ok");
     }
@@ -5454,7 +5453,6 @@
     async function removeLigaEntregaExpurgo(expurgoId) {
       if (!expurgoId) return;
       await req(`${CONFIG.endpoints.ligaEntrega.expurgos}/${encodeURIComponent(expurgoId)}`, { method: "DELETE", timeoutMs: 20000 });
-      state.ligaEntregaDashboard = null;
       await syncLigaEntregaReports({ silent: false, force: true });
       addLog("Expurgo removido e dashboard recalculado.", "ok");
     }
@@ -5470,7 +5468,6 @@
         { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia: dashboard.competencia, status }), timeoutMs: 20000 }
       )));
       state.ligaEntregaTeamChanges = {};
-      state.ligaEntregaDashboard = null;
       await syncLigaEntregaReports({ silent: false, force: true });
       addLog(`${changes.length} status da equipe salvo(s).`, "ok");
     }
@@ -5519,7 +5516,7 @@
 
       try {
         const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
-        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}?period=${encodeURIComponent(period)}`, { timeoutMs: 60000 }) || {};
+        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}?period=${encodeURIComponent(period)}`, { timeoutMs: force ? 180000 : 60000 }) || {};
       } catch (err) {
         state.ligaEntregaDashboard = {
           ok: false,
