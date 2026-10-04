@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService
+from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService, invalidate_dashboard_cache
 from bot_api.services.liga_entrega_pdf_service import build_liga_entrega_dashboard_pdf
 from bot_api.services.operational_indicators_service import OperationalIndicatorsService
 from bot_api.services.monthly_map_cities_service import MonthlyMapCitiesService
@@ -345,6 +345,7 @@ def create_admin_liga_entrega_router(
             )
             if liga_entrega_snapshot_store is not None:
                 liga_entrega_snapshot_store.invalidate(competencia=payload.competencia)
+            invalidate_dashboard_cache(payload.competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         record_security_event(request, channel="api", event_type="admin_liga_expurgo_upsert", decision="allowed", reason=str(item.get("id") or ""))
@@ -367,6 +368,7 @@ def create_admin_liga_entrega_router(
             item = liga_entrega_status_service.set_status(competencia=payload.competencia, cod=cod, status=payload.status, actor=actor_from_context(context))
             if liga_entrega_snapshot_store is not None:
                 liga_entrega_snapshot_store.invalidate(competencia=payload.competencia)
+            invalidate_dashboard_cache(payload.competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         record_security_event(request, channel="api", event_type="admin_liga_equipe_status", decision="allowed", reason=str(item.get("cod") or ""))
@@ -391,6 +393,7 @@ def create_admin_liga_entrega_router(
             item = liga_entrega_expurgo_service.delete_expurgo(expurgo_id, actor=actor_from_context(context))
             if liga_entrega_snapshot_store is not None:
                 liga_entrega_snapshot_store.invalidate(competencia=str(item.get("competencia") or ""))
+            invalidate_dashboard_cache(str(item.get("competencia") or ""))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except KeyError as exc:

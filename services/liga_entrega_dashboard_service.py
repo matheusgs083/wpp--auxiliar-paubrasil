@@ -104,6 +104,16 @@ CANONICAL_ROSTER = set(CANONICAL_MOTORISTAS) | set(CANONICAL_AJUDANTES)
 # CSVs grandes quando nada mudou.
 _DASHBOARD_CACHE: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
 _DASHBOARD_CACHE_LOCK = threading.Lock()
+
+
+def invalidate_dashboard_cache(competencia: str) -> None:
+    target = str(competencia or "").strip()
+    if not target:
+        return
+    with _DASHBOARD_CACHE_LOCK:
+        for key in list(_DASHBOARD_CACHE):
+            if str(key[1]).endswith(f":{target}"):
+                _DASHBOARD_CACHE.pop(key, None)
 # Os auxiliares não mudam a cada consulta do painel. Reaproveitamos o
 # resultado enquanto caminho, tamanho e data de alteração permanecerem iguais.
 # Isso evita reabrir o XLSX/CSV a cada atualização da tela.
