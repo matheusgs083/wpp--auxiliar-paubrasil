@@ -124,7 +124,7 @@ _CHECKLIST_CACHE: dict[tuple[str, int, int, tuple[tuple[str, str], ...]], list[d
 
 
 class LigaEntregaDashboardService:
-    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None, snapshot_store: Any | None = None, raw_sql_import_service: Any | None = None) -> None:
+    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None, snapshot_store: Any | None = None, raw_sql_import_service: Any | None = None, allow_source_files: bool = False) -> None:
         self.report_store = report_store
         self.expurgo_service = expurgo_service
         self.status_service = status_service
@@ -132,6 +132,7 @@ class LigaEntregaDashboardService:
         self.dprodutos_import_service = dprodutos_import_service
         self.snapshot_store = snapshot_store
         self.raw_sql_import_service = raw_sql_import_service
+        self.allow_source_files = bool(allow_source_files)
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
         period = "fechado" if str(period).lower() == "fechado" else "atual"
@@ -149,15 +150,15 @@ class LigaEntregaDashboardService:
         except Exception:
             return _sql_snapshot_unavailable(requested_comp or "", period, "Nao foi possivel consultar o snapshot SQL da Liga.")
 
-        # Nao tente descobrir a competencia lendo manifests/arquivos: se nao
-        # existe snapshot, a carga especial precisa ser executada antes de
-        # abrir o painel. Retornar um estado explicito evita uma leitura
-        # silenciosa de CSV e permite que a UI mostre uma mensagem acionavel.
-        return _sql_snapshot_unavailable(
-            requested_comp or "",
-            period,
-            "Dados da Liga ainda nao foram carregados no SQL. Execute a carga inicial dos relatorios.",
-        )
+        # O caminho normal nunca lê os arquivos. A exceção explícita é o
+        # bootstrap one-shot, chamado somente pelo script de materialização
+        # dos snapshots depois que os CSVs já foram importados para SQL.
+        if not self.allow_source_files:
+            return _sql_snapshot_unavailable(
+                requested_comp or "",
+                period,
+                "Dados da Liga ainda nao foram carregados no SQL. Execute a carga inicial dos relatorios.",
+            )
 
         # Mantido abaixo apenas como referencia para o calculo historico da
         # carga offline; este trecho nao e alcancado por requisicoes do painel.

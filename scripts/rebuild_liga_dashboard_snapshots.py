@@ -11,7 +11,7 @@ def main() -> None:
     base = f"http://127.0.0.1:{settings.app_port}/api/admin/liga-entrega/dashboard"
     for period in ("atual", "fechado"):
         request = urllib.request.Request(
-            f"{base}?period={period}",
+            f"{base}?period={period}&bootstrap=1",
             headers={"X-Admin-Token": settings.admin_api_token},
         )
         with urllib.request.urlopen(request, timeout=900) as response:
