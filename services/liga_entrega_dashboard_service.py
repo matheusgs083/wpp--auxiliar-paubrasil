@@ -1287,7 +1287,7 @@ def pior_pct(value: float | None, meta: float, *, menor: bool) -> float:
 
 
 def blank() -> dict[str, float]:
-    return {"rotas": 0, "kmR": 0, "kmP": 0, "tR": 0, "tP": 0, "saiOk": 0, "saiTot": 0, "exp_km": 0, "exp_tml": 0}
+    return {"rotas": 0, "rotas_total": 0, "kmR": 0, "kmP": 0, "tR": 0, "tP": 0, "saiOk": 0, "saiTot": 0, "exp_km": 0, "exp_tml": 0}
 
 
 def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]], devols: list[dict[str, Any]], ent_m: dict[str, int], ent_a: dict[str, int], checklist: list[dict[str, str]], colab: dict[str, dict[str, str]], *, has_farol: bool, first_week: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -1300,11 +1300,13 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
         mot = norm_code(r.get("mot"))
         route_expurgada = bool(r.get("expurgo_saida") or r.get("expurgo_km"))
         if mot != "0":
+            agg_m[mot]["rotas_total"] += 1
             agg_m[mot]["exp_km"] += int(bool(r.get("expurgo_km")))
             agg_m[mot]["exp_tml"] += int(bool(r.get("expurgo_saida")))
         for a0 in r.get("aju") or []:
             a = norm_code(a0)
             if a != "0":
+                agg_a[a]["rotas_total"] += 1
                 agg_a[a]["exp_km"] += int(bool(r.get("expurgo_km")))
                 agg_a[a]["exp_tml"] += int(bool(r.get("expurgo_saida")))
         # Qualquer expurgo retira a rota da Liga inteira. Ela continua visível
@@ -1431,7 +1433,7 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         status = str(info.get("status") or canonical_status(cod))
         if status != "ativo":
             continue
-        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
+        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas_total"]), "rotas_validas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
     elig = [x for x in rows if x["elegivel"]]
     elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -int(x.get("rotas") or 0)))
     for i, row in enumerate(elig, 1):
