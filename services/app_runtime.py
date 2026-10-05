@@ -296,6 +296,7 @@ def configure_app_runtime(
         giro_import_service=giro_import_service,
         critica_rn_import_service=critica_rn_import_service,
         critica_operacao_admin_service=critica_operacao_admin_service,
+        liga_entrega_raw_sql_import_service=liga_entrega_raw_sql_import_service,
         critica_rn_query_service=critica_rn_query_service,
         critica_rn_pdf_prebuild_service=critica_rn_pdf_prebuild_service,
         critica_pdf_prebuild_executor=critica_pdf_prebuild_executor,

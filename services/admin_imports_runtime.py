@@ -45,6 +45,7 @@ dclientes_import_service: Any = None
 giro_import_service: Any = None
 critica_rn_import_service: Any = None
 critica_operacao_admin_service: Any = None
+liga_entrega_raw_sql_import_service: Any = None
 _clear_critica_runtime_cache: Any = None
 _queue_critica_pdf_prebuild: Any = None
 _snapshot_critica_pdf_prebuild_state: Any = None
@@ -341,6 +342,13 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
     else:
         result = getattr(service, str(config["import_method"]))(source_path, reference_date=batch_date)
     post_actions: dict[str, Any] = {}
+    if normalized_dataset in {"liga_1706_indicadores", "liga_03114902_mensal"} and liga_entrega_raw_sql_import_service is not None:
+        report_store = getattr(service, "report_store", None)
+        routine = str(getattr(service, "routine", "") or "")
+        manifest = report_store.latest_manifest(routine) if report_store is not None and routine else None
+        if manifest:
+            liga_entrega_raw_sql_import_service.enqueue_manifests({routine: [manifest]})
+            post_actions["sql_import_queued"] = True
     if normalized_dataset == "drevendas" and callable(_refresh_filial_labels_runtime):
         post_actions["refresh_filial_labels"] = _serialize_admin_import_value(_refresh_filial_labels_runtime())
     if normalized_dataset == "dprecos":
