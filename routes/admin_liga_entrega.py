@@ -21,7 +21,9 @@ LIGA_ENTREGA_REPORTS = (
     {"routine": "030224_AJUDANTE_LIGA", "code": "03.02.24", "label": "Devolucoes por ajudante", "kind": "Mensal"},
     {"routine": "030237", "code": "03.02.37", "label": "Entregas", "kind": "Mensal"},
     {"routine": "03114902_BOT", "code": "03.11.49.02", "label": "Cidades por mapa", "kind": "Mensal"},
+    {"routine": "03114902_MENSAL_LIGA", "code": "03.11.49.02", "label": "Cidades por mapa · mensal", "kind": "Mensal"},
     {"routine": "031129_LIGA", "code": "03.11.29", "label": "Equipe do dia por mapa", "kind": "Mensal"},
+    {"routine": "1706_BI_INDICADORES", "code": "17.06", "label": "Indicadores BI", "kind": "Mensal"},
     {"routine": "PONTOMAIS_ESPELHO", "code": "PONTO", "label": "Espelho de ponto", "kind": "Mensal"},
     {"routine": "CHECKLIST_FROTA", "code": "XLSX", "label": "Checklist Frota", "kind": "Mensal"},
 )
