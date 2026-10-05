@@ -170,7 +170,7 @@ class LigaEntregaRawSqlImportService:
                         SELECT payload, reference_date
                         FROM (
                             SELECT DISTINCT ON (filename, row_number)
-                                   filename, row_number, payload, imported_at
+                                   filename, row_number, payload, reference_date, imported_at
                             FROM {}.liga_entrega_raw_rows
                             WHERE routine = %s AND period = %s
                             ORDER BY filename, row_number, imported_at DESC
