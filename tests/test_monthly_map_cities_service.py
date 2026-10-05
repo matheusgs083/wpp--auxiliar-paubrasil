@@ -34,6 +34,38 @@ class MonthlyMapCitiesServiceTests(unittest.TestCase):
         self.assertEqual(result["rows"][0]["mapa"], "777")
         self.assertEqual(result["summary"]["files"], 1)
 
+    def test_imports_saved_manifest_when_sql_queue_has_not_finished(self) -> None:
+        content = b"Mapa;Cidade;Data\n000778;Patos;05/10/2026\n"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = LigaEntregaReportStore(temp_dir)
+            store.store_batch(
+                routine=MONTHLY_MAP_CITIES_ROUTINE,
+                files={"03.11.49.02_PATOS_SET.csv": content},
+                reference_date="2026-10-05",
+            )
+
+            class SqlRows:
+                def __init__(self) -> None:
+                    self.loaded = False
+
+                def rows_for_routine(self, *, routine: str, competencia: str | None = None, period: str = "atual"):
+                    if not self.loaded:
+                        return []
+                    return [{
+                        "source_key": "loaded",
+                        "filename": "03.11.49.02_PATOS_SET.csv",
+                        "payload": {"Mapa": "000778", "Cidade": "Patos", "Data": "05/10/2026"},
+                    }]
+
+                def import_manifests(self, manifests):
+                    self.loaded = True
+
+            result = MonthlyMapCitiesService(
+                report_store=store,
+                raw_sql_import_service=SqlRows(),
+            ).build_dashboard(competencia="2026-10", period="atual")
+        self.assertEqual(result["rows"][0]["mapa"], "778")
+
     def test_reads_monthly_maps_without_using_liga_dashboard_batch(self) -> None:
         content = b"Mapa;Cidade;Data\n000123;Patos;30/09/2026\n000124;Sume;30/09/2026\n"
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -78,19 +78,19 @@ class MonthlyMapCitiesService:
 
     def _build_from_sql(self, *, routine: str, competencia: str) -> dict[str, Any]:
         """Monta o card somente das linhas persistidas em reports.*."""
-        try:
-            records = self.raw_sql_import_service.rows_for_routine(
-                routine=routine,
-                competencia=competencia or None,
-                period="fechado" if routine == MONTHLY_MAP_CITIES_ROUTINE else "atual",
-            )
-        except TypeError:
-            # Compatibilidade com doubles/integrações antigas; o serviço real
-            # sempre recebe o período para não misturar atual e fechamento.
-            records = self.raw_sql_import_service.rows_for_routine(
-                routine=routine,
-                competencia=competencia or None,
-            )
+        records = self._rows_from_sql(routine=routine, competencia=competencia)
+        if not records:
+            # O upload do painel grava primeiro o manifesto e agenda a carga
+            # SQL em segundo plano. Se a página for aberta antes da fila
+            # terminar (ou se a fila tiver sido interrompida), aproveitamos o
+            # lote salvo para concluir a carga uma única vez e consultamos
+            # novamente o SQL. O card continua sem fallback de leitura direta
+            # dos CSVs.
+            latest_manifest = getattr(self.report_store, "latest_manifest", lambda _routine: None)(routine)
+            importer = getattr(self.raw_sql_import_service, "import_manifests", None)
+            if latest_manifest and callable(importer):
+                importer({routine: [latest_manifest]})
+                records = self._rows_from_sql(routine=routine, competencia=competencia)
         if not records:
             return self._empty(competencia) | {
                 "warnings": ["Nenhum registro SQL importado para o lote de mapas."]
@@ -151,6 +151,21 @@ class MonthlyMapCitiesService:
             },
             "warnings": [],
         }
+
+    def _rows_from_sql(self, *, routine: str, competencia: str) -> list[dict[str, Any]]:
+        try:
+            return self.raw_sql_import_service.rows_for_routine(
+                routine=routine,
+                competencia=competencia or None,
+                period="fechado" if routine == MONTHLY_MAP_CITIES_ROUTINE else "atual",
+            )
+        except TypeError:
+            # Compatibilidade com doubles/integrações antigas; o serviço real
+            # sempre recebe o período para não misturar atual e fechamento.
+            return self.raw_sql_import_service.rows_for_routine(
+                routine=routine,
+                competencia=competencia or None,
+            )
 
     @staticmethod
     def _rows(path: Path) -> list[dict[str, str]]:
