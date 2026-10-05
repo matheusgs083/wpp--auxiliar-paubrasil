@@ -21,8 +21,13 @@ class MonthlyMapCitiesService:
         self.raw_sql_import_service = raw_sql_import_service
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
-        normalized_period = "fechado" if str(period).lower() == "fechado" else "atual"
-        routine = MONTHLY_MAP_CITIES_ROUTINE if normalized_period == "fechado" else CURRENT_MAP_CITIES_ROUTINE
+        # Este card representa o lote mensal e deve permanecer independente do
+        # seletor Atual/Fechamento da Liga. A rotina atual (03114902_BOT) já é
+        # consumida pelo dashboard de rotas; misturá-la aqui fazia o card ficar
+        # vazio sempre que a tela estivesse no período atual.
+        del period
+        normalized_period = "fechado"
+        routine = MONTHLY_MAP_CITIES_ROUTINE
         if self.raw_sql_import_service is not None:
             return self._build_from_sql(routine=routine, competencia=competencia or "")
         manifests = []
