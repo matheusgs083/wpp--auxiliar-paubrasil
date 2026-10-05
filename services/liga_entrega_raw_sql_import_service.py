@@ -167,7 +167,7 @@ class LigaEntregaRawSqlImportService:
                 with conn.cursor() as cur:
                     query = sql.SQL(
                         """
-                        SELECT payload
+                        SELECT payload, reference_date
                         FROM (
                             SELECT DISTINCT ON (filename, row_number)
                                    filename, row_number, payload, imported_at
@@ -179,7 +179,14 @@ class LigaEntregaRawSqlImportService:
                         """
                     ).format(sql.Identifier(self.schema))
                     cur.execute(query, (routine, self._normalize_period(period)))
-                    rows = [dict(item[0]) for item in cur.fetchall() if isinstance(item[0], dict)]
+                    rows = []
+                    for item in cur.fetchall():
+                        if not isinstance(item[0], dict):
+                            continue
+                        payload = dict(item[0])
+                        if item[1] is not None:
+                            payload["_reference_date"] = item[1].isoformat() if hasattr(item[1], "isoformat") else str(item[1])
+                        rows.append(payload)
         except Exception:
             return []
         if competencia:
@@ -187,6 +194,7 @@ class LigaEntregaRawSqlImportService:
             rows = [
                 row for row in rows
                 if f"{str(row.get('Ano') or '').strip()}-{str(row.get('Mês') or row.get('Mes') or '').strip().zfill(2)}" == selected
+                or str(row.get("_reference_date") or "").startswith(selected)
                 or not str(row.get('Ano') or '').strip()
             ]
         return rows

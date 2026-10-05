@@ -126,8 +126,10 @@ class OperationalIndicatorsService:
             metric = _INDICATOR_BASES.get(str(row.get("Base") or "").strip().zfill(4))
             if not puxada or metric is None:
                 continue
-            year = str(row.get("Ano") or "").strip()
-            month = str(row.get("Mês") or row.get("Mes") or "").strip().zfill(2)
+            reference_date = str(row.get("_reference_date") or "").strip()
+            year = str(row.get("Ano") or "").strip() or reference_date[:4]
+            month_value = str(row.get("Mês") or row.get("Mes") or "").strip()
+            month = month_value.zfill(2) if month_value else reference_date[5:7]
             row_competencia = f"{year}-{month}" if year.isdigit() and month.isdigit() else ""
             if row_competencia:
                 recognized.add(row_competencia)
