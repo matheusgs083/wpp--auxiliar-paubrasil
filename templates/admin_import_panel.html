@@ -5552,7 +5552,8 @@
 
       try {
         const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
-        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}?period=${encodeURIComponent(period)}`, { timeoutMs: force ? 180000 : 60000 }) || {};
+        const bootstrap = force ? "&bootstrap=1" : "";
+        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}?period=${encodeURIComponent(period)}${bootstrap}`, { timeoutMs: force ? 180000 : 60000 }) || {};
       } catch (err) {
         state.ligaEntregaDashboard = {
           ok: false,

@@ -143,12 +143,13 @@ class LigaEntregaDashboardService:
         requested_comp = _clean_comp(competencia) if competencia else None
         if self.snapshot_store is None:
             return _sql_snapshot_unavailable(requested_comp or "", period, "Armazenamento SQL da Liga indisponivel.")
-        try:
-            latest = self.snapshot_store.get_latest(competencia=requested_comp, period=period)
-            if latest is not None:
-                return latest[1]
-        except Exception:
-            return _sql_snapshot_unavailable(requested_comp or "", period, "Nao foi possivel consultar o snapshot SQL da Liga.")
+        if not self.allow_source_files:
+            try:
+                latest = self.snapshot_store.get_latest(competencia=requested_comp, period=period)
+                if latest is not None:
+                    return latest[1]
+            except Exception:
+                return _sql_snapshot_unavailable(requested_comp or "", period, "Nao foi possivel consultar o snapshot SQL da Liga.")
 
         # O caminho normal nunca lê os arquivos. A exceção explícita é o
         # bootstrap one-shot, chamado somente pelo script de materialização
@@ -687,6 +688,15 @@ class LigaEntregaDashboardService:
                 m for m in manifests
                 if str((m.get("metadata") or {}).get("period") or "atual") == period
             ]
+            # Imports antigos dos relatórios mensais não registravam o
+            # período. Quando se consulta uma competência já encerrada, use
+            # esses lotes somente como compatibilidade do Fechamento.
+            if not candidates and period == "fechado" and routine in {R030224S, R030224M, R030224A, R030237}:
+                candidates = [
+                    m for m in manifests
+                    if str((m.get("metadata") or {}).get("period") or "atual") == "atual"
+                    and _manifest_covers_operational_competencia(m, comp)
+                ]
             # The normal installation has one current/closing batch per
             # routine. Do not rescan large CSVs just to rediscover a
             # competence already established by 03.08.05. The expensive

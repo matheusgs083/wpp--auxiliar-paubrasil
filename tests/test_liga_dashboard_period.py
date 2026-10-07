@@ -31,6 +31,46 @@ def test_other_closed_routines_still_require_closed_period_metadata():
     assert result == []
 
 
+def test_closed_dashboard_recovers_legacy_devolucao_batch_without_period_metadata():
+    from bot_api.services.liga_entrega_dashboard_service import R030224S
+
+    service = LigaEntregaDashboardService.__new__(LigaEntregaDashboardService)
+    service.report_store = _Store()
+    result = service._list(R030224S, "2026-09", period="fechado")
+    assert len(result) == 1
+
+
+def test_bootstrap_rebuilds_instead_of_returning_stale_snapshot():
+    class EmptyStore:
+        def list_manifests(self, _routine, *, competencia=None):
+            return []
+
+    class SnapshotStore:
+        def get_latest(self, **_kwargs):
+            return ("2026-08", {"summary": {"ready": True, "devolucoes": 999}})
+
+        def get(self, **_kwargs):
+            return None
+
+        def put(self, **_kwargs):
+            return None
+
+    class Expurgos:
+        def list_expurgos(self, **_kwargs):
+            return {"items": []}
+
+    service = LigaEntregaDashboardService(
+        report_store=EmptyStore(),
+        expurgo_service=Expurgos(),
+        snapshot_store=SnapshotStore(),
+        allow_source_files=True,
+    )
+
+    rebuilt = service.build_dashboard(competencia="2026-08", period="fechado")
+
+    assert rebuilt["summary"]["devolucoes"] == 0
+
+
 def test_closed_dashboard_competence_follows_daily_030805_filename():
     service = LigaEntregaDashboardService.__new__(LigaEntregaDashboardService)
     service.report_store = _Store()
