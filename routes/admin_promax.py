@@ -352,6 +352,7 @@ class PromaxJobCreateRequest(_StrictPayload):
     end_date: date
     send_dates: StrictBool = False
     publish: StrictBool = False
+    target_worker_id: str | None = Field(default=None, min_length=1, max_length=160)
 
     @field_validator("category")
     @classmethod
@@ -418,6 +419,7 @@ class PromaxJobBatchCreateRequest(_StrictPayload):
     end_date: date
     send_dates: StrictBool = False
     publish: StrictBool = False
+    target_worker_id: str | None = Field(default=None, min_length=1, max_length=160)
 
     @field_validator("units")
     @classmethod
@@ -441,6 +443,7 @@ class PromaxScheduleChainCreateRequest(_StrictPayload):
     end_date: date
     send_dates: StrictBool = False
     publish: StrictBool = False
+    target_worker_id: str | None = Field(default=None, min_length=1, max_length=160)
     schedule_type: Literal["daily", "weekly", "monthly"]
     time_of_day: time
     timezone: str = Field(default="America/Fortaleza", min_length=1, max_length=64)
@@ -489,6 +492,7 @@ class PromaxScheduleUpdateRequest(_StrictPayload):
     end_date: date | None = None
     send_dates: StrictBool | None = None
     publish: StrictBool | None = None
+    target_worker_id: str | None = Field(default=None, min_length=1, max_length=160)
 
     @field_validator("category")
     @classmethod
@@ -1245,6 +1249,7 @@ def create_admin_promax_router(
             "end_date": payload.end_date.isoformat(),
             "send_dates": payload.send_dates,
             "publish": payload.publish,
+            "target_worker_id": payload.target_worker_id,
         }
         jobs = service.enqueue_jobs(
             items=[
@@ -1580,6 +1585,7 @@ def create_admin_promax_router(
             "end_date": payload.end_date.isoformat(),
             "send_dates": payload.send_dates,
             "publish": payload.publish,
+            "target_worker_id": payload.target_worker_id,
         }
         chain_items = [
             {
@@ -1693,6 +1699,7 @@ def create_admin_promax_router(
             "end_date",
             "send_dates",
             "publish",
+            "target_worker_id",
         }
         selection_changed = bool(selection_fields.intersection(payload.model_fields_set))
         schedule_payload = (

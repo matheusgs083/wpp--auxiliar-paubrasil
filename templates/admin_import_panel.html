@@ -1751,6 +1751,12 @@
                     <label class="form-check mb-0"><input class="form-check-input" id="promaxPublish" type="checkbox" checked> <span class="form-check-label fw-semibold">Publicar arquivos</span></label>
                   </div>
                 </div>
+                <div class="col-xl-3 col-lg-6">
+                  <label class="form-label small mb-1" for="promaxRunTargetWorker">Bot que executará</label>
+                  <select class="form-select form-select-sm" id="promaxRunTargetWorker">
+                    <option value="">Automático</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -1962,6 +1968,12 @@
                     <label class="form-check mb-0"><input class="form-check-input" id="promaxScheduleSendDates" type="checkbox"> <span class="form-check-label fw-semibold">Enviar data</span></label>
                     <label class="form-check mb-0"><input class="form-check-input" id="promaxSchedulePublish" type="checkbox" checked> <span class="form-check-label fw-semibold">Publicar arquivos</span></label>
                   </div>
+                </div>
+                <div class="col-xl-3 col-lg-6">
+                  <label class="form-label small mb-1" for="promaxScheduleTargetWorker">Bot que executará</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleTargetWorker">
+                    <option value="">Automático</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -3733,6 +3745,7 @@
       promaxEndDate: document.getElementById("promaxEndDate"),
       promaxSendDates: document.getElementById("promaxSendDates"),
       promaxPublish: document.getElementById("promaxPublish"),
+      promaxRunTargetWorker: document.getElementById("promaxRunTargetWorker"),
       promaxRunBtn: document.getElementById("promaxRunBtn"),
       promaxJobStatusFilter: document.getElementById("promaxJobStatusFilter"),
       promaxJobFromDate: document.getElementById("promaxJobFromDate"),
@@ -3769,6 +3782,7 @@
       promaxScheduleResellers: document.getElementById("promaxScheduleResellers"),
       promaxScheduleRoutines: document.getElementById("promaxScheduleRoutines"),
       promaxSchedulePublish: document.getElementById("promaxSchedulePublish"),
+      promaxScheduleTargetWorker: document.getElementById("promaxScheduleTargetWorker"),
       promaxScheduleTriggerType: document.getElementById("promaxScheduleTriggerType"),
       promaxScheduleTriggerScheduleWrap: document.getElementById("promaxScheduleTriggerScheduleWrap"),
       promaxScheduleTriggerSchedule: document.getElementById("promaxScheduleTriggerSchedule"),
@@ -5608,7 +5622,8 @@
         start_date: startDate,
         end_date: endDate,
         send_dates: Boolean(E.promaxSendDates && E.promaxSendDates.checked),
-        publish: Boolean(E.promaxPublish && E.promaxPublish.checked)
+        publish: Boolean(E.promaxPublish && E.promaxPublish.checked),
+        target_worker_id: String(E.promaxRunTargetWorker && E.promaxRunTargetWorker.value || "") || null
       };
     }
 
@@ -5856,6 +5871,7 @@
         end_date: endDate,
         send_dates: Boolean(E.promaxScheduleSendDates && E.promaxScheduleSendDates.checked),
         publish: Boolean(E.promaxSchedulePublish && E.promaxSchedulePublish.checked),
+        target_worker_id: String(E.promaxScheduleTargetWorker && E.promaxScheduleTargetWorker.value || "") || null,
         trigger_after_schedule_id: triggerAfterScheduleId || null
       };
     }
@@ -6432,6 +6448,15 @@
       return options.join("");
     }
 
+    function renderPromaxTargetWorkerSelect(select, workers, selectedWorkerId = null) {
+      if (!select) return;
+      const currentWorkerId = selectedWorkerId == null
+        ? String(select.value || "")
+        : String(selectedWorkerId || "");
+      select.innerHTML = renderPromaxWorkerAssignmentOptions(workers, currentWorkerId);
+      select.value = currentWorkerId;
+    }
+
     function renderPromaxWorkerAssignments(workers) {
       if (!E.promaxWorkerAssignmentsBody) return;
       const categories = promaxAssignableCategories();
@@ -6640,6 +6665,8 @@
       }
       renderPromaxWorkers(workers);
       renderPromaxWorkerAssignments(workers);
+      renderPromaxTargetWorkerSelect(E.promaxRunTargetWorker, workers);
+      renderPromaxTargetWorkerSelect(E.promaxScheduleTargetWorker, workers);
       renderPromaxCredentials(workers);
       renderFinanceiroFechamentoWorker(workerPayload);
       if (E.promaxQueueState) {
@@ -6970,6 +6997,7 @@
       if (E.promaxScheduleHourlyStep) E.promaxScheduleHourlyStep.value = "60";
       setPromaxSelectedScheduleDays([0, 1, 2, 3, 4]);
       if (E.promaxScheduleSendDates) E.promaxScheduleSendDates.checked = false;
+      if (E.promaxScheduleTargetWorker) E.promaxScheduleTargetWorker.value = "";
       renderPromaxScheduleCatalog();
       renderPromaxScheduleResellers(state.promax.scheduleSelectedUnits);
       renderPromaxScheduleTriggerOptions("");
@@ -6999,6 +7027,11 @@
       E.promaxScheduleEndDate.value = String(payload.end_date || "");
       E.promaxScheduleSendDates.checked = Boolean(payload.send_dates);
       E.promaxSchedulePublish.checked = Boolean(payload.publish);
+      renderPromaxTargetWorkerSelect(
+        E.promaxScheduleTargetWorker,
+        promaxWorkersFromPayload(state.promax.worker || {}),
+        payload.target_worker_id
+      );
       promaxApplyScheduleScopeForEdit(promaxScheduleScopeForEdit(schedule));
       const triggerScheduleId = String(schedule.trigger_after_schedule_id || "");
       E.promaxScheduleTriggerType.value = triggerScheduleId ? "after" : "time";
@@ -7039,6 +7072,11 @@
       E.promaxScheduleEndDate.value = String(payload.end_date || "");
       E.promaxScheduleSendDates.checked = Boolean(payload.send_dates);
       E.promaxSchedulePublish.checked = Boolean(payload.publish);
+      renderPromaxTargetWorkerSelect(
+        E.promaxScheduleTargetWorker,
+        promaxWorkersFromPayload(state.promax.worker || {}),
+        payload.target_worker_id
+      );
       promaxApplyScheduleScopeForEdit(promaxScheduleScopeForEdit(group));
       const triggerScheduleId = String(group.triggerScheduleId || primary.trigger_after_schedule_id || "");
       E.promaxScheduleTriggerType.value = triggerScheduleId ? "after" : "time";
@@ -7098,6 +7136,7 @@
           end_date: chainPayload.end_date,
           send_dates: chainPayload.send_dates,
           publish: chainPayload.publish,
+          target_worker_id: chainPayload.target_worker_id,
           trigger_after_schedule_id: chainPayload.trigger_after_schedule_id,
           ...timingPayloads[0],
           enabled: editingSchedule ? Boolean(editingSchedule.enabled) : true
@@ -7142,6 +7181,7 @@
                   end_date: chainPayload.end_date,
                   send_dates: chainPayload.send_dates,
                   publish: chainPayload.publish,
+                  target_worker_id: chainPayload.target_worker_id,
                   trigger_after_schedule_id: chainPayload.trigger_after_schedule_id,
                   ...timingPayload,
                   enabled: Boolean(schedule.enabled)

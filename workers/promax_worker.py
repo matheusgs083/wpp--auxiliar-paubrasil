@@ -1578,6 +1578,7 @@ class PromaxWorker:
 
         specs = (
             ("030805_LIGA", "03.08.05"),
+            ("030224_RESUMO_LIGA", "03.02.24/Resumo"),
             ("030224_MOTORISTA_LIGA", "03.02.24/Motorista"),
             ("030224_AJUDANTE_LIGA", "03.02.24/Ajudante"),
             ("031120_BOT", "03.11.20"),

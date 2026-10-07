@@ -83,6 +83,21 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
             self.html,
         )
 
+    def test_worker_can_be_selected_for_run_now_and_schedules(self) -> None:
+        for field_id in ("promaxRunTargetWorker", "promaxScheduleTargetWorker"):
+            with self.subTest(field_id=field_id):
+                self.assertEqual(self.html.count(f'id="{field_id}"'), 1)
+
+        self.assertIn("function renderPromaxTargetWorkerSelect", self.html)
+        self.assertIn(
+            'target_worker_id: String(E.promaxRunTargetWorker && E.promaxRunTargetWorker.value || "") || null',
+            self.html,
+        )
+        self.assertIn(
+            'target_worker_id: String(E.promaxScheduleTargetWorker && E.promaxScheduleTargetWorker.value || "") || null',
+            self.html,
+        )
+
     def test_execution_log_filters_by_date_range(self) -> None:
         for field_id in (
             "promaxJobStatusFilter",

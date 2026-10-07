@@ -194,6 +194,38 @@ class PromaxClientTests(unittest.TestCase):
         self.assertEqual(payload["filename"], "03,02,06_2210003.pdf")
         self.assertEqual(base64.b64decode(payload["file_base64"]), b"%PDF-1.4\nconteudo")
 
+    def test_client_uploads_liga_entrega_files_with_period(self) -> None:
+        captured: list[tuple[str, dict[str, object], float]] = []
+
+        def opener(request: object, *, timeout: float) -> _FakeResponse:
+            captured.append((request.full_url, json.loads(request.data), timeout))
+            return _FakeResponse({"ok": True, "result": {"file_count": 1}})
+
+        client = PromaxClient(
+            base_url="http://localhost:8080",
+            token="token",
+            worker_id="worker",
+            pid=321,
+            boleto_import_timeout_seconds=120,
+            opener=opener,
+        )
+
+        client.import_liga_entrega_files(
+            job_id="job-1",
+            lease_token="lease-token",
+            routine="030805_LIGA",
+            files={"PATOS_06_10.csv": b"Mapa;Data\n1;06/10/2026\n"},
+            reference_date="2026-10-06",
+            period="fechado",
+        )
+
+        self.assertEqual(captured[0][0], "http://localhost:8080/api/internal/promax/liga-entrega/import")
+        payload = captured[0][1]
+        self.assertEqual(captured[0][2], 120)
+        self.assertEqual(payload["period"], "fechado")
+        self.assertEqual(payload["reference_date"], "2026-10-06")
+        self.assertEqual(payload["routine"], "030805_LIGA")
+
     def test_client_uploads_inadimplencia_csvs_to_internal_import_route(self) -> None:
         captured: list[tuple[str, dict[str, object], float]] = []
 
@@ -989,6 +1021,7 @@ class PromaxClientTests(unittest.TestCase):
         client.import_liga_entrega_files.assert_called_once()
         call_kwargs = client.import_liga_entrega_files.call_args.kwargs
         self.assertEqual(call_kwargs["routine"], "030805_LIGA")
+        self.assertEqual(call_kwargs["period"], "atual")
         self.assertEqual(list(call_kwargs["files"].keys()), ["PATOS_21_09.csv"])
         self.assertEqual(client.heartbeat_job.call_count, 2)
 
@@ -1036,6 +1069,45 @@ class PromaxClientTests(unittest.TestCase):
         call_kwargs = client.import_liga_entrega_files.call_args.kwargs
         self.assertEqual(call_kwargs["routine"], "03114902_BOT")
         self.assertEqual(list(call_kwargs["files"].keys()), ["03.11.49.02_PATOS_SET.csv"])
+
+    def test_liga_entrega_uploads_resumo_030224(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            reports_root = Path(temp_dir) / "RELATORIOS"
+            source_dir = reports_root / "03.02.24" / "Resumo"
+            source_dir.mkdir(parents=True)
+            (source_dir / "03.02.24_PATOS_OUT.csv").write_bytes(b"Data;Volume\n06/10/2026;10\n")
+
+            client = Mock()
+            client.import_liga_entrega_files.return_value = {
+                "ok": True,
+                "result": {"routine": "030224_RESUMO_LIGA", "file_count": 1},
+            }
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            with patch.dict(os.environ, {"PROMAX_LIGA_ENTREGA_REPORTS_ROOT": str(reports_root)}):
+                worker._upload_liga_entrega_reports_if_needed(
+                    {"payload": {"routines": ["030224_RESUMO_LIGA"], "publish": True}},
+                    "job-1",
+                    "lease-token",
+                    PromaxRunResult(status="success", return_code=0, child_pid=123, details={"run_started_at_epoch": 1.0}),
+                )
+
+        call_kwargs = client.import_liga_entrega_files.call_args.kwargs
+        self.assertEqual(call_kwargs["routine"], "030224_RESUMO_LIGA")
+        self.assertEqual(list(call_kwargs["files"].keys()), ["03.02.24_PATOS_OUT.csv"])
 
 
     def test_020220_bot_imports_comodatos_csvs_in_one_batch(self) -> None:

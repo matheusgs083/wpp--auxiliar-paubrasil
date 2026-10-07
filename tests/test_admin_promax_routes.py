@@ -24,6 +24,7 @@ class FakePromaxService:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
         self.job_result: dict[str, Any] | None = None
+        self.credentials_by_worker: dict[str, dict[str, str]] = {}
 
     def _call(self, operation: str, *args: Any, return_value: Any, **kwargs: Any) -> Any:
         self.calls.append((operation, args, kwargs))
@@ -198,6 +199,9 @@ class FakePromaxService:
             return_value={"id": "job-1", "lease_token": "lease-token"},
             **kwargs,
         )
+
+    def worker_credentials(self, worker_id: str) -> dict[str, str] | None:
+        return self.credentials_by_worker.get(worker_id)
 
     def heartbeat_worker(self, **kwargs: Any) -> dict[str, Any]:
         return self._call(
@@ -661,6 +665,19 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         self.assertIs(items[1]["payload"]["send_dates"], False)
         self.assertEqual(events[-1]["event_type"], "admin_promax_job_batch_create")
 
+    def test_job_batch_keeps_selected_worker_in_each_job_payload(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+        payload = {**self.job_batch_payload(), "target_worker_id": "promax-patos"}
+
+        response = client.post("/api/admin/promax/jobs/batch", json=payload)
+
+        self.assertEqual(response.status_code, 202, response.text)
+        items = service.calls[0][2]["items"]
+        self.assertEqual(
+            [item["payload"]["target_worker_id"] for item in items],
+            ["promax-patos"],
+        )
+
     def test_job_batch_rejects_duplicate_or_unknown_groups(self) -> None:
         duplicate = self.job_batch_payload()
         duplicate["groups"] = [duplicate["groups"][0], duplicate["groups"][0]]
@@ -851,6 +868,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 "end_date": "2026-07-18",
                 "send_dates": True,
                 "publish": True,
+                "target_worker_id": "promax-sume",
                 "schedule_type": "daily",
                 "time_of_day": "06:00:00",
                 "timezone": "America/Fortaleza",
@@ -866,6 +884,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         self.assertEqual([item["job_type"] for item in kwargs["items"]], ["reports", "obz"])
         self.assertEqual(kwargs["items"][0]["payload"]["units"], ["0640001", "2210003"])
         self.assertIs(kwargs["items"][0]["payload"]["send_dates"], True)
+        self.assertEqual(kwargs["items"][1]["payload"]["target_worker_id"], "promax-sume")
         self.assertEqual(kwargs["trigger_after_schedule_id"], trigger_id)
         self.assertEqual(events[-1]["event_type"], "admin_promax_schedule_chain_create")
 
@@ -970,6 +989,24 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         worker_auth_events = [event for event in events if event["event_type"] == "promax_worker_auth"]
         self.assertEqual(len(worker_auth_events), len(responses))
         self.assertTrue(all(event["decision"] == "allowed" for event in worker_auth_events))
+
+    def test_claim_delivers_credentials_to_the_claiming_worker(self) -> None:
+        client, service, _events, _auth_calls = self.make_client()
+        service.credentials_by_worker["worker-1"] = {
+            "username": "usuario-painel",
+            "password": "senha-painel",
+        }
+
+        response = client.post(
+            "/api/internal/promax/next-job/claim",
+            headers=self.worker_headers,
+            json={"worker_id": "worker-1", "pid": 4321, "lease_seconds": 180},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        claimed = response.json()["job"]
+        self.assertEqual(claimed["promax_credentials"]["username"], "usuario-painel")
+        self.assertEqual(claimed["promax_credentials"]["password"], "senha-painel")
 
     def test_internal_job_log_returns_conflict_when_lease_is_lost(self) -> None:
         client, service, _events, _auth_calls = self.make_client()
