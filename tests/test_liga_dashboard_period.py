@@ -1,10 +1,25 @@
 from bot_api.services.liga_entrega_dashboard_service import (
     LigaEntregaDashboardService,
     _default_dashboard_competencia,
+    build_cobertura,
     preserve_operational_route_date,
     route_km_values,
 )
 from datetime import date
+
+
+def test_coverage_is_limited_to_dashboard_competence():
+    rows = [
+        {"data": "2026-09-30", "mapa": "1", "mot": "M1"},
+        {"data": "2026-10-01", "mapa": "2", "mot": "M1"},
+        {"data": "2026-10-02", "mapa": "3", "mot": "M2"},
+    ]
+    competencia = "2026-10"
+    coverage = build_cobertura([
+        row for row in rows if str(row["data"]).startswith(f"{competencia}-")
+    ])
+
+    assert [row["data"] for row in coverage] == ["2026-10-01", "2026-10-02"]
 
 
 class _Store:

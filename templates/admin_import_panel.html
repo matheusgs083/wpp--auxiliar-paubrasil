@@ -5163,7 +5163,9 @@
       const routes = Array.isArray(dashboard.rotas) ? dashboard.rotas : [];
       const devols = Array.isArray(dashboard.devolucoes_auxiliares) ? dashboard.devolucoes_auxiliares : (Array.isArray(dashboard.devolucoes) ? dashboard.devolucoes : []);
       const team = Array.isArray(dashboard.equipe) ? dashboard.equipe : [];
-      const coverage = Array.isArray(dashboard.cobertura) ? dashboard.cobertura : [];
+      const dashboardCompetencia = String(dashboard.competencia || "").trim();
+      const coverage = (Array.isArray(dashboard.cobertura) ? dashboard.cobertura : [])
+        .filter(row => !dashboardCompetencia || String(row.data || "").startsWith(`${dashboardCompetencia}-`));
       const view = state.ligaEntregaView || "motoristas";
       const filters = state.ligaEntregaFilters || {};
       const q = String(filters.q || "").trim().toLowerCase();

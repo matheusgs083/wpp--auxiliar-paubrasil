@@ -592,7 +592,14 @@ class LigaEntregaDashboardService:
                 devolucoes_volume_hl_resumo=resumo_devolucoes_hl.get(filial_code),
                 devolucoes_valor_resumo=resumo_devolucoes_valor.get(filial_code),
             )
-        cobertura = build_cobertura(rotas_list)
+        # A cobertura diaria deve respeitar a competência exibida no painel.
+        # O relatório 03.08.05 pode trazer uma janela que atravessa meses
+        # (por exemplo, os últimos dias do mês anterior junto com o atual),
+        # mas esses dias não pertencem à Liga da competência selecionada.
+        cobertura = build_cobertura([
+            rota for rota in rotas_list
+            if _record_competencia(rota.get("data")) == comp
+        ])
         devolucoes_auxiliares = sorted(devols, key=lambda x: (str(x.get("data_devolucao") or x.get("data") or ""), str(x.get("cliente") or ""), str(x.get("nota") or "")), reverse=True)
         active_devols = [item for item in devols if not item.get("excluida")]
         warnings = list(dict.fromkeys(warnings))
