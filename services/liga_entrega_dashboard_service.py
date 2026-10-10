@@ -141,29 +141,35 @@ class LigaEntregaDashboardService:
         # Alem de evitar o timeout, isso garante que um expurgo seja aplicado
         # sobre o mesmo conjunto de fatos persistido no snapshot.
         requested_comp = _clean_comp(competencia) if competencia else None
+        selected_comp = requested_comp or _default_dashboard_competencia(period)
         if self.snapshot_store is None:
-            return _sql_snapshot_unavailable(requested_comp or "", period, "Armazenamento SQL da Liga indisponivel.")
+            return _sql_snapshot_unavailable(selected_comp, period, "Armazenamento SQL da Liga indisponivel.")
         if not self.allow_source_files:
             try:
-                latest = self.snapshot_store.get_latest(competencia=requested_comp, period=period)
+                # "Atual" e "Fechamento" sao periodos de negocio, nao um
+                # simples "ultimo snapshot gerado". Selecionar pelo calendario
+                # evita que uma regravação tardia de setembro faça o painel
+                # voltar para uma competência antiga quando outubro já é o mês
+                # corrente.
+                latest = self.snapshot_store.get_latest(competencia=selected_comp, period=period)
                 if latest is not None:
                     return latest[1]
             except Exception:
-                return _sql_snapshot_unavailable(requested_comp or "", period, "Nao foi possivel consultar o snapshot SQL da Liga.")
+                return _sql_snapshot_unavailable(selected_comp, period, "Nao foi possivel consultar o snapshot SQL da Liga.")
 
         # O caminho normal nunca lê os arquivos. A exceção explícita é o
         # bootstrap one-shot, chamado somente pelo script de materialização
         # dos snapshots depois que os CSVs já foram importados para SQL.
         if not self.allow_source_files:
             return _sql_snapshot_unavailable(
-                requested_comp or "",
+                selected_comp,
                 period,
                 "Dados da Liga ainda nao foram carregados no SQL. Execute a carga inicial dos relatorios.",
             )
 
         # Mantido abaixo apenas como referencia para o calculo historico da
         # carga offline; este trecho nao e alcancado por requisicoes do painel.
-        comp = requested_comp or self._latest_competencia(period=period)
+        comp = selected_comp
         if not comp:
             return _empty("")
         manifests = self._select_manifests(comp, period=period)
@@ -836,6 +842,21 @@ def _clean_comp(value: str | None) -> str:
     if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", text):
         raise ValueError("Competencia invalida. Use AAAA-MM.")
     return text
+
+
+def _default_dashboard_competencia(period: str, *, reference: date | None = None) -> str:
+    """Retorna a competência padrão de cada visão do painel.
+
+    A visão atual acompanha o mês corrente; a visão de fechamento acompanha o
+    último mês completo. O dia de corte dos relatórios continua sendo tratado
+    pelo worker como ontem, mas isso não deve trocar a competência de outubro
+    para setembro no dia seguinte à virada do mês.
+    """
+
+    current = reference or datetime.now().date()
+    if str(period).lower() == "fechado":
+        current = current.replace(day=1) - timedelta(days=1)
+    return current.strftime("%Y-%m")
 
 
 def stored_files(manifest: dict[str, Any]) -> Iterable[dict[str, Any]]:

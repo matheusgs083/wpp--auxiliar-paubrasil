@@ -1,8 +1,10 @@
 from bot_api.services.liga_entrega_dashboard_service import (
     LigaEntregaDashboardService,
+    _default_dashboard_competencia,
     preserve_operational_route_date,
     route_km_values,
 )
+from datetime import date
 
 
 class _Store:
@@ -81,6 +83,32 @@ def test_current_dashboard_competence_also_follows_daily_030805_filename():
     service = LigaEntregaDashboardService.__new__(LigaEntregaDashboardService)
     service.report_store = _Store()
     assert service._latest_competencia(period="atual") == "2026-09"
+
+
+def test_default_dashboard_competence_keeps_current_month_after_month_turn():
+    assert _default_dashboard_competencia("atual", reference=date(2026, 10, 1)) == "2026-10"
+    assert _default_dashboard_competencia("fechado", reference=date(2026, 10, 1)) == "2026-09"
+
+
+def test_sql_dashboard_does_not_fall_back_to_previous_month_snapshot():
+    requested = []
+
+    class SnapshotStore:
+        def get_latest(self, **kwargs):
+            requested.append(kwargs)
+            return None
+
+    service = LigaEntregaDashboardService(
+        report_store=object(),
+        expurgo_service=object(),
+        snapshot_store=SnapshotStore(),
+        allow_source_files=False,
+    )
+
+    result = service.build_dashboard(competencia="2026-10", period="atual")
+
+    assert result["competencia"] == "2026-10"
+    assert requested == [{"competencia": "2026-10", "period": "atual"}]
 
 
 def test_auxiliary_manifest_matches_operational_csv_date_when_uploaded_next_month(tmp_path):
