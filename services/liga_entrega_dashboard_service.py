@@ -25,8 +25,10 @@ except Exception:  # pragma: no cover
     load_workbook = None  # type: ignore[assignment]
 
 METAS = {"devol": 1.4, "saida": "07:30", "saida_pct": 90, "tempo": 110, "tempo_pern": 100, "km": 10, "check_inicio": "2026-07-13"}
-PESOS_MOT = {"devol": 35, "saida": 25, "km": 15, "check": 25}
-PESOS_AJD = {"devol": 35, "saida": 25, "km": 15, "check": 25}
+# O peso que antes pertencia ao checklist foi transferido para devolução.
+# A devolução é binária: na meta recebe todos os pontos; fora dela, zero.
+PESOS_MOT = {"devol": 60, "saida": 25, "km": 15}
+PESOS_AJD = {"devol": 60, "saida": 25, "km": 15}
 MIN_ROTAS = 3
 TEMPO_PREV_MAX = 840
 MAX_AUXILIARY_BYTES = 25 * 1024 * 1024
@@ -35,7 +37,8 @@ MAX_COMPETENCE_SCAN_ROWS = 5000
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 19
+CACHE_VERSION = 20
+LIGA_RANKING_VERSION = 2
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -153,7 +156,17 @@ class LigaEntregaDashboardService:
                 # corrente.
                 latest = self.snapshot_store.get_latest(competencia=selected_comp, period=period)
                 if latest is not None:
-                    return latest[1]
+                    payload = latest[1]
+                    if payload.get("ranking_version") == LIGA_RANKING_VERSION:
+                        return payload
+                    # Recalcula snapshots antigos com a regra atual sem voltar
+                    # a ler CSVs: os fatos necessários já estão persistidos
+                    # no próprio snapshot.
+                    if refresh_snapshot_from_sql(self.snapshot_store, self.expurgo_service, selected_comp):
+                        refreshed = self.snapshot_store.get_latest(competencia=selected_comp, period=period)
+                        if refreshed is not None and refreshed[1].get("ranking_version") == LIGA_RANKING_VERSION:
+                            return refreshed[1]
+                    return payload
             except Exception:
                 return _sql_snapshot_unavailable(selected_comp, period, "Nao foi possivel consultar o snapshot SQL da Liga.")
 
@@ -448,9 +461,8 @@ class LigaEntregaDashboardService:
                     ponto.update(cached_ponto if cached_ponto is not None else cache_espelho(path))
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"espelho {file['filename']}: {exc}")
-        # O checklist é um XLSX pequeno e é a fonte direta da coluna
-        # Checklist. Ele não pode ser descartado pelo timeout reservado ao
-        # espelho de ponto, pois isso deixa todos os colaboradores em 0%.
+        # O checklist permanece como rotina de importação própria, mas não
+        # participa mais do cálculo da Liga.
         for manifest in manifests.get(RCHK, []):
             for file in stored_files(manifest):
                 if file["path"].stat().st_size > MAX_AUXILIARY_BYTES:
@@ -486,7 +498,14 @@ class LigaEntregaDashboardService:
             if equipe.get("filial") and not rota.get("filial"):
                 rota["filial"] = equipe["filial"]
 
-        devols = deduplicate_devolucoes(devols)
+        # A carga pode conter janelas de dias que atravessam competências
+        # (principalmente o relatório diário usado pelo Atual).  A
+        # competência selecionada é a fonte de verdade do painel; fatos de
+        # outro mês não podem participar do ranking nem receber expurgos.
+        devols = [
+            item for item in deduplicate_devolucoes(devols)
+            if _record_competencia(item.get("data_devolucao") or item.get("data")) == comp
+        ]
         if self.dclientes_query_service is not None and devols:
             keys = [(str(item.get("filial") or ""), str(item.get("cliente_cod") or "")) for item in devols]
             try:
@@ -528,6 +547,8 @@ class LigaEntregaDashboardService:
         rotas_list: list[dict[str, Any]] = []
         for key, r0 in rotas.items():
             r = dict(r0)
+            if _record_competencia(r.get("data")) != comp:
+                continue
             mapa = str(r.get("mapa") or "")
             p = lookup_route_aux(port, r)
             r["hr_sai"] = (p.get("sai") or [None, r.get("hs0805") or ""])[1]
@@ -606,7 +627,7 @@ class LigaEntregaDashboardService:
         # O snapshot é JSONB: preserve apenas os totais necessários para
         # reaplicar expurgos. Os conjuntos de PDVs são convertidos em inteiros
         # para não fazer a persistência falhar silenciosamente.
-        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50], "_liga_facts": {"ent_m": {k: len(v) for k, v in ent_m.items()}, "ent_a": {k: len(v) for k, v in ent_a.items()}, "checklist": checklist, "first_week": first_week, "has_farol": has_farol}}
+        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "ranking_version": LIGA_RANKING_VERSION, "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50], "_liga_facts": {"ent_m": {k: len(v) for k, v in ent_m.items()}, "ent_a": {k: len(v) for k, v in ent_a.items()}, "checklist": checklist, "first_week": first_week, "has_farol": has_farol}}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
         self._write_persisted_cache(comp, period, cache_signature, result)
@@ -726,7 +747,17 @@ class LigaEntregaDashboardService:
             result = self.expurgo_service.list_expurgos(competencia=comp, active_only=True)
         except Exception:
             return []
-        return [dict(x) for x in result.get("items", []) if isinstance(x, dict)]
+        # Legados podem ter a competência correta no registro, mas uma data
+        # operacional de outro mês. Não deixe esse expurgo alterar a Liga
+        # exibida quando o usuário troca o mês.
+        return [
+            dict(x) for x in result.get("items", [])
+            if isinstance(x, dict)
+            and (
+                not x.get("data")
+                or _record_competencia(x.get("data")) == comp
+            )
+        ]
 
     def _status_overrides(self, comp: str) -> dict[str, str]:
         try:
@@ -772,6 +803,7 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
             payload["expurgos"] = {"counts": counts, "items": expurgos}
             payload["summary"]["devolucoes"] = sum(not item.get("excluida") for item in devols)
             payload["summary"]["devolucoes_expurgadas"] = sum(bool(item.get("excluida")) for item in devols)
+            payload["ranking_version"] = LIGA_RANKING_VERSION
             signature = hashlib.sha256(json.dumps(expurgos, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
             snapshot_store.put(competencia=competencia, period=period, signature=f"sql-expurgo:{signature}", payload=payload)
         except Exception:
@@ -1331,9 +1363,6 @@ def blank() -> dict[str, float]:
 def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]], devols: list[dict[str, Any]], ent_m: dict[str, int], ent_a: dict[str, int], checklist: list[dict[str, str]], colab: dict[str, dict[str, str]], *, has_farol: bool, first_week: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     agg_m: dict[str, dict[str, float]] = defaultdict(blank)
     agg_a: dict[str, dict[str, float]] = defaultdict(blank)
-    chk_set = {f"{c.get('cod')}|{c.get('data')}|{c.get('tipo')}" for c in checklist}
-    chk_e: dict[str, int] = defaultdict(int)
-    chk_f: dict[str, int] = defaultdict(int)
     for r in rotas:
         mot = norm_code(r.get("mot"))
         route_expurgada = bool(r.get("expurgo_saida") or r.get("expurgo_km"))
@@ -1349,7 +1378,7 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
                 agg_a[a]["exp_tml"] += int(bool(r.get("expurgo_saida")))
         # Qualquer expurgo retira a rota da Liga inteira. Ela continua visível
         # na aba de rotas para auditoria, mas não entra em denominadores,
-        # pontuação, checklist ou elegibilidade.
+        # pontuação ou elegibilidade.
         if route_expurgada:
             continue
         if mot != "0":
@@ -1380,20 +1409,11 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
             if r.get("hr_sai") and not r.get("expurgo_saida"):
                 agg_a[a]["saiTot"] += 1
                 agg_a[a]["saiOk"] += int(str(r["hr_sai"]) <= str(METAS["saida"]))
-        if has_farol and str(r.get("data") or "") >= str(METAS["check_inicio"]) and mot != "0":
-            p = lookup_route_aux(port, r)
-            ds = (p.get("sai") or [r.get("data")])[0]
-            de = (p.get("ent") or [r.get("data")])[0]
-            fez_s = f"{mot}|{ds}|S" in chk_set
-            fez_r = f"{mot}|{de}|R" in chk_set or f"{mot}|{next_day(de)}|R" in chk_set
-            for c in [mot] + [norm_code(x) for x in (r.get("aju") or []) if norm_code(x) != "0"]:
-                chk_e[c] += 2
-                chk_f[c] += int(fez_s) + int(fez_r)
     devol_m, devol_a = aggregate_devolucoes(devols)
     exp_dev_m, exp_dev_a = aggregate_devolucoes(devols, only_expurgadas=True)
     return (
-        mount(colab, agg_m, ent_m, devol_m, exp_dev_m, chk_e, chk_f, "MOTORISTA", has_farol=has_farol, first_week=first_week),
-        mount(colab, agg_a, ent_a, devol_a, exp_dev_a, chk_e, chk_f, "AJUDANTE", has_farol=has_farol, first_week=first_week),
+        mount(colab, agg_m, ent_m, devol_m, exp_dev_m, {}, {}, "MOTORISTA", has_farol=has_farol, first_week=first_week),
+        mount(colab, agg_a, ent_a, devol_a, exp_dev_a, {}, {}, "AJUDANTE", has_farol=has_farol, first_week=first_week),
     )
 
 
@@ -1458,20 +1478,18 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         km = pct(max(0, g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else None
         # O HTML original concede o peso inteiro enquanto o Farol ainda não
         # foi disponibilizado. Quando existe, mede saída e retorno normalmente.
-        check = pct(chk_f[cod] / chk_e[cod] * 100) if chk_e.get(cod) else (100.0 if not has_farol else None)
         pts = {
             "saida": round(pesos["saida"] * faixa(pior_pct(psaida, float(METAS["saida_pct"]), menor=False)), 1) if psaida is not None else 0,
-            "devol": round(pesos["devol"] * faixa(max(0, (pdev - float(METAS["devol"])) / float(METAS["devol"]) * 100)), 1) if pdev is not None else 0,
+            "devol": float(pesos["devol"]) if pdev is not None and pdev <= float(METAS["devol"]) else 0,
             "km": round(pesos["km"] * faixa(pior_pct(km, float(METAS["km"]), menor=True)), 1) if km is not None else 0,
-            "check": round(pesos["check"] * faixa(pior_pct(check, 100, menor=False)), 1) if check is not None else 0,
         }
-        measured = {"saida": psaida is not None, "devol": pdev is not None, "km": km is not None, "check": check is not None}
+        measured = {"saida": psaida is not None, "devol": pdev is not None, "km": km is not None}
         sw = sum(w for k, w in pesos.items() if measured[k])
         sp = sum(float(pts[k]) for k in pesos if measured[k])
         status = str(info.get("status") or canonical_status(cod))
         if status != "ativo":
             continue
-        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas_total"]), "rotas_validas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "check_pct": check, "check_f": chk_f.get(cod) if chk_e.get(cod) else None, "check_e": chk_e.get(cod) or None, "pts": pts, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
+        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas_total"]), "rotas_validas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "pts": pts, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
     elig = [x for x in rows if x["elegivel"]]
     elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -int(x.get("rotas") or 0)))
     for i, row in enumerate(elig, 1):
@@ -1557,7 +1575,10 @@ def _expurgo_scope(expurgo: dict[str, Any]) -> bool:
 
 def _record_competencia(value: Any) -> str:
     text = str(value or "").strip()
-    return text[:7] if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) else ""
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return text[:7]
+    normalized = to_iso(value, fallback="")
+    return normalized[:7] if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized) else ""
 
 
 def next_day(value: Any) -> str:

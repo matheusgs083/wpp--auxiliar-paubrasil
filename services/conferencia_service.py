@@ -836,48 +836,63 @@ class ConferenciaService:
         self,
         *,
         search: str,
+        codes: Iterable[Any] | None = None,
         limit: int = 20,
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.ensure_schema()
         query = str(search or "").strip()
-        if len(query) < 2:
+        normalized_codes = list(dict.fromkeys(_manual_code(item) for item in (codes or ()) if _manual_code(item)))[:200]
+        if len(query) < 2 and not normalized_codes:
             return {"ok": True, "products": []}
-        clean_limit = min(max(int(limit or 20), 1), 50)
+        clean_limit = min(max(int(limit or 20), 1), 200 if normalized_codes else 50)
         with self._connect() as conn:
             if not _relation_exists(conn, self.schema, "dprodutos_latest"):
                 return {"ok": True, "products": []}
-            token = f"%{query.lower()}%"
-            digits = re.sub(r"\D+", "", query)
-            params: list[Any] = [token, token, token]
-            where = """
-                LOWER(COALESCE(descricao, '')) LIKE %s
-                OR LOWER(COALESCE(descricao_unitaria, '')) LIKE %s
-                OR LOWER(COALESCE(codigo::text, '')) LIKE %s
-            """
-            if digits:
-                where += " OR regexp_replace(COALESCE(codigo::text, ''), '\\D', '', 'g') LIKE %s"
-                params.append(f"%{digits}%")
-            params.append(clean_limit)
             with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        SELECT codigo, descricao, descricao_unitaria, embalagem, grupo, subtipo
-                        FROM {}.dprodutos_latest
-                        WHERE {}
-                        ORDER BY
-                            CASE
-                                WHEN regexp_replace(COALESCE(codigo::text, ''), '\\D', '', 'g') = %s THEN 0
-                                WHEN LOWER(COALESCE(descricao_unitaria, '')) LIKE %s THEN 1
-                                ELSE 2
-                            END,
-                            descricao_unitaria, descricao
-                        LIMIT %s
-                        """
-                    ).format(sql.Identifier(self.schema), sql.SQL(where)),
-                    (*params[:-1], digits, token, params[-1]),
-                )
+                if normalized_codes:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            SELECT codigo, descricao, descricao_unitaria, embalagem, grupo, subtipo
+                            FROM {}.dprodutos_latest
+                            WHERE COALESCE(NULLIF(regexp_replace(COALESCE(codigo::text, ''), '^0+', ''), ''), '0') = ANY(%s)
+                            LIMIT %s
+                            """
+                        ).format(sql.Identifier(self.schema)),
+                        (normalized_codes, clean_limit),
+                    )
+                else:
+                    token = f"%{query.lower()}%"
+                    digits = re.sub(r"\D+", "", query)
+                    params: list[Any] = [token, token, token]
+                    where = """
+                        LOWER(COALESCE(descricao, '')) LIKE %s
+                        OR LOWER(COALESCE(descricao_unitaria, '')) LIKE %s
+                        OR LOWER(COALESCE(codigo::text, '')) LIKE %s
+                    """
+                    if digits:
+                        where += " OR regexp_replace(COALESCE(codigo::text, ''), '\\D', '', 'g') LIKE %s"
+                        params.append(f"%{digits}%")
+                    params.append(clean_limit)
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            SELECT codigo, descricao, descricao_unitaria, embalagem, grupo, subtipo
+                            FROM {}.dprodutos_latest
+                            WHERE {}
+                            ORDER BY
+                                CASE
+                                    WHEN regexp_replace(COALESCE(codigo::text, ''), '\\D', '', 'g') = %s THEN 0
+                                    WHEN LOWER(COALESCE(descricao_unitaria, '')) LIKE %s THEN 1
+                                    ELSE 2
+                                END,
+                                descricao_unitaria, descricao
+                            LIMIT %s
+                            """
+                        ).format(sql.Identifier(self.schema), sql.SQL(where)),
+                        (*params[:-1], digits, token, params[-1]),
+                    )
                 rows = [dict(row) for row in cur.fetchall()]
         return {
             "ok": True,

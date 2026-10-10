@@ -430,7 +430,9 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         worker_token: str | None = "worker-secret",
         auth_status: int | None = None,
         allow_feature: bool = True,
+        allowed_features: set[str] | None = None,
         is_admin: bool = True,
+        context_override: dict[str, Any] | None = None,
         catalog_value: Any | None = None,
     ) -> tuple[
         TestClient,
@@ -447,11 +449,11 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             auth_calls.append(kwargs)
             if auth_status is not None:
                 raise HTTPException(status_code=auth_status, detail="auth denied")
-            return {**self.context, "is_admin": is_admin}
+            return {**self.context, **(context_override or {}), "is_admin": is_admin}
 
         def require_feature(context: dict[str, Any] | None, feature: str) -> None:
             feature_calls.append((context, feature))
-            if not allow_feature:
+            if not allow_feature or (allowed_features is not None and feature not in allowed_features):
                 raise HTTPException(status_code=403, detail="feature denied")
 
         app = FastAPI()
@@ -511,6 +513,36 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             )
         )
         return TestClient(app), service, events, auth_calls
+
+    def test_armazem_can_submit_and_audit_grade_jobs_without_promax_admin_access(self) -> None:
+        client, service, _events, _auth_calls = self.make_client(
+            is_admin=False,
+            allowed_features={"armazem"},
+            context_override={"mode": "armazem", "features": ("armazem",), "username": "almox"},
+        )
+        payload = {
+            "filename": "grade.csv",
+            "file_base64": base64.b64encode(b"grade;produto;quantidade\n1;9092;1\n").decode("ascii"),
+            "unidade": "2210003",
+            "target_worker_id": "worker-1",
+        }
+
+        created = client.post("/api/admin/promax/grade-020304/jobs", json=payload)
+        self.assertEqual(created.status_code, 202, created.text)
+        self.assertEqual(created.json()["items"], 1)
+        self.assertEqual(service.calls[0][0], "enqueue_jobs")
+        self.assertEqual(service.calls[0][2]["created_by"], "almox")
+        self.assertEqual(service.calls[0][2]["items"][0]["payload"]["target_worker_id"], "worker-1")
+
+        audit = client.get("/api/admin/promax/jobs?category=lancamento_grade_020304")
+        self.assertEqual(audit.status_code, 200, audit.text)
+        workers = client.get("/api/admin/promax/grade/workers")
+        self.assertEqual(workers.status_code, 200, workers.text)
+        self.assertEqual(workers.json()["workers"], [{"worker_id": "worker-1", "online": True, "heartbeat_at": None, "current_job_id": None}])
+
+        self.assertEqual(client.post("/api/admin/promax/jobs", json=self.job_payload()).status_code, 403)
+        self.assertEqual(client.get("/api/admin/promax/jobs?category=reports").status_code, 403)
+        self.assertEqual(client.get("/api/admin/promax/worker/status").status_code, 403)
 
     def test_admin_routes_use_documented_service_contract_and_admin_auth(self) -> None:
         client, service, events, auth_calls = self.make_client()

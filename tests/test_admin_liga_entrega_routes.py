@@ -183,7 +183,7 @@ class AdminLigaEntregaRoutesTest(unittest.TestCase):
         self.assertEqual(motorista["pos"], 1)
         self.assertEqual(motorista["devol"], 0)
         self.assertEqual(motorista["expurgos"]["devolucao"], 1)
-        self.assertEqual(motorista["check_pct"], 100.0)
+        self.assertNotIn("check_pct", motorista)
         self.assertGreaterEqual(payload["summary"]["motoristas_ativos"], 1)
         self.assertGreaterEqual(payload["summary"]["motoristas_elegiveis"], 1)
         self.assertEqual(payload["operacao"]["rotas"], 3)

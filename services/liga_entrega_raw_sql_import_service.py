@@ -13,6 +13,35 @@ import psycopg
 from psycopg import sql
 
 
+def _payload_competencia(payload: dict[str, Any]) -> str:
+    """Extrai a competência operacional de uma linha persistida.
+
+    Nem todos os relatórios têm ``Ano``/``Mês``; os diários normalmente
+    trazem a data em ``Data`` ou ``Data Entrega``.  Retornar vazio quando não
+    há data é intencional: uma linha sem competência não deve aparecer em
+    todos os meses por acidente.
+    """
+    year = str(payload.get("Ano") or "").strip()
+    month = str(payload.get("Mês") or payload.get("Mes") or "").strip()
+    if re.fullmatch(r"\d{4}", year) and re.fullmatch(r"\d{1,2}", month):
+        month_int = int(month)
+        if 1 <= month_int <= 12:
+            return f"{year}-{month_int:02d}"
+    for key in ("Data", "Data Entrega", "Data Movimento", "Dt. Operacao", "Dt Operacao", "Data Operacao", "reference_date"):
+        value = str(payload.get(key) or "").strip()
+        iso = re.search(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", value)
+        if iso:
+            month_int = int(iso.group(2))
+            if 1 <= month_int <= 12:
+                return f"{iso.group(1)}-{month_int:02d}"
+        br = re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{4})", value)
+        if br:
+            month_int = int(br.group(2))
+            if 1 <= month_int <= 12:
+                return f"{br.group(3)}-{month_int:02d}"
+    return ""
+
+
 class LigaEntregaRawSqlImportService:
     """Importa as linhas dos arquivos da Liga para o PostgreSQL.
 
@@ -155,9 +184,10 @@ class LigaEntregaRawSqlImportService:
     def fetch_rows(self, *, routine: str, competencia: str | None = None, period: str = "atual") -> list[dict[str, Any]]:
         """Retorna linhas persistidas para uma rotina, sem tocar nos arquivos de origem.
 
-        A consulta privilegia a versão mais recente de cada arquivo/linha.  Isso
-        evita que cargas repetidas do mesmo relatório misturem competências no
-        painel, mantendo o CSV apenas como entrada da etapa de importação.
+        A consulta privilegia a versão mais recente de cada arquivo/linha
+        dentro da competência solicitada. Arquivos com o mesmo nome podem ser
+        reenviados em meses diferentes; por isso a competência faz parte da
+        deduplicação e o CSV permanece apenas como entrada da importação.
         """
         if not self.database_url:
             return []
@@ -167,36 +197,37 @@ class LigaEntregaRawSqlImportService:
                 with conn.cursor() as cur:
                     query = sql.SQL(
                         """
-                        SELECT payload, reference_date
-                        FROM (
-                            SELECT DISTINCT ON (filename, row_number)
-                                   filename, row_number, payload, reference_date, imported_at
-                            FROM {}.liga_entrega_raw_rows
-                            WHERE routine = %s AND period = %s
-                            ORDER BY filename, row_number, imported_at DESC
-                        ) latest
-                        ORDER BY filename, row_number
+                        SELECT filename, row_number, payload, reference_date, imported_at
+                        FROM {}.liga_entrega_raw_rows
+                        WHERE routine = %s AND period = %s
+                        ORDER BY imported_at DESC, filename, row_number
                         """
                     ).format(sql.Identifier(self.schema))
                     cur.execute(query, (routine, self._normalize_period(period)))
                     rows = []
+                    seen: set[tuple[str, int, str]] = set()
+                    selected = str(competencia or "").strip()
                     for item in cur.fetchall():
-                        if not isinstance(item[0], dict):
+                        if not isinstance(item[2], dict):
                             continue
-                        payload = dict(item[0])
-                        if item[1] is not None:
-                            payload["_reference_date"] = item[1].isoformat() if hasattr(item[1], "isoformat") else str(item[1])
+                        payload = dict(item[2])
+                        reference_date = item[3].isoformat() if hasattr(item[3], "isoformat") else str(item[3] or "")
+                        if reference_date:
+                            payload["_reference_date"] = reference_date
+                        row_comp = _payload_competencia(payload) or reference_date[:7]
+                        if selected and row_comp != selected:
+                            continue
+                        # Arquivos com o mesmo nome são reenviados em vários
+                        # meses. A competência precisa fazer parte da chave;
+                        # deduplicar apenas por filename/linha apagava o mês
+                        # anterior e fazia a Liga misturar todas as rotas.
+                        key = (str(item[0] or ""), int(item[1] or 0), row_comp)
+                        if key in seen:
+                            continue
+                        seen.add(key)
                         rows.append(payload)
         except Exception:
             return []
-        if competencia:
-            selected = str(competencia).strip()
-            rows = [
-                row for row in rows
-                if f"{str(row.get('Ano') or '').strip()}-{str(row.get('Mês') or row.get('Mes') or '').strip().zfill(2)}" == selected
-                or str(row.get("_reference_date") or "").startswith(selected)
-                or not str(row.get('Ano') or '').strip()
-            ]
         return rows
 
     def _import_file(self, conn: psycopg.Connection[Any], routine: str, manifest: dict[str, Any], item: dict[str, Any]) -> tuple[bool, int]:

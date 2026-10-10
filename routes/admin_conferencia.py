@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 
@@ -193,24 +193,33 @@ def create_admin_conferencia_router(
     def api_admin_conferencia_products(
         request: Request,
         search: str = "",
+        codes: str = Query(default="", max_length=4000),
         limit: int = 20,
         authorization: str | None = Header(default=None),
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
-        context = require_conferencia_context(
+        context = require_admin_panel_auth(
             request=request,
             authorization=authorization,
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
         )
-        payload = search_conferencia_products(search=search, limit=limit, context=context)
+        # The 01.11 product base is also used only to label grade-audit lines
+        # in Armazem.  This does not grant access to conference maps/counts.
+        if not (
+            panel_context_can_access_feature(context, "conferencia")
+            or panel_context_can_access_feature(context, "armazem")
+        ):
+            require_admin_panel_feature(context, "conferencia")
+        product_codes = [item.strip() for item in str(codes or "").split(",") if item.strip()]
+        payload = search_conferencia_products(search=search, codes=product_codes, limit=limit, context=context)
         record_security_event(
             request,
             channel="api",
             event_type="admin_conferencia_product_search",
             decision="allowed",
-            reason=f"search={search[:40]}",
+            reason=f"search={search[:40]};codes={len(product_codes)}",
         )
         return payload
 

@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Requ
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from bot_api.services.promax_jobs_service import LeaseLostError
+from bot_api.services.promax_grade_input_service import MAX_CSV_BYTES, parse_grade_csv, parse_grade_020304_csv
 
 
 _CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
@@ -241,6 +242,18 @@ def _has_auto_retry_marker(job: Any) -> bool:
 def _retry_payload_for_job(job: Any) -> tuple[dict[str, Any], list[str], str]:
     payload = _mapping_value(job, "payload", {})
     retry_payload = dict(payload or {}) if isinstance(payload, Mapping) else {}
+    lancamento = retry_payload.get("lancamento")
+    result = _mapping_value(job, "result", {})
+    metadata = result.get("metadata") if isinstance(result, Mapping) else None
+    failed_items = metadata.get("failed_items") if isinstance(metadata, Mapping) else None
+    if isinstance(lancamento, Mapping) and isinstance(failed_items, Sequence) and not isinstance(failed_items, (str, bytes, bytearray)):
+        failed_rows = {int(item.get("source_row")) for item in failed_items if isinstance(item, Mapping) and str(item.get("source_row") or "").isdigit()}
+        items = lancamento.get("itens")
+        selected = [dict(item) for item in items if isinstance(item, Mapping) and int(item.get("source_row") or 0) in failed_rows] if isinstance(items, Sequence) else []
+        if selected:
+            retry_payload["lancamento"] = {**dict(lancamento), "itens": selected}
+            retry_payload["retry_scope"] = "failed_items"
+            return retry_payload, [str(item.get("source_row")) for item in selected], "failed_items"
     retry_units, failed_details, retry_mode = _extract_failed_retry_units(job)
     if retry_mode == "failed_units" and retry_units:
         retry_payload["units"] = retry_units
@@ -373,6 +386,27 @@ class PromaxJobCreateRequest(_StrictPayload):
     def validate_dates(self) -> PromaxJobCreateRequest:
         _validate_date_range(self.start_date, self.end_date)
         return self
+
+
+class PromaxGradeCsvRequest(_StrictPayload):
+    filename: str = Field(min_length=1, max_length=180)
+    file_base64: str = Field(min_length=1, max_length=3_000_000)
+    unidade: str | None = Field(default=None, min_length=1, max_length=64)
+    target_worker_id: str | None = Field(default=None, min_length=1, max_length=160)
+
+    @field_validator("filename")
+    @classmethod
+    def validate_csv_filename(cls, value: str) -> str:
+        if not value.lower().endswith(".csv"):
+            raise ValueError("Envie um arquivo CSV.")
+        return FilePath(value).name
+
+    @field_validator("unidade")
+    @classmethod
+    def validate_unidade(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _normalize_identifiers([value], field_name="unidade")[0]
 
 
 class PromaxScheduleCreateRequest(PromaxJobCreateRequest):
@@ -928,6 +962,33 @@ def create_admin_promax_router(
         require_admin_panel_feature(context, "promax")
         return context
 
+    def require_grade_context(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        """Authorize the narrowly scoped warehouse grade workflow.
+
+        A warehouse user may submit and audit grade jobs, but must not gain the
+        wider Promax administration surface (credentials, schedules and queue
+        controls).  Promax administrators keep their existing access.
+        """
+        context = require_admin_panel_auth(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        try:
+            require_admin_panel_feature(context, "promax")
+            return {**context, "_grade_access": "promax"}
+        except HTTPException as exc:
+            if exc.status_code != 403:
+                raise
+        require_admin_panel_feature(context, "armazem")
+        return {**context, "_grade_access": "armazem"}
+
     def require_worker_auth(
         request: Request,
         x_promax_worker_token: str | None = Header(default=None, alias="x-promax-worker-token"),
@@ -1228,6 +1289,67 @@ def create_admin_promax_router(
         )
         return _item_response(job, key="job")
 
+    @router.post("/api/admin/promax/grade/jobs", status_code=202)
+    def api_admin_promax_create_grade_jobs(
+        request: Request,
+        payload: PromaxGradeCsvRequest,
+        context: dict[str, Any] = Depends(require_grade_context),
+    ) -> dict[str, Any]:
+        if not payload.unidade:
+            raise HTTPException(status_code=422, detail="Selecione a revenda para o lançamento da grade.")
+        try:
+            raw_csv = base64.b64decode(payload.file_base64.encode("ascii"), validate=True)
+        except (ValueError, UnicodeEncodeError, binascii.Error) as exc:
+            raise HTTPException(status_code=422, detail="Arquivo CSV invalido.") from exc
+        if len(raw_csv) > MAX_CSV_BYTES:
+            raise HTTPException(status_code=422, detail="O CSV excede o limite de 2 MB.")
+        try:
+            launches = parse_grade_csv(raw_csv)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        jobs = service.enqueue_jobs(
+            items=[
+                {
+                    "job_type": "lancamento_grade",
+                    "payload": {
+                        "operation": "lancamento_grade",
+                        "unidade": payload.unidade,
+                        "target_worker_id": payload.target_worker_id,
+                        "source_filename": payload.filename,
+                        "lancamento": launch,
+                    },
+                    "priority": 60,
+                }
+                for launch in launches
+            ],
+            created_by=context_actor(context),
+        )
+        job_items = jobs.get("jobs", jobs) if isinstance(jobs, Mapping) else jobs
+        item_count = sum(len(launch["itens"]) for launch in launches)
+        record_admin_event(request, "admin_promax_grade_jobs_create", reason=f"file={payload.filename};items={item_count}")
+        record_panel_action(
+            request,
+            context,
+            action="lancar_grade_020105",
+            metadata={"filename": payload.filename, "launches": len(launches), "items": item_count},
+        )
+        return {"ok": True, "jobs": job_items, "launches": len(launches), "items": item_count}
+
+    @router.post("/api/admin/promax/grade-020304/jobs", status_code=202)
+    def api_admin_promax_create_grade_020304_jobs(request: Request, payload: PromaxGradeCsvRequest, context: dict[str, Any] = Depends(require_grade_context)) -> dict[str, Any]:
+        if not payload.unidade:
+            raise HTTPException(status_code=422, detail="Selecione a revenda para o lançamento da grade.")
+        try:
+            raw_csv = base64.b64decode(payload.file_base64.encode("ascii"), validate=True)
+            launches = parse_grade_020304_csv(raw_csv)
+        except (ValueError, UnicodeEncodeError, binascii.Error) as exc:
+            raise HTTPException(status_code=422, detail=str(exc) or "Arquivo CSV inválido.") from exc
+        jobs = service.enqueue_jobs(items=[{"job_type": "lancamento_grade_020304", "payload": {"operation": "lancamento_grade_020304", "unidade": payload.unidade, "target_worker_id": payload.target_worker_id, "source_filename": payload.filename, "lancamento": launch}, "priority": 60} for launch in launches], created_by=context_actor(context))
+        item_count = sum(len(launch["itens"]) for launch in launches)
+        record_admin_event(request, "admin_promax_grade_020304_jobs_create", reason=f"file={payload.filename};items={item_count}")
+        record_panel_action(request, context, action="lancar_grade_020301_020304", metadata={"filename": payload.filename, "launches": len(launches), "items": item_count})
+        return {"ok": True, "jobs": jobs.get("jobs", jobs) if isinstance(jobs, Mapping) else jobs, "launches": len(launches), "items": item_count}
+
     @router.post("/api/admin/promax/jobs/batch", status_code=202)
     def api_admin_promax_create_job_batch(
         request: Request,
@@ -1319,8 +1441,10 @@ def create_admin_promax_router(
         created_from: date | None = Query(default=None),
         created_to: date | None = Query(default=None),
         limit: int = Query(default=50, ge=1, le=200),
-        context: dict[str, Any] = Depends(require_promax_context),
+        context: dict[str, Any] = Depends(require_grade_context),
     ) -> dict[str, Any]:
+        if context.get("_grade_access") == "armazem" and category not in {"lancamento_grade", "lancamento_grade_020304"}:
+            raise HTTPException(status_code=403, detail="Acesso do Armazem restrito aos jobs de lancamento de grade.")
         created_from_at, created_before_at = _promax_job_created_bounds(
             created_from,
             created_to,
@@ -1347,6 +1471,28 @@ def create_admin_promax_router(
             ][:limit]
         record_admin_event(request, "admin_promax_jobs_list")
         return _mapping_or_value(result, key="jobs")
+
+    @router.get("/api/admin/promax/grade/workers")
+    def api_admin_promax_grade_workers(
+        request: Request,
+        _context: dict[str, Any] = Depends(require_grade_context),
+    ) -> dict[str, Any]:
+        list_worker_heartbeats = getattr(service, "list_worker_heartbeats", None)
+        workers = list_worker_heartbeats() if callable(list_worker_heartbeats) else []
+        # Keep this response intentionally small: it powers the worker selector
+        # without exposing queue state, job history or credentials.
+        visible_workers = [
+            {
+                "worker_id": _mapping_value(worker, "worker_id", ""),
+                "online": bool(_mapping_value(worker, "online", False)),
+                "heartbeat_at": _mapping_value(worker, "heartbeat_at"),
+                "current_job_id": _mapping_value(worker, "current_job_id"),
+            }
+            for worker in workers
+            if _mapping_value(worker, "worker_id", "")
+        ]
+        record_admin_event(request, "admin_promax_grade_workers_list")
+        return {"ok": True, "workers": visible_workers}
 
     @router.get("/api/admin/promax/jobs/{job_id}")
     def api_admin_promax_get_job(

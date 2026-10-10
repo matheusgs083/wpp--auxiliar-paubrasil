@@ -1756,6 +1756,27 @@ class PromaxRunnerTests(unittest.TestCase):
         self.assertNotIn("--data-inicial", command)
         self.assertNotIn("--data-final", command)
 
+    def test_runner_writes_grade_input_and_uses_controlled_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+            command = runner.build_command(
+                {
+                    "id": "grade-job-1",
+                    "job_type": "lancamento_grade",
+                    "payload": {
+                        "operation": "lancamento_grade",
+                        "unidade": "6",
+                        "lancamento": {"armazem": "01", "deposito": "01", "data_movimento": "08/10/2026", "itens": [{"codigo": "22177", "sku": 2}]},
+                    },
+                }
+            )
+            self.assertIn("lancamento-grade", command)
+            self.assertIn("--job-id", command)
+            payload_path = Path(command[command.index("--arquivo") + 1])
+            self.assertTrue(payload_path.is_file())
+            self.assertIn('"codigo": "22177"', payload_path.read_text(encoding="utf-8"))
+
     def test_runner_ignores_zero_ponto_apoio_for_fechamento_mapa(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._config(Path(temp_dir))

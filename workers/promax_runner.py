@@ -120,6 +120,31 @@ class PromaxRunner:
         operation = str(payload.get("operation") or "").strip()
         job_id = str(job.get("id") or job.get("job_id") or "").strip()
         normalized_job_kind = _normalize_job_kind(operation or job_type)
+        if normalized_job_kind in {"lancamento_grade", "lancamento_grade_020304"}:
+            if job_type != normalized_job_kind or operation != normalized_job_kind:
+                raise ValueError("Invalid Promax grade launch job.")
+            lancamento = payload.get("lancamento")
+            if not isinstance(lancamento, Mapping):
+                raise ValueError("Promax grade launch requires payload.lancamento.")
+            if not job_id or not _IDENTIFIER_PATTERN.fullmatch(job_id):
+                raise ValueError("Promax grade launch requires a valid job id.")
+            input_dir = self.config.driver_dir / "data" / "job_inputs"
+            input_dir.mkdir(parents=True, exist_ok=True)
+            input_path = input_dir / f"{normalized_job_kind}_{job_id}.json"
+            input_path.write_text(json.dumps(dict(lancamento), ensure_ascii=False), encoding="utf-8")
+            command = [
+                str(self.config.python_executable),
+                str(self.config.cli_path),
+                "lancamento-grade-020304" if normalized_job_kind == "lancamento_grade_020304" else "lancamento-grade",
+                "--arquivo",
+                str(input_path),
+                "--job-id",
+                job_id,
+            ]
+            unidade = str(payload.get("unidade") or payload.get("unit") or "").strip()
+            if unidade:
+                command.extend(["--unidade", unidade])
+            return command
         if job_type == "reprocess_publication" or operation == "reprocess_publication":
             if job_type != "reprocess_publication" or operation != "reprocess_publication":
                 raise ValueError("Invalid Promax publication reprocessing job.")

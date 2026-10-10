@@ -668,6 +668,27 @@
     .promax-status--success { color: var(--success); border-color: rgba(4, 120, 87, 0.28); }
     .promax-status--warning { color: var(--warning); border-color: rgba(180, 83, 9, 0.3); }
     .promax-status--danger { color: var(--danger); border-color: rgba(185, 28, 28, 0.34); background: rgba(185, 28, 28, 0.06); }
+    .armazem-grade-audit { border-color: var(--promax-neutral-border); background: linear-gradient(145deg, var(--surface), var(--soft-panel)); }
+    .armazem-grade-audit-toolbar { padding: 0.7rem; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--surface-soft) 84%, transparent); }
+    .armazem-grade-audit-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.75rem; }
+    .armazem-grade-audit-kpi { display: grid; gap: 0.12rem; min-height: 66px; padding: 0.58rem 0.7rem; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+    .armazem-grade-audit-kpi .label { color: var(--ink-500); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+    .armazem-grade-audit-kpi strong { color: var(--ink-900); font-size: 1.05rem; line-height: 1.05; }
+    .armazem-grade-audit-kpi.ok { border-color: rgba(4, 120, 87, 0.3); }
+    .armazem-grade-audit-kpi.danger { border-color: rgba(185, 28, 28, 0.42); background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+    .armazem-grade-audit-kpi.warn { border-color: rgba(180, 83, 9, 0.35); }
+    .armazem-grade-job-list { max-height: 390px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+    .armazem-grade-job-card { border: 0; border-bottom: 1px solid var(--line); color: var(--ink-900); background: var(--surface); transition: border-color .18s ease, background-color .18s ease; }
+    .armazem-grade-job-card:last-child { border-bottom: 0; }
+    .armazem-grade-job-card:hover { border-left-color: var(--brand-600); background: var(--surface-soft); }
+    .armazem-grade-job-card.active { border-left: 3px solid var(--brand-600); color: var(--ink-900); background: color-mix(in srgb, var(--brand-600) 10%, var(--surface)); }
+    .armazem-grade-job-card.active .text-secondary { color: var(--ink-700) !important; }
+    .armazem-grade-detail { min-width: 0; padding: 0.75rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .armazem-grade-detail .table-scroll { max-height: 390px; }
+    .armazem-grade-product-name { display: block; max-width: 360px; color: var(--ink-700); font-size: .78rem; line-height: 1.22; }
+    .armazem-grade-error-row > * { background: color-mix(in srgb, var(--danger) 6%, transparent) !important; }
+    .armazem-grade-error-row > td:first-child { border-left: 3px solid var(--danger); }
+    @media (max-width: 767px) { .armazem-grade-audit-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .armazem-grade-job-list { max-height: 220px; } .armazem-grade-detail { padding: 0.55rem; } .armazem-grade-product-name { max-width: 190px; } }
     .promax-impact-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.65rem; }
     .promax-impact-kpi { display: grid; gap: 0.18rem; min-height: 92px; padding: 0.75rem; border: 1px solid var(--promax-neutral-border); border-radius: 8px; background: var(--promax-neutral-bg); }
     .promax-impact-label { color: var(--ink-500); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
@@ -870,6 +891,10 @@
           <span class="flow-icon"><i class="bi bi-pc-display-horizontal"></i></span>
           <span><span class="flow-title">Promax</span><span class="flow-desc">Fila, execucoes, agendas e logs do robo.</span><span class="flow-meta">Automacao</span></span>
         </a>
+        <a href="/admin/armazem" class="flow-path" data-flow-target="armazemTab" data-flow-label="Armazém" aria-pressed="false">
+          <span class="flow-icon"><i class="bi bi-box-seam"></i></span>
+          <span><span class="flow-title">Armazém</span><span class="flow-desc">Lançamentos de estoque e acompanhamento da grade.</span><span class="flow-meta">Estoque</span></span>
+        </a>
         <a href="/admin/entrega" class="flow-path" data-flow-target="entregaTab" data-flow-label="Entrega" aria-pressed="false">
           <span class="flow-icon"><i class="bi bi-trophy"></i></span>
           <span><span class="flow-title">Entrega</span><span class="flow-desc">Liga da Entrega, rotinas e expurgos operacionais.</span><span class="flow-meta">Liga</span></span>
@@ -925,6 +950,11 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link" id="promaxTab" href="/admin/promax" data-admin-page-link="true" data-bs-target="#promaxPane" role="tab" aria-controls="promaxPane" aria-selected="false">
             <i class="bi bi-pc-display-horizontal me-1"></i>Promax
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="armazemTab" href="/admin/armazem" data-admin-page-link="true" data-bs-target="#armazemPane" role="tab" aria-controls="armazemPane" aria-selected="false">
+            <i class="bi bi-box-seam me-1"></i>Armazém
           </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -1661,7 +1691,7 @@
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Dashboard da Liga</h2>
               <div class="form-text" id="entregaLigaDashboardStatus">Aguardando relatórios carregados para montar o dashboard.</div>
             </div>
-            <div class="d-flex gap-2 align-items-center"><select class="form-select form-select-sm" id="entregaLigaPeriodo" aria-label="Período da Liga" style="width:auto"><option value="atual">Atual</option><option value="fechado">Fechamento</option></select><span class="pill" id="entregaLigaDashboardBadge">Pendente</span></div>
+            <div class="d-flex gap-2 align-items-center"><select class="form-select form-select-sm" id="entregaLigaPeriodo" aria-label="Período da Liga" style="width:auto"><option value="atual">Atual</option><option value="fechado">Fechamento</option></select><select class="form-select form-select-sm" id="entregaLigaMes" aria-label="Mês da Liga" style="width:auto"></select><span class="pill" id="entregaLigaDashboardBadge">Pendente</span></div>
           </div>
           <div class="recolha-dashboard-grid mb-3" id="entregaLigaDashboardCards"></div>
           <div class="source-box" id="entregaLigaDashboardDetails">
@@ -2129,6 +2159,52 @@
             </div>
             <div id="promaxImpactChart" class="promax-impact-chart" aria-label="Grafico de ganho de tempo do Promax"></div>
           </div>
+        </section>
+      </div>
+
+      <div class="tab-pane fade" id="armazemPane" role="tabpanel" aria-labelledby="armazemTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-box-seam me-2 text-primary"></i>Armazém</h2>
+              <div class="form-text">Operações de estoque separadas da administração do robô.</div>
+            </div>
+            <span class="pill">Estoque</span>
+          </div>
+          <nav class="nav nav-pills gap-2" aria-label="Rotinas do armazém">
+            <button class="nav-link active" id="armazemGradeTab" type="button" aria-current="page"><i class="bi bi-grid-3x3-gap me-1"></i>Grade</button>
+          </nav>
+        </section>
+        <section class="panel-card p-3 mb-3" id="armazem020304Pane" role="region" aria-labelledby="armazemGradeTab">
+          <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-2"><div><h2 class="h6 fw-bold mb-1">Entrada na grade para estoque 02.03.04</h2><div class="form-text">Rotina 02.03.01: informa a grade, confirma o produto no check azul, lança “Fabricado em Outra Unidade” e salva.</div></div><span class="pill">02.03.01 → 02.03.04</span></div>
+          <div class="row g-2 align-items-end"><div class="col-lg-6"><label class="form-label small mb-1" for="promaxGrade020304File">Relatório de produtos</label><input class="form-control form-control-sm" id="promaxGrade020304File" type="file" accept=".csv,text/csv"></div><div class="col-lg-3"><label class="form-label small mb-1" for="promaxGrade020304Unit">Revenda</label><select class="form-select form-select-sm" id="promaxGrade020304Unit"><option value="">Selecione a revenda</option></select></div><div class="col-lg-3"><label class="form-label small mb-1" for="promaxGrade020304Worker">Bot que executará</label><select class="form-select form-select-sm" id="promaxGrade020304Worker"><option value="">Automático</option></select></div></div>
+          <div class="d-flex flex-wrap gap-2 align-items-center mt-3"><button class="btn btn-primary btn-sm" id="promaxGrade020304QueueBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Validar CSV e adicionar à fila</button><button class="btn btn-outline-primary btn-sm" id="promaxGrade020304TemplateBtn" type="button"><i class="bi bi-download me-1"></i>Baixar modelo CSV</button><span class="form-text" id="promaxGrade020304Status">Colunas: grade; produto; quantidade.</span></div>
+          <div class="border-top mt-3 pt-3"><div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-2"><div><h3 class="h6 mb-1">Lançamento manual</h3><div class="form-text">Informe um produto para lançamento avulso ou adicione linhas para enviar em lote.</div></div><span class="pill">Sem CSV</span></div><div class="row g-2 align-items-end mb-2"><div class="col-sm-3"><label class="form-label small mb-1" for="promaxGrade020304ManualGrade">Grade</label><input class="form-control form-control-sm" id="promaxGrade020304ManualGrade" inputmode="numeric" value="1"></div></div><div class="table-scroll"><table class="table table-sm align-middle mb-0"><thead><tr><th>Produto</th><th>Quantidade</th><th class="text-end">Ação</th></tr></thead><tbody id="promaxGrade020304ManualRows"></tbody></table></div><div class="d-flex flex-wrap gap-2 align-items-center mt-2"><button class="btn btn-outline-primary btn-sm" id="promaxGrade020304AddRowBtn" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar item</button><button class="btn btn-success btn-sm" id="promaxGrade020304ManualQueueBtn" type="button"><i class="bi bi-send-check me-1"></i>Lançar itens manualmente</button><span class="form-text" id="promaxGrade020304ManualStatus">Uma linha é lançamento avulso; mais linhas formam um lote.</span></div></div>
+        </section>
+
+        <section class="panel-card p-3 mb-3" id="armazemGradePane" role="region" aria-labelledby="armazemGradeTab">
+          <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1">Lançamento de grade · 02.01.05</h2>
+              <div class="form-text">Envie o CSV para validar, guardar na fila e lançar no Promax. Cada falha fica vinculada à linha de origem para reenvio seguro.</div>
+            </div>
+            <span class="pill">CSV</span>
+          </div>
+          <div class="row g-2 align-items-end">
+            <div class="col-lg-6"><label class="form-label small mb-1" for="promaxGradeFile">Relatório de itens</label><input class="form-control form-control-sm" id="promaxGradeFile" type="file" accept=".csv,text/csv"></div>
+            <div class="col-lg-3"><label class="form-label small mb-1" for="promaxGradeUnit">Revenda</label><select class="form-select form-select-sm" id="promaxGradeUnit"><option value="">Selecione a revenda</option></select></div>
+            <div class="col-lg-3"><label class="form-label small mb-1" for="promaxGradeTargetWorker">Bot que executará</label><select class="form-select form-select-sm" id="promaxGradeTargetWorker"><option value="">Automático</option></select></div>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center mt-3"><button class="btn btn-primary btn-sm" id="promaxGradeQueueBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Validar CSV e adicionar à fila</button><button class="btn btn-outline-primary btn-sm" id="promaxGradeTemplateBtn" type="button"><i class="bi bi-download me-1"></i>Baixar modelo CSV</button><span class="form-text" id="promaxGradeStatus">Colunas: armazem; deposito; data_movimento; item; sku; pallet; lastro; unidade; garrafa.</span></div>
+          <div class="border-top mt-3 pt-3"><div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-2"><div><h3 class="h6 mb-1">Lançamento manual</h3><div class="form-text">Use uma linha para lançamento avulso ou adicione produtos para montar um lote.</div></div><span class="pill">Sem CSV</span></div><div class="row g-2 align-items-end mb-2"><div class="col-sm-3"><label class="form-label small mb-1" for="promaxGradeManualArmazem">Armazém</label><input class="form-control form-control-sm" id="promaxGradeManualArmazem" inputmode="numeric" value="01"></div><div class="col-sm-3"><label class="form-label small mb-1" for="promaxGradeManualDeposito">Depósito</label><input class="form-control form-control-sm" id="promaxGradeManualDeposito" inputmode="numeric" value="02"></div><div class="col-sm-4"><label class="form-label small mb-1" for="promaxGradeManualDate">Data do movimento</label><input class="form-control form-control-sm" id="promaxGradeManualDate" type="date"></div></div><div class="table-scroll"><table class="table table-sm align-middle mb-0"><thead><tr><th>Item</th><th>Pallet</th><th>Lastro</th><th>SKU</th><th>Unidade</th><th>Garrafa</th><th class="text-end">Ação</th></tr></thead><tbody id="promaxGradeManualRows"></tbody></table></div><div class="d-flex flex-wrap gap-2 align-items-center mt-2"><button class="btn btn-outline-primary btn-sm" id="promaxGradeAddRowBtn" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar item</button><button class="btn btn-success btn-sm" id="promaxGradeManualQueueBtn" type="button"><i class="bi bi-send-check me-1"></i>Lançar itens manualmente</button><span class="form-text" id="promaxGradeManualStatus">Informe pelo menos pallet, lastro, SKU ou unidade para cada item.</span></div></div>
+        </section>
+        <section class="panel-card p-3 mb-3 armazem-grade-audit" aria-labelledby="armazemGradeAuditTitle">
+          <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3">
+            <div><h2 class="h6 fw-bold mb-1" id="armazemGradeAuditTitle"><i class="bi bi-clipboard2-check me-2 text-primary"></i>Auditoria · estoque 02.03.04</h2><div class="form-text">Histórico guardado por dia e por job. Selecione um job para conferir cada código enviado ao Promax.</div></div>
+            <div class="d-flex flex-wrap align-items-end gap-2"><div><label class="form-label small mb-1" for="armazemGradeAuditDate">Dia da execução</label><input class="form-control form-control-sm" id="armazemGradeAuditDate" type="date"></div><button class="btn btn-outline-primary btn-sm" id="armazemGradeAuditTodayBtn" type="button"><i class="bi bi-calendar-day me-1"></i>Hoje</button><span class="pill" id="armazemGradeAuditCount">Aguardando execução</span></div>
+          </div>
+          <div class="row g-2 align-items-end mb-3 armazem-grade-audit-toolbar"><div class="col-md-7"><label class="form-label small mb-1" for="armazemGradeAuditSearch">Pesquisar produto</label><div class="input-group input-group-sm"><span class="input-group-text" aria-hidden="true"><i class="bi bi-search"></i></span><input class="form-control" id="armazemGradeAuditSearch" type="search" placeholder="Código ou nome do produto" autocomplete="off"></div></div><div class="col-md-5"><div class="form-check form-switch mb-1"><input class="form-check-input" id="armazemGradeAuditErrorsOnly" type="checkbox"><label class="form-check-label small" for="armazemGradeAuditErrorsOnly">Somente erros e não executados</label></div><div class="form-text">Nome consultado na tabela de produtos 01.11.</div></div></div>
+          <div id="armazemGradeAudit"><div class="text-secondary small py-3">Nenhuma auditoria de grade disponível.</div></div>
         </section>
       </div>
 
@@ -3277,6 +3353,9 @@
           catalog: "/api/admin/promax/catalog",
           jobs: "/api/admin/promax/jobs",
           jobsBatch: "/api/admin/promax/jobs/batch",
+          gradeJobs: "/api/admin/promax/grade/jobs",
+          grade020304Jobs: "/api/admin/promax/grade-020304/jobs",
+          gradeWorkers: "/api/admin/promax/grade/workers",
           worker: "/api/admin/promax/worker/status",
           workerAssignments: "/api/admin/promax/worker-assignments",
           workerCredentials: "/api/admin/promax/worker-credentials",
@@ -3412,6 +3491,10 @@
       promax: {
         catalog: null,
         jobs: [],
+        grade020304AuditJobs: [],
+        selectedGrade020304AuditJobId: "",
+        grade020304ProductNames: {},
+        grade020304ProductLookupAttempted: {},
         worker: null,
         workerAssignments: [],
         workerCredentials: [],
@@ -3701,6 +3784,7 @@
       entregaLigaDashboardBadge: document.getElementById("entregaLigaDashboardBadge"),
       entregaLigaDashboardCards: document.getElementById("entregaLigaDashboardCards"),
       entregaLigaDashboardDetails: document.getElementById("entregaLigaDashboardDetails"),
+      entregaLigaMes: document.getElementById("entregaLigaMes"),
       entregaIndicadoresModule: document.getElementById("entregaIndicadoresModule"),
       entregaIndicadoresModuleTab: document.getElementById("entregaIndicadoresModuleTab"),
       entregaIndicadoresRefreshBtn: document.getElementById("entregaIndicadoresRefreshBtn"),
@@ -3747,6 +3831,40 @@
       promaxPublish: document.getElementById("promaxPublish"),
       promaxRunTargetWorker: document.getElementById("promaxRunTargetWorker"),
       promaxRunBtn: document.getElementById("promaxRunBtn"),
+      promaxGradeFile: document.getElementById("promaxGradeFile"),
+      promaxGradeUnit: document.getElementById("promaxGradeUnit"),
+      promaxGradeTargetWorker: document.getElementById("promaxGradeTargetWorker"),
+      promaxGradeQueueBtn: document.getElementById("promaxGradeQueueBtn"),
+      promaxGradeStatus: document.getElementById("promaxGradeStatus"),
+      promaxGradeTemplateBtn: document.getElementById("promaxGradeTemplateBtn"),
+      promaxGradeManualArmazem: document.getElementById("promaxGradeManualArmazem"),
+      promaxGradeManualDeposito: document.getElementById("promaxGradeManualDeposito"),
+      promaxGradeManualDate: document.getElementById("promaxGradeManualDate"),
+      promaxGradeManualRows: document.getElementById("promaxGradeManualRows"),
+      promaxGradeAddRowBtn: document.getElementById("promaxGradeAddRowBtn"),
+      promaxGradeManualQueueBtn: document.getElementById("promaxGradeManualQueueBtn"),
+      promaxGradeManualStatus: document.getElementById("promaxGradeManualStatus"),
+      promaxGrade020304File: document.getElementById("promaxGrade020304File"),
+      promaxGrade020304Unit: document.getElementById("promaxGrade020304Unit"),
+      promaxGrade020304Worker: document.getElementById("promaxGrade020304Worker"),
+      promaxGrade020304QueueBtn: document.getElementById("promaxGrade020304QueueBtn"),
+      promaxGrade020304Status: document.getElementById("promaxGrade020304Status"),
+      promaxGrade020304TemplateBtn: document.getElementById("promaxGrade020304TemplateBtn"),
+      promaxGrade020304ManualGrade: document.getElementById("promaxGrade020304ManualGrade"),
+      promaxGrade020304ManualRows: document.getElementById("promaxGrade020304ManualRows"),
+      promaxGrade020304AddRowBtn: document.getElementById("promaxGrade020304AddRowBtn"),
+      promaxGrade020304ManualQueueBtn: document.getElementById("promaxGrade020304ManualQueueBtn"),
+      promaxGrade020304ManualStatus: document.getElementById("promaxGrade020304ManualStatus"),
+      armazemGradeTab: document.getElementById("armazemGradeTab"),
+      armazem020304Tab: document.getElementById("armazem020304Tab"),
+      armazemGradePane: document.getElementById("armazemGradePane"),
+      armazem020304Pane: document.getElementById("armazem020304Pane"),
+      armazemGradeAudit: document.getElementById("armazemGradeAudit"),
+      armazemGradeAuditCount: document.getElementById("armazemGradeAuditCount"),
+      armazemGradeAuditDate: document.getElementById("armazemGradeAuditDate"),
+      armazemGradeAuditTodayBtn: document.getElementById("armazemGradeAuditTodayBtn"),
+      armazemGradeAuditSearch: document.getElementById("armazemGradeAuditSearch"),
+      armazemGradeAuditErrorsOnly: document.getElementById("armazemGradeAuditErrorsOnly"),
       promaxJobStatusFilter: document.getElementById("promaxJobStatusFilter"),
       promaxJobFromDate: document.getElementById("promaxJobFromDate"),
       promaxJobToDate: document.getElementById("promaxJobToDate"),
@@ -4180,6 +4298,7 @@
       "/admin/payip": "payipTab",
       "/admin/reports": "reportsTab",
       "/admin/promax": "promaxTab",
+      "/admin/armazem": "armazemTab",
       "/admin/entrega": "entregaTab",
       "/admin/tables": "reportsTab",
       "/admin/power-bi": "reportsTab",
@@ -4196,6 +4315,7 @@
       payipTab: "/admin/payip",
       reportsTab: "/admin/reports",
       promaxTab: "/admin/promax",
+      armazemTab: "/admin/armazem",
       entregaTab: "/admin/entrega",
       criticaTab: "/admin/critica",
       recolhasTab: "/admin/recolhas",
@@ -5182,7 +5302,7 @@
         };
         const prizes = role === "motoristas" ? [700, 600, 500, 450, 400, 350, 300, 300, 250, 250, 250, "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE"] : [500, 400, 350, 300, 250, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 150, 150, "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE"];
         const prize = pos => { const value = pos ? prizes[Number(pos) - 1] : null; return value === "BRINDE" ? '<span class="liga-prize gift"><i class="bi bi-gift-fill me-1"></i>Brinde</span>' : value ? `<span class="liga-prize">R$ ${fmt(value)}</span>` : '<span class="text-secondary">—</span>'; };
-        return `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0 liga-ranking-table"><thead><tr><th># <i class="bi bi-caret-up-fill text-warning"></i></th><th>Colaborador</th><th>Filial</th><th class="text-end">Rotas</th><th class="text-end">Devolução<span class="sub">≤${(dashboard.metas || {}).devol || 1.4}%</span></th><th class="text-end">Saída ≤${(dashboard.metas || {}).saida || "07:30"}<span class="sub">≥${(dashboard.metas || {}).saida_pct || 90}%</span></th><th class="text-end">Desvio KM<span class="sub">≤${(dashboard.metas || {}).km || 10}%</span></th><th class="text-end">Checklist<span class="sub">desde 13/07</span></th><th class="text-end">Total</th><th class="text-end">Prêmio</th></tr></thead><tbody>${filter(rows.filter(row => String(row.status || "ativo") === "ativo")).map(row => { const pos = Number(row.pos || 0); const medal = pos ? `${pos}º` : "—"; const score = Math.max(0, Math.min(100, Number(row.total || 0))); return `<tr class="${pos ? `top-${pos}` : ""}"><td><span class="liga-rank ${pos && pos <= 3 ? "top" : ""}">${medal}</span></td><td><button type="button" class="btn btn-link p-0 liga-person-name liga-person-detail" data-liga-person="${escapeHtml(row.cod || "")}">${escapeHtml(row.nome || row.cod || "-")}</button></td><td>${escapeHtml(row.filial || "-")}</td><td class="text-end"><b>${fmt(row.rotas)}</b></td><td class="text-end">${metric(row.pdev, Number((dashboard.metas || {}).devol || 1.4), false, `${fmt(row.devol)}/${fmt(row.entregas)}`)}</td><td class="text-end">${metric(row.psaida, Number((dashboard.metas || {}).saida_pct || 90), true)}</td><td class="text-end">${metric(row.km_desv, Number((dashboard.metas || {}).km || 10), false)}</td><td class="text-end">${metric(row.check_pct, 100, true, row.check_e ? `${fmt(row.check_f)}/${fmt(row.check_e)}` : "")}</td><td class="text-end"><span class="liga-score-wrap"><span class="liga-score-bar ${pos === 1 ? "gold" : ""}"><i style="width:${score}%"></i></span><span class="liga-score">${fmt(row.total)}</span></span></td><td class="text-end">${prize(row.pos)}</td></tr>`; }).join("") || '<tr><td colspan="10" class="text-center text-secondary py-4">Nenhum colaborador para este filtro.</td></tr>'}</tbody></table></div>`;
+        return `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0 liga-ranking-table"><thead><tr><th># <i class="bi bi-caret-up-fill text-warning"></i></th><th>Colaborador</th><th>Filial</th><th class="text-end">Rotas</th><th class="text-end">Devolução<span class="sub">≤${(dashboard.metas || {}).devol || 1.4}%</span></th><th class="text-end">Saída ≤${(dashboard.metas || {}).saida || "07:30"}<span class="sub">≥${(dashboard.metas || {}).saida_pct || 90}%</span></th><th class="text-end">Desvio KM<span class="sub">≤${(dashboard.metas || {}).km || 10}%</span></th><th class="text-end">Total</th><th class="text-end">Prêmio</th></tr></thead><tbody>${filter(rows.filter(row => String(row.status || "ativo") === "ativo")).map(row => { const pos = Number(row.pos || 0); const medal = pos ? `${pos}º` : "—"; const score = Math.max(0, Math.min(100, Number(row.total || 0))); return `<tr class="${pos ? `top-${pos}` : ""}"><td><span class="liga-rank ${pos && pos <= 3 ? "top" : ""}">${medal}</span></td><td><button type="button" class="btn btn-link p-0 liga-person-name liga-person-detail" data-liga-person="${escapeHtml(row.cod || "")}">${escapeHtml(row.nome || row.cod || "-")}</button></td><td>${escapeHtml(row.filial || "-")}</td><td class="text-end"><b>${fmt(row.rotas)}</b></td><td class="text-end">${metric(row.pdev, Number((dashboard.metas || {}).devol || 1.4), false, `${fmt(row.devol)}/${fmt(row.entregas)}`)}</td><td class="text-end">${metric(row.psaida, Number((dashboard.metas || {}).saida_pct || 90), true)}</td><td class="text-end">${metric(row.km_desv, Number((dashboard.metas || {}).km || 10), false)}</td><td class="text-end"><span class="liga-score-wrap"><span class="liga-score-bar ${pos === 1 ? "gold" : ""}"><i style="width:${score}%"></i></span><span class="liga-score">${fmt(row.total)}</span></span></td><td class="text-end">${prize(row.pos)}</td></tr>`; }).join("") || '<tr><td colspan="9" class="text-center text-secondary py-4">Nenhum colaborador para este filtro.</td></tr>'}</tbody></table></div>`;
       };
       let content = "";
       if (view === "motoristas" || view === "ajudantes") content = personRows(Array.isArray(rankings[view]) ? rankings[view] : [], view);
@@ -5350,7 +5470,9 @@
       if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.disabled = true;
       try {
         const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
-        state.ligaIndicadores = await req(`${CONFIG.endpoints.ligaEntrega.indicadores}?period=${encodeURIComponent(period)}`, { timeoutMs: 30000 }) || {};
+        const competencia = ensureLigaMesFilter();
+        const monthQuery = competencia ? `&competencia=${encodeURIComponent(competencia)}` : "";
+        state.ligaIndicadores = await req(`${CONFIG.endpoints.ligaEntrega.indicadores}?period=${encodeURIComponent(period)}${monthQuery}`, { timeoutMs: 30000 }) || {};
         renderIndicadores(state.ligaIndicadores);
         if (!silent) addLog("Indicadores BI atualizados.", "ok");
       } catch (err) {
@@ -5374,7 +5496,9 @@
       if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.disabled = true;
       try {
         const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
-        state.ligaMapasMensais = await req(`${CONFIG.endpoints.ligaEntrega.mapasMensais}?period=${encodeURIComponent(period)}`, { timeoutMs: 30000 }) || {};
+        const competencia = ensureLigaMesFilter();
+        const monthQuery = competencia ? `&competencia=${encodeURIComponent(competencia)}` : "";
+        state.ligaMapasMensais = await req(`${CONFIG.endpoints.ligaEntrega.mapasMensais}?period=${encodeURIComponent(period)}${monthQuery}`, { timeoutMs: 30000 }) || {};
         renderMapasMensais(state.ligaMapasMensais);
         if (!silent) addLog("Cidades por mapa mensais atualizadas.", "ok");
       } catch (err) {
@@ -5533,6 +5657,31 @@
       }
     }
 
+    const LIGA_MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+    function ensureLigaMesFilter() {
+      const select = E.entregaLigaMes;
+      if (!select) return "";
+      const now = new Date();
+      const year = now.getFullYear();
+      const options = LIGA_MESES.map((label, index) => {
+        const month = String(index + 1).padStart(2, "0");
+        return `<option value="${year}-${month}">${label} ${year}</option>`;
+      }).join("");
+      if (select.dataset.ligaYear !== String(year)) {
+        const previous = select.value;
+        select.innerHTML = options;
+        select.dataset.ligaYear = String(year);
+        if (previous && select.querySelector(`option[value="${previous}"]`)) select.value = previous;
+      }
+      if (!select.value) {
+        const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
+        const target = new Date(year, now.getMonth() + (period === "fechado" ? -1 : 0), 1);
+        select.value = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`;
+      }
+      return String(select.value || "");
+    }
+
     async function syncLigaEntregaReportsInternal({ silent = true, force = false } = {}) {
       if (!hasPanelAuth()) return false;
       if (!force && state.ligaEntregaReports && Array.isArray(state.ligaEntregaReports.items) && state.ligaEntregaDashboard) {
@@ -5554,8 +5703,10 @@
 
       try {
         const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
+        const competencia = ensureLigaMesFilter();
         const bootstrap = force ? "&bootstrap=1" : "";
-        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}?period=${encodeURIComponent(period)}${bootstrap}`, { timeoutMs: force ? 180000 : 60000 }) || {};
+        const monthQuery = competencia ? `&competencia=${encodeURIComponent(competencia)}` : "";
+        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}?period=${encodeURIComponent(period)}${monthQuery}${bootstrap}`, { timeoutMs: force ? 180000 : 60000 }) || {};
       } catch (err) {
         state.ligaEntregaDashboard = {
           ok: false,
@@ -6460,6 +6611,13 @@
       select.value = currentWorkerId;
     }
 
+    function renderPromaxGradeResellerSelect(select) {
+      if (!select) return;
+      const selected = String(select.value || "");
+      select.innerHTML = `<option value="">Selecione a revenda</option>${PROMAX_RESELLERS.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} (${escapeHtml(item.id)})</option>`).join("")}`;
+      select.value = selected;
+    }
+
     function renderPromaxWorkerAssignments(workers) {
       if (!E.promaxWorkerAssignmentsBody) return;
       const categories = promaxAssignableCategories();
@@ -6669,6 +6827,10 @@
       renderPromaxWorkers(workers);
       renderPromaxWorkerAssignments(workers);
       renderPromaxTargetWorkerSelect(E.promaxRunTargetWorker, workers);
+      renderPromaxTargetWorkerSelect(E.promaxGradeTargetWorker, workers);
+      renderPromaxTargetWorkerSelect(E.promaxGrade020304Worker, workers);
+      renderPromaxGradeResellerSelect(E.promaxGradeUnit);
+      renderPromaxGradeResellerSelect(E.promaxGrade020304Unit);
       renderPromaxTargetWorkerSelect(E.promaxScheduleTargetWorker, workers);
       renderPromaxCredentials(workers);
       renderFinanceiroFechamentoWorker(workerPayload);
@@ -6683,6 +6845,7 @@
         E.promaxReprocessPublicationsBtn.disabled = !onlineWorkers.length || Boolean(queue.paused);
       }
       renderPromaxImpact(jobs);
+      renderArmazemGradeAudit();
 
       if (E.promaxJobsBody) {
         E.promaxJobsBody.innerHTML = jobs.length ? jobs.map(job => {
@@ -6755,6 +6918,133 @@
       }
     }
 
+    function armazemGradeAuditDate() {
+      return String(E.armazemGradeAuditDate && E.armazemGradeAuditDate.value || formatDateInputValue(new Date()));
+    }
+
+    function armazemGradeJobAudit(job) {
+      const result = job && job.result && typeof job.result === "object" ? job.result : {};
+      const metadata = result.metadata || (result.details && result.details.metadata) || {};
+      return Array.isArray(metadata.item_audit) ? metadata.item_audit : [];
+    }
+
+    function armazemGradeAuditProductCode(value) {
+      const text = String(value ?? "").trim();
+      return /^\d+$/.test(text) ? (text.replace(/^0+/, "") || "0") : text;
+    }
+
+    function armazemGradeAuditProductName(value) {
+      return String(state.promax.grade020304ProductNames[armazemGradeAuditProductCode(value)] || "");
+    }
+
+    async function loadArmazemGradeAuditProductNames(items) {
+      const names = state.promax.grade020304ProductNames;
+      const attempted = state.promax.grade020304ProductLookupAttempted;
+      const codes = [...new Set((Array.isArray(items) ? items : [])
+        .map(item => armazemGradeAuditProductCode(item && item.produto))
+        .filter(code => code && !Object.prototype.hasOwnProperty.call(names, code) && !attempted[code]))];
+      if (!codes.length) return;
+      codes.forEach(code => { attempted[code] = true; });
+      try {
+        const params = new URLSearchParams({ codes: codes.join(","), limit: String(Math.min(codes.length, 200)) });
+        const payload = await req(`${CONFIG.endpoints.conferencia.produtos}?${params.toString()}`, { timeoutMs: 20000 });
+        (Array.isArray(payload && payload.products) ? payload.products : []).forEach(product => {
+          const code = armazemGradeAuditProductCode(product && product.codigo);
+          const name = String(product && (product.descricao || product.descricao_completa) || "").trim();
+          if (code && name) names[code] = name;
+        });
+      } catch (_error) {
+        // A auditoria continua útil pelo código mesmo se a base 01.11 estiver indisponível.
+      }
+      renderArmazemGradeAudit();
+    }
+
+    function selectArmazemGradeAuditJob(jobId) {
+      state.promax.selectedGrade020304AuditJobId = String(jobId || "");
+      renderArmazemGradeAudit();
+    }
+
+    function renderArmazemGradeAudit() {
+      if (!E.armazemGradeAudit) return;
+      const gradeJobs = (Array.isArray(state.promax.grade020304AuditJobs) ? state.promax.grade020304AuditJobs : [])
+        .filter(job => String(job && job.job_type || "") === "lancamento_grade_020304")
+        .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
+      if (!gradeJobs.length) {
+        if (E.armazemGradeAuditCount) E.armazemGradeAuditCount.textContent = "Nenhum job no dia";
+        E.armazemGradeAudit.innerHTML = '<div class="text-secondary small py-3">Nenhum lançamento 02.03.04 foi encontrado neste dia.</div>';
+        return;
+      }
+      const selectedId = gradeJobs.some(job => String(job.id) === state.promax.selectedGrade020304AuditJobId)
+        ? state.promax.selectedGrade020304AuditJobId
+        : String(gradeJobs[0].id || "");
+      state.promax.selectedGrade020304AuditJobId = selectedId;
+      const selectedJob = gradeJobs.find(job => String(job.id) === selectedId) || gradeJobs[0];
+      const audit = armazemGradeJobAudit(selectedJob);
+      const query = normalizeTextForSearch(E.armazemGradeAuditSearch && E.armazemGradeAuditSearch.value || "");
+      const onlyErrors = Boolean(E.armazemGradeAuditErrorsOnly && E.armazemGradeAuditErrorsOnly.checked);
+      const visibleAudit = audit.filter(item => {
+        const code = String(item && item.produto || "");
+        const name = armazemGradeAuditProductName(code);
+        const searchText = normalizeTextForSearch(`${code} ${name}`);
+        const status = String(item && item.status || "NAO_EXECUTADO");
+        return (!query || searchText.includes(query)) && (!onlyErrors || status !== "LANCADO");
+      });
+      loadArmazemGradeAuditProductNames(audit);
+      const totals = audit.reduce((summary, item) => {
+        const status = String(item && item.status || "NAO_EXECUTADO");
+        summary[status] = (summary[status] || 0) + 1;
+        return summary;
+      }, {});
+      if (E.armazemGradeAuditCount) E.armazemGradeAuditCount.textContent = `${gradeJobs.length} job(ns) em ${formatDate(armazemGradeAuditDate())}`;
+      const jobCards = gradeJobs.map(job => {
+        const jobAudit = armazemGradeJobAudit(job);
+        const isSelected = String(job.id) === selectedId;
+        const jobStatus = String(job.status || "pending");
+        const jobTotals = jobAudit.reduce((summary, item) => { const status = String(item && item.status || "NAO_EXECUTADO"); summary[status] = (summary[status] || 0) + 1; return summary; }, {});
+        const jobSummary = jobAudit.length ? `${jobTotals.LANCADO || 0} lançado(s) · ${(jobTotals.FALHOU || 0) + (jobTotals.NAO_EXECUTADO || 0)} pendência(s)` : "sem retorno por item";
+        return `<button type="button" class="list-group-item list-group-item-action armazem-grade-job-card ${isSelected ? "active" : ""}" data-grade-audit-job="${escapeHtml(String(job.id || ""))}" aria-pressed="${isSelected ? "true" : "false"}"><div class="d-flex justify-content-between gap-2"><strong class="mono small">${escapeHtml(String(job.id || "").slice(0, 8))}</strong><span class="promax-status ${promaxStatusClass(jobStatus)}">${escapeHtml(promaxStatusLabel(jobStatus))}</span></div><div class="small text-secondary mt-1">${escapeHtml(formatDateTime(job.created_at))}</div><div class="small text-secondary">${escapeHtml(jobSummary)}</div></button>`;
+      }).join("");
+      const auditRows = audit.length
+        ? visibleAudit.length
+          ? `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Linha</th><th>Produto</th><th class="text-end">Quantidade</th><th>Status</th><th>Detalhe</th></tr></thead><tbody>${visibleAudit.map(item => { const status = String(item.status || "NAO_EXECUTADO"); const tone = status === "LANCADO" ? "ok" : status === "FALHOU" ? "danger" : "warn"; const code = String(item.produto || "-"); const name = armazemGradeAuditProductName(code); const isPending = status !== "LANCADO"; return `<tr class="${isPending ? "armazem-grade-error-row" : ""}"><td class="mono small">${escapeHtml(String(item.source_row ?? "-"))}</td><td><div class="mono">${escapeHtml(code)}</div><span class="armazem-grade-product-name">${escapeHtml(name || "Produto não localizado na base 01.11.")}</span></td><td class="text-end">${escapeHtml(String(item.quantidade ?? "-"))}</td><td><span class="pill ${tone}">${escapeHtml(status.replaceAll("_", " "))}</span></td><td class="small text-secondary">${escapeHtml(item.detail || "-")}</td></tr>`; }).join("")}</tbody></table></div>`
+          : '<div class="text-secondary small py-3">Nenhum item deste job atende aos filtros informados.</div>'
+        : '<div class="text-secondary small py-3">Este job ainda não retornou a auditoria por item. Atualize após a execução.</div>';
+      E.armazemGradeAudit.innerHTML = `<div class="armazem-grade-audit-kpis"><div class="armazem-grade-audit-kpi"><span class="label">Jobs no dia</span><strong>${gradeJobs.length}</strong></div><div class="armazem-grade-audit-kpi ok"><span class="label">Lançados</span><strong>${totals.LANCADO || 0}</strong></div><div class="armazem-grade-audit-kpi danger"><span class="label">Falhos</span><strong>${totals.FALHOU || 0}</strong></div><div class="armazem-grade-audit-kpi warn"><span class="label">Não executados</span><strong>${totals.NAO_EXECUTADO || 0}</strong></div></div><div class="row g-3"><div class="col-lg-4"><div class="d-flex justify-content-between align-items-center mb-2"><span class="small fw-bold">JOBS DO DIA</span><span class="small text-secondary">${gradeJobs.length}</span></div><div class="list-group armazem-grade-job-list">${jobCards}</div></div><div class="col-lg-8"><div class="armazem-grade-detail"><div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3"><div><div class="small text-secondary text-uppercase fw-bold">Job selecionado</div><strong class="mono">${escapeHtml(String(selectedJob.id || "").slice(0, 8))}</strong><span class="small text-secondary ms-2">${escapeHtml(formatDateTime(selectedJob.created_at))}</span><div class="small text-secondary mt-1">${visibleAudit.length}/${audit.length} item(ns) exibidos</div></div><div class="d-flex flex-wrap gap-1"><span class="pill ok">${totals.LANCADO || 0} lançado(s)</span><span class="pill danger">${totals.FALHOU || 0} falhou</span><span class="pill warn">${totals.NAO_EXECUTADO || 0} não executado(s)</span></div></div>${auditRows}</div></div></div>`;
+      E.armazemGradeAudit.querySelectorAll("[data-grade-audit-job]").forEach(button => button.addEventListener("click", () => selectArmazemGradeAuditJob(button.dataset.gradeAuditJob)));
+    }
+
+    async function syncArmazemGradeAudit({ silent = true } = {}) {
+      if (!(state.panel && state.panel.canArmazem)) return false;
+      const selectedDate = armazemGradeAuditDate();
+      const params = new URLSearchParams({ category: "lancamento_grade_020304", limit: "200", created_from: selectedDate, created_to: selectedDate });
+      try {
+        const payload = await req(`${CONFIG.endpoints.promax.jobs}?${params.toString()}`, { timeoutMs: 30000 });
+        state.promax.grade020304AuditJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
+        renderArmazemGradeAudit();
+        return true;
+      } catch (error) {
+        if (!silent) addLog(`Não consegui carregar a auditoria da grade: ${error.message}`, "err");
+        return false;
+      }
+    }
+
+    async function syncArmazemGrade({ silent = true } = {}) {
+      if (!(state.panel && state.panel.canArmazem)) return false;
+      try {
+        const payload = await req(CONFIG.endpoints.promax.gradeWorkers, { timeoutMs: 20000 });
+        state.promax.worker = { workers: Array.isArray(payload.workers) ? payload.workers : [] };
+        const workers = promaxWorkersFromPayload(state.promax.worker);
+        renderPromaxTargetWorkerSelect(E.promaxGradeTargetWorker, workers);
+        renderPromaxTargetWorkerSelect(E.promaxGrade020304Worker, workers);
+        renderPromaxGradeResellerSelect(E.promaxGradeUnit);
+        renderPromaxGradeResellerSelect(E.promaxGrade020304Unit);
+      } catch (error) {
+        if (!silent) addLog(`Não consegui carregar os bots para grade: ${error.message}`, "err");
+        return false;
+      }
+      return syncArmazemGradeAudit({ silent });
+    }
+
     async function syncPromax({ silent = true } = {}) {
       if (!state.panel || !state.panel.canManagePromax) return false;
       const params = new URLSearchParams({ limit: "100" });
@@ -6788,8 +7078,151 @@
       renderPromax();
       const failed = results.filter(result => result.status === "rejected");
       if (failed.length && !silent) addLog(`Promax: ${failed.length} consulta(s) falharam.`, "err");
-      if (!failed.length && !silent) addLog("Promax Admin atualizado.", "ok");
-      return failed.length === 0;
+      const auditLoaded = await syncArmazemGradeAudit({ silent });
+      if (!failed.length && auditLoaded && !silent) addLog("Promax Admin atualizado.", "ok");
+      return failed.length === 0 && auditLoaded;
+    }
+
+    function gradeCsvCell(value) {
+      return `"${String(value ?? "").replaceAll('"', '""')}"`;
+    }
+
+    function gradeCsvBase64(text) {
+      const bytes = new TextEncoder().encode(text);
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 8192) binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+      return btoa(binary);
+    }
+
+    function downloadGradeTemplate(filename, content) {
+      const blobUrl = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(blobUrl);
+    }
+
+    function addPromaxGrade020304ManualRow(values = {}) {
+      if (!E.promaxGrade020304ManualRows) return;
+      E.promaxGrade020304ManualRows.insertAdjacentHTML("beforeend", `<tr data-grade-020304-manual-row><td><input class="form-control form-control-sm mono" data-field="produto" inputmode="numeric" value="${escapeHtml(values.produto || "")}" placeholder="Código"></td><td><input class="form-control form-control-sm" data-field="quantidade" inputmode="numeric" value="${escapeHtml(values.quantidade ?? "")}" placeholder="0"></td><td class="text-end"><button class="btn btn-outline-danger btn-sm" type="button" data-remove-grade-020304-row aria-label="Remover item"><i class="bi bi-trash3"></i></button></td></tr>`);
+    }
+
+    function addPromaxGradeManualRow(values = {}) {
+      if (!E.promaxGradeManualRows) return;
+      E.promaxGradeManualRows.insertAdjacentHTML("beforeend", `<tr data-grade-manual-row><td><input class="form-control form-control-sm mono" data-field="item" inputmode="numeric" value="${escapeHtml(values.item || "")}" placeholder="Código"></td><td><input class="form-control form-control-sm" data-field="pallet" inputmode="numeric" value="${escapeHtml(values.pallet ?? "0")}"></td><td><input class="form-control form-control-sm" data-field="lastro" inputmode="numeric" value="${escapeHtml(values.lastro ?? "0")}"></td><td><input class="form-control form-control-sm" data-field="sku" inputmode="numeric" value="${escapeHtml(values.sku ?? "0")}"></td><td><input class="form-control form-control-sm" data-field="unidade" inputmode="numeric" value="${escapeHtml(values.unidade ?? "0")}"></td><td><input class="form-control form-control-sm" data-field="garrafa" inputmode="numeric" value="${escapeHtml(values.garrafa || "")}"></td><td class="text-end"><button class="btn btn-outline-danger btn-sm" type="button" data-remove-grade-row aria-label="Remover item"><i class="bi bi-trash3"></i></button></td></tr>`);
+    }
+
+    function manualGradeField(row, name) {
+      const field = row.querySelector(`[data-field="${name}"]`);
+      return String(field && field.value || "").trim();
+    }
+
+    async function queuePromaxGrade020304Manual() {
+      const grade = String(E.promaxGrade020304ManualGrade && E.promaxGrade020304ManualGrade.value || "").trim();
+      const unidade = String(E.promaxGrade020304Unit && E.promaxGrade020304Unit.value || "").trim();
+      const rows = [...(E.promaxGrade020304ManualRows ? E.promaxGrade020304ManualRows.querySelectorAll("[data-grade-020304-manual-row]") : [])];
+      if (!grade || !/^\d+$/.test(grade)) { E.promaxGrade020304ManualStatus.textContent = "Informe uma grade numérica."; return; }
+      if (!unidade) { E.promaxGrade020304ManualStatus.textContent = "Selecione a revenda que executará o lançamento."; return; }
+      const items = rows.map((row, index) => ({ produto: manualGradeField(row, "produto"), quantidade: manualGradeField(row, "quantidade"), line: index + 1 })).filter(item => item.produto || item.quantidade);
+      if (!items.length) { E.promaxGrade020304ManualStatus.textContent = "Informe ao menos um produto."; return; }
+      const invalid = items.find(item => !/^\d+$/.test(item.produto) || !/^\d+$/.test(item.quantidade));
+      if (invalid) { E.promaxGrade020304ManualStatus.textContent = `Linha ${invalid.line}: produto e quantidade devem ser números inteiros não negativos.`; return; }
+      const csv = ["grade;produto;quantidade", ...items.map(item => [grade, item.produto, item.quantidade].map(gradeCsvCell).join(";"))].join("\n");
+      E.promaxGrade020304ManualQueueBtn.disabled = true;
+      E.promaxGrade020304ManualStatus.textContent = "Validando e adicionando o lançamento manual à fila...";
+      try {
+        const response = await req(CONFIG.endpoints.promax.grade020304Jobs, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "lancamento_manual_020304.csv", file_base64: gradeCsvBase64(csv), unidade, target_worker_id: String(E.promaxGrade020304Worker.value || "").trim() || null }) });
+        E.promaxGrade020304ManualStatus.textContent = `${response.items || 0} item(ns) manual(is) em ${response.launches || 0} grade(s) adicionados à fila.`;
+        E.promaxGrade020304ManualRows.innerHTML = "";
+        addPromaxGrade020304ManualRow();
+        syncArmazemGrade({ silent: true });
+      } catch (error) { E.promaxGrade020304ManualStatus.textContent = error && error.message ? error.message : "Falha ao lançar os itens manualmente."; }
+      finally { E.promaxGrade020304ManualQueueBtn.disabled = false; }
+    }
+
+    async function queuePromaxGradeManual() {
+      const armazem = String(E.promaxGradeManualArmazem && E.promaxGradeManualArmazem.value || "").trim();
+      const deposito = String(E.promaxGradeManualDeposito && E.promaxGradeManualDeposito.value || "").trim();
+      const dateValue = String(E.promaxGradeManualDate && E.promaxGradeManualDate.value || "").trim();
+      const unidade = String(E.promaxGradeUnit && E.promaxGradeUnit.value || "").trim();
+      const rows = [...(E.promaxGradeManualRows ? E.promaxGradeManualRows.querySelectorAll("[data-grade-manual-row]") : [])];
+      if (!/^\d+$/.test(armazem) || !/^\d+$/.test(deposito) || !dateValue) { E.promaxGradeManualStatus.textContent = "Informe armazém, depósito e data do movimento."; return; }
+      if (!unidade) { E.promaxGradeManualStatus.textContent = "Selecione a revenda que executará o lançamento."; return; }
+      const items = rows.map((row, index) => ({ item: manualGradeField(row, "item"), pallet: manualGradeField(row, "pallet") || "0", lastro: manualGradeField(row, "lastro") || "0", sku: manualGradeField(row, "sku") || "0", unidade: manualGradeField(row, "unidade") || "0", garrafa: manualGradeField(row, "garrafa"), line: index + 1 })).filter(item => item.item || Number(item.pallet) || Number(item.lastro) || Number(item.sku) || Number(item.unidade) || item.garrafa);
+      if (!items.length) { E.promaxGradeManualStatus.textContent = "Informe ao menos um item."; return; }
+      const invalid = items.find(item => !/^\d+$/.test(item.item) || ![item.pallet, item.lastro, item.sku, item.unidade].every(value => /^\d+$/.test(value)) || (item.garrafa && !/^\d+$/.test(item.garrafa)) || ![item.pallet, item.lastro, item.sku, item.unidade].some(value => Number(value) > 0));
+      if (invalid) { E.promaxGradeManualStatus.textContent = `Linha ${invalid.line}: informe código numérico e ao menos uma quantidade maior que zero.`; return; }
+      const movementDate = dateValue.split("-").reverse().join("/");
+      const csv = ["armazem;deposito;data_movimento;item;pallet;lastro;sku;unidade;garrafa", ...items.map(item => [armazem, deposito, movementDate, item.item, item.pallet, item.lastro, item.sku, item.unidade, item.garrafa].map(gradeCsvCell).join(";"))].join("\n");
+      E.promaxGradeManualQueueBtn.disabled = true;
+      E.promaxGradeManualStatus.textContent = "Validando e adicionando o lançamento manual à fila...";
+      try {
+        const response = await req(CONFIG.endpoints.promax.gradeJobs, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "lancamento_manual_020105.csv", file_base64: gradeCsvBase64(csv), unidade, target_worker_id: String(E.promaxGradeTargetWorker.value || "").trim() || null }) });
+        E.promaxGradeManualStatus.textContent = `${response.items || 0} item(ns) manual(is) em ${response.launches || 0} lançamento(s) adicionados à fila.`;
+        E.promaxGradeManualRows.innerHTML = "";
+        addPromaxGradeManualRow();
+        syncArmazemGrade({ silent: true });
+      } catch (error) { E.promaxGradeManualStatus.textContent = error && error.message ? error.message : "Falha ao lançar os itens manualmente."; }
+      finally { E.promaxGradeManualQueueBtn.disabled = false; }
+    }
+
+    async function promaxQueueGradeCsv() {
+      const file = E.promaxGradeFile && E.promaxGradeFile.files && E.promaxGradeFile.files[0];
+      if (!file) {
+        E.promaxGradeStatus.textContent = "Selecione o CSV da grade.";
+        return;
+      }
+      if (!String(E.promaxGradeUnit.value || "").trim()) {
+        E.promaxGradeStatus.textContent = "Selecione a revenda que executará o lançamento.";
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        E.promaxGradeStatus.textContent = "O CSV da grade não pode passar de 2 MB.";
+        return;
+      }
+      E.promaxGradeQueueBtn.disabled = true;
+      E.promaxGradeStatus.textContent = "Validando o CSV e criando os lançamentos...";
+      try {
+        const encoded = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || "").split(",", 2)[1] || "");
+          reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
+          reader.readAsDataURL(file);
+        });
+        const response = await req(CONFIG.endpoints.promax.gradeJobs, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            file_base64: encoded,
+            unidade: String(E.promaxGradeUnit.value || "").trim() || null,
+            target_worker_id: String(E.promaxGradeTargetWorker.value || "").trim() || null
+          })
+        });
+        E.promaxGradeStatus.textContent = `${response.items || 0} item(ns) em ${response.launches || 0} lançamento(s) adicionados à fila.`;
+        syncArmazemGrade({ silent: true });
+      } catch (error) {
+        E.promaxGradeStatus.textContent = error && error.message ? error.message : "Falha ao validar o CSV.";
+      } finally {
+        E.promaxGradeQueueBtn.disabled = false;
+      }
+    }
+
+    async function promaxQueueGrade020304Csv() {
+      const file = E.promaxGrade020304File && E.promaxGrade020304File.files[0];
+      if (!file) { E.promaxGrade020304Status.textContent = "Selecione o CSV da entrada para 02.03.04."; return; }
+      if (!String(E.promaxGrade020304Unit.value || "").trim()) { E.promaxGrade020304Status.textContent = "Selecione a revenda que executará o lançamento."; return; }
+      E.promaxGrade020304QueueBtn.disabled = true;
+      try {
+        const encoded = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result || "").split(",", 2)[1] || ""); r.onerror = () => reject(new Error("Não foi possível ler o arquivo.")); r.readAsDataURL(file); });
+        const response = await req(CONFIG.endpoints.promax.grade020304Jobs, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: file.name, file_base64: encoded, unidade: String(E.promaxGrade020304Unit.value || "").trim() || null, target_worker_id: String(E.promaxGrade020304Worker.value || "").trim() || null }) });
+        E.promaxGrade020304Status.textContent = `${response.items || 0} item(ns) em ${response.launches || 0} grade(s) adicionados à fila.`;
+        syncArmazemGrade({ silent: true });
+      } catch (error) { E.promaxGrade020304Status.textContent = error && error.message ? error.message : "Falha ao validar o CSV."; }
+      finally { E.promaxGrade020304QueueBtn.disabled = false; }
     }
 
     async function promaxRunNow() {
@@ -10193,6 +10626,10 @@
       if (E.promaxEndDate && !E.promaxEndDate.value) E.promaxEndDate.value = today;
       if (E.promaxScheduleStartDate && !E.promaxScheduleStartDate.value) E.promaxScheduleStartDate.value = today;
       if (E.promaxScheduleEndDate && !E.promaxScheduleEndDate.value) E.promaxScheduleEndDate.value = today;
+      if (E.armazemGradeAuditDate && !E.armazemGradeAuditDate.value) E.armazemGradeAuditDate.value = today;
+      if (E.promaxGradeManualDate && !E.promaxGradeManualDate.value) E.promaxGradeManualDate.value = today;
+      addPromaxGrade020304ManualRow();
+      addPromaxGradeManualRow();
       syncPromaxJobDateBounds();
       syncPromaxDateFields();
       syncPromaxScheduleFields();
@@ -10222,9 +10659,42 @@
         if (workerId) state.promax.credentialUserDrafts[workerId] = input.value;
       });
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
+      if (E.promaxGradeQueueBtn) E.promaxGradeQueueBtn.addEventListener("click", promaxQueueGradeCsv);
+      if (E.promaxGrade020304QueueBtn) E.promaxGrade020304QueueBtn.addEventListener("click", promaxQueueGrade020304Csv);
+      if (E.promaxGrade020304TemplateBtn) E.promaxGrade020304TemplateBtn.addEventListener("click", () => downloadGradeTemplate("modelo_grade_020304.csv", "grade;produto;quantidade\n1;9092;0\n1;10175;0\n1;8919;0\n"));
+      if (E.promaxGradeTemplateBtn) E.promaxGradeTemplateBtn.addEventListener("click", () => downloadGradeTemplate("modelo_grade_020105.csv", "armazem;deposito;data_movimento;item;pallet;lastro;sku;unidade;garrafa\n01;02;08/10/2026;22177;0;0;1;0;\n"));
+      if (E.promaxGrade020304AddRowBtn) E.promaxGrade020304AddRowBtn.addEventListener("click", () => addPromaxGrade020304ManualRow());
+      if (E.promaxGradeAddRowBtn) E.promaxGradeAddRowBtn.addEventListener("click", () => addPromaxGradeManualRow());
+      if (E.promaxGrade020304ManualRows) E.promaxGrade020304ManualRows.addEventListener("click", event => { const button = event.target.closest("[data-remove-grade-020304-row]"); if (button) { button.closest("tr").remove(); if (!E.promaxGrade020304ManualRows.children.length) addPromaxGrade020304ManualRow(); } });
+      if (E.promaxGradeManualRows) E.promaxGradeManualRows.addEventListener("click", event => { const button = event.target.closest("[data-remove-grade-row]"); if (button) { button.closest("tr").remove(); if (!E.promaxGradeManualRows.children.length) addPromaxGradeManualRow(); } });
+      if (E.promaxGrade020304ManualQueueBtn) E.promaxGrade020304ManualQueueBtn.addEventListener("click", queuePromaxGrade020304Manual);
+      if (E.promaxGradeManualQueueBtn) E.promaxGradeManualQueueBtn.addEventListener("click", queuePromaxGradeManual);
+      if (E.armazemGradeAuditDate) E.armazemGradeAuditDate.addEventListener("change", () => {
+        state.promax.selectedGrade020304AuditJobId = "";
+        syncArmazemGradeAudit({ silent: false });
+      });
+      if (E.armazemGradeAuditTodayBtn) E.armazemGradeAuditTodayBtn.addEventListener("click", () => {
+        E.armazemGradeAuditDate.value = formatDateInputValue(new Date());
+        state.promax.selectedGrade020304AuditJobId = "";
+        syncArmazemGradeAudit({ silent: false });
+      });
+      if (E.armazemGradeAuditSearch) E.armazemGradeAuditSearch.addEventListener("input", () => renderArmazemGradeAudit());
+      if (E.armazemGradeAuditErrorsOnly) E.armazemGradeAuditErrorsOnly.addEventListener("change", () => renderArmazemGradeAudit());
       if (E.entregaOpenLigaPromaxBtn) E.entregaOpenLigaPromaxBtn.addEventListener("click", openLigaEntregaPromax);
       if (E.entregaLigaReportsRefreshBtn) E.entregaLigaReportsRefreshBtn.addEventListener("click", () => syncLigaEntregaReports({ silent: false, force: true }));
-      if (E.entregaLigaPeriodo) E.entregaLigaPeriodo.addEventListener("change", () => syncLigaEntregaReports({ silent: false, force: true }));
+      if (E.entregaLigaPeriodo) E.entregaLigaPeriodo.addEventListener("change", () => {
+        syncLigaEntregaReports({ silent: false, force: true });
+        syncIndicadores({ silent: false });
+        syncMapasMensais({ silent: false });
+      });
+      if (E.entregaLigaMes) {
+        ensureLigaMesFilter();
+        E.entregaLigaMes.addEventListener("change", () => {
+          syncLigaEntregaReports({ silent: false, force: true });
+          syncIndicadores({ silent: false });
+          syncMapasMensais({ silent: false });
+        });
+      }
       if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.addEventListener("click", () => setEntregaModule("liga"));
       if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.addEventListener("click", () => setEntregaModule("indicadores"));
       if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.addEventListener("click", () => syncIndicadores({ silent: false }));
@@ -10566,6 +11036,9 @@
           syncPromax({ silent: true });
           if (state.promax.selectedJobId) promaxLoadLogs(state.promax.selectedJobId);
         }
+        if (isPaneActive("armazemPane") && state.panel && state.panel.canArmazem) {
+          syncArmazemGrade({ silent: true });
+        }
       }, 15000);
     }
 
@@ -10737,6 +11210,8 @@
         tasks.push(syncLigaEntregaReports({ silent, force }));
       } else if (activeTabId === "promaxTab") {
         if (state.panel && state.panel.canManagePromax) tasks.push(syncPromax({ silent }));
+      } else if (activeTabId === "armazemTab") {
+        if (state.panel && state.panel.canArmazem) tasks.push(syncArmazemGrade({ silent }));
       }
 
       if (!tasks.length) {
@@ -11117,6 +11592,7 @@
       setPanelTabVisible("payipTab", payipVisible);
       setPanelTabVisible("reportsTab", reportsVisible);
       setPanelTabVisible("promaxTab", Boolean(state.panel && state.panel.canManagePromax));
+      setPanelTabVisible("armazemTab", Boolean(state.panel && state.panel.canArmazem));
       setPanelTabVisible("entregaTab", Boolean(state.panel && state.panel.canManagePromax));
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));

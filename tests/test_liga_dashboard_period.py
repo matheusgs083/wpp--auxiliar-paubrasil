@@ -2,8 +2,10 @@ from bot_api.services.liga_entrega_dashboard_service import (
     LigaEntregaDashboardService,
     _default_dashboard_competencia,
     build_cobertura,
+    build_rankings,
     preserve_operational_route_date,
     route_km_values,
+    _record_competencia,
 )
 from datetime import date
 
@@ -20,6 +22,28 @@ def test_coverage_is_limited_to_dashboard_competence():
     ])
 
     assert [row["data"] for row in coverage] == ["2026-10-01", "2026-10-02"]
+
+
+def test_route_and_expurgo_dates_accept_only_selected_month():
+    assert _record_competencia("2026-10-02") == "2026-10"
+    assert _record_competencia("02/10/2026") == "2026-10"
+    assert _record_competencia("2026-09-30") != "2026-10"
+    assert _record_competencia("") == ""
+
+
+def test_liga_devolucao_uses_binary_score_and_replaces_checklist():
+    routes = [{"data": "2026-10-01", "mot": "7302", "aju": [], "km_real": 100, "km_prev": 100, "hr_sai": "07:00"}]
+    colab = {"7302": {"nome": "Motorista", "filial": "PATOS", "funcao": "MOTORISTA", "status": "ativo"}}
+    good = [{"cod": "7302", "cliente_cod": "1", "data": "2026-10-01", "aju": [], "excluida": False}]
+    bad = good + [{"cod": "7302", "cliente_cod": "2", "data": "2026-10-01", "aju": [], "excluida": False}]
+
+    good_row = build_rankings(routes, {}, good, {"7302": 100}, {}, [], colab, has_farol=False, first_week=False)[0][0]
+    bad_row = build_rankings(routes, {}, bad, {"7302": 100}, {}, [], colab, has_farol=False, first_week=False)[0][0]
+
+    assert good_row["pts"]["devol"] == 60
+    assert bad_row["pts"]["devol"] == 0
+    assert "check" not in good_row["pts"]
+    assert "check_pct" not in good_row
 
 
 class _Store:
