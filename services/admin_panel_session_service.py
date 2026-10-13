@@ -271,6 +271,7 @@ class AdminPanelSessionService:
             "import_status": {"reports", "critica"},
             "payip": {"payip"},
             "promax": {"promax"},
+            "entrega": {"entrega"},
             "critica": {"critica"},
             "critica_import": {"critica"},
             "recolhas": {"recolhas"},

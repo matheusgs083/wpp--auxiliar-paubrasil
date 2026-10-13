@@ -3439,6 +3439,7 @@
       { id: "reports", label: "Relatorios", icon: "bi-folder2-open", description: "Uploads e historico de relatorios." },
       { id: "payip", label: "PayIP", icon: "bi-credit-card-2-front", description: "Cobrancas, validacoes e clientes." },
       { id: "promax", label: "Promax", icon: "bi-cloud-arrow-down", description: "Execucoes, agendas e workers." },
+      { id: "entrega", label: "Entrega", icon: "bi-truck", description: "Liga Entrega, rotas e indicadores." },
       { id: "critica", label: "Critica", icon: "bi-clipboard-data", description: "Importacao, dashboard e PDFs." },
       { id: "recolhas", label: "Recolhas", icon: "bi-box-arrow-in-down", description: "Solicitacoes e acompanhamento." },
       { id: "financeiro", label: "Financeiro", icon: "bi-cash-coin", description: "Fechamento de caixa por dia e mapa." },
@@ -3532,7 +3533,8 @@
         canViewGiro: true,
         canViewCritica: true,
         canViewUsage: true,
-        canManagePromax: false
+        canManagePromax: false,
+        canEntrega: true
       },
       accessUsers: [], accessEditing: null, panelUsers: [], panelUserEditingId: "", panelUserFilter: "", panelUserTemporaryCredentials: null, lastSyncAt: null,
       evolutionUsage: null,
@@ -11687,6 +11689,9 @@
           : Boolean(payload && payload.is_admin),
         canManagePromax: payload && Object.prototype.hasOwnProperty.call(payload, "can_manage_promax")
           ? Boolean(payload.can_manage_promax)
+          : Boolean(payload && payload.is_admin),
+        canEntrega: payload && Object.prototype.hasOwnProperty.call(payload, "can_entrega")
+          ? Boolean(payload.can_entrega)
           : Boolean(payload && payload.is_admin)
       };
       applyPanelPermissions();
@@ -11705,6 +11710,7 @@
         "canPayip",
         "canReports",
         "canManagePromax",
+        "canEntrega",
         "canViewCritica",
         "canManageRecolhas",
         "canFinanceiro",
@@ -11763,7 +11769,7 @@
       setPanelTabVisible("reportsTab", reportsVisible);
       setPanelTabVisible("promaxTab", Boolean(state.panel && state.panel.canManagePromax));
       setPanelTabVisible("armazemTab", Boolean(state.panel && state.panel.canArmazem));
-      setPanelTabVisible("entregaTab", Boolean(state.panel && state.panel.canManagePromax));
+      setPanelTabVisible("entregaTab", Boolean(state.panel && state.panel.canEntrega));
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
       setPanelTabVisible("financeiroTab", Boolean(state.panel && state.panel.canFinanceiro) && !isCritica);

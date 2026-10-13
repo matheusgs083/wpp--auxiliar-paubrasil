@@ -87,7 +87,9 @@ def create_admin_liga_entrega_router(
             x_api_token=x_api_token,
             x_admin_token=x_admin_token,
         )
-        require_admin_panel_feature(context, "reports")
+        # Liga Entrega é um bloco próprio: não deve exigir acesso amplo aos
+        # uploads/histórico de Relatórios para o usuário operacional.
+        require_admin_panel_feature(context, "entrega")
         return context
 
     def actor_from_context(context: dict[str, Any] | None) -> str:

@@ -339,6 +339,7 @@ def create_admin_panel_router(
             "can_view_giro": is_admin or is_finance or panel_context_can_access_feature(context, "giro"),
             "can_view_critica": can_critica,
             "can_manage_promax": is_admin or panel_context_can_access_feature(context, "promax"),
+            "can_entrega": is_admin or panel_context_can_access_feature(context, "entrega"),
         }
 
     def require_panel_admin(
