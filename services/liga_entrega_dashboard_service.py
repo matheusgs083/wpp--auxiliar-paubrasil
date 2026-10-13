@@ -1377,24 +1377,20 @@ def build_rankings(rotas: list[dict[str, Any]], port: dict[str, dict[str, Any]],
     agg_a: dict[str, dict[str, float]] = defaultdict(blank)
     for r in rotas:
         mot = norm_code(r.get("mot"))
-        route_expurgada = bool(r.get("expurgo_saida") or r.get("expurgo_km"))
         if mot != "0":
             agg_m[mot]["rotas_total"] += 1
+            # O expurgo remove somente o indicador afetado; a rota continua
+            # compondo a amostra operacional e a elegibilidade do colaborador.
+            agg_m[mot]["rotas"] += 1
             agg_m[mot]["exp_km"] += int(bool(r.get("expurgo_km")))
             agg_m[mot]["exp_tml"] += int(bool(r.get("expurgo_saida")))
         for a0 in r.get("aju") or []:
             a = norm_code(a0)
             if a != "0":
                 agg_a[a]["rotas_total"] += 1
+                agg_a[a]["rotas"] += 1
                 agg_a[a]["exp_km"] += int(bool(r.get("expurgo_km")))
                 agg_a[a]["exp_tml"] += int(bool(r.get("expurgo_saida")))
-        # Qualquer expurgo retira a rota da Liga inteira. Ela continua visível
-        # na aba de rotas para auditoria, mas não entra em denominadores,
-        # pontuação ou elegibilidade.
-        if route_expurgada:
-            continue
-        if mot != "0":
-            agg_m[mot]["rotas"] += 1
         km_ok = r.get("km_real") is not None and r.get("km_prev") is not None and not r.get("expurgo_km")
         if mot != "0" and km_ok:
             agg_m[mot]["kmR"] += float(r.get("km_real") or 0)

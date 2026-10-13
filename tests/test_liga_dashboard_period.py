@@ -46,6 +46,27 @@ def test_liga_devolucao_uses_binary_score_and_replaces_checklist():
     assert "check_pct" not in good_row
 
 
+def test_expurgo_removes_only_affected_indicator_and_keeps_route_in_ranking():
+    routes = [
+        {
+            "data": f"2026-10-0{i}", "mot": "7302", "aju": [],
+            "km_real": 100, "km_prev": 100, "hr_sai": "07:00",
+            "expurgo_saida": True, "expurgo_km": False,
+        }
+        for i in range(1, 4)
+    ]
+    colab = {"7302": {"nome": "Motorista", "filial": "PATOS", "funcao": "MOTORISTA", "status": "ativo"}}
+    devols = [{"cod": "7302", "cliente_cod": "1", "data": "2026-10-01", "aju": [], "excluida": False}]
+
+    row = build_rankings(routes, {}, devols, {"7302": 100}, {}, [], colab, has_farol=False, first_week=False)[0][0]
+
+    assert row["rotas"] == 3
+    assert row["rotas_validas"] == 3
+    assert row["psaida"] is None
+    assert row["elegivel"] is True
+    assert row["pos"] == 1
+
+
 class _Store:
     def list_manifests(self, routine, *, competencia=None):
         return [
