@@ -1691,7 +1691,7 @@
               <h2 class="h6 fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Dashboard da Liga</h2>
               <div class="form-text" id="entregaLigaDashboardStatus">Aguardando relatórios carregados para montar o dashboard.</div>
             </div>
-            <div class="d-flex gap-2 align-items-center"><select class="form-select form-select-sm" id="entregaLigaPeriodo" aria-label="Período da Liga" style="width:auto"><option value="atual">Atual</option><option value="fechado">Fechamento</option></select><select class="form-select form-select-sm" id="entregaLigaMes" aria-label="Mês da Liga" style="width:auto"></select><span class="pill" id="entregaLigaDashboardBadge">Pendente</span></div>
+            <div class="d-flex gap-2 align-items-center"><select class="form-select form-select-sm d-none" id="entregaLigaPeriodo" aria-label="Período da Liga"><option value="atual" selected>Mensal</option></select><select class="form-select form-select-sm" id="entregaLigaMes" aria-label="Mês da Liga" style="width:auto"></select><span class="pill" id="entregaLigaDashboardBadge">Pendente</span></div>
           </div>
           <div class="recolha-dashboard-grid mb-3" id="entregaLigaDashboardCards"></div>
           <div class="source-box" id="entregaLigaDashboardDetails">
@@ -5217,7 +5217,6 @@
       const normalizedView = view === "ajudantes" ? "ajudantes" : "motoristas";
       const dashboard = state.ligaEntregaDashboard || {};
       const query = new URLSearchParams({ view: normalizedView });
-      query.set("period", String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual"));
       if (dashboard.competencia) query.set("competencia", dashboard.competencia);
       const headers = {};
       if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
@@ -5411,7 +5410,8 @@
         ["Valor devolvido", `R$ ${fmt(operacao.devolucoes_valor ?? totalValue)}`, "Total em dinheiro", false]
       ];
       if (E.entregaDevolucoesCards) E.entregaDevolucoesCards.innerHTML = cards.map(([label, value, sub, highlight]) => `<article class="devolucao-kpi-card ${highlight ? "is-highlight" : ""}"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(value)}</span><span class="sub">${escapeHtml(sub)}</span></article>`).join("");
-      if (E.entregaDevolucoesStatus) E.entregaDevolucoesStatus.textContent = rows.length ? `${rows.length} registros do 03.02.24 Motorista${branch ? ` · filial ${branch === "SUME" ? "Sumé" : "Patos"}` : ""}. Esta análise é operacional e independente do ranking da Liga.` : (branch ? `Nenhum registro de devoluções para ${branch === "SUME" ? "Sumé" : "Patos"}.` : "Nenhum relatório de devoluções carregado.");
+      const competencia = String(dashboard.competencia || ensureLigaMesFilter() || "");
+      if (E.entregaDevolucoesStatus) E.entregaDevolucoesStatus.textContent = rows.length ? `${rows.length} registros do 03.02.24 Motorista · competência ${competencia}${branch ? ` · filial ${branch === "SUME" ? "Sumé" : "Patos"}` : ""}. Esta análise usa exclusivamente o mês selecionado.` : (branch ? `Nenhum registro de devoluções para ${branch === "SUME" ? "Sumé" : "Patos"} na competência ${competencia}.` : `Nenhum relatório de devoluções carregado para a competência ${competencia}.`);
       if (!E.entregaDevolucoesDetails) return;
       const q = String(state.entregaDevolucoesFilter || "").trim().toLowerCase();
       const filtered = rows.filter(row => !q || JSON.stringify(row).toLowerCase().includes(q));
@@ -5469,10 +5469,9 @@
       if (!hasPanelAuth()) return;
       if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.disabled = true;
       try {
-        const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
         const competencia = ensureLigaMesFilter();
-        const monthQuery = competencia ? `&competencia=${encodeURIComponent(competencia)}` : "";
-        state.ligaIndicadores = await req(`${CONFIG.endpoints.ligaEntrega.indicadores}?period=${encodeURIComponent(period)}${monthQuery}`, { timeoutMs: 30000 }) || {};
+        const monthQuery = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
+        state.ligaIndicadores = await req(`${CONFIG.endpoints.ligaEntrega.indicadores}${monthQuery}`, { timeoutMs: 30000 }) || {};
         renderIndicadores(state.ligaIndicadores);
         if (!silent) addLog("Indicadores BI atualizados.", "ok");
       } catch (err) {
@@ -5495,10 +5494,9 @@
       if (!hasPanelAuth()) return;
       if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.disabled = true;
       try {
-        const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
         const competencia = ensureLigaMesFilter();
-        const monthQuery = competencia ? `&competencia=${encodeURIComponent(competencia)}` : "";
-        state.ligaMapasMensais = await req(`${CONFIG.endpoints.ligaEntrega.mapasMensais}?period=${encodeURIComponent(period)}${monthQuery}`, { timeoutMs: 30000 }) || {};
+        const monthQuery = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
+        state.ligaMapasMensais = await req(`${CONFIG.endpoints.ligaEntrega.mapasMensais}${monthQuery}`, { timeoutMs: 30000 }) || {};
         renderMapasMensais(state.ligaMapasMensais);
         if (!silent) addLog("Cidades por mapa mensais atualizadas.", "ok");
       } catch (err) {
@@ -5675,8 +5673,7 @@
         if (previous && select.querySelector(`option[value="${previous}"]`)) select.value = previous;
       }
       if (!select.value) {
-        const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
-        const target = new Date(year, now.getMonth() + (period === "fechado" ? -1 : 0), 1);
+        const target = new Date(year, now.getMonth(), 1);
         select.value = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`;
       }
       return String(select.value || "");
@@ -5702,11 +5699,12 @@
       }
 
       try {
-        const period = String((E.entregaLigaPeriodo && E.entregaLigaPeriodo.value) || "atual");
         const competencia = ensureLigaMesFilter();
-        const bootstrap = force ? "&bootstrap=1" : "";
-        const monthQuery = competencia ? `&competencia=${encodeURIComponent(competencia)}` : "";
-        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}?period=${encodeURIComponent(period)}${monthQuery}${bootstrap}`, { timeoutMs: force ? 180000 : 60000 }) || {};
+        // A leitura normal usa exclusivamente o snapshot SQL. O bootstrap
+        // de arquivos fica reservado ao script administrativo de reconstrução.
+        const bootstrap = "";
+        const monthQuery = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
+        state.ligaEntregaDashboard = await req(`${CONFIG.endpoints.ligaEntrega.dashboard}${monthQuery}${bootstrap}`, { timeoutMs: force ? 180000 : 60000 }) || {};
       } catch (err) {
         state.ligaEntregaDashboard = {
           ok: false,

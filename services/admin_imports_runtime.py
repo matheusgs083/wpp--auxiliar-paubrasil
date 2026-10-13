@@ -342,7 +342,7 @@ def _run_admin_import(dataset: str, reference_date: str | None = None) -> dict[s
     else:
         result = getattr(service, str(config["import_method"]))(source_path, reference_date=batch_date)
     post_actions: dict[str, Any] = {}
-    if normalized_dataset in {"liga_1706_indicadores", "liga_03114902_mensal"} and liga_entrega_raw_sql_import_service is not None:
+    if normalized_dataset.startswith("liga_") and liga_entrega_raw_sql_import_service is not None:
         report_store = getattr(service, "report_store", None)
         routine = str(getattr(service, "routine", "") or "")
         manifest = report_store.latest_manifest(routine) if report_store is not None and routine else None

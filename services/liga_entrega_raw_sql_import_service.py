@@ -93,6 +93,7 @@ class LigaEntregaRawSqlImportService:
                         routine VARCHAR(80) NOT NULL,
                         reference_date DATE,
                         period VARCHAR(12) NOT NULL DEFAULT 'atual',
+                        competencia VARCHAR(7),
                         filename TEXT NOT NULL,
                         row_number INTEGER NOT NULL,
                         payload JSONB NOT NULL,
@@ -110,8 +111,23 @@ class LigaEntregaRawSqlImportService:
             )
             cur.execute(
                 sql.SQL(
+                    "ALTER TABLE {}.liga_entrega_raw_rows "
+                    "ADD COLUMN IF NOT EXISTS competencia VARCHAR(7)"
+                ).format(sql.Identifier(self.schema))
+            )
+            cur.execute(
+                sql.SQL(
                     "CREATE INDEX IF NOT EXISTS liga_entrega_raw_rows_routine_idx "
-                    "ON {}.liga_entrega_raw_rows (routine, period, reference_date)"
+                    "ON {}.liga_entrega_raw_rows (routine, period, competencia, reference_date)"
+                ).format(sql.Identifier(self.schema))
+            )
+            # A primeira versão criou routine_idx com apenas routine/reference_date.
+            # O índice novo é versionado para que deployments existentes recebam
+            # a estrutura correta sem depender de DROP manual.
+            cur.execute(
+                sql.SQL(
+                    "CREATE INDEX IF NOT EXISTS liga_entrega_raw_rows_routine_period_comp_idx "
+                    "ON {}.liga_entrega_raw_rows (routine, period, competencia, imported_at DESC, source_key DESC, row_number)"
                 ).format(sql.Identifier(self.schema))
             )
         conn.commit()
@@ -154,12 +170,11 @@ class LigaEntregaRawSqlImportService:
                 clauses = ["routine = %s", "period = %s"]
                 params: list[Any] = [str(routine), self._normalize_period(period)]
                 if competencia:
-                    clauses.append("reference_date >= (%s || '-01')::date")
-                    clauses.append("reference_date < ((%s || '-01')::date + INTERVAL '1 month')")
-                    params.extend([str(competencia), str(competencia)])
+                    clauses.append("competencia = %s")
+                    params.append(str(competencia))
                 query = sql.SQL(
                     """
-                    SELECT source_key, filename, imported_at, payload
+                    SELECT source_key, filename, imported_at, competencia, payload
                     FROM {}.liga_entrega_raw_rows
                     WHERE {}
                     ORDER BY imported_at DESC, source_key DESC, row_number
@@ -172,7 +187,8 @@ class LigaEntregaRawSqlImportService:
                             "source_key": row[0],
                             "filename": row[1],
                             "imported_at": row[2],
-                            "payload": row[3] if isinstance(row[3], dict) else {},
+                            "competencia": row[3] or "",
+                            "payload": row[4] if isinstance(row[4], dict) else {},
                         }
                         for row in cur.fetchall()
                     ]
@@ -195,15 +211,20 @@ class LigaEntregaRawSqlImportService:
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 with conn.cursor() as cur:
+                    clauses = ["routine = %s", "period = %s"]
+                    params: list[Any] = [str(routine), self._normalize_period(period)]
+                    if competencia:
+                        clauses.append("competencia = %s")
+                        params.append(str(competencia))
                     query = sql.SQL(
                         """
-                        SELECT filename, row_number, payload, reference_date, imported_at
+                        SELECT filename, row_number, payload, reference_date, imported_at, competencia
                         FROM {}.liga_entrega_raw_rows
-                        WHERE routine = %s AND period = %s
+                        WHERE {}
                         ORDER BY imported_at DESC, filename, row_number
                         """
-                    ).format(sql.Identifier(self.schema))
-                    cur.execute(query, (routine, self._normalize_period(period)))
+                    ).format(sql.Identifier(self.schema), sql.SQL(" AND ").join(sql.SQL(item) for item in clauses))
+                    cur.execute(query, params)
                     rows = []
                     seen: set[tuple[str, int, str]] = set()
                     selected = str(competencia or "").strip()
@@ -214,7 +235,7 @@ class LigaEntregaRawSqlImportService:
                         reference_date = item[3].isoformat() if hasattr(item[3], "isoformat") else str(item[3] or "")
                         if reference_date:
                             payload["_reference_date"] = reference_date
-                        row_comp = _payload_competencia(payload) or reference_date[:7]
+                        row_comp = str(item[5] or "") or _payload_competencia(payload) or reference_date[:7]
                         if selected and row_comp != selected:
                             continue
                         # Arquivos com o mesmo nome são reenviados em vários
@@ -229,6 +250,42 @@ class LigaEntregaRawSqlImportService:
         except Exception:
             return []
         return rows
+
+    def backfill_competencias(self) -> int:
+        """Preenche a competência das linhas históricas já importadas.
+
+        A coluna foi adicionada depois da primeira carga. O backfill usa a data
+        operacional do payload e só cai na data de referência do manifesto
+        quando o relatório não possui data própria.
+        """
+        if not self.database_url:
+            return 0
+        updated = 0
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                with conn.cursor() as cur:
+                    cur.execute(sql.SQL(
+                        "SELECT source_key, row_number, payload, reference_date "
+                        "FROM {}.liga_entrega_raw_rows "
+                        "WHERE competencia IS NULL"
+                    ).format(sql.Identifier(self.schema)))
+                    pending = cur.fetchall()
+                    for source_key, row_number, payload, reference_date in pending:
+                        data = payload if isinstance(payload, dict) else {}
+                        ref = reference_date.isoformat() if hasattr(reference_date, "isoformat") else str(reference_date or "")
+                        competencia = _payload_competencia(data) or ref[:7]
+                        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", competencia):
+                            continue
+                        cur.execute(sql.SQL(
+                            "UPDATE {}.liga_entrega_raw_rows SET competencia = %s "
+                            "WHERE source_key = %s AND row_number = %s"
+                        ).format(sql.Identifier(self.schema)), (competencia, source_key, row_number))
+                        updated += cur.rowcount
+                conn.commit()
+        except Exception:
+            return updated
+        return updated
 
     def _import_file(self, conn: psycopg.Connection[Any], routine: str, manifest: dict[str, Any], item: dict[str, Any]) -> tuple[bool, int]:
         path = Path(str(item.get("path") or ""))
@@ -248,19 +305,23 @@ class LigaEntregaRawSqlImportService:
         if not rows:
             return True, 0
         reference_date = str(manifest.get("reference_date") or "") or None
+        metadata = manifest.get("metadata") if isinstance(manifest, dict) else {}
+        manifest_competencia = str((metadata or {}).get("competencia") or (metadata or {}).get("operational_competencia") or "").strip()
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", manifest_competencia):
+            manifest_competencia = ""
         filename = path.name
         with conn.cursor() as cur:
             cur.executemany(
                 sql.SQL(
                     """
                     INSERT INTO {}.liga_entrega_raw_rows
-                        (source_key, routine, reference_date, period, filename, row_number, payload)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                        (source_key, routine, reference_date, period, competencia, filename, row_number, payload)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                     ON CONFLICT (source_key, row_number) DO NOTHING
                     """
                 ).format(sql.Identifier(self.schema)),
                 [
-                    (source_key, routine, reference_date, period, filename, index, json.dumps(row, ensure_ascii=False, separators=(",", ":")))
+                    (source_key, routine, reference_date, period, _payload_competencia(row) or manifest_competencia or str(reference_date or "")[:7], filename, index, json.dumps(row, ensure_ascii=False, separators=(",", ":")))
                     for index, row in enumerate(rows, start=1)
                 ],
             )
@@ -268,16 +329,28 @@ class LigaEntregaRawSqlImportService:
 
     @staticmethod
     def _normalize_period(value: Any) -> str:
-        return "fechado" if str(value or "").strip().lower() == "fechado" else "atual"
+        # O modelo de negócio passou a ser mensal; registros antigos de
+        # fechamento são normalizados para a mesma série temporal.
+        return "atual"
 
     def _manifest_period(self, routine: str, manifest: dict[str, Any]) -> str:
         metadata = manifest.get("metadata") if isinstance(manifest, dict) else {}
-        value = metadata.get("period") if isinstance(metadata, dict) else None
-        if value:
-            return self._normalize_period(value)
-        # Rotinas mensais e de fechamento já têm semântica própria mesmo nos
-        # manifestos antigos que não gravavam metadata.period.
-        return "fechado" if str(routine) in {"03114902_MENSAL_LIGA", "1706_BI_INDICADORES_FECHAMENTO"} else "atual"
+        return "atual"
+
+    def normalize_periods(self) -> int:
+        """Converte linhas antigas de fechamento para a série mensal única."""
+        if not self.database_url:
+            return 0
+        try:
+            with self._connect() as conn:
+                self._ensure_schema(conn)
+                with conn.cursor() as cur:
+                    cur.execute(sql.SQL("UPDATE {}.liga_entrega_raw_rows SET period = 'atual' WHERE period <> 'atual'").format(sql.Identifier(self.schema)))
+                    changed = cur.rowcount
+                conn.commit()
+                return int(changed or 0)
+        except Exception:
+            return 0
 
     def _read_rows(self, path: Path) -> Iterable[dict[str, Any]]:
         suffix = path.suffix.lower()

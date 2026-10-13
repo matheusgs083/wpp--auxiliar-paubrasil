@@ -259,6 +259,7 @@ class PromaxClient:
         lease_token: str,
         files: Mapping[str, bytes],
         reference_date: str | None = None,
+        competencia: str | None = None,
         period: str = "atual",
     ) -> dict[str, Any]:
         if not files:
@@ -281,6 +282,8 @@ class PromaxClient:
         }
         if reference_date:
             payload["reference_date"] = str(reference_date)
+        if competencia:
+            payload["competencia"] = str(competencia)
         payload["period"] = str(period or "atual")
         return self._request(
             "POST",
@@ -489,6 +492,8 @@ class PromaxClient:
         }
         if reference_date:
             payload["reference_date"] = str(reference_date)
+        # O worker da Liga envia atual; preservamos o argumento para clientes
+        # legados que ainda chamam a assinatura antiga.
         payload["period"] = str(period or "atual").strip().lower()
         return self._request(
             "POST",

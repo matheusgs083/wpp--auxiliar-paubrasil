@@ -21,21 +21,19 @@ class MonthlyMapCitiesService:
         self.raw_sql_import_service = raw_sql_import_service
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
-        # Este card representa o lote mensal e deve permanecer independente do
-        # seletor Atual/Fechamento da Liga. A rotina atual (03114902_BOT) já é
-        # consumida pelo dashboard de rotas; misturá-la aqui fazia o card ficar
-        # vazio sempre que a tela estivesse no período atual.
+        # A Liga é filtrada somente pela competência mensal. ``period`` fica
+        # aceito para compatibilidade com o frontend antigo, mas não altera a
+        # fonte do card mensal.
         del period
-        normalized_period = "fechado"
         routine = MONTHLY_MAP_CITIES_ROUTINE
         if self.raw_sql_import_service is not None:
             return self._build_from_sql(routine=routine, competencia=competencia or "")
         manifests = []
         for manifest in self.report_store.list_manifests(routine, competencia=competencia):
             metadata = manifest.get("metadata") or {}
-            stored_period = str(metadata.get("period") or ("fechado" if routine == MONTHLY_MAP_CITIES_ROUTINE else "atual"))
-            if stored_period == normalized_period:
-                manifests.append(manifest)
+            # O card é mensal e não possui uma segunda série de fechamento.
+            # Manifestos antigos com metadata.period=fechado continuam válidos.
+            manifests.append(manifest)
         if not manifests:
             return self._empty(competencia or "")
         warnings: list[str] = []
@@ -79,18 +77,6 @@ class MonthlyMapCitiesService:
     def _build_from_sql(self, *, routine: str, competencia: str) -> dict[str, Any]:
         """Monta o card somente das linhas persistidas em reports.*."""
         records = self._rows_from_sql(routine=routine, competencia=competencia)
-        if not records:
-            # O upload do painel grava primeiro o manifesto e agenda a carga
-            # SQL em segundo plano. Se a página for aberta antes da fila
-            # terminar (ou se a fila tiver sido interrompida), aproveitamos o
-            # lote salvo para concluir a carga uma única vez e consultamos
-            # novamente o SQL. O card continua sem fallback de leitura direta
-            # dos CSVs.
-            latest_manifest = getattr(self.report_store, "latest_manifest", lambda _routine: None)(routine)
-            importer = getattr(self.raw_sql_import_service, "import_manifests", None)
-            if latest_manifest and callable(importer):
-                importer({routine: [latest_manifest]})
-                records = self._rows_from_sql(routine=routine, competencia=competencia)
         if not records:
             return self._empty(competencia) | {
                 "warnings": ["Nenhum registro SQL importado para o lote de mapas."]
@@ -157,7 +143,7 @@ class MonthlyMapCitiesService:
             return self.raw_sql_import_service.rows_for_routine(
                 routine=routine,
                 competencia=competencia or None,
-                period="fechado" if routine == MONTHLY_MAP_CITIES_ROUTINE else "atual",
+                period="atual",
             )
         except TypeError:
             # Compatibilidade com doubles/integrações antigas; o serviço real

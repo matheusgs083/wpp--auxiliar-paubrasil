@@ -1524,8 +1524,11 @@ class PromaxWorker:
         payload = job.get("payload") if isinstance(job.get("payload"), Mapping) else {}
         if not _routine_selected(payload, "1706_BI_INDICADORES") or payload.get("publish", True) is False:
             return
-        period = "fechado" if str(payload.get("category") or "").strip().lower() == "liga_entrega_fechamento" else "atual"
-        reference_date = _closed_reference_date() if period == "fechado" else _current_reference_date()
+        # A Liga usa somente a competência mensal; categorias antigas de
+        # fechamento continuam aceitas, mas não criam uma segunda série.
+        period = "atual"
+        reference_date = _current_reference_date()
+        competencia = reference_date[:7]
         source_dir = Path(self.config.liga_bi_indicators_dir).expanduser()
         if not self.config.liga_bi_indicators_dir.strip() or not source_dir.is_dir():
             self._send_log(job_id, lease_token, "Importação automática 17.06 ignorada: configure PROMAX_LIGA_BI_INDICATORS_DIR no worker.", "warning", {"event": "promax_liga_bi_indicators_missing_dir"})
@@ -1552,7 +1555,7 @@ class PromaxWorker:
             self._heartbeat_active_job(job_id, lease_token)
             response = self.client.import_liga_entrega_files(
                 job_id=job_id, lease_token=lease_token, routine="1706_BI_INDICADORES",
-                files={path.name: path.read_bytes() for path in files}, reference_date=reference_date, period=period,
+                files={path.name: path.read_bytes() for path in files}, reference_date=reference_date, competencia=competencia, period=period,
             )
             self._heartbeat_active_job(job_id, lease_token)
             self._send_log(job_id, lease_token, f"Indicadores BI 17.06 importados automaticamente: {len(files)} arquivo(s).", "info", {"event": "promax_liga_bi_indicators_done", "source_dir": str(source_dir), "result": response.get("result", {}) if isinstance(response, Mapping) else {}})
@@ -1573,8 +1576,9 @@ class PromaxWorker:
             payload = {}
         if payload.get("publish", True) is False:
             return
-        period = "fechado" if str(payload.get("category") or "").strip().lower() == "liga_entrega_fechamento" else "atual"
-        reference_date = _closed_reference_date() if period == "fechado" else _current_reference_date()
+        period = "atual"
+        reference_date = _current_reference_date()
+        competencia = reference_date[:7]
 
         specs = (
             ("030805_LIGA", "03.08.05"),
@@ -1665,6 +1669,7 @@ class PromaxWorker:
                     routine=routine_id,
                     files={path.name: path.read_bytes() for path in files},
                     reference_date=reference_date,
+                    competencia=competencia,
                     period=period,
                 )
                 self._heartbeat_active_job(job_id, lease_token)

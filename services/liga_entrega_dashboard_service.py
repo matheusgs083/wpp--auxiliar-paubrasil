@@ -138,6 +138,9 @@ class LigaEntregaDashboardService:
         self.allow_source_files = bool(allow_source_files)
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
+        # A interface usa competência mensal. Mantemos a leitura de ``period``
+        # apenas para compatibilidade com snapshots antigos; novas cargas e o
+        # frontend usam sempre a série mensal atual.
         period = "fechado" if str(period).lower() == "fechado" else "atual"
         # A requisicao do painel nunca deve voltar a ler os CSVs. Eles sao
         # apenas a origem da carga/importacao SQL executada fora deste fluxo.
@@ -145,7 +148,7 @@ class LigaEntregaDashboardService:
         # sobre o mesmo conjunto de fatos persistido no snapshot.
         requested_comp = _clean_comp(competencia) if competencia else None
         selected_comp = requested_comp or _default_dashboard_competencia(period)
-        if self.snapshot_store is None:
+        if self.snapshot_store is None and not self.allow_source_files:
             return _sql_snapshot_unavailable(selected_comp, period, "Armazenamento SQL da Liga indisponivel.")
         if not self.allow_source_files:
             try:
@@ -157,7 +160,9 @@ class LigaEntregaDashboardService:
                 latest = self.snapshot_store.get_latest(competencia=selected_comp, period=period)
                 if latest is not None:
                     payload = latest[1]
-                    if payload.get("ranking_version") == LIGA_RANKING_VERSION:
+                    active_expurgos = self._active_expurgos(selected_comp)
+                    saved_expurgos = ((payload.get("expurgos") or {}).get("items") or []) if isinstance(payload, dict) else []
+                    if payload.get("ranking_version") == LIGA_RANKING_VERSION and _same_expurgos(saved_expurgos, active_expurgos):
                         return payload
                     # Recalcula snapshots antigos com a regra atual sem voltar
                     # a ler CSVs: os fatos necessários já estão persistidos
@@ -777,8 +782,8 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
                 continue
             _, payload = latest
             facts = payload.get("_liga_facts") or {}
-            routes = [dict(item) for item in payload.get("rotas") or [] if isinstance(item, dict)]
-            devols = [dict(item) for item in payload.get("devolucoes_auxiliares") or [] if isinstance(item, dict)]
+            routes = [dict(item) for item in payload.get("rotas") or [] if isinstance(item, dict) and _record_competencia(item.get("data")) in {"", competencia}]
+            devols = [dict(item) for item in payload.get("devolucoes_auxiliares") or [] if isinstance(item, dict) and _record_competencia(item.get("data")) in {"", competencia}]
             expurgos = [dict(item) for item in expurgo_service.list_expurgos(competencia=competencia, active_only=True).get("items", [])]
             for route in routes:
                 route["expurgo_saida"] = bool(matching_route_expurgos(route, expurgos, {"tml"}))
@@ -831,6 +836,13 @@ def _sql_snapshot_unavailable(comp: str, period: str, warning: str) -> dict[str,
     result["warnings"] = [warning]
     result["summary"]["warnings"] = 1
     return result
+
+
+def _same_expurgos(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> bool:
+    """Compara a versão aplicada ao snapshot sem depender da ordem dos itens."""
+    def normalize(items: list[dict[str, Any]]) -> list[str]:
+        return sorted(json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")) for item in items if isinstance(item, dict))
+    return normalize(left) == normalize(right)
 
 
 def dashboard_signature(manifests: dict[str, list[dict[str, Any]]], expurgos: list[dict[str, Any]], statuses: dict[str, str] | None = None) -> str:

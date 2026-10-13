@@ -64,7 +64,8 @@ class MonthlyMapCitiesServiceTests(unittest.TestCase):
                 report_store=store,
                 raw_sql_import_service=SqlRows(),
             ).build_dashboard(competencia="2026-10", period="atual")
-        self.assertEqual(result["rows"][0]["mapa"], "778")
+        self.assertEqual(result["rows"], [])
+        self.assertIn("SQL", " ".join(result["warnings"]))
 
     def test_reads_monthly_maps_without_using_liga_dashboard_batch(self) -> None:
         content = b"Mapa;Cidade;Data\n000123;Patos;30/09/2026\n000124;Sume;30/09/2026\n"

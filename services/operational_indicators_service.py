@@ -24,12 +24,15 @@ class OperationalIndicatorsService:
         self.raw_sql_import_service = raw_sql_import_service
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
-        normalized_period = "fechado" if str(period).lower() == "fechado" else "atual"
+        normalized_period = "atual"
         # A Liga em produção deve consultar apenas a carga SQL. Os arquivos
         # são usados exclusivamente pelo importador, fora da requisição.
         if self.raw_sql_import_service is not None:
             return self._build_from_sql(competencia=competencia, period=normalized_period)
-        manifests = [m for m in self.report_store.list_manifests(BI_INDICATORS_ROUTINE, competencia=competencia) if str((m.get("metadata") or {}).get("period") or "atual") == normalized_period]
+        # 17.06 is a monthly source. Older manifests may still carry the
+        # legacy ``period=fechado`` flag, but that flag must never hide a
+        # competence when the panel is filtered by month.
+        manifests = list(self.report_store.list_manifests(BI_INDICATORS_ROUTINE, competencia=competencia))
         if not manifests:
             return self._empty(competencia or "")
 
@@ -121,6 +124,15 @@ class OperationalIndicatorsService:
         selected = str(competencia or "")
         recognized: set[str] = set()
         branches: dict[str, dict[str, Any]] = {}
+        if not selected:
+            for row in rows:
+                reference_date = str(row.get("_reference_date") or "").strip()
+                year = str(row.get("Ano") or "").strip() or reference_date[:4]
+                month_value = str(row.get("Mês") or row.get("Mes") or "").strip()
+                month = month_value.zfill(2) if month_value else reference_date[5:7]
+                if year.isdigit() and month.isdigit():
+                    recognized.add(f"{year}-{month}")
+            selected = max(recognized) if recognized else ""
         for row in rows:
             puxada = self._clean_puxada(row.get("Puxada"))
             metric = _INDICATOR_BASES.get(str(row.get("Base") or "").strip().zfill(4))
@@ -139,9 +151,6 @@ class OperationalIndicatorsService:
             if metric in branch["metrics"]:
                 warnings.append(f"Métrica duplicada no SQL: {puxada}/{metric}; foi mantido o último valor válido.")
             branch["metrics"][metric] = self._number(row.get("Valor Mes")) if str(row.get("Valor Mes") or "").strip() else None
-        if not selected and recognized:
-            selected = max(recognized)
-            branches = {key: value for key, value in branches.items() if any(str(row.get("Puxada") or "") == key for row in rows)}
         if not branches:
             return self._empty(selected) | {"warnings": warnings or ["Nenhum registro reconhecido no SQL."]}
         items = sorted(branches.values(), key=lambda item: str(item["filial"]).casefold())

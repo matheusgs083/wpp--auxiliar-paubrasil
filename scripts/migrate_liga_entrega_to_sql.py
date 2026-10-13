@@ -18,11 +18,14 @@ def main() -> None:
         if path.is_dir()
     } if reports_root.is_dir() else {}
     settings = get_settings()
-    result = LigaEntregaRawSqlImportService(
+    importer = LigaEntregaRawSqlImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
-    ).import_manifests(manifests)
+    )
+    result = importer.import_manifests(manifests)
+    result["normalized_periods"] = importer.normalize_periods()
+    result["backfilled"] = importer.backfill_competencias()
     print(json.dumps({"ok": True, "routines": len(manifests), **result}, ensure_ascii=False))
 
 

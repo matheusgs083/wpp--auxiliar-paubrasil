@@ -37,6 +37,8 @@ class LigaEntregaReportImportServiceTest(unittest.TestCase):
             self.assertIsNotNone(latest)
             self.assertEqual(latest["total_rows"], 2)
             self.assertIn("PATOS_21_09.csv", latest["source_file"])
+            manifests = store.list_manifests("030805_LIGA")
+            self.assertEqual(manifests[0]["metadata"]["competencia"], "2026-09")
 
 
     def test_030805_history_upload_groups_files_by_filename_date(self):

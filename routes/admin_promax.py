@@ -767,6 +767,7 @@ class PromaxLigaEntregaImportRequest(_StrictPayload):
     routine: str = Field(min_length=1, max_length=64)
     files: list[PromaxLigaEntregaImportFile] = Field(min_length=1, max_length=300)
     reference_date: date | None = None
+    competencia: str | None = None
     period: str = "atual"
 
     @field_validator("period")
@@ -776,6 +777,16 @@ class PromaxLigaEntregaImportRequest(_StrictPayload):
         if period not in {"atual", "fechado"}:
             raise ValueError("period deve ser atual ou fechado")
         return period
+
+    @field_validator("competencia")
+    @classmethod
+    def validate_competencia(cls, value: str | None) -> str | None:
+        if value in (None, ""):
+            return None
+        competencia = str(value).strip()
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", competencia):
+            raise ValueError("competencia deve estar no formato AAAA-MM")
+        return competencia
 
     @field_validator("routine")
     @classmethod
@@ -2290,7 +2301,7 @@ def create_admin_promax_router(
                 routine=payload.routine,
                 files=decoded,
                 reference_date=payload.reference_date,
-                metadata={"job_id": payload.job_id, "worker_id": payload.worker_id, "period": payload.period},
+                metadata={"job_id": payload.job_id, "worker_id": payload.worker_id, "period": "atual", "competencia": payload.competencia or (payload.reference_date.isoformat()[:7] if payload.reference_date else "")},
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

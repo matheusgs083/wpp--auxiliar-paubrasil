@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
 from collections.abc import Mapping
 from datetime import date, datetime
@@ -18,6 +19,8 @@ class LigaEntregaReportStore:
 
     def __init__(self, root_dir: str | Path) -> None:
         self.root_dir = Path(root_dir)
+        self._latest_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+        self._latest_cache_ttl = 5.0
 
     def store_batch(
         self,
@@ -49,6 +52,11 @@ class LigaEntregaReportStore:
             path.write_bytes(data)
             stored_files.append({"filename": safe_name, "bytes": len(data), "path": str(path)})
 
+        manifest_metadata = dict(metadata or {})
+        # Toda remessa passa a carregar explicitamente sua competência. Isso
+        # mantém o histórico quando o mesmo arquivo é enviado novamente em
+        # outro mês e evita depender apenas da pasta de upload.
+        manifest_metadata.setdefault("competencia", ref_date.strftime("%Y-%m"))
         manifest = {
             "batch_id": batch_id,
             "routine": clean_routine,
@@ -56,12 +64,13 @@ class LigaEntregaReportStore:
             "stored_at": datetime.now().isoformat(timespec="seconds"),
             "file_count": len(stored_files),
             "files": stored_files,
-            "metadata": dict(metadata or {}),
+            "metadata": manifest_metadata,
         }
         (target_dir / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        self._latest_cache.pop(clean_routine, None)
         return manifest
 
 
@@ -88,8 +97,7 @@ class LigaEntregaReportStore:
         except OSError:
             return []
         for date_dir in date_dirs:
-            if clean_competencia and not date_dir.name.startswith(f"{clean_competencia}-"):
-                continue
+            date_matches = not clean_competencia or date_dir.name.startswith(f"{clean_competencia}-")
             try:
                 batch_dirs = [path for path in date_dir.iterdir() if path.is_dir()]
             except OSError:
@@ -103,6 +111,11 @@ class LigaEntregaReportStore:
                 except (OSError, json.JSONDecodeError):
                     continue
                 if isinstance(payload, dict):
+                    if clean_competencia and not date_matches:
+                        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+                        manifest_comp = str(metadata.get("competencia") or metadata.get("operational_competencia") or "").strip()
+                        if manifest_comp != clean_competencia:
+                            continue
                     manifests.append(payload)
 
         def sort_key(payload: dict[str, Any]) -> tuple[str, str]:
@@ -115,14 +128,20 @@ class LigaEntregaReportStore:
         """Retorna o manifesto mais recente gravado para uma rotina da Liga Entrega."""
 
         clean_routine = self._clean_routine(routine)
+        now = time.monotonic()
+        cached = self._latest_cache.get(clean_routine)
+        if cached is not None and now - cached[0] < self._latest_cache_ttl:
+            return dict(cached[1]) if isinstance(cached[1], dict) else None
         routine_dir = self.root_dir / clean_routine
         if not routine_dir.exists() or not routine_dir.is_dir():
+            self._latest_cache[clean_routine] = (now, None)
             return None
 
         candidates: list[Path] = []
         try:
             date_dirs = [path for path in routine_dir.iterdir() if path.is_dir()]
         except OSError:
+            self._latest_cache[clean_routine] = (now, None)
             return None
         for date_dir in date_dirs:
             try:
@@ -152,7 +171,8 @@ class LigaEntregaReportStore:
             if latest_sort_key is None or sort_key > latest_sort_key:
                 latest_sort_key = sort_key
                 latest_payload = payload
-        return latest_payload
+        self._latest_cache[clean_routine] = (now, latest_payload)
+        return dict(latest_payload) if isinstance(latest_payload, dict) else None
 
     @staticmethod
     def _clean_routine(value: str) -> str:

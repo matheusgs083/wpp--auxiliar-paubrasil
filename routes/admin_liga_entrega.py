@@ -203,7 +203,10 @@ def create_admin_liga_entrega_router(
                 dprodutos_import_service=dprodutos_import_service,
                 snapshot_store=liga_entrega_snapshot_store,
                 raw_sql_import_service=liga_entrega_raw_sql_import_service,
-                allow_source_files=bootstrap,
+                # Compatibilidade apenas para testes/instalações sem o banco
+                # configurado; em produção ambos os serviços estão presentes
+                # e o painel permanece SQL-only.
+                allow_source_files=bootstrap or (liga_entrega_snapshot_store is None and liga_entrega_raw_sql_import_service is None),
             ).build_dashboard(competencia=competencia, period=period)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -288,6 +291,7 @@ def create_admin_liga_entrega_router(
                 dprodutos_import_service=dprodutos_import_service,
                 snapshot_store=liga_entrega_snapshot_store,
                 raw_sql_import_service=liga_entrega_raw_sql_import_service,
+                allow_source_files=liga_entrega_snapshot_store is None and liga_entrega_raw_sql_import_service is None,
             ).build_dashboard(competencia=competencia, period=period)
             content, filename = build_liga_entrega_dashboard_pdf(dashboard, view=view)
         except ValueError as exc:
@@ -353,8 +357,8 @@ def create_admin_liga_entrega_router(
             )
             if liga_entrega_snapshot_store is not None:
                 refreshed = refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, payload.competencia)
-                if not refreshed:
-                    liga_entrega_snapshot_store.invalidate(competencia=payload.competencia)
+                # Em caso de falha transitória, preserve o último snapshot;
+                # a próxima leitura tentará reaplicar o expurgo novamente.
             invalidate_dashboard_cache(payload.competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -404,8 +408,6 @@ def create_admin_liga_entrega_router(
             if liga_entrega_snapshot_store is not None:
                 competencia_item = str(item.get("competencia") or "")
                 refreshed = refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, competencia_item)
-                if not refreshed:
-                    liga_entrega_snapshot_store.invalidate(competencia=competencia_item)
             invalidate_dashboard_cache(str(item.get("competencia") or ""))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
