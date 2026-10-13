@@ -67,6 +67,25 @@ def test_expurgo_removes_only_affected_indicator_and_keeps_route_in_ranking():
     assert row["pos"] == 1
 
 
+def test_liga_scores_only_indicators_that_reach_their_targets():
+    routes = [
+        {
+            "data": f"2026-10-0{i}", "mot": "7302", "aju": [],
+            "km_real": 120, "km_prev": 100, "hr_sai": "08:00",
+        }
+        for i in range(1, 4)
+    ]
+    colab = {"7302": {"nome": "Motorista", "filial": "PATOS", "funcao": "MOTORISTA", "status": "ativo"}}
+    devols = [{"cod": "7302", "cliente_cod": "1", "data": "2026-10-01", "aju": [], "excluida": False}]
+
+    row = build_rankings(routes, {}, devols, {"7302": 100}, {}, [], colab, has_farol=False, first_week=False)[0][0]
+
+    assert row["psaida"] == 0
+    assert row["km_desv"] == 20
+    assert row["pts"] == {"devol": 60.0, "saida": 0.0, "km": 0.0}
+    assert row["total"] == 60.0
+
+
 class _Store:
     def list_manifests(self, routine, *, competencia=None):
         return [

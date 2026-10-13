@@ -38,7 +38,9 @@ MAX_COMPETENCE_SCAN_ROWS = 5000
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
 CACHE_VERSION = 20
-LIGA_RANKING_VERSION = 2
+# Bump when ranking eligibility or point calculation changes so persisted SQL
+# snapshots are recalculated before being returned by the dashboard.
+LIGA_RANKING_VERSION = 3
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -1484,12 +1486,13 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         # KM abaixo do previsto não é desvio negativo: somente o excedente
         # realizado acima do previsto prejudica a pontuação.
         km = pct(max(0, g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else None
-        # O HTML original concede o peso inteiro enquanto o Farol ainda não
-        # foi disponibilizado. Quando existe, mede saída e retorno normalmente.
+        # A Liga usa pontuação binária: cada indicador só recebe seu peso
+        # quando a respectiva meta é atingida. Indicador sem dados não entra
+        # no denominador; indicador medido fora da meta recebe zero.
         pts = {
-            "saida": round(pesos["saida"] * faixa(pior_pct(psaida, float(METAS["saida_pct"]), menor=False)), 1) if psaida is not None else 0,
+            "saida": float(pesos["saida"]) if psaida is not None and psaida >= float(METAS["saida_pct"]) else 0,
             "devol": float(pesos["devol"]) if pdev is not None and pdev <= float(METAS["devol"]) else 0,
-            "km": round(pesos["km"] * faixa(pior_pct(km, float(METAS["km"]), menor=True)), 1) if km is not None else 0,
+            "km": float(pesos["km"]) if km is not None and km <= float(METAS["km"]) else 0,
         }
         measured = {"saida": psaida is not None, "devol": pdev is not None, "km": km is not None}
         sw = sum(w for k, w in pesos.items() if measured[k])
