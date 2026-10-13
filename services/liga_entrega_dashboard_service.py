@@ -711,7 +711,23 @@ class LigaEntregaDashboardService:
         daily_aux = {R031120, R031129, R030224M, R030224A, R030237}
         for routine in ROUTINES[1:]:
             items = self._list(routine, comp, period=period)
-            out[routine] = items if routine in daily_aux else ([items[-1]] if items else [])
+            if routine == R030237:
+                # 03.02.37 is a cumulative snapshot re-exported during the
+                # month, not an incremental daily feed. Keep every manifest
+                # in SQL for history, but use only the latest batch for the
+                # dashboard or the same deliveries are counted repeatedly.
+                latest = max(
+                    items,
+                    key=lambda item: (
+                        str(item.get("stored_at") or ""),
+                        str(item.get("reference_date") or ""),
+                        str(item.get("batch_id") or ""),
+                    ),
+                    default=None,
+                )
+                out[routine] = [latest] if latest else []
+            else:
+                out[routine] = items if routine in daily_aux else ([items[-1]] if items else [])
         return out
 
     def _list(self, routine: str, comp: str, *, period: str = "atual") -> list[dict[str, Any]]:

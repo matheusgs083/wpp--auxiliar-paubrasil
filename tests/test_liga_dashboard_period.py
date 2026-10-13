@@ -164,6 +164,23 @@ def test_current_dashboard_competence_also_follows_daily_030805_filename():
     assert service._latest_competencia(period="atual") == "2026-09"
 
 
+def test_030237_uses_latest_cumulative_batch_but_preserves_manifest_history():
+    class Store:
+        def list_manifests(self, routine, *, competencia=None):
+            if routine == "030237":
+                return [
+                    {"batch_id": "old", "reference_date": "2026-10-01", "stored_at": "2026-10-01T10:00:00", "metadata": {"period": "atual"}},
+                    {"batch_id": "latest", "reference_date": "2026-10-10", "stored_at": "2026-10-10T12:00:00", "metadata": {"period": "atual"}},
+                ]
+            return []
+
+    service = LigaEntregaDashboardService.__new__(LigaEntregaDashboardService)
+    service.report_store = Store()
+    selected = service._select_manifests("2026-10", period="atual")
+
+    assert [item["batch_id"] for item in selected["030237"]] == ["latest"]
+
+
 def test_default_dashboard_competence_keeps_current_month_after_month_turn():
     assert _default_dashboard_competencia("atual", reference=date(2026, 10, 1)) == "2026-10"
     assert _default_dashboard_competencia("fechado", reference=date(2026, 10, 1)) == "2026-09"
