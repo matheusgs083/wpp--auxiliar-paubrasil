@@ -13,7 +13,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from bot_api.commercial_scope import normalize_numeric_code
-from bot_api.services.import_publication import activate_import_batch, ensure_dataset_state_table, prune_import_batches
+from bot_api.services.import_publication import activate_import_batch, ensure_dataset_state_table
 from bot_api.services.relatorio_020304_pdf_service import (
     build_020304_pdf,
     read_020304_csv,
@@ -193,7 +193,9 @@ class Estoque020304ImportService:
             self._insert_item_rows(conn, batch_id, summary.filial, rows)
             activate_import_batch(conn, self.schema, self.dataset_name, batch_id)
             self._create_latest_view(conn)
-            prune_import_batches(conn, self.schema, self.dataset_name, keep_last=3)
+            # Os lotes do armazém são evidência operacional e precisam permanecer
+            # disponíveis para auditoria. A view continua apontando apenas para o
+            # lote ativo, enquanto import_batches guarda o histórico completo.
             conn.commit()
 
         return {

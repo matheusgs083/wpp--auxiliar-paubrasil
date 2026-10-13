@@ -688,6 +688,20 @@
     .armazem-grade-product-name { display: block; max-width: 360px; color: var(--ink-700); font-size: .78rem; line-height: 1.22; }
     .armazem-grade-error-row > * { background: color-mix(in srgb, var(--danger) 6%, transparent) !important; }
     .armazem-grade-error-row > td:first-child { border-left: 3px solid var(--danger); }
+    .armazem-routine-tabs { border-bottom: 1px solid var(--line); padding-bottom: .65rem; }
+    .armazem-routine-tabs .nav-link { cursor: pointer; border: 1px solid transparent; color: var(--ink-700); transition: color .2s ease, background-color .2s ease, border-color .2s ease; }
+    .armazem-routine-tabs .nav-link:hover { color: var(--brand-700); background: var(--surface-soft); }
+    .armazem-routine-tabs .nav-link.active { color: var(--brand-700); background: color-mix(in srgb, var(--brand-600) 10%, var(--surface)); border-color: color-mix(in srgb, var(--brand-600) 35%, var(--line)); }
+    .armazem-status-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin-top: .85rem; }
+    .armazem-status-card { min-height: 70px; padding: .7rem .8rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .armazem-status-card .label { display: block; color: var(--ink-500); font-size: .65rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+    .armazem-status-card strong { display: block; margin-top: .2rem; color: var(--ink-900); font-size: 1.15rem; line-height: 1.1; }
+    .armazem-status-card small { color: var(--ink-600); }
+    .armazem-status-card.ok { border-color: rgba(4, 120, 87, .32); }
+    .armazem-status-card.warn { border-color: rgba(180, 83, 9, .38); }
+    .armazem-status-card.danger { border-color: rgba(185, 28, 28, .42); }
+    .armazem-routine-section[hidden] { display: none !important; }
+    @media (max-width: 767px) { .armazem-status-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 767px) { .armazem-grade-audit-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .armazem-grade-job-list { max-height: 220px; } .armazem-grade-detail { padding: 0.55rem; } .armazem-grade-product-name { max-width: 190px; } }
     .promax-impact-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.65rem; }
     .promax-impact-kpi { display: grid; gap: 0.18rem; min-height: 92px; padding: 0.75rem; border: 1px solid var(--promax-neutral-border); border-radius: 8px; background: var(--promax-neutral-bg); }
@@ -2171,18 +2185,26 @@
             </div>
             <span class="pill">Estoque</span>
           </div>
-          <nav class="nav nav-pills gap-2" aria-label="Rotinas do armazém">
-            <button class="nav-link active" id="armazemGradeTab" type="button" aria-current="page"><i class="bi bi-grid-3x3-gap me-1"></i>Grade</button>
+          <nav class="nav nav-pills gap-2 armazem-routine-tabs" aria-label="Rotinas do armazém">
+            <button class="nav-link active" id="armazemRoutine020304Tab" type="button" data-armazem-routine="020304" aria-selected="true"><i class="bi bi-box-arrow-in-down me-1"></i>Entrada 02.03.04</button>
+            <button class="nav-link" id="armazemRoutine020105Tab" type="button" data-armazem-routine="020105" aria-selected="false"><i class="bi bi-grid-3x3-gap me-1"></i>Grade 02.01.05</button>
+            <button class="nav-link" id="armazemRoutineAuditTab" type="button" data-armazem-routine="auditoria" aria-selected="false"><i class="bi bi-clipboard2-check me-1"></i>Auditoria</button>
           </nav>
+          <div class="armazem-status-strip" id="armazemQueueSummary" aria-live="polite">
+            <div class="armazem-status-card"><span class="label">Fila do armazém</span><strong id="armazemQueueTotal">—</strong><small>jobs recentes</small></div>
+            <div class="armazem-status-card ok"><span class="label">Concluídos</span><strong id="armazemQueueDone">—</strong><small>execuções concluídas</small></div>
+            <div class="armazem-status-card warn"><span class="label">Pendentes</span><strong id="armazemQueuePending">—</strong><small>aguardando worker</small></div>
+            <div class="armazem-status-card danger"><span class="label">Falhas</span><strong id="armazemQueueFailed">—</strong><small>revisar na auditoria</small></div>
+          </div>
         </section>
-        <section class="panel-card p-3 mb-3" id="armazem020304Pane" role="region" aria-labelledby="armazemGradeTab">
+        <section class="panel-card p-3 mb-3 armazem-routine-section" id="armazem020304Pane" data-armazem-section="020304" role="region" aria-labelledby="armazemRoutine020304Tab">
           <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-2"><div><h2 class="h6 fw-bold mb-1">Entrada na grade para estoque 02.03.04</h2><div class="form-text">Rotina 02.03.01: informa a grade, confirma o produto no check azul, lança “Fabricado em Outra Unidade” e salva.</div></div><span class="pill">02.03.01 → 02.03.04</span></div>
           <div class="row g-2 align-items-end"><div class="col-lg-6"><label class="form-label small mb-1" for="promaxGrade020304File">Relatório de produtos</label><input class="form-control form-control-sm" id="promaxGrade020304File" type="file" accept=".csv,text/csv"></div><div class="col-lg-3"><label class="form-label small mb-1" for="promaxGrade020304Unit">Revenda</label><select class="form-select form-select-sm" id="promaxGrade020304Unit"><option value="">Selecione a revenda</option></select></div><div class="col-lg-3"><label class="form-label small mb-1" for="promaxGrade020304Worker">Bot que executará</label><select class="form-select form-select-sm" id="promaxGrade020304Worker"><option value="">Automático</option></select></div></div>
           <div class="d-flex flex-wrap gap-2 align-items-center mt-3"><button class="btn btn-primary btn-sm" id="promaxGrade020304QueueBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Validar CSV e adicionar à fila</button><button class="btn btn-outline-primary btn-sm" id="promaxGrade020304TemplateBtn" type="button"><i class="bi bi-download me-1"></i>Baixar modelo CSV</button><span class="form-text" id="promaxGrade020304Status">Colunas: grade; produto; quantidade.</span></div>
           <div class="border-top mt-3 pt-3"><div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-2"><div><h3 class="h6 mb-1">Lançamento manual</h3><div class="form-text">Informe um produto para lançamento avulso ou adicione linhas para enviar em lote.</div></div><span class="pill">Sem CSV</span></div><div class="row g-2 align-items-end mb-2"><div class="col-sm-3"><label class="form-label small mb-1" for="promaxGrade020304ManualGrade">Grade</label><input class="form-control form-control-sm" id="promaxGrade020304ManualGrade" inputmode="numeric" value="1"></div></div><div class="table-scroll"><table class="table table-sm align-middle mb-0"><thead><tr><th>Produto</th><th>Quantidade</th><th class="text-end">Ação</th></tr></thead><tbody id="promaxGrade020304ManualRows"></tbody></table></div><div class="d-flex flex-wrap gap-2 align-items-center mt-2"><button class="btn btn-outline-primary btn-sm" id="promaxGrade020304AddRowBtn" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar item</button><button class="btn btn-success btn-sm" id="promaxGrade020304ManualQueueBtn" type="button"><i class="bi bi-send-check me-1"></i>Lançar itens manualmente</button><span class="form-text" id="promaxGrade020304ManualStatus">Uma linha é lançamento avulso; mais linhas formam um lote.</span></div></div>
         </section>
 
-        <section class="panel-card p-3 mb-3" id="armazemGradePane" role="region" aria-labelledby="armazemGradeTab">
+        <section class="panel-card p-3 mb-3 armazem-routine-section" id="armazemGradePane" data-armazem-section="020105" role="region" aria-labelledby="armazemRoutine020105Tab" hidden>
           <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-2">
             <div>
               <h2 class="h6 fw-bold mb-1">Lançamento de grade · 02.01.05</h2>
@@ -2198,7 +2220,7 @@
           <div class="d-flex flex-wrap gap-2 align-items-center mt-3"><button class="btn btn-primary btn-sm" id="promaxGradeQueueBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Validar CSV e adicionar à fila</button><button class="btn btn-outline-primary btn-sm" id="promaxGradeTemplateBtn" type="button"><i class="bi bi-download me-1"></i>Baixar modelo CSV</button><span class="form-text" id="promaxGradeStatus">Colunas: armazem; deposito; data_movimento; item; sku; pallet; lastro; unidade; garrafa.</span></div>
           <div class="border-top mt-3 pt-3"><div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-2"><div><h3 class="h6 mb-1">Lançamento manual</h3><div class="form-text">Use uma linha para lançamento avulso ou adicione produtos para montar um lote.</div></div><span class="pill">Sem CSV</span></div><div class="row g-2 align-items-end mb-2"><div class="col-sm-3"><label class="form-label small mb-1" for="promaxGradeManualArmazem">Armazém</label><input class="form-control form-control-sm" id="promaxGradeManualArmazem" inputmode="numeric" value="01"></div><div class="col-sm-3"><label class="form-label small mb-1" for="promaxGradeManualDeposito">Depósito</label><input class="form-control form-control-sm" id="promaxGradeManualDeposito" inputmode="numeric" value="02"></div><div class="col-sm-4"><label class="form-label small mb-1" for="promaxGradeManualDate">Data do movimento</label><input class="form-control form-control-sm" id="promaxGradeManualDate" type="date"></div></div><div class="table-scroll"><table class="table table-sm align-middle mb-0"><thead><tr><th>Item</th><th>Pallet</th><th>Lastro</th><th>SKU</th><th>Unidade</th><th>Garrafa</th><th class="text-end">Ação</th></tr></thead><tbody id="promaxGradeManualRows"></tbody></table></div><div class="d-flex flex-wrap gap-2 align-items-center mt-2"><button class="btn btn-outline-primary btn-sm" id="promaxGradeAddRowBtn" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar item</button><button class="btn btn-success btn-sm" id="promaxGradeManualQueueBtn" type="button"><i class="bi bi-send-check me-1"></i>Lançar itens manualmente</button><span class="form-text" id="promaxGradeManualStatus">Informe pelo menos pallet, lastro, SKU ou unidade para cada item.</span></div></div>
         </section>
-        <section class="panel-card p-3 mb-3 armazem-grade-audit" aria-labelledby="armazemGradeAuditTitle">
+        <section class="panel-card p-3 mb-3 armazem-grade-audit armazem-routine-section" data-armazem-section="auditoria" aria-labelledby="armazemGradeAuditTitle" hidden>
           <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3">
             <div><h2 class="h6 fw-bold mb-1" id="armazemGradeAuditTitle"><i class="bi bi-clipboard2-check me-2 text-primary"></i>Auditoria · estoque 02.03.04</h2><div class="form-text">Histórico guardado por dia e por job. Selecione um job para conferir cada código enviado ao Promax.</div></div>
             <div class="d-flex flex-wrap align-items-end gap-2"><div><label class="form-label small mb-1" for="armazemGradeAuditDate">Dia da execução</label><input class="form-control form-control-sm" id="armazemGradeAuditDate" type="date"></div><button class="btn btn-outline-primary btn-sm" id="armazemGradeAuditTodayBtn" type="button"><i class="bi bi-calendar-day me-1"></i>Hoje</button><span class="pill" id="armazemGradeAuditCount">Aguardando execução</span></div>
@@ -3491,6 +3513,7 @@
       promax: {
         catalog: null,
         jobs: [],
+        armazemRoutine: "020304",
         grade020304AuditJobs: [],
         selectedGrade020304AuditJobId: "",
         grade020304ProductNames: {},
@@ -3855,6 +3878,13 @@
       promaxGrade020304AddRowBtn: document.getElementById("promaxGrade020304AddRowBtn"),
       promaxGrade020304ManualQueueBtn: document.getElementById("promaxGrade020304ManualQueueBtn"),
       promaxGrade020304ManualStatus: document.getElementById("promaxGrade020304ManualStatus"),
+      armazemRoutine020304Tab: document.getElementById("armazemRoutine020304Tab"),
+      armazemRoutine020105Tab: document.getElementById("armazemRoutine020105Tab"),
+      armazemRoutineAuditTab: document.getElementById("armazemRoutineAuditTab"),
+      armazemQueueTotal: document.getElementById("armazemQueueTotal"),
+      armazemQueueDone: document.getElementById("armazemQueueDone"),
+      armazemQueuePending: document.getElementById("armazemQueuePending"),
+      armazemQueueFailed: document.getElementById("armazemQueueFailed"),
       armazemGradeTab: document.getElementById("armazemGradeTab"),
       armazem020304Tab: document.getElementById("armazem020304Tab"),
       armazemGradePane: document.getElementById("armazemGradePane"),
@@ -6796,6 +6826,32 @@
       }
     }
 
+    function setArmazemRoutine(routine) {
+      const selected = ["020304", "020105", "auditoria"].includes(String(routine)) ? String(routine) : "020304";
+      state.promax.armazemRoutine = selected;
+      document.querySelectorAll("[data-armazem-routine]").forEach(button => {
+        const active = button.dataset.armazemRoutine === selected;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.setAttribute("aria-current", active ? "page" : "false");
+      });
+      document.querySelectorAll("[data-armazem-section]").forEach(section => {
+        section.hidden = section.dataset.armazemSection !== selected;
+      });
+    }
+
+    function renderArmazemQueueSummary(jobs) {
+      const armazemJobs = (Array.isArray(jobs) ? jobs : []).filter(job => ["lancamento_grade", "lancamento_grade_020304"].includes(String(job && job.job_type || "")));
+      const total = armazemJobs.length;
+      const done = armazemJobs.filter(job => ["completed", "success", "succeeded", "done"].includes(String(job && job.status || "").toLowerCase())).length;
+      const pending = armazemJobs.filter(job => ["pending", "running", "cancel_requested"].includes(String(job && job.status || "").toLowerCase())).length;
+      const failed = armazemJobs.filter(job => ["failed", "error", "cancelled"].includes(String(job && job.status || "").toLowerCase())).length;
+      if (E.armazemQueueTotal) E.armazemQueueTotal.textContent = String(total);
+      if (E.armazemQueueDone) E.armazemQueueDone.textContent = String(done);
+      if (E.armazemQueuePending) E.armazemQueuePending.textContent = String(pending);
+      if (E.armazemQueueFailed) E.armazemQueueFailed.textContent = String(failed);
+    }
+
     function renderPromax() {
       renderPromaxRunCatalog({
         categoryIds: state.promax.runSelectedCategories,
@@ -6813,6 +6869,7 @@
       const queue = workerPayload.queue || {};
       const workers = promaxWorkersFromPayload(workerPayload);
       const jobs = Array.isArray(state.promax.jobs) ? state.promax.jobs : [];
+      renderArmazemQueueSummary([...(Array.isArray(jobs) ? jobs : []), ...(Array.isArray(state.promax.grade020304AuditJobs) ? state.promax.grade020304AuditJobs : [])]);
       const pendingJobs = jobs.filter(job => String(job && job.status || "") === "pending").length;
       const activeJobs = jobs.filter(job => ["running", "cancel_requested"].includes(String(job && job.status || ""))).length;
       const onlineWorkers = workers.filter(worker => worker && worker.online);
@@ -6844,6 +6901,7 @@
       }
       renderPromaxImpact(jobs);
       renderArmazemGradeAudit();
+      setArmazemRoutine(state.promax.armazemRoutine);
 
       if (E.promaxJobsBody) {
         E.promaxJobsBody.innerHTML = jobs.length ? jobs.map(job => {
@@ -6939,7 +6997,7 @@
       const names = state.promax.grade020304ProductNames;
       const attempted = state.promax.grade020304ProductLookupAttempted;
       const codes = [...new Set((Array.isArray(items) ? items : [])
-        .map(item => armazemGradeAuditProductCode(item && item.produto))
+        .map(item => armazemGradeAuditProductCode(item && (item.produto || item.item || item.codigo)))
         .filter(code => code && !Object.prototype.hasOwnProperty.call(names, code) && !attempted[code]))];
       if (!codes.length) return;
       codes.forEach(code => { attempted[code] = true; });
@@ -6965,11 +7023,11 @@
     function renderArmazemGradeAudit() {
       if (!E.armazemGradeAudit) return;
       const gradeJobs = (Array.isArray(state.promax.grade020304AuditJobs) ? state.promax.grade020304AuditJobs : [])
-        .filter(job => String(job && job.job_type || "") === "lancamento_grade_020304")
+        .filter(job => ["lancamento_grade", "lancamento_grade_020304"].includes(String(job && job.job_type || "")))
         .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
       if (!gradeJobs.length) {
         if (E.armazemGradeAuditCount) E.armazemGradeAuditCount.textContent = "Nenhum job no dia";
-        E.armazemGradeAudit.innerHTML = '<div class="text-secondary small py-3">Nenhum lançamento 02.03.04 foi encontrado neste dia.</div>';
+        E.armazemGradeAudit.innerHTML = '<div class="text-secondary small py-3">Nenhum lançamento de grade foi encontrado neste dia.</div>';
         return;
       }
       const selectedId = gradeJobs.some(job => String(job.id) === state.promax.selectedGrade020304AuditJobId)
@@ -6981,7 +7039,7 @@
       const query = normalizeTextForSearch(E.armazemGradeAuditSearch && E.armazemGradeAuditSearch.value || "");
       const onlyErrors = Boolean(E.armazemGradeAuditErrorsOnly && E.armazemGradeAuditErrorsOnly.checked);
       const visibleAudit = audit.filter(item => {
-        const code = String(item && item.produto || "");
+        const code = String(item && (item.produto || item.item || item.codigo) || "");
         const name = armazemGradeAuditProductName(code);
         const searchText = normalizeTextForSearch(`${code} ${name}`);
         const status = String(item && item.status || "NAO_EXECUTADO");
@@ -7000,11 +7058,12 @@
         const jobStatus = String(job.status || "pending");
         const jobTotals = jobAudit.reduce((summary, item) => { const status = String(item && item.status || "NAO_EXECUTADO"); summary[status] = (summary[status] || 0) + 1; return summary; }, {});
         const jobSummary = jobAudit.length ? `${jobTotals.LANCADO || 0} lançado(s) · ${(jobTotals.FALHOU || 0) + (jobTotals.NAO_EXECUTADO || 0)} pendência(s)` : "sem retorno por item";
-        return `<button type="button" class="list-group-item list-group-item-action armazem-grade-job-card ${isSelected ? "active" : ""}" data-grade-audit-job="${escapeHtml(String(job.id || ""))}" aria-pressed="${isSelected ? "true" : "false"}"><div class="d-flex justify-content-between gap-2"><strong class="mono small">${escapeHtml(String(job.id || "").slice(0, 8))}</strong><span class="promax-status ${promaxStatusClass(jobStatus)}">${escapeHtml(promaxStatusLabel(jobStatus))}</span></div><div class="small text-secondary mt-1">${escapeHtml(formatDateTime(job.created_at))}</div><div class="small text-secondary">${escapeHtml(jobSummary)}</div></button>`;
+        const routineLabel = String(job.job_type || "") === "lancamento_grade_020304" ? "02.03.04" : "02.01.05";
+        return `<button type="button" class="list-group-item list-group-item-action armazem-grade-job-card ${isSelected ? "active" : ""}" data-grade-audit-job="${escapeHtml(String(job.id || ""))}" aria-pressed="${isSelected ? "true" : "false"}"><div class="d-flex justify-content-between gap-2"><strong class="mono small">${escapeHtml(String(job.id || "").slice(0, 8))}</strong><span class="promax-status ${promaxStatusClass(jobStatus)}">${escapeHtml(promaxStatusLabel(jobStatus))}</span></div><div class="small text-secondary mt-1">${escapeHtml(routineLabel)} · ${escapeHtml(formatDateTime(job.created_at))}</div><div class="small text-secondary">${escapeHtml(jobSummary)}</div></button>`;
       }).join("");
       const auditRows = audit.length
         ? visibleAudit.length
-          ? `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Linha</th><th>Produto</th><th class="text-end">Quantidade</th><th>Status</th><th>Detalhe</th></tr></thead><tbody>${visibleAudit.map(item => { const status = String(item.status || "NAO_EXECUTADO"); const tone = status === "LANCADO" ? "ok" : status === "FALHOU" ? "danger" : "warn"; const code = String(item.produto || "-"); const name = armazemGradeAuditProductName(code); const isPending = status !== "LANCADO"; return `<tr class="${isPending ? "armazem-grade-error-row" : ""}"><td class="mono small">${escapeHtml(String(item.source_row ?? "-"))}</td><td><div class="mono">${escapeHtml(code)}</div><span class="armazem-grade-product-name">${escapeHtml(name || "Produto não localizado na base 01.11.")}</span></td><td class="text-end">${escapeHtml(String(item.quantidade ?? "-"))}</td><td><span class="pill ${tone}">${escapeHtml(status.replaceAll("_", " "))}</span></td><td class="small text-secondary">${escapeHtml(item.detail || "-")}</td></tr>`; }).join("")}</tbody></table></div>`
+          ? `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Linha</th><th>Produto/item</th><th class="text-end">Quantidade</th><th>Status</th><th>Detalhe</th></tr></thead><tbody>${visibleAudit.map(item => { const status = String(item.status || "NAO_EXECUTADO"); const tone = status === "LANCADO" ? "ok" : status === "FALHOU" ? "danger" : "warn"; const code = String(item.produto || item.item || item.codigo || "-"); const name = armazemGradeAuditProductName(code); const quantity = item.quantidade ?? item.unidade ?? item.pallet ?? "-"; const isPending = status !== "LANCADO"; return `<tr class="${isPending ? "armazem-grade-error-row" : ""}"><td class="mono small">${escapeHtml(String(item.source_row ?? item.line ?? "-"))}</td><td><div class="mono">${escapeHtml(code)}</div><span class="armazem-grade-product-name">${escapeHtml(name || "Código enviado ao Promax")}</span></td><td class="text-end">${escapeHtml(String(quantity))}</td><td><span class="pill ${tone}">${escapeHtml(status.replaceAll("_", " "))}</span></td><td class="small text-secondary">${escapeHtml(item.detail || "-")}</td></tr>`; }).join("")}</tbody></table></div>`
           : '<div class="text-secondary small py-3">Nenhum item deste job atende aos filtros informados.</div>'
         : '<div class="text-secondary small py-3">Este job ainda não retornou a auditoria por item. Atualize após a execução.</div>';
       E.armazemGradeAudit.innerHTML = `<div class="armazem-grade-audit-kpis"><div class="armazem-grade-audit-kpi"><span class="label">Jobs no dia</span><strong>${gradeJobs.length}</strong></div><div class="armazem-grade-audit-kpi ok"><span class="label">Lançados</span><strong>${totals.LANCADO || 0}</strong></div><div class="armazem-grade-audit-kpi danger"><span class="label">Falhos</span><strong>${totals.FALHOU || 0}</strong></div><div class="armazem-grade-audit-kpi warn"><span class="label">Não executados</span><strong>${totals.NAO_EXECUTADO || 0}</strong></div></div><div class="row g-3"><div class="col-lg-4"><div class="d-flex justify-content-between align-items-center mb-2"><span class="small fw-bold">JOBS DO DIA</span><span class="small text-secondary">${gradeJobs.length}</span></div><div class="list-group armazem-grade-job-list">${jobCards}</div></div><div class="col-lg-8"><div class="armazem-grade-detail"><div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3"><div><div class="small text-secondary text-uppercase fw-bold">Job selecionado</div><strong class="mono">${escapeHtml(String(selectedJob.id || "").slice(0, 8))}</strong><span class="small text-secondary ms-2">${escapeHtml(formatDateTime(selectedJob.created_at))}</span><div class="small text-secondary mt-1">${visibleAudit.length}/${audit.length} item(ns) exibidos</div></div><div class="d-flex flex-wrap gap-1"><span class="pill ok">${totals.LANCADO || 0} lançado(s)</span><span class="pill danger">${totals.FALHOU || 0} falhou</span><span class="pill warn">${totals.NAO_EXECUTADO || 0} não executado(s)</span></div></div>${auditRows}</div></div></div>`;
@@ -7014,10 +7073,15 @@
     async function syncArmazemGradeAudit({ silent = true } = {}) {
       if (!(state.panel && state.panel.canArmazem)) return false;
       const selectedDate = armazemGradeAuditDate();
-      const params = new URLSearchParams({ category: "lancamento_grade_020304", limit: "200", created_from: selectedDate, created_to: selectedDate });
+      const baseParams = { limit: "200", created_from: selectedDate, created_to: selectedDate };
       try {
-        const payload = await req(`${CONFIG.endpoints.promax.jobs}?${params.toString()}`, { timeoutMs: 30000 });
-        state.promax.grade020304AuditJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
+        const categories = ["lancamento_grade", "lancamento_grade_020304"];
+        const payloads = await Promise.all(categories.map(category => {
+          const params = new URLSearchParams({ ...baseParams, category });
+          return req(`${CONFIG.endpoints.promax.jobs}?${params.toString()}`, { timeoutMs: 30000 });
+        }));
+        state.promax.grade020304AuditJobs = payloads.flatMap(payload => Array.isArray(payload && payload.jobs) ? payload.jobs : []);
+        renderArmazemQueueSummary(state.promax.grade020304AuditJobs);
         renderArmazemGradeAudit();
         return true;
       } catch (error) {
@@ -7101,6 +7165,25 @@
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(blobUrl);
+    }
+
+    async function previewArmazemCsv(file, statusElement, routine) {
+      if (!file || !statusElement) return;
+      if (file.size > 2 * 1024 * 1024) {
+        statusElement.textContent = "Arquivo acima de 2 MB. Escolha um CSV menor.";
+        return;
+      }
+      try {
+        const lines = (await file.text()).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        const data = lines.slice(1);
+        const codeIndex = routine === "020304" ? 1 : 3;
+        const codes = data.map(line => line.split(/[;,]/)[codeIndex] || "").map(value => value.replace(/^\"|\"$/g, "").trim()).filter(Boolean);
+        const duplicates = codes.length - new Set(codes).size;
+        const duplicateHint = duplicates ? ` · ${duplicates} duplicidade(s) para revisar` : " · sem duplicidades aparentes";
+        statusElement.textContent = `Prévia: ${data.length} linha(s), ${new Set(codes).size} código(s)${duplicateHint}. Selecione a revenda e envie para a fila.`;
+      } catch (_error) {
+        statusElement.textContent = "Não foi possível gerar a prévia. O arquivo ainda pode ser validado no envio.";
+      }
     }
 
     function addPromaxGrade020304ManualRow(values = {}) {
@@ -10657,6 +10740,9 @@
         if (workerId) state.promax.credentialUserDrafts[workerId] = input.value;
       });
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
+      document.querySelectorAll("[data-armazem-routine]").forEach(button => button.addEventListener("click", () => setArmazemRoutine(button.dataset.armazemRoutine)));
+      if (E.promaxGradeFile) E.promaxGradeFile.addEventListener("change", () => previewArmazemCsv(E.promaxGradeFile.files[0], E.promaxGradeStatus, "020105"));
+      if (E.promaxGrade020304File) E.promaxGrade020304File.addEventListener("change", () => previewArmazemCsv(E.promaxGrade020304File.files[0], E.promaxGrade020304Status, "020304"));
       if (E.promaxGradeQueueBtn) E.promaxGradeQueueBtn.addEventListener("click", promaxQueueGradeCsv);
       if (E.promaxGrade020304QueueBtn) E.promaxGrade020304QueueBtn.addEventListener("click", promaxQueueGrade020304Csv);
       if (E.promaxGrade020304TemplateBtn) E.promaxGrade020304TemplateBtn.addEventListener("click", () => downloadGradeTemplate("modelo_grade_020304.csv", "grade;produto;quantidade\n1;9092;0\n1;10175;0\n1;8919;0\n"));
