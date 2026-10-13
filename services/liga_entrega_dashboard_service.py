@@ -287,6 +287,15 @@ class LigaEntregaDashboardService:
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.08.05 {file['filename']}: {exc}")
 
+        # O 03.02.37 pode conter entregas de outros mapas/competências no
+        # mesmo export. O denominador da Liga deve ser limitado às rotas
+        # operacionais realmente carregadas no 03.08.05.
+        route_context = {
+            (str(route.get("filial") or "").strip().upper(), norm_mapa(route.get("mapa")), str(route.get("mot") or ""))
+            for route in rotas.values()
+            if _record_competencia(route.get("data")) == comp
+        }
+
         for manifest in manifests.get(R031120, []):
             for file in stored_files(manifest):
                 filial = filial_from_name(file["filename"])
@@ -390,6 +399,11 @@ class LigaEntregaDashboardService:
                             continue
                         cliente = norm_code(pick(row, "Cliente", "Cod Cliente", "Cod. Cliente"))
                         filial_code = filial_code_for_liga(filial)
+                        mapa = norm_mapa(pick(row, "Mapa"))
+                        data_operacao = to_iso(pick(row, "Dt. Operacao", "Dt Operacao", "Data"), fallback=manifest_ref(manifest))
+                        mot = remember(pick(row, "Motorista", "CdMot"), filial=filial, funcao="MOTORISTA")
+                        if (str(filial or "").strip().upper(), mapa, mot) not in route_context:
+                            continue
                         filial_entregas = entregas_por_filial[filial_code]
                         if cliente != "0":
                             entregas_pdvs.add(f"{filial_code}|{cliente}")
@@ -404,8 +418,7 @@ class LigaEntregaDashboardService:
                             quantidade = to_float(pick(row, "Qtde", "Quantidade", "Qtd"))
                             entregas_qtde_por_produto[produto] += quantidade
                             filial_entregas["qtde_por_produto"][produto] += quantidade
-                        pdv = f"{cliente}|{to_iso(pick(row, 'Dt. Operacao', 'Dt Operacao', 'Data'), fallback=manifest_ref(manifest))}"
-                        mot = remember(pick(row, "Motorista", "CdMot"), filial=filial, funcao="MOTORISTA")
+                        pdv = f"{cliente}|{data_operacao}|{mapa}"
                         if mot != "0":
                             ent_m[mot].add(pdv)
                         for col in ("ajudante-1", "ajudante 1", "Ajudante 1", "CdAju1", "ajudante-2", "ajudante 2", "Ajudante 2", "CdAju2"):
