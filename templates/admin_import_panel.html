@@ -5702,7 +5702,11 @@
       const team = Array.isArray(dashboard.equipe) ? dashboard.equipe : [];
       const drivers = team.filter(item => String(item.funcao || "").toUpperCase().includes("MOTOR"));
       const helpers = team.filter(item => String(item.funcao || "").toUpperCase().includes("AJUD"));
-      const option = (item, selected) => `<option value="${escapeHtml(String(item.cod || ""))}" ${String(item.cod || "") === String(selected || "") ? "selected" : ""}>${escapeHtml(item.cod || "")} - ${escapeHtml(item.nome || "")}</option>`;
+      const matchesPerson = (item, selected) => {
+        const wanted = String(selected || "").trim().toUpperCase();
+        return wanted && [item.cod, item.nome].some(value => String(value || "").trim().toUpperCase() === wanted);
+      };
+      const option = (item, selected) => `<option value="${escapeHtml(String(item.cod || ""))}" ${matchesPerson(item, selected) ? "selected" : ""}>${escapeHtml(item.cod || "")} - ${escapeHtml(item.nome || "")}</option>`;
       const blank = `<option value="">— Não informado —</option>`;
       const driverSelect = document.getElementById("ligaRouteTeamDriver");
       const helper1Select = document.getElementById("ligaRouteTeamHelper1");
