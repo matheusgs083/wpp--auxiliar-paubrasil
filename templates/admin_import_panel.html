@@ -3072,6 +3072,39 @@
     </div>
   </main>
 
+  <div class="modal fade" id="ligaRouteTeamModal" tabindex="-1" aria-labelledby="ligaRouteTeamModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="ligaRouteTeamModalTitle">Equipe da rota</h5>
+            <div class="small text-secondary" id="ligaRouteTeamModalSubtitle"></div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="ligaRouteTeamDriver">Motorista</label>
+            <select class="form-select" id="ligaRouteTeamDriver"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="ligaRouteTeamHelper1">Ajudante 1</label>
+            <select class="form-select" id="ligaRouteTeamHelper1"></select>
+          </div>
+          <div>
+            <label class="form-label small fw-semibold" for="ligaRouteTeamHelper2">Ajudante 2</label>
+            <select class="form-select" id="ligaRouteTeamHelper2"></select>
+          </div>
+          <div class="form-text mt-2">Selecione os integrantes da equipe desta rota. Os ajudantes são opcionais.</div>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="ligaRouteTeamSave">Salvar equipe</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content panel-card">
@@ -5667,16 +5700,39 @@
       const dashboard = state.ligaEntregaDashboard || {};
       if (!dashboard.competencia) throw new Error("Competência da Liga indisponível.");
       const team = Array.isArray(dashboard.equipe) ? dashboard.equipe : [];
-      const drivers = team.filter(item => String(item.funcao || "").toUpperCase().includes("MOTOR")).map(item => `${item.cod} - ${item.nome}`).join("\n");
-      const helpers = team.filter(item => String(item.funcao || "").toUpperCase().includes("AJUD")).map(item => `${item.cod} - ${item.nome}`).join("\n");
-      const driver = window.prompt(`Motorista da rota ${button.dataset.routeMapa}. Informe o código.\n\n${drivers}`, button.dataset.routeMot || "");
-      if (driver === null) return;
-      const helperText = window.prompt(`Ajudantes (até 2 códigos separados por vírgula).\n\n${helpers}`, button.dataset.routeAju || "");
-      if (helperText === null) return;
-      const ajudantes = helperText.split(",").map(item => item.trim()).filter(Boolean).slice(0, 2);
-      await req(CONFIG.endpoints.ligaEntrega.rotaEquipe, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia: dashboard.competencia, data: button.dataset.routeData || "", filial: button.dataset.routeFilial || "", mapa: button.dataset.routeMapa || "", motorista: driver.trim(), ajudantes }), timeoutMs: 30000 });
-      await syncLigaEntregaReports({ silent: false, force: true });
-      addLog(`Equipe da rota ${button.dataset.routeMapa} atualizada.`, "ok");
+      const drivers = team.filter(item => String(item.funcao || "").toUpperCase().includes("MOTOR"));
+      const helpers = team.filter(item => String(item.funcao || "").toUpperCase().includes("AJUD"));
+      const option = (item, selected) => `<option value="${escapeHtml(String(item.cod || ""))}" ${String(item.cod || "") === String(selected || "") ? "selected" : ""}>${escapeHtml(item.cod || "")} - ${escapeHtml(item.nome || "")}</option>`;
+      const blank = `<option value="">— Não informado —</option>`;
+      const driverSelect = document.getElementById("ligaRouteTeamDriver");
+      const helper1Select = document.getElementById("ligaRouteTeamHelper1");
+      const helper2Select = document.getElementById("ligaRouteTeamHelper2");
+      const modalEl = document.getElementById("ligaRouteTeamModal");
+      if (!driverSelect || !helper1Select || !helper2Select || !modalEl || !window.bootstrap) throw new Error("Modal de equipe da rota indisponível.");
+      const atuais = (button.dataset.routeAju || "").split(",").map(value => value.trim()).filter(Boolean);
+      driverSelect.innerHTML = blank + drivers.map(item => option(item, button.dataset.routeMot || "")).join("");
+      helper1Select.innerHTML = blank + helpers.map(item => option(item, atuais[0])).join("");
+      helper2Select.innerHTML = blank + helpers.map(item => option(item, atuais[1])).join("");
+      document.getElementById("ligaRouteTeamModalSubtitle").textContent = `Mapa ${button.dataset.routeMapa || "-"} · ${button.dataset.routeData || "-"} · ${button.dataset.routeFilial || "-"}`;
+      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      const save = document.getElementById("ligaRouteTeamSave");
+      save.disabled = false;
+      save.onclick = async () => {
+        const ajudantes = [helper1Select.value, helper2Select.value].filter(Boolean);
+        if (new Set(ajudantes).size !== ajudantes.length) { addLog("Selecione ajudantes diferentes.", "warn"); return; }
+        if (!driverSelect.value) { addLog("Selecione o motorista da rota.", "warn"); return; }
+        save.disabled = true;
+        try {
+          await req(CONFIG.endpoints.ligaEntrega.rotaEquipe, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia: dashboard.competencia, data: button.dataset.routeData || "", filial: button.dataset.routeFilial || "", mapa: button.dataset.routeMapa || "", motorista: driverSelect.value, ajudantes }), timeoutMs: 30000 });
+          modal.hide();
+          await syncLigaEntregaReports({ silent: false, force: true });
+          addLog(`Equipe da rota ${button.dataset.routeMapa} atualizada.`, "ok");
+        } catch (error) {
+          save.disabled = false;
+          addLog(`Falha ao atualizar equipe: ${error.message || error}`, "error");
+        }
+      };
+      modal.show();
     }
 
     async function syncLigaEntregaReports(options = {}) {
