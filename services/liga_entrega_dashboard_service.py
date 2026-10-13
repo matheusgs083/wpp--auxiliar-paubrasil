@@ -40,7 +40,7 @@ MAX_COMPETENCE_SCAN_ROWS = 5000
 CACHE_VERSION = 20
 # Bump when ranking eligibility or point calculation changes so persisted SQL
 # snapshots are recalculated before being returned by the dashboard.
-LIGA_RANKING_VERSION = 3
+LIGA_RANKING_VERSION = 4
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
