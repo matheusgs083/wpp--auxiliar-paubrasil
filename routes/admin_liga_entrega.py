@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService, invalidate_dashboard_cache, refresh_snapshot_from_sql
+from bot_api.services.liga_entrega_dashboard_service import CANONICAL_AJUDANTES, CANONICAL_MOTORISTAS, LigaEntregaDashboardService, invalidate_dashboard_cache, refresh_snapshot_from_sql
 from bot_api.services.liga_entrega_pdf_service import build_liga_entrega_dashboard_pdf
 from bot_api.services.operational_indicators_service import OperationalIndicatorsService
 from bot_api.services.monthly_map_cities_service import MonthlyMapCitiesService
@@ -47,6 +47,15 @@ class LigaEntregaStatusRequest(BaseModel):
     status: str = Field(..., description="ativo, ferias, afastado ou desligado")
 
 
+class LigaEntregaRouteTeamRequest(BaseModel):
+    competencia: str = Field(..., description="AAAA-MM")
+    data: str = Field(..., description="AAAA-MM-DD")
+    filial: str = ""
+    mapa: str = Field(..., description="Mapa da rota")
+    motorista: str = Field(..., description="Codigo do motorista")
+    ajudantes: list[str] = Field(default_factory=list, description="Ate dois codigos de ajudante")
+
+
 def create_admin_liga_entrega_router(
     *,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
@@ -59,6 +68,7 @@ def create_admin_liga_entrega_router(
     liga_entrega_report_store: Any | None = None,
     liga_entrega_snapshot_store: Any | None = None,
     liga_entrega_raw_sql_import_service: Any | None = None,
+    liga_entrega_route_team_service: Any | None = None,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
@@ -203,6 +213,7 @@ def create_admin_liga_entrega_router(
                 dprodutos_import_service=dprodutos_import_service,
                 snapshot_store=liga_entrega_snapshot_store,
                 raw_sql_import_service=liga_entrega_raw_sql_import_service,
+                route_team_service=liga_entrega_route_team_service,
                 # Compatibilidade apenas para testes/instalações sem o banco
                 # configurado; em produção ambos os serviços estão presentes
                 # e o painel permanece SQL-only.
@@ -237,6 +248,7 @@ def create_admin_liga_entrega_router(
                 report_store=liga_entrega_report_store,
                 drevendas_import_service=drevendas_import_service,
                 raw_sql_import_service=liga_entrega_raw_sql_import_service,
+                route_team_service=liga_entrega_route_team_service,
             ).build_dashboard(competencia=competencia, period=period)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -309,6 +321,74 @@ def create_admin_liga_entrega_router(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
+    @router.get("/api/admin/liga-entrega/rotas/equipe")
+    def api_admin_liga_entrega_route_team_list(
+        request: Request,
+        competencia: str = Query(...),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_route_team_service is None:
+            raise HTTPException(status_code=503, detail="Ajuste de equipe por rota indisponivel.")
+        return {"ok": True, "items": liga_entrega_route_team_service.list_overrides(competencia=competencia)}
+
+    @router.put("/api/admin/liga-entrega/rotas/equipe")
+    def api_admin_liga_entrega_route_team_upsert(
+        request: Request,
+        payload: LigaEntregaRouteTeamRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_route_team_service is None:
+            raise HTTPException(status_code=503, detail="Ajuste de equipe por rota indisponivel.")
+        driver_code = str(payload.motorista or "").strip()
+        helper_codes = [str(item or "").strip() for item in payload.ajudantes if str(item or "").strip()]
+        if driver_code not in CANONICAL_MOTORISTAS:
+            raise HTTPException(status_code=400, detail="motorista nao pertence ao cadastro de motoristas da Liga.")
+        if any(code not in CANONICAL_AJUDANTES for code in helper_codes):
+            raise HTTPException(status_code=400, detail="ajudante nao pertence ao cadastro de ajudantes da Liga.")
+        try:
+            item = liga_entrega_route_team_service.upsert_override(payload.model_dump(), actor=actor_from_context(context))
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if liga_entrega_snapshot_store is not None:
+            refresh_snapshot_from_sql(
+                liga_entrega_snapshot_store,
+                liga_entrega_expurgo_service,
+                payload.competencia,
+                status_service=liga_entrega_status_service,
+                route_team_service=liga_entrega_route_team_service,
+            )
+        invalidate_dashboard_cache(payload.competencia)
+        record_security_event(request, channel="api", event_type="admin_liga_route_team_upsert", decision="allowed", reason=f"{payload.competencia}:{payload.mapa}")
+        record_panel_action(request, context, action="salvar_equipe_rota", target_id=str(payload.mapa), metadata=payload.model_dump())
+        return {"ok": True, "item": item}
+
+    @router.delete("/api/admin/liga-entrega/rotas/equipe")
+    def api_admin_liga_entrega_route_team_delete(
+        request: Request,
+        competencia: str = Query(...),
+        data: str = Query(...),
+        filial: str = Query(default=""),
+        mapa: str = Query(...),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_route_team_service is None:
+            raise HTTPException(status_code=503, detail="Ajuste de equipe por rota indisponivel.")
+        try:
+            changed = liga_entrega_route_team_service.delete_override(competencia=competencia, data=data, filial=filial, mapa=mapa, actor=actor_from_context(context))
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        invalidate_dashboard_cache(competencia)
+        return {"ok": True, "changed": changed}
+
     @router.get("/api/admin/liga-entrega/expurgos")
     def api_admin_liga_entrega_expurgos(
         request: Request,
@@ -356,7 +436,7 @@ def create_admin_liga_entrega_router(
                 actor=actor_from_context(context),
             )
             if liga_entrega_snapshot_store is not None:
-                refreshed = refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, payload.competencia)
+                refreshed = refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, payload.competencia, route_team_service=liga_entrega_route_team_service)
                 # Em caso de falha transitória, preserve o último snapshot;
                 # a próxima leitura tentará reaplicar o expurgo novamente.
             invalidate_dashboard_cache(payload.competencia)
@@ -389,6 +469,7 @@ def create_admin_liga_entrega_router(
                     liga_entrega_expurgo_service,
                     payload.competencia,
                     status_service=liga_entrega_status_service,
+                    route_team_service=liga_entrega_route_team_service,
                 )
             invalidate_dashboard_cache(payload.competencia)
         except ValueError as exc:
@@ -415,7 +496,7 @@ def create_admin_liga_entrega_router(
             item = liga_entrega_expurgo_service.delete_expurgo(expurgo_id, actor=actor_from_context(context))
             if liga_entrega_snapshot_store is not None:
                 competencia_item = str(item.get("competencia") or "")
-                refreshed = refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, competencia_item)
+                refreshed = refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, competencia_item, route_team_service=liga_entrega_route_team_service)
             invalidate_dashboard_cache(str(item.get("competencia") or ""))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -35,6 +35,7 @@ from bot_api.services.promax_catalog_service import DEFAULT_PROMAX_CATALOG, Prom
 from bot_api.services.liga_entrega_expurgo_service import LigaEntregaExpurgoService
 from bot_api.services.liga_entrega_report_store import LigaEntregaReportStore
 from bot_api.services.liga_entrega_dashboard_snapshot_store import LigaEntregaDashboardSnapshotStore
+from bot_api.services.liga_entrega_route_team_service import LigaEntregaRouteTeamService
 from bot_api.services.liga_entrega_raw_sql_import_service import LigaEntregaRawSqlImportService
 from bot_api.services.liga_entrega_status_service import LigaEntregaStatusService
 from bot_api.services.promax_scheduler import PromaxScheduler
@@ -118,6 +119,11 @@ def configure_app_runtime(
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
     liga_entrega_raw_sql_import_service = LigaEntregaRawSqlImportService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    liga_entrega_route_team_service = LigaEntregaRouteTeamService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -664,6 +670,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "liga_entrega_raw_sql_import_service": runtime["liga_entrega_raw_sql_import_service"],
         "liga_entrega_expurgo_service": runtime["liga_entrega_expurgo_service"],
         "liga_entrega_status_service": runtime["liga_entrega_status_service"],
+        "liga_entrega_route_team_service": runtime["liga_entrega_route_team_service"],
         "dclientes_query_service": runtime["services"].dclientes_query_service,
         "after_critica_operacao_import": runtime["_after_critica_operacao_auto_import"],
         "require_webhook_token": runtime["_require_webhook_token"],

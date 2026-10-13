@@ -129,7 +129,7 @@ _CHECKLIST_CACHE: dict[tuple[str, int, int, tuple[tuple[str, str], ...]], list[d
 
 
 class LigaEntregaDashboardService:
-    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None, snapshot_store: Any | None = None, raw_sql_import_service: Any | None = None, allow_source_files: bool = False) -> None:
+    def __init__(self, *, report_store: Any, expurgo_service: Any, status_service: Any | None = None, dclientes_query_service: Any | None = None, dprodutos_import_service: Any | None = None, snapshot_store: Any | None = None, raw_sql_import_service: Any | None = None, route_team_service: Any | None = None, allow_source_files: bool = False) -> None:
         self.report_store = report_store
         self.expurgo_service = expurgo_service
         self.status_service = status_service
@@ -137,6 +137,7 @@ class LigaEntregaDashboardService:
         self.dprodutos_import_service = dprodutos_import_service
         self.snapshot_store = snapshot_store
         self.raw_sql_import_service = raw_sql_import_service
+        self.route_team_service = route_team_service
         self.allow_source_files = bool(allow_source_files)
 
     def build_dashboard(self, *, competencia: str | None = None, period: str = "atual") -> dict[str, Any]:
@@ -165,6 +166,8 @@ class LigaEntregaDashboardService:
                     active_expurgos = self._active_expurgos(selected_comp)
                     saved_expurgos = ((payload.get("expurgos") or {}).get("items") or []) if isinstance(payload, dict) else []
                     if payload.get("ranking_version") == LIGA_RANKING_VERSION and _same_expurgos(saved_expurgos, active_expurgos):
+                        if apply_route_team_overrides(payload, self.route_team_service, selected_comp):
+                            payload["ranking_version"] = LIGA_RANKING_VERSION
                         return payload
                     # Recalcula snapshots antigos com a regra atual sem voltar
                     # a ler CSVs: os fatos necessários já estão persistidos
@@ -172,6 +175,7 @@ class LigaEntregaDashboardService:
                     if refresh_snapshot_from_sql(self.snapshot_store, self.expurgo_service, selected_comp):
                         refreshed = self.snapshot_store.get_latest(competencia=selected_comp, period=period)
                         if refreshed is not None and refreshed[1].get("ranking_version") == LIGA_RANKING_VERSION:
+                            apply_route_team_overrides(refreshed[1], self.route_team_service, selected_comp)
                             return refreshed[1]
                     return payload
             except Exception:
@@ -590,6 +594,8 @@ class LigaEntregaDashboardService:
             rotas_list.append(r)
         rotas_list.sort(key=lambda x: (str(x.get("data") or ""), to_int(x.get("mapa"))))
 
+        apply_route_team_overrides_to_routes(rotas_list, self.route_team_service, comp)
+
         has_farol = bool(manifests.get(RCHK))
         first_week = is_first_week(rotas_list)
         motoristas, ajudantes = build_rankings(
@@ -802,7 +808,86 @@ class LigaEntregaDashboardService:
             return {}
 
 
-def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, competencia: str, status_service: Any | None = None) -> bool:
+def apply_route_team_overrides_to_routes(routes: list[dict[str, Any]], route_team_service: Any | None, competencia: str) -> int:
+    if route_team_service is None:
+        return 0
+    try:
+        overrides = route_team_service.list_overrides(competencia=competencia)
+    except Exception:
+        return 0
+    by_key = {
+        (str(item.get("data") or "")[:10], str(item.get("filial") or "").strip().upper(), norm_mapa(item.get("mapa"))): item
+        for item in overrides if isinstance(item, dict) and item.get("active", True)
+    }
+    applied = 0
+    for route in routes:
+        key = (str(route.get("data") or "")[:10], str(route.get("filial") or "").strip().upper(), norm_mapa(route.get("mapa")))
+        item = by_key.get(key)
+        if not item:
+            continue
+        route.setdefault("mot_origem", route.get("mot") or "")
+        route.setdefault("aju_origem", list(route.get("aju") or []))
+        route["mot"] = str(item.get("motorista") or route.get("mot") or "")
+        raw_helpers = item.get("ajudantes")
+        if isinstance(raw_helpers, str):
+            try:
+                raw_helpers = json.loads(raw_helpers)
+            except Exception:
+                raw_helpers = []
+        route["aju"] = [str(code).strip() for code in (raw_helpers or []) if str(code).strip()][:2]
+        route["equipe_override"] = True
+        route["equipe_override_id"] = str(item.get("id") or "")
+        applied += 1
+    return applied
+
+
+def apply_route_team_overrides(payload: dict[str, Any], route_team_service: Any | None, competencia: str) -> bool:
+    routes = [item for item in payload.get("rotas") or [] if isinstance(item, dict)]
+    if not routes:
+        return False
+    applied = apply_route_team_overrides_to_routes(routes, route_team_service, competencia)
+    if not applied:
+        return False
+    payload["rotas"] = routes
+    colab = {str(item.get("cod")): dict(item) for item in payload.get("equipe") or [] if isinstance(item, dict) and item.get("cod")}
+    facts = payload.get("_liga_facts") or {}
+    ent_m = dict(facts.get("ent_m") or {})
+    ent_a = dict(facts.get("ent_a") or {})
+    if not facts.get("_route_team_overrides_applied"):
+        _rebalance_route_delivery_facts(routes, ent_m, ent_a)
+        facts["_route_team_overrides_applied"] = True
+    facts["ent_m"], facts["ent_a"] = ent_m, ent_a
+    motoristas, ajudantes = build_rankings(
+        routes, {}, [dict(item) for item in payload.get("devolucoes_auxiliares") or [] if isinstance(item, dict)],
+        ent_m, ent_a, facts.get("checklist") or [], colab,
+        has_farol=bool(facts.get("has_farol")), first_week=bool(facts.get("first_week")),
+    )
+    payload["rankings"] = {"motoristas": motoristas, "ajudantes": ajudantes}
+    return True
+
+
+def _rebalance_route_delivery_facts(routes: list[dict[str, Any]], ent_m: dict[str, Any], ent_a: dict[str, Any]) -> None:
+    """Move the route's delivery denominator when a team override is saved."""
+    for route in routes:
+        if not route.get("equipe_override"):
+            continue
+        amount = int(route.get("entregas") or 0)
+        if amount <= 0:
+            continue
+        old_mot = norm_code(route.get("mot_origem"))
+        new_mot = norm_code(route.get("mot"))
+        if old_mot != new_mot:
+            ent_m[old_mot] = max(0, int(ent_m.get(old_mot) or 0) - amount)
+            ent_m[new_mot] = int(ent_m.get(new_mot) or 0) + amount
+        old_helpers = {norm_code(code) for code in route.get("aju_origem") or [] if norm_code(code) != "0"}
+        new_helpers = {norm_code(code) for code in route.get("aju") or [] if norm_code(code) != "0"}
+        for code in old_helpers - new_helpers:
+            ent_a[code] = max(0, int(ent_a.get(code) or 0) - amount)
+        for code in new_helpers - old_helpers:
+            ent_a[code] = int(ent_a.get(code) or 0) + amount
+
+
+def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, competencia: str, status_service: Any | None = None, route_team_service: Any | None = None) -> bool:
     """Reaplica expurgos/status usando somente os fatos persistidos no snapshot."""
     if snapshot_store is None:
         return False
@@ -814,6 +899,7 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
             _, payload = latest
             facts = payload.get("_liga_facts") or {}
             routes = [dict(item) for item in payload.get("rotas") or [] if isinstance(item, dict) and _record_competencia(item.get("data")) in {"", competencia}]
+            apply_route_team_overrides_to_routes(routes, route_team_service, competencia)
             devols = [dict(item) for item in payload.get("devolucoes_auxiliares") or [] if isinstance(item, dict) and _record_competencia(item.get("data")) in {"", competencia}]
             expurgos = [dict(item) for item in expurgo_service.list_expurgos(competencia=competencia, active_only=True).get("items", [])]
             for route in routes:
@@ -822,6 +908,12 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
             for dev in devols:
                 dev["excluida"] = bool(matching_dev_expurgos(dev, expurgos))
             colab = {str(item.get("cod")): dict(item) for item in payload.get("equipe") or [] if isinstance(item, dict) and item.get("cod")}
+            ent_m = dict(facts.get("ent_m") or {})
+            ent_a = dict(facts.get("ent_a") or {})
+            if not facts.get("_route_team_overrides_applied"):
+                _rebalance_route_delivery_facts(routes, ent_m, ent_a)
+                facts["_route_team_overrides_applied"] = True
+            facts["ent_m"], facts["ent_a"] = ent_m, ent_a
             if status_service is not None:
                 statuses = status_service.statuses(competencia)
                 for code, status in statuses.items():
@@ -829,7 +921,7 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
                         colab[code]["status"] = status
             motoristas, ajudantes = build_rankings(
                 routes, {}, devols,
-                facts.get("ent_m") or {}, facts.get("ent_a") or {}, facts.get("checklist") or [],
+                ent_m, ent_a, facts.get("checklist") or [],
                 colab,
                 has_farol=bool(facts.get("has_farol")), first_week=bool(facts.get("first_week")),
             )

@@ -3297,6 +3297,7 @@
         ligaEntrega: {
           expurgos: "/api/admin/liga-entrega/expurgos",
           equipe: "/api/admin/liga-entrega/equipe",
+          rotaEquipe: "/api/admin/liga-entrega/rotas/equipe",
           reports: "/api/admin/liga-entrega/relatorios",
           dashboard: "/api/admin/liga-entrega/dashboard",
           indicadores: "/api/admin/liga-entrega/indicadores",
@@ -5336,7 +5337,7 @@
       let content = "";
       if (view === "motoristas" || view === "ajudantes") content = personRows(Array.isArray(rankings[view]) ? rankings[view] : [], view);
       if (view === "devolucoes") content = renderLigaDevolucoesExpurgoCard(dashboard, filter);
-      if (view === "rotas") content = table('<th>Data</th><th>Mapa</th><th>Filial</th><th>Motorista</th><th>Cidade</th><th class="text-end">KM real/prev.</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th>Expurgos</th><th></th>', filter(routes).slice().reverse().map(row => { const suspect = Number(row.km_real || 0) > Number(row.km_prev || 0) + 50; const late = String(row.hr_sai || "") > "12:00"; const expurgos = [row.expurgo_saida ? '<span class="badge text-bg-warning me-1">TML</span>' : "", row.expurgo_km ? '<span class="badge text-bg-warning">KM</span>' : ""].filter(Boolean).join("") || '<span class="text-secondary">—</span>'; return `<tr><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.mapa || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml((team.find(p => p.cod === row.mot) || {}).nome || row.mot || "-")}</td><td>${escapeHtml(row.cidade || "-")}</td><td class="text-end ${suspect ? "text-warning fw-bold" : ""}">${fmt(row.km_real)} / ${fmt(row.km_prev)}${suspect ? " ⚠" : ""}</td><td class="text-end ${late ? "text-warning fw-bold" : ""}">${escapeHtml(row.hr_sai || "-")}${late ? " ⚠" : ""}</td><td class="text-end">${pct(row.tempo_pct)}</td><td>${expurgos}</td><td><button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">KM</button></td></tr>`; }).join(""));
+      if (view === "rotas") content = table('<th>Data</th><th>Mapa</th><th>Filial</th><th>Motorista</th><th>Ajudantes</th><th>Cidade</th><th class="text-end">KM real/prev.</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th>Expurgos</th><th>Ações</th>', filter(routes).slice().reverse().map(row => { const suspect = Number(row.km_real || 0) > Number(row.km_prev || 0) + 50; const late = String(row.hr_sai || "") > "12:00"; const expurgos = [row.expurgo_saida ? '<span class="badge text-bg-warning me-1">TML</span>' : "", row.expurgo_km ? '<span class="badge text-bg-warning">KM</span>' : ""].filter(Boolean).join("") || '<span class="text-secondary">—</span>'; const helperNames = (row.aju || []).map(code => (team.find(p => p.cod === code) || {}).nome || code).join(", "); return `<tr><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.mapa || "-")}${row.equipe_override ? ' <span class="badge text-bg-info">ajustada</span>' : ""}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml((team.find(p => p.cod === row.mot) || {}).nome || row.mot || "-")}</td><td>${escapeHtml(helperNames || "—")}</td><td>${escapeHtml(row.cidade || "-")}</td><td class="text-end ${suspect ? "text-warning fw-bold" : ""}">${fmt(row.km_real)} / ${fmt(row.km_prev)}${suspect ? " ⚠" : ""}</td><td class="text-end ${late ? "text-warning fw-bold" : ""}">${escapeHtml(row.hr_sai || "-")}${late ? " ⚠" : ""}</td><td class="text-end">${pct(row.tempo_pct)}</td><td>${expurgos}</td><td><button class="btn btn-outline-primary btn-sm py-0 liga-route-team" type="button" data-route-data="${escapeHtml(row.data || "")}" data-route-filial="${escapeHtml(row.filial || "")}" data-route-mapa="${escapeHtml(row.mapa || "")}" data-route-mot="${escapeHtml(row.mot || "")}" data-route-aju="${escapeHtml((row.aju || []).join(","))}">Equipe</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">KM</button></td></tr>`; }).join(""));
       if (view === "equipe") {
         const pending = state.ligaEntregaTeamChanges || {};
         const pendingCount = Object.keys(pending).length;
@@ -5660,6 +5661,22 @@
       state.ligaEntregaTeamChanges = {};
       await syncLigaEntregaReports({ silent: false, force: true });
       addLog(`${changes.length} status da equipe salvo(s).`, "ok");
+    }
+
+    async function editLigaEntregaRouteTeam(button) {
+      const dashboard = state.ligaEntregaDashboard || {};
+      if (!dashboard.competencia) throw new Error("Competência da Liga indisponível.");
+      const team = Array.isArray(dashboard.equipe) ? dashboard.equipe : [];
+      const drivers = team.filter(item => String(item.funcao || "").toUpperCase().includes("MOTOR")).map(item => `${item.cod} - ${item.nome}`).join("\n");
+      const helpers = team.filter(item => String(item.funcao || "").toUpperCase().includes("AJUD")).map(item => `${item.cod} - ${item.nome}`).join("\n");
+      const driver = window.prompt(`Motorista da rota ${button.dataset.routeMapa}. Informe o código.\n\n${drivers}`, button.dataset.routeMot || "");
+      if (driver === null) return;
+      const helperText = window.prompt(`Ajudantes (até 2 códigos separados por vírgula).\n\n${helpers}`, button.dataset.routeAju || "");
+      if (helperText === null) return;
+      const ajudantes = helperText.split(",").map(item => item.trim()).filter(Boolean).slice(0, 2);
+      await req(CONFIG.endpoints.ligaEntrega.rotaEquipe, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia: dashboard.competencia, data: button.dataset.routeData || "", filial: button.dataset.routeFilial || "", mapa: button.dataset.routeMapa || "", motorista: driver.trim(), ajudantes }), timeoutMs: 30000 });
+      await syncLigaEntregaReports({ silent: false, force: true });
+      addLog(`Equipe da rota ${button.dataset.routeMapa} atualizada.`, "ok");
     }
 
     async function syncLigaEntregaReports(options = {}) {
@@ -10810,7 +10827,7 @@
         const button = event.target.closest(".liga-expurgo-remove");
         if (button) removeLigaEntregaExpurgo(button.dataset.expurgoId || "").catch(err => addLog(`Falha ao remover expurgo: ${err.message}`, "err"));
       });
-      if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("click", event => {
+      if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("click", async event => {
         const saveTeamButton = event.target.closest(".liga-team-save");
         if (saveTeamButton) {
           saveTeamButton.disabled = true;
@@ -10874,6 +10891,15 @@
           state.ligaEntregaView = "rotas";
           state.ligaEntregaFilters = { ...(state.ligaEntregaFilters || {}), q: personButton.dataset.ligaPerson || "" };
           renderLigaEntregaDashboard((state.ligaEntregaReports || {}).items || [], (state.ligaEntregaReports || {}).summary || {});
+          return;
+        }
+        const routeTeamButton = event.target.closest(".liga-route-team");
+        if (routeTeamButton) {
+          try {
+            await editLigaEntregaRouteTeam(routeTeamButton);
+          } catch (error) {
+            addLog(error && error.message ? error.message : "Não foi possível atualizar a equipe da rota.", "error");
+          }
           return;
         }
         const button = event.target.closest(".liga-expurgo-route");
