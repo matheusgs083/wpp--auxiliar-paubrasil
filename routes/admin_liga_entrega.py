@@ -381,7 +381,15 @@ def create_admin_liga_entrega_router(
         try:
             item = liga_entrega_status_service.set_status(competencia=payload.competencia, cod=cod, status=payload.status, actor=actor_from_context(context))
             if liga_entrega_snapshot_store is not None:
-                liga_entrega_snapshot_store.invalidate(competencia=payload.competencia)
+                # Preserve the SQL facts/routes and refresh only the team
+                # status and rankings. Invalidating the snapshot would make
+                # the SQL-only dashboard appear empty until a full import.
+                refresh_snapshot_from_sql(
+                    liga_entrega_snapshot_store,
+                    liga_entrega_expurgo_service,
+                    payload.competencia,
+                    status_service=liga_entrega_status_service,
+                )
             invalidate_dashboard_cache(payload.competencia)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

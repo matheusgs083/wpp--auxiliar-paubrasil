@@ -802,8 +802,8 @@ class LigaEntregaDashboardService:
             return {}
 
 
-def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, competencia: str) -> bool:
-    """Reaplica expurgos usando somente os fatos do snapshot persistido."""
+def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, competencia: str, status_service: Any | None = None) -> bool:
+    """Reaplica expurgos/status usando somente os fatos persistidos no snapshot."""
     if snapshot_store is None:
         return False
     for period in ("atual", "fechado"):
@@ -822,6 +822,11 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
             for dev in devols:
                 dev["excluida"] = bool(matching_dev_expurgos(dev, expurgos))
             colab = {str(item.get("cod")): dict(item) for item in payload.get("equipe") or [] if isinstance(item, dict) and item.get("cod")}
+            if status_service is not None:
+                statuses = status_service.statuses(competencia)
+                for code, status in statuses.items():
+                    if code in colab:
+                        colab[code]["status"] = status
             motoristas, ajudantes = build_rankings(
                 routes, {}, devols,
                 facts.get("ent_m") or {}, facts.get("ent_a") or {}, facts.get("checklist") or [],
