@@ -86,6 +86,24 @@ def test_liga_scores_only_indicators_that_reach_their_targets():
     assert row["total"] == 60.0
 
 
+def test_known_helper_is_not_duplicated_in_driver_ranking_when_report_mislabels_code():
+    routes = [{
+        "data": "2026-10-01", "mot": "7480", "aju": [],
+        "km_real": 100, "km_prev": 100, "hr_sai": "07:00",
+    }]
+    colab = {
+        "7480": {"nome": "Ajudante", "filial": "PATOS", "funcao": "AJUDANTE", "status": "ativo"},
+    }
+
+    motoristas, ajudantes = build_rankings(
+        routes, {}, [], {"7480": 10}, {"7480": 10}, [], colab,
+        has_farol=False, first_week=True,
+    )
+
+    assert all(row["cod"] != "7480" for row in motoristas)
+    assert any(row["cod"] == "7480" for row in ajudantes)
+
+
 class _Store:
     def list_manifests(self, routine, *, competencia=None):
         return [

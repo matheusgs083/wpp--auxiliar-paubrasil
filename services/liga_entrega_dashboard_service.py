@@ -1507,7 +1507,14 @@ def deduplicate_devolucoes(devols: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], entregas: dict[str, int], devols: dict[str, int], devols_expurgadas: dict[str, int], chk_e: dict[str, int], chk_f: dict[str, int], role: str, *, has_farol: bool, first_week: bool) -> list[dict[str, Any]]:
     pesos = PESOS_MOT if role == "MOTORISTA" else PESOS_AJD
-    codes = {k for k, v in colab.items() if v.get("funcao") == role} | set(agg) | set(entregas)
+    # A mesma matrícula pode aparecer em uma coluna incorreta do relatório.
+    # Quando o cadastro já conhece a função, ele é a fonte de verdade e não
+    # deve ser replicado no ranking da outra função.
+    observed = set(agg) | set(entregas)
+    codes = (
+        {k for k, v in colab.items() if v.get("funcao") == role}
+        | {k for k in observed if not colab.get(k) or colab[k].get("funcao") == role}
+    )
     rows: list[dict[str, Any]] = []
     for cod in sorted(codes):
         info = colab.get(cod, {"nome": f"COD {cod}", "filial": ""})
