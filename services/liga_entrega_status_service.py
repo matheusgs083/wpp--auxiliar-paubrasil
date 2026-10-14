@@ -42,6 +42,45 @@ class LigaEntregaStatusService:
             self._write(payload)
         return {"competencia": competencia, "cod": code, "status": clean_status}
 
+    def roster(self, competencia: str) -> dict[str, dict[str, str]]:
+        """Retorna os colaboradores explicitamente cadastrados na Liga."""
+        self._validate_competencia(competencia)
+        payload = self._read()
+        rows = ((payload.get("roster") or {}).get(competencia) or {}) if isinstance(payload, dict) else {}
+        return {str(code): dict(item) for code, item in rows.items() if isinstance(item, dict) and item.get("active", True)}
+
+    def set_roster(self, *, competencia: str, cod: str, nome: str, filial: str, funcao: str, actor: str = "") -> dict[str, str]:
+        self._validate_competencia(competencia)
+        code = re.sub(r"\D", "", str(cod or ""))
+        clean_name = str(nome or "").strip()[:160]
+        clean_filial = str(filial or "").strip().upper()[:80]
+        clean_role = str(funcao or "").strip().upper()
+        if not code or not clean_name or clean_role not in {"MOTORISTA", "AJUDANTE"}:
+            raise ValueError("Informe código, nome e função válidos para cadastrar o colaborador.")
+        with self._lock:
+            payload = self._read()
+            roster = payload.setdefault("roster", {})
+            rows = roster.setdefault(competencia, {})
+            rows[code] = {"cod": code, "nome": clean_name, "filial": clean_filial, "funcao": clean_role, "active": True}
+            payload["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            payload["updated_by"] = actor
+            self._write(payload)
+        return {"competencia": competencia, **rows[code]}
+
+    def remove_roster(self, *, competencia: str, cod: str, actor: str = "") -> bool:
+        self._validate_competencia(competencia)
+        code = re.sub(r"\D", "", str(cod or ""))
+        with self._lock:
+            payload = self._read()
+            rows = ((payload.get("roster") or {}).get(competencia) or {}) if isinstance(payload, dict) else {}
+            if code not in rows:
+                return False
+            rows.pop(code, None)
+            payload["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            payload["updated_by"] = actor
+            self._write(payload)
+        return True
+
     def _read(self) -> dict[str, Any]:
         try:
             payload = json.loads(self.storage_path.read_text(encoding="utf-8"))

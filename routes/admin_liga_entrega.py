@@ -47,6 +47,14 @@ class LigaEntregaStatusRequest(BaseModel):
     status: str = Field(..., description="ativo, ferias, afastado ou desligado")
 
 
+class LigaEntregaRosterRequest(BaseModel):
+    competencia: str = Field(..., description="AAAA-MM")
+    cod: str = Field(..., description="Código do colaborador")
+    nome: str = Field(..., description="Nome do colaborador")
+    filial: str = ""
+    funcao: str = Field(..., description="MOTORISTA ou AJUDANTE")
+
+
 class LigaEntregaRouteTeamRequest(BaseModel):
     competencia: str = Field(..., description="AAAA-MM")
     data: str = Field(..., description="AAAA-MM-DD")
@@ -349,10 +357,19 @@ def create_admin_liga_entrega_router(
             raise HTTPException(status_code=503, detail="Ajuste de equipe por rota indisponivel.")
         driver_code = str(payload.motorista or "").strip()
         helper_codes = [str(item or "").strip() for item in payload.ajudantes if str(item or "").strip()]
-        if driver_code not in CANONICAL_MOTORISTAS:
-            raise HTTPException(status_code=400, detail="motorista nao pertence ao cadastro de motoristas da Liga.")
-        if any(code not in CANONICAL_AJUDANTES for code in helper_codes):
-            raise HTTPException(status_code=400, detail="ajudante nao pertence ao cadastro de ajudantes da Liga.")
+        # O cadastro canônico é a referência inicial. Colaboradores novos só
+        # podem ser usados depois do cadastro explícito na Liga.
+        candidatos: dict[str, str] = {
+            str(code): "MOTORISTA" for code in CANONICAL_MOTORISTAS
+        }
+        candidatos.update({str(code): "AJUDANTE" for code in CANONICAL_AJUDANTES})
+        if liga_entrega_status_service is not None and hasattr(liga_entrega_status_service, "roster"):
+            for code, item in liga_entrega_status_service.roster(payload.competencia).items():
+                candidatos[str(code)] = str(item.get("funcao") or "").upper()
+        if candidatos.get(driver_code) != "MOTORISTA":
+            raise HTTPException(status_code=400, detail="motorista nao foi encontrado nos relatorios desta competencia.")
+        if any(candidatos.get(code) != "AJUDANTE" for code in helper_codes):
+            raise HTTPException(status_code=400, detail="ajudante nao foi encontrado nos relatorios desta competencia.")
         try:
             item = liga_entrega_route_team_service.upsert_override(payload.model_dump(), actor=actor_from_context(context))
         except (ValueError, RuntimeError) as exc:
@@ -479,6 +496,51 @@ def create_admin_liga_entrega_router(
         record_security_event(request, channel="api", event_type="admin_liga_equipe_status", decision="allowed", reason=str(item.get("cod") or ""))
         record_panel_action(request, context, action="salvar_status_equipe", target_id=str(item.get("cod") or ""), metadata=item)
         return {"ok": True, "item": item}
+
+    @router.post("/api/admin/liga-entrega/equipe/cadastro")
+    def api_admin_liga_entrega_equipe_cadastro(
+        request: Request,
+        payload: LigaEntregaRosterRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_status_service is None or not hasattr(liga_entrega_status_service, "set_roster"):
+            raise HTTPException(status_code=503, detail="Cadastro da equipe da Liga indisponível.")
+        try:
+            item = liga_entrega_status_service.set_roster(**payload.model_dump(), actor=actor_from_context(context))
+            if liga_entrega_snapshot_store is not None:
+                refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, payload.competencia, status_service=liga_entrega_status_service, route_team_service=liga_entrega_route_team_service)
+            invalidate_dashboard_cache(payload.competencia)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_security_event(request, channel="api", event_type="admin_liga_equipe_cadastro", decision="allowed", reason=str(item.get("cod") or ""))
+        record_panel_action(request, context, action="cadastrar_colaborador_liga", target_id=str(item.get("cod") or ""), metadata=item)
+        return {"ok": True, "item": item}
+
+    @router.delete("/api/admin/liga-entrega/equipe/cadastro/{cod}")
+    def api_admin_liga_entrega_equipe_cadastro_delete(
+        cod: str,
+        request: Request,
+        competencia: str = Query(...),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_status_service is None or not hasattr(liga_entrega_status_service, "remove_roster"):
+            raise HTTPException(status_code=503, detail="Cadastro da equipe da Liga indisponível.")
+        try:
+            changed = liga_entrega_status_service.remove_roster(competencia=competencia, cod=cod, actor=actor_from_context(context))
+            if changed and liga_entrega_snapshot_store is not None:
+                refresh_snapshot_from_sql(liga_entrega_snapshot_store, liga_entrega_expurgo_service, competencia, status_service=liga_entrega_status_service, route_team_service=liga_entrega_route_team_service)
+            invalidate_dashboard_cache(competencia)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_security_event(request, channel="api", event_type="admin_liga_equipe_cadastro_delete", decision="allowed", reason=str(cod or ""))
+        record_panel_action(request, context, action="remover_colaborador_liga", target_id=str(cod or ""), metadata={"competencia": competencia})
+        return {"ok": True, "changed": changed}
 
     @router.delete("/api/admin/liga-entrega/expurgos/{expurgo_id}")
     def api_admin_liga_entrega_expurgo_delete(

@@ -241,6 +241,23 @@ class LigaEntregaDashboardService:
             code: {"cod": code, "nome": name, "filial": filial, "funcao": "AJUDANTE", "status": canonical_status(code, status_overrides)}
             for code, (name, filial) in CANONICAL_AJUDANTES.items()
         })
+        registered_codes: set[str] = set()
+        if self.status_service is not None and hasattr(self.status_service, "roster"):
+            try:
+                for code, item in self.status_service.roster(comp).items():
+                    clean_code = norm_code(code)
+                    if clean_code == "0":
+                        continue
+                    registered_codes.add(clean_code)
+                    colab[clean_code] = {
+                        "cod": clean_code,
+                        "nome": clean_name(item.get("nome") or f"COD {clean_code}"),
+                        "filial": str(item.get("filial") or "").strip().upper(),
+                        "funcao": str(item.get("funcao") or "MOTORISTA").strip().upper(),
+                        "status": canonical_status(clean_code, status_overrides),
+                    }
+            except Exception:
+                pass
         warnings: list[str] = []
         def remember(cod: Any, *, nome: str = "", filial: str = "", funcao: str = "") -> str:
             c = norm_code(cod)
@@ -603,6 +620,15 @@ class LigaEntregaDashboardService:
 
         has_farol = bool(manifests.get(RCHK))
         first_week = is_first_week(rotas_list)
+        # Os códigos novos ficam visíveis em ``equipe_candidatos`` para
+        # cadastro explícito, mas não participam do ranking antes da decisão.
+        candidatos = [
+            dict(item) for code, item in colab.items()
+            if norm_code(code) not in CANONICAL_ROSTER and norm_code(code) not in registered_codes
+        ]
+        for code in list(colab):
+            if norm_code(code) not in CANONICAL_ROSTER and norm_code(code) not in registered_codes:
+                colab.pop(code, None)
         motoristas, ajudantes = build_rankings(
             rotas_list, port, devols, {k: len(v) for k, v in ent_m.items()}, {k: len(v) for k, v in ent_a.items()},
             checklist, colab, has_farol=has_farol, first_week=first_week,
@@ -658,7 +684,8 @@ class LigaEntregaDashboardService:
         # O snapshot é JSONB: preserve apenas os totais necessários para
         # reaplicar expurgos. Os conjuntos de PDVs são convertidos em inteiros
         # para não fazer a persistência falhar silenciosamente.
-        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "ranking_version": LIGA_RANKING_VERSION, "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or "")), "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50], "_liga_facts": {"ent_m": {k: len(v) for k, v in ent_m.items()}, "ent_a": {k: len(v) for k, v in ent_a.items()}, "checklist": checklist, "first_week": first_week, "has_farol": has_farol}}
+        equipe = sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
+        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "ranking_version": LIGA_RANKING_VERSION, "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": equipe, "equipe_candidatos": candidatos, "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50], "_liga_facts": {"ent_m": {k: len(v) for k, v in ent_m.items()}, "ent_a": {k: len(v) for k, v in ent_a.items()}, "checklist": checklist, "first_week": first_week, "has_farol": has_farol}}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
         self._write_persisted_cache(comp, period, cache_signature, result)
@@ -916,6 +943,23 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
             for dev in devols:
                 dev["excluida"] = bool(matching_dev_expurgos(dev, expurgos))
             colab = {str(item.get("cod")): dict(item) for item in payload.get("equipe") or [] if isinstance(item, dict) and item.get("cod")}
+            candidatos = [dict(item) for item in payload.get("equipe_candidatos") or [] if isinstance(item, dict)]
+            registered_codes: set[str] = set()
+            if status_service is not None and hasattr(status_service, "roster"):
+                for code, item in status_service.roster(competencia).items():
+                    clean_code = norm_code(code)
+                    registered_codes.add(clean_code)
+                    colab[clean_code] = {
+                        "cod": clean_code,
+                        "nome": str(item.get("nome") or f"COD {clean_code}"),
+                        "filial": str(item.get("filial") or "").strip().upper(),
+                        "funcao": str(item.get("funcao") or "MOTORISTA").strip().upper(),
+                        "status": "ativo",
+                    }
+            for code in list(colab):
+                clean_code = norm_code(code)
+                if clean_code not in CANONICAL_ROSTER and clean_code not in registered_codes:
+                    candidatos.append(colab.pop(code))
             ent_m = dict(facts.get("ent_m") or {})
             ent_a = dict(facts.get("ent_a") or {})
             if not facts.get("_route_team_overrides_applied"):
@@ -938,6 +982,8 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
                 if item.get("tipo") in counts:
                     counts[item["tipo"]] += 1
             payload["rankings"] = {"motoristas": motoristas, "ajudantes": ajudantes}
+            payload["equipe"] = sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
+            payload["equipe_candidatos"] = sorted({str(item.get("cod")): item for item in candidatos if item.get("cod")}.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
             payload["rotas"] = routes
             payload["devolucoes"] = devols
             payload["devolucoes_auxiliares"] = devols
@@ -1620,9 +1666,12 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
     # Quando o cadastro já conhece a função, ele é a fonte de verdade e não
     # deve ser replicado no ranking da outra função.
     observed = set(agg) | set(entregas)
+    # Colaboradores observados nos relatórios, mas ainda não cadastrados na
+    # Liga, ficam disponíveis como candidatos e não entram no ranking.
+    known_codes = set(colab)
     codes = (
         {k for k, v in colab.items() if v.get("funcao") == role}
-        | {k for k in observed if not colab.get(k) or colab[k].get("funcao") == role}
+        | {k for k in observed if k in known_codes and colab[k].get("funcao") == role}
     )
     rows: list[dict[str, Any]] = []
     for cod in sorted(codes):
