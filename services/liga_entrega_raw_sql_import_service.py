@@ -7,7 +7,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Lock
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 import psycopg
 from psycopg import sql
@@ -49,7 +49,14 @@ class LigaEntregaRawSqlImportService:
     source_key evita reler e duplicar um arquivo que não foi alterado.
     """
 
-    def __init__(self, *, database_url: str, schema: str = "reports", connect_timeout_seconds: float = 3.0) -> None:
+    def __init__(
+        self,
+        *,
+        database_url: str,
+        schema: str = "reports",
+        connect_timeout_seconds: float = 3.0,
+        post_import_callback: Callable[[dict[str, list[dict[str, Any]]], dict[str, int]], None] | None = None,
+    ) -> None:
         self.database_url = str(database_url or "")
         self.schema = str(schema or "reports")
         self.connect_timeout_seconds = max(float(connect_timeout_seconds or 3), 1.0)
@@ -57,23 +64,51 @@ class LigaEntregaRawSqlImportService:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="liga-sql-import")
         self._pending_lock = Lock()
         self._pending = False
+        self._pending_manifests: dict[str, list[dict[str, Any]]] = {}
+        self._post_import_callback = post_import_callback
+
+    def set_post_import_callback(
+        self,
+        callback: Callable[[dict[str, list[dict[str, Any]]], dict[str, int]], None] | None,
+    ) -> None:
+        """Define a callback executado somente depois do commit da carga SQL."""
+        with self._pending_lock:
+            self._post_import_callback = callback
 
     def enqueue_manifests(self, manifests: dict[str, list[dict[str, Any]]]) -> None:
         """Agenda a conversao sem bloquear a resposta do painel."""
         if not self.database_url:
             return
         with self._pending_lock:
+            for routine, items in manifests.items():
+                if not items:
+                    continue
+                self._pending_manifests.setdefault(str(routine), []).extend(items)
+            if not self._pending_manifests:
+                return
             if self._pending:
                 return
             self._pending = True
-        self._executor.submit(self._run_pending, manifests)
+        self._executor.submit(self._run_pending)
 
-    def _run_pending(self, manifests: dict[str, list[dict[str, Any]]]) -> None:
-        try:
-            self.import_manifests(manifests)
-        finally:
+    def _run_pending(self) -> None:
+        while True:
             with self._pending_lock:
-                self._pending = False
+                manifests = self._pending_manifests
+                self._pending_manifests = {}
+                callback = self._post_import_callback
+            if not manifests:
+                with self._pending_lock:
+                    self._pending = False
+                return
+            result = self.import_manifests(manifests)
+            if callback is not None:
+                try:
+                    callback(manifests, result)
+                except Exception:
+                    # A reconstrução é complementar: nunca reverta uma carga
+                    # SQL já confirmada por causa de falha no snapshot.
+                    pass
 
     def _connect(self) -> psycopg.Connection[Any]:
         if not self.database_url:

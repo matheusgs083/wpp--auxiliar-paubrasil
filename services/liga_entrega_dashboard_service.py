@@ -374,8 +374,13 @@ class LigaEntregaDashboardService:
                         data = to_iso(pick(row, "Data"), fallback=manifest_ref(manifest))
                         key = dev_key(nota, pick(row, "Serie", "Série"), data)
                         mot = remember(pick(row, "Motorista", "CdMot"), nome=pick(row, "Nome Motorista"), filial=filial, funcao="MOTORISTA")
+                        # O cadastro da Liga é a fonte de verdade da unidade
+                        # do motorista. Isso corrige exports do Promax que
+                        # repetem o arquivo completo ao trocar PATOS/SUMÉ.
+                        cadastro_filial = str((CANONICAL_MOTORISTAS.get(mot) or ("", ""))[1] or "").strip()
+                        filial_devolucao = cadastro_filial or filial
                         devols.append({
-                            "chave": key, "filial": filial, "cod": mot, "aju": ajud_devol.get(key, []), "data": data,
+                            "chave": key, "filial": filial_devolucao, "cod": mot, "aju": ajud_devol.get(key, []), "data": data,
                             "nota": nota, "serie": str(pick(row, "Serie", "Série") or "").strip(),
                             "cliente_cod": norm_code(pick(row, "Cod. Cliente", "Cod Cliente", "Cliente")),
                             "cliente": str(pick(row, "Nome Cliente", "Cliente Nome") or "").strip(),
@@ -900,7 +905,10 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
             facts = payload.get("_liga_facts") or {}
             routes = [dict(item) for item in payload.get("rotas") or [] if isinstance(item, dict) and _record_competencia(item.get("data")) in {"", competencia}]
             apply_route_team_overrides_to_routes(routes, route_team_service, competencia)
-            devols = [dict(item) for item in payload.get("devolucoes_auxiliares") or [] if isinstance(item, dict) and _record_competencia(item.get("data")) in {"", competencia}]
+            devols = deduplicate_devolucoes([
+                dict(item) for item in payload.get("devolucoes_auxiliares") or []
+                if isinstance(item, dict) and _record_competencia(item.get("data")) in {"", competencia}
+            ])
             expurgos = [dict(item) for item in expurgo_service.list_expurgos(competencia=competencia, active_only=True).get("items", [])]
             for route in routes:
                 route["expurgo_saida"] = bool(matching_route_expurgos(route, expurgos, {"tml"}))
@@ -1574,15 +1582,24 @@ def aggregate_devolucoes(devols: list[dict[str, Any]], *, only_expurgadas: bool 
 
 
 def deduplicate_devolucoes(devols: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Remove a mesma NF repetida em lotes/arquivos da mesma filial e data."""
-    unique: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
+    """Remove a mesma NF repetida em lotes/arquivos e preserva o historico.
+
+    Alguns exports do Promax retornam o mesmo relatorio de Motorista para as
+    duas unidades. Nesse caso a filial do nome do arquivo nao pode fazer uma
+    devolucao identica contar duas vezes. O motorista (codigo) faz parte da
+    chave porque uma NF pode existir em unidades diferentes, mas nao para o
+    mesmo motorista; registros sem motorista continuam isolados por filial.
+    """
+    unique: dict[tuple[str, str, str, str, str, str], dict[str, Any]] = {}
     for item in devols:
+        motorista = norm_code(item.get("cod"))
         key = (
-            str(item.get("filial") or "").strip().upper(),
+            motorista or str(item.get("filial") or "").strip().upper(),
             str(item.get("nota") or "").strip(),
             str(item.get("serie") or "").strip(),
             str(item.get("data") or "").strip(),
             norm_code(item.get("cliente_cod")),
+            str(item.get("volume_hl") or "").strip(),
         )
         current = unique.get(key)
         if current is None:

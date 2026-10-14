@@ -6,6 +6,7 @@ from bot_api.services.liga_entrega_dashboard_service import (
     preserve_operational_route_date,
     route_km_values,
     _record_competencia,
+    deduplicate_devolucoes,
 )
 from datetime import date
 
@@ -44,6 +45,19 @@ def test_liga_devolucao_uses_binary_score_and_replaces_checklist():
     assert bad_row["pts"]["devol"] == 0
     assert "check" not in good_row["pts"]
     assert "check_pct" not in good_row
+
+
+def test_identical_motorista_export_for_two_filiais_counts_devolucao_once():
+    base = {
+        "nota": "220237", "serie": "003", "data": "2026-10-10",
+        "cliente_cod": "7410", "volume_hl": 0.04, "cod": "7410",
+        "aju": [], "excluida": False,
+    }
+    duplicate = [dict(base, filial="PATOS"), dict(base, filial="SUME")]
+
+    result = deduplicate_devolucoes(duplicate)
+
+    assert len(result) == 1
 
 
 def test_expurgo_removes_only_affected_indicator_and_keeps_route_in_ranking():

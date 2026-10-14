@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import re
 from threading import Event, Lock, RLock
 from typing import Any
 
@@ -33,6 +34,7 @@ from bot_api.services.filial_labels import set_filial_labels
 from bot_api.services.health_service import HealthPayloadBuilder
 from bot_api.services.promax_catalog_service import DEFAULT_PROMAX_CATALOG, PromaxCatalogService
 from bot_api.services.liga_entrega_expurgo_service import LigaEntregaExpurgoService
+from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboardService
 from bot_api.services.liga_entrega_report_store import LigaEntregaReportStore
 from bot_api.services.liga_entrega_dashboard_snapshot_store import LigaEntregaDashboardSnapshotStore
 from bot_api.services.liga_entrega_route_team_service import LigaEntregaRouteTeamService
@@ -130,6 +132,53 @@ def configure_app_runtime(
     )
     liga_entrega_expurgo_service = LigaEntregaExpurgoService(LIGA_ENTREGA_EXPURGOS_PATH)
     liga_entrega_status_service = LigaEntregaStatusService(LIGA_ENTREGA_STATUS_PATH)
+
+    def _rebuild_liga_snapshots_after_sql_import(
+        manifests: dict[str, list[dict[str, Any]]],
+        result: dict[str, int],
+    ) -> None:
+        """Recalcula a competência após o commit do lote SQL.
+
+        O upload do worker é assíncrono para não prender a requisição. Sem
+        este callback, os fatos novos entravam em ``raw_rows`` mas o painel
+        continuava servindo o snapshot anterior até uma execução manual.
+        ``allow_source_files`` fica restrito a esta etapa de materialização;
+        as requisições normais do painel continuam SQL/snapshot-only.
+        """
+        if not result.get("files") and not result.get("rows"):
+            return
+        competencias: set[str] = set()
+        for items in manifests.values():
+            for manifest in items:
+                metadata = manifest.get("metadata") if isinstance(manifest, dict) else {}
+                values = (
+                    (metadata or {}).get("competencia"),
+                    (metadata or {}).get("operational_competencia"),
+                    manifest.get("reference_date") if isinstance(manifest, dict) else None,
+                )
+                for value in values:
+                    text = str(value or "")
+                    match = re.search(r"(\d{4}-\d{2})", text)
+                    if match:
+                        competencias.add(match.group(1))
+        for competencia in sorted(competencias):
+            try:
+                LigaEntregaDashboardService(
+                    report_store=liga_entrega_report_store,
+                    expurgo_service=liga_entrega_expurgo_service,
+                    status_service=liga_entrega_status_service,
+                    snapshot_store=liga_entrega_snapshot_store,
+                    raw_sql_import_service=liga_entrega_raw_sql_import_service,
+                    route_team_service=liga_entrega_route_team_service,
+                    allow_source_files=True,
+                ).build_dashboard(competencia=competencia, period="atual")
+                logger.info("Snapshot da Liga reconstruído após importação SQL: %s", competencia)
+            except Exception:
+                logger.exception("Falha ao reconstruir snapshot da Liga após importação SQL: %s", competencia)
+
+    liga_entrega_raw_sql_import_service.set_post_import_callback(
+        _rebuild_liga_snapshots_after_sql_import
+    )
     ADMIN_UPLOAD_CHUNK_SIZE_BYTES = 1024 * 1024
     ADMIN_PANEL_SESSION_COOKIE = "bot_admin_session"
     ADMIN_PANEL_SESSION_TTL_SECONDS = 12 * 60 * 60
