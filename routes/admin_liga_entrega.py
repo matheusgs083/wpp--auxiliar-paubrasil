@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
@@ -355,8 +356,13 @@ def create_admin_liga_entrega_router(
         context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
         if liga_entrega_route_team_service is None:
             raise HTTPException(status_code=503, detail="Ajuste de equipe por rota indisponivel.")
-        driver_code = str(payload.motorista or "").strip()
-        helper_codes = [str(item or "").strip() for item in payload.ajudantes if str(item or "").strip()]
+        driver_code = re.sub(r"\D", "", str(payload.motorista or ""))
+        driver_code = driver_code.lstrip("0") or "0"
+        helper_codes = []
+        for item in payload.ajudantes:
+            code = re.sub(r"\D", "", str(item or "")).lstrip("0") or "0"
+            if code != "0" and code not in helper_codes:
+                helper_codes.append(code)
         # O cadastro canônico é a referência inicial. Colaboradores novos só
         # podem ser usados depois do cadastro explícito na Liga.
         candidatos: dict[str, str] = {
@@ -371,7 +377,10 @@ def create_admin_liga_entrega_router(
         if any(candidatos.get(code) != "AJUDANTE" for code in helper_codes):
             raise HTTPException(status_code=400, detail="ajudante nao foi encontrado nos relatorios desta competencia.")
         try:
-            item = liga_entrega_route_team_service.upsert_override(payload.model_dump(), actor=actor_from_context(context))
+            normalized_payload = payload.model_dump()
+            normalized_payload["motorista"] = driver_code
+            normalized_payload["ajudantes"] = helper_codes
+            item = liga_entrega_route_team_service.upsert_override(normalized_payload, actor=actor_from_context(context))
         except (ValueError, RuntimeError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if liga_entrega_snapshot_store is not None:

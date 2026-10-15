@@ -7,6 +7,8 @@ from bot_api.services.liga_entrega_dashboard_service import (
     route_km_values,
     _record_competencia,
     deduplicate_devolucoes,
+    _is_valid_roster_candidate,
+    expand_role_people,
 )
 from datetime import date
 
@@ -79,6 +81,27 @@ def test_expurgo_removes_only_affected_indicator_and_keeps_route_in_ranking():
     assert row["psaida"] is None
     assert row["elegivel"] is True
     assert row["pos"] == 1
+
+
+def test_roster_candidates_ignore_report_control_rows_but_keep_people():
+    assert not _is_valid_roster_candidate({"cod": "000001", "nome": "000001"})
+    assert not _is_valid_roster_candidate({"cod": "10", "nome": "MOTORISTA"})
+    assert _is_valid_roster_candidate({"cod": "7472", "nome": "NICOLLAS DA SILVA LUCENA"})
+
+
+def test_same_code_is_kept_separate_by_role():
+    rows = expand_role_people({
+        "7480": {
+            "cod": "7480", "nome": "EMANUEL DA SILVA GUEDES",
+            "nome_motorista": "EMANUEL DA SILVA GUEDES",
+            "nome_ajudante": "CARLOS ALBERTO NASCIMENTO DE ARAUJO",
+            "funcao": "MOTORISTA", "funcoes": ["MOTORISTA", "AJUDANTE"],
+        }
+    })
+    assert {(row["cod"], row["funcao"], row["nome"]) for row in rows} == {
+        ("7480", "MOTORISTA", "EMANUEL DA SILVA GUEDES"),
+        ("7480", "AJUDANTE", "CARLOS ALBERTO NASCIMENTO DE ARAUJO"),
+    }
 
 
 def test_liga_scores_only_indicators_that_reach_their_targets():

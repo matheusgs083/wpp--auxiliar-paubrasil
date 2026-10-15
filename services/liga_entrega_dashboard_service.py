@@ -37,10 +37,10 @@ MAX_COMPETENCE_SCAN_ROWS = 5000
 # otherwise an older persisted payload can hide newly available report fields.
 # Increment when the enrichment rules change so a persisted dashboard built
 # with an older rule cannot hide newly linked routes or helpers.
-CACHE_VERSION = 20
+CACHE_VERSION = 21
 # Bump when ranking eligibility or point calculation changes so persisted SQL
 # snapshots are recalculated before being returned by the dashboard.
-LIGA_RANKING_VERSION = 4
+LIGA_RANKING_VERSION = 5
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -72,6 +72,9 @@ CANONICAL_MOTORISTAS = {
     "7394": ("JOFLE LUILLES CARVALHO LEITE", "PATOS"), "7404": ("VINICIUS MENDES GOMES GONCALVES", "PATOS"),
     "7410": ("LEONARDO VIEIRA DA SILVA", "PATOS"), "7430": ("DIOGO DE MEDEIROS LIMA", "PATOS"),
     "7431": ("TULIO BELO DE LIMA", "PATOS"), "7446": ("COSMO JACKSON MONTEIRO SANTANA", "PATOS"),
+    # O Promax reutiliza o código 7480 para pessoas de funções diferentes;
+    # o papel da pessoa faz parte da identidade da Liga.
+    "7480": ("EMANUEL DA SILVA GUEDES", "PATOS"),
     "7459": ("JOSE FRANCILEUDO RODRIGUES", "PATOS"), "7478": ("DANRLEI SATORNO SANTOS", "PATOS"),
     "7479": ("WILLYAN DE LIMA SATORNO", "PATOS"), "9078": ("YAN OLIVEIRA PEREIRA", "SUME"),
     "9083": ("JOSE MARCIO CORDEIRO DE SOUZA", "SUME"), "9085": ("VALDECI SOARES DE LIMA", "SUME"),
@@ -234,13 +237,15 @@ class LigaEntregaDashboardService:
         ponto: dict[str, str] = {}
         checklist: list[dict[str, str]] = []
         colab: dict[str, dict[str, str]] = {
-            code: {"cod": code, "nome": name, "filial": filial, "funcao": "MOTORISTA", "status": canonical_status(code, status_overrides)}
+            code: {"cod": code, "nome": name, "nome_motorista": name, "filial": filial, "funcao": "MOTORISTA", "funcoes": ["MOTORISTA"], "status": canonical_status(code, status_overrides)}
             for code, (name, filial) in CANONICAL_MOTORISTAS.items()
         }
-        colab.update({
-            code: {"cod": code, "nome": name, "filial": filial, "funcao": "AJUDANTE", "status": canonical_status(code, status_overrides)}
-            for code, (name, filial) in CANONICAL_AJUDANTES.items()
-        })
+        for code, (name, filial) in CANONICAL_AJUDANTES.items():
+            if code in colab:
+                colab[code]["nome_ajudante"] = name
+                colab[code]["funcoes"] = sorted(set([*(colab[code].get("funcoes") or []), "AJUDANTE"]))
+            else:
+                colab[code] = {"cod": code, "nome": name, "nome_ajudante": name, "filial": filial, "funcao": "AJUDANTE", "funcoes": ["AJUDANTE"], "status": canonical_status(code, status_overrides)}
         registered_codes: set[str] = set()
         if self.status_service is not None and hasattr(self.status_service, "roster"):
             try:
@@ -249,13 +254,20 @@ class LigaEntregaDashboardService:
                     if clean_code == "0":
                         continue
                     registered_codes.add(clean_code)
-                    colab[clean_code] = {
+                    registered = {
                         "cod": clean_code,
                         "nome": clean_name(item.get("nome") or f"COD {clean_code}"),
                         "filial": str(item.get("filial") or "").strip().upper(),
                         "funcao": str(item.get("funcao") or "MOTORISTA").strip().upper(),
+                        "funcoes": [str(item.get("funcao") or "MOTORISTA").strip().upper()],
                         "status": canonical_status(clean_code, status_overrides),
                     }
+                    role = registered["funcao"]
+                    if clean_code in colab and role in {"MOTORISTA", "AJUDANTE"}:
+                        colab[clean_code][f"nome_{role.lower()}"] = registered["nome"]
+                        colab[clean_code]["funcoes"] = sorted(set([*(colab[clean_code].get("funcoes") or []), role]))
+                    else:
+                        colab[clean_code] = registered
             except Exception:
                 pass
         warnings: list[str] = []
@@ -263,9 +275,16 @@ class LigaEntregaDashboardService:
             c = norm_code(cod)
             if c == "0":
                 return c
-            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": funcao, "status": canonical_status(c, status_overrides)})
-            if nome and str(row.get("nome") or "").startswith("COD "):
-                row["nome"] = clean_name(nome)
+            role = str(funcao or "").strip().upper()
+            row = colab.setdefault(c, {"cod": c, "nome": f"COD {c}", "filial": filial, "funcao": role, "funcoes": [role] if role else [], "status": canonical_status(c, status_overrides)})
+            if role and role not in (row.get("funcoes") or []):
+                row["funcoes"] = sorted(set([*(row.get("funcoes") or []), role]))
+            if nome:
+                clean = clean_name(nome)
+                if str(row.get("nome") or "").startswith("COD "):
+                    row["nome"] = clean
+                if role in {"MOTORISTA", "AJUDANTE"}:
+                    row[f"nome_{role.lower()}"] = clean
             if filial and not row.get("filial"):
                 row["filial"] = filial
             if funcao and not row.get("funcao"):
@@ -623,8 +642,10 @@ class LigaEntregaDashboardService:
         # Os códigos novos ficam visíveis em ``equipe_candidatos`` para
         # cadastro explícito, mas não participam do ranking antes da decisão.
         candidatos = [
-            dict(item) for code, item in colab.items()
-            if norm_code(code) not in CANONICAL_ROSTER and norm_code(code) not in registered_codes
+            dict(item) for item in expand_role_people(colab)
+            if norm_code(item.get("cod")) not in CANONICAL_ROSTER
+            and norm_code(item.get("cod")) not in registered_codes
+            and _is_valid_roster_candidate(item)
         ]
         for code in list(colab):
             if norm_code(code) not in CANONICAL_ROSTER and norm_code(code) not in registered_codes:
@@ -684,7 +705,7 @@ class LigaEntregaDashboardService:
         # O snapshot é JSONB: preserve apenas os totais necessários para
         # reaplicar expurgos. Os conjuntos de PDVs são convertidos em inteiros
         # para não fazer a persistência falhar silenciosamente.
-        equipe = sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
+        equipe = sorted(expand_role_people(colab), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
         result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "ranking_version": LIGA_RANKING_VERSION, "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": equipe, "equipe_candidatos": candidatos, "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50], "_liga_facts": {"ent_m": {k: len(v) for k, v in ent_m.items()}, "ent_a": {k: len(v) for k, v in ent_a.items()}, "checklist": checklist, "first_week": first_week, "has_farol": has_farol}}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
@@ -942,8 +963,26 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
                 route["expurgo_km"] = bool(matching_route_expurgos(route, expurgos, {"km", "dispersao"}))
             for dev in devols:
                 dev["excluida"] = bool(matching_dev_expurgos(dev, expurgos))
-            colab = {str(item.get("cod")): dict(item) for item in payload.get("equipe") or [] if isinstance(item, dict) and item.get("cod")}
-            candidatos = [dict(item) for item in payload.get("equipe_candidatos") or [] if isinstance(item, dict)]
+            colab: dict[str, dict[str, Any]] = {}
+            for raw_item in payload.get("equipe") or []:
+                if not isinstance(raw_item, dict) or not raw_item.get("cod"):
+                    continue
+                code = norm_code(raw_item.get("cod"))
+                item = dict(raw_item)
+                role = str(item.get("funcao") or "").strip().upper()
+                if code in colab and role in {"MOTORISTA", "AJUDANTE"}:
+                    colab[code][f"nome_{role.lower()}"] = item.get("nome") or colab[code].get(f"nome_{role.lower()}")
+                    colab[code]["funcoes"] = sorted(set([*(colab[code].get("funcoes") or []), role]))
+                else:
+                    item["cod"] = code
+                    item["funcoes"] = sorted(set([*(item.get("funcoes") or []), role])) if role else item.get("funcoes") or []
+                    if role in {"MOTORISTA", "AJUDANTE"}:
+                        item[f"nome_{role.lower()}"] = item.get("nome")
+                    colab[code] = item
+            candidatos = [
+                dict(item) for item in payload.get("equipe_candidatos") or []
+                if isinstance(item, dict) and _is_valid_roster_candidate(item)
+            ]
             registered_codes: set[str] = set()
             if status_service is not None and hasattr(status_service, "roster"):
                 for code, item in status_service.roster(competencia).items():
@@ -959,7 +998,9 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
             for code in list(colab):
                 clean_code = norm_code(code)
                 if clean_code not in CANONICAL_ROSTER and clean_code not in registered_codes:
-                    candidatos.append(colab.pop(code))
+                    candidate = colab.pop(code)
+                    if _is_valid_roster_candidate(candidate):
+                        candidatos.append(candidate)
             ent_m = dict(facts.get("ent_m") or {})
             ent_a = dict(facts.get("ent_a") or {})
             if not facts.get("_route_team_overrides_applied"):
@@ -982,8 +1023,8 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
                 if item.get("tipo") in counts:
                     counts[item["tipo"]] += 1
             payload["rankings"] = {"motoristas": motoristas, "ajudantes": ajudantes}
-            payload["equipe"] = sorted(colab.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
-            payload["equipe_candidatos"] = sorted({str(item.get("cod")): item for item in candidatos if item.get("cod")}.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
+            payload["equipe"] = sorted(expand_role_people(colab), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
+            payload["equipe_candidatos"] = sorted({f"{norm_code(item.get('cod'))}|{str(item.get('funcao') or '').upper()}": item for item in candidatos if item.get("cod")}.values(), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
             payload["rotas"] = routes
             payload["devolucoes"] = devols
             payload["devolucoes_auxiliares"] = devols
@@ -1163,6 +1204,46 @@ def pick(row: dict[str, str], *names: str) -> str:
 
 def clean_name(value: Any) -> str:
     return " ".join(str(value or "").strip().upper().split())
+
+
+def _is_valid_roster_candidate(item: dict[str, Any]) -> bool:
+    """Retorna apenas pessoas que podem ser cadastradas explicitamente.
+
+    Alguns relatórios trazem cabeçalhos, códigos soltos ou linhas de controle
+    na coluna de colaborador. Esses valores não devem aparecer como candidatos
+    na tela nem ser tratados como integrantes da Liga.
+    """
+
+    if not isinstance(item, dict):
+        return False
+    name = clean_name(item.get("nome"))
+    code = norm_code(item.get("cod"))
+    if not name or re.fullmatch(r"[\d\s./_-]+", name):
+        return False
+    if re.fullmatch(r"(?:COD|CODIGO|CÓDIGO)?\s*\d+", name):
+        return False
+    normalized_name = re.sub(r"[^A-Z0-9]+", "", name)
+    if normalized_name in {"MOTORISTA", "AJUDANTE", "COLABORADOR", "COD", "CODIGO"}:
+        return False
+    if code and re.sub(r"[^A-Z0-9]+", "", name) == code:
+        return False
+    return True
+
+
+def expand_role_people(colab: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Expande códigos compartilhados em uma linha por função."""
+
+    result: list[dict[str, Any]] = []
+    for item in colab.values():
+        roles = [str(role).upper() for role in item.get("funcoes") or [] if str(role).strip()]
+        if not roles:
+            roles = [str(item.get("funcao") or "").upper()]
+        for role in dict.fromkeys(roles):
+            row = dict(item)
+            row["funcao"] = role
+            row["nome"] = item.get(f"nome_{role.lower()}") or item.get("nome") or f"COD {item.get('cod')}"
+            result.append(row)
+    return result
 
 
 def short_name(value: str) -> str:
@@ -1669,13 +1750,17 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
     # Colaboradores observados nos relatórios, mas ainda não cadastrados na
     # Liga, ficam disponíveis como candidatos e não entram no ranking.
     known_codes = set(colab)
+    def has_role(item: dict[str, Any], wanted: str) -> bool:
+        return wanted in {str(value).upper() for value in item.get("funcoes") or []} or str(item.get("funcao") or "").upper() == wanted
     codes = (
-        {k for k, v in colab.items() if v.get("funcao") == role}
-        | {k for k in observed if k in known_codes and colab[k].get("funcao") == role}
+        {k for k, v in colab.items() if has_role(v, role)}
+        | {k for k in observed if k in known_codes and has_role(colab[k], role)}
     )
     rows: list[dict[str, Any]] = []
     for cod in sorted(codes):
-        info = colab.get(cod, {"nome": f"COD {cod}", "filial": ""})
+        info = dict(colab.get(cod, {"nome": f"COD {cod}", "filial": ""}))
+        info["funcao"] = role
+        info["nome"] = info.get(f"nome_{role.lower()}") or info.get("nome") or f"COD {cod}"
         g = agg.get(cod, blank())
         ent = int(entregas.get(cod, 0))
         dev = int(devols.get(cod, 0))
