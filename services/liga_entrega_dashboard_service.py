@@ -168,14 +168,25 @@ class LigaEntregaDashboardService:
                     payload = latest[1]
                     active_expurgos = self._active_expurgos(selected_comp)
                     saved_expurgos = ((payload.get("expurgos") or {}).get("items") or []) if isinstance(payload, dict) else []
-                    if payload.get("ranking_version") == LIGA_RANKING_VERSION and _same_expurgos(saved_expurgos, active_expurgos):
+                    missing_devolucao_gv = any(
+                        isinstance(item, dict)
+                        and norm_code(item.get("cliente_cod")) != "0"
+                        and not str(item.get("gv") or "").strip()
+                        for item in payload.get("devolucoes_auxiliares") or []
+                    )
+                    if payload.get("ranking_version") == LIGA_RANKING_VERSION and _same_expurgos(saved_expurgos, active_expurgos) and not missing_devolucao_gv:
                         if apply_route_team_overrides(payload, self.route_team_service, selected_comp):
                             payload["ranking_version"] = LIGA_RANKING_VERSION
                         return payload
                     # Recalcula snapshots antigos com a regra atual sem voltar
                     # a ler CSVs: os fatos necessários já estão persistidos
                     # no próprio snapshot.
-                    if refresh_snapshot_from_sql(self.snapshot_store, self.expurgo_service, selected_comp):
+                    if refresh_snapshot_from_sql(
+                        self.snapshot_store,
+                        self.expurgo_service,
+                        selected_comp,
+                        dclientes_query_service=self.dclientes_query_service,
+                    ):
                         refreshed = self.snapshot_store.get_latest(competencia=selected_comp, period=period)
                         if refreshed is not None and refreshed[1].get("ranking_version") == LIGA_RANKING_VERSION:
                             apply_route_team_overrides(refreshed[1], self.route_team_service, selected_comp)
@@ -944,7 +955,7 @@ def _rebalance_route_delivery_facts(routes: list[dict[str, Any]], ent_m: dict[st
             ent_a[code] = int(ent_a.get(code) or 0) + amount
 
 
-def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, competencia: str, status_service: Any | None = None, route_team_service: Any | None = None) -> bool:
+def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, competencia: str, status_service: Any | None = None, route_team_service: Any | None = None, dclientes_query_service: Any | None = None) -> bool:
     """Reaplica expurgos/status usando somente os fatos persistidos no snapshot."""
     if snapshot_store is None:
         return False
@@ -961,6 +972,21 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
                 dict(item) for item in payload.get("devolucoes_auxiliares") or []
                 if isinstance(item, dict) and _record_competencia(item.get("data")) in {"", competencia}
             ])
+            if dclientes_query_service is not None and devols:
+                keys = [(str(item.get("filial") or ""), str(item.get("cliente_cod") or "")) for item in devols]
+                try:
+                    client_map = dclientes_query_service.lookup_liga_clientes(keys)
+                except Exception:
+                    client_map = {}
+                for item in devols:
+                    key = (filial_code_for_liga(item.get("filial")), norm_code(item.get("cliente_cod")))
+                    base = client_map.get(key) or {}
+                    item["cliente_nome_base"] = str(base.get("cliente_nome") or item.get("cliente_nome_base") or "").strip()
+                    item["cliente"] = item["cliente_nome_base"] or item.get("cliente") or item.get("cliente_cod") or ""
+                    item["setor"] = str(base.get("setor") or item.get("setor") or "").strip()
+                    item["rn"] = str(base.get("rn") or item.get("rn") or item.get("setor") or "").strip()
+                    item["area"] = str(base.get("area") or item.get("area") or "").strip()
+                    item["gv"] = str(base.get("gv") or item.get("gv") or "").strip()
             expurgos = [dict(item) for item in expurgo_service.list_expurgos(competencia=competencia, active_only=True).get("items", [])]
             for route in routes:
                 route["expurgo_saida"] = bool(matching_route_expurgos(route, expurgos, {"tml"}))
