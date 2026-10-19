@@ -1769,11 +1769,15 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         ent = int(entregas.get(cod, 0))
         dev = int(devols.get(cod, 0))
         pdev = round(dev / ent * 100, 2) if ent else None
-        psaida = pct(g["saiOk"] / g["saiTot"] * 100) if g["saiTot"] else None
+        saida_total = int(g["saiTot"] + g["exp_tml"])
+        saida_ok = int(g["saiOk"] + g["exp_tml"])
+        psaida = pct(saida_ok / saida_total * 100) if saida_total else None
         tempo = pct(g["tR"] / g["tP"] * 100) if g["tP"] else None
         # KM abaixo do previsto não é desvio negativo: somente o excedente
         # realizado acima do previsto prejudica a pontuação.
-        km = pct(max(0, g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else None
+        # Rota expurgada de KM conta como dentro da meta. Quando todas as
+        # rotas de KM foram expurgadas, a métrica é medida como 0% de desvio.
+        km = pct(max(0, g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else (0.0 if g["exp_km"] else None)
         # A Liga usa pontuação binária: cada indicador só recebe seu peso
         # quando a respectiva meta é atingida. Indicador sem dados não entra
         # no denominador; indicador medido fora da meta recebe zero.
@@ -1790,7 +1794,9 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
             continue
         rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas_total"]), "rotas_validas": int(g["rotas"]), "entregas": ent, "devol": dev, "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "pts": pts, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= MIN_ROTAS), "pos": None})
     elig = [x for x in rows if x["elegivel"]]
-    elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -int(x.get("rotas") or 0)))
+    # Em empate de pontuação, prioriza quem realizou mais entregas. Isso
+    # evita que dois 100 pontos sejam ordenados apenas por devolução/rotas.
+    elig.sort(key=lambda x: (-float(x.get("total") or 0), -int(x.get("entregas") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -int(x.get("rotas") or 0)))
     for i, row in enumerate(elig, 1):
         row["pos"] = i
     rows.sort(key=lambda x: (x.get("pos") is None, x.get("pos") or 9999, -float(x.get("total") or 0), x.get("nome") or ""))

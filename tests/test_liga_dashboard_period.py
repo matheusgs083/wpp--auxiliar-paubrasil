@@ -62,7 +62,7 @@ def test_identical_motorista_export_for_two_filiais_counts_devolucao_once():
     assert len(result) == 1
 
 
-def test_expurgo_removes_only_affected_indicator_and_keeps_route_in_ranking():
+def test_expurgo_keeps_route_and_counts_affected_indicator_as_met():
     routes = [
         {
             "data": f"2026-10-0{i}", "mot": "7302", "aju": [],
@@ -78,9 +78,30 @@ def test_expurgo_removes_only_affected_indicator_and_keeps_route_in_ranking():
 
     assert row["rotas"] == 3
     assert row["rotas_validas"] == 3
-    assert row["psaida"] is None
+    assert row["psaida"] == 100.0
+    assert row["pts"]["saida"] > 0
     assert row["elegivel"] is True
     assert row["pos"] == 1
+
+
+def test_tie_breaker_prioritizes_more_deliveries():
+    routes = [
+        {"data": f"2026-10-0{i}", "mot": cod, "aju": [], "km_real": 100, "km_prev": 100, "hr_sai": "07:00"}
+        for cod in ("7302", "7303")
+        for i in range(1, 4)
+    ]
+    colab = {
+        "7302": {"nome": "Menos entregas", "filial": "PATOS", "funcao": "MOTORISTA", "status": "ativo"},
+        "7303": {"nome": "Mais entregas", "filial": "PATOS", "funcao": "MOTORISTA", "status": "ativo"},
+    }
+    motoristas, _ = build_rankings(
+        routes, {}, [], {"7302": 277, "7303": 284}, {}, [], colab,
+        has_farol=False, first_week=False,
+    )
+
+    assert motoristas[0]["cod"] == "7303"
+    assert motoristas[0]["entregas"] == 284
+    assert motoristas[1]["entregas"] == 277
 
 
 def test_roster_candidates_ignore_report_control_rows_but_keep_people():
