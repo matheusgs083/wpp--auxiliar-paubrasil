@@ -1582,6 +1582,10 @@ class PromaxWorker:
 
         specs = (
             ("030805_LIGA", "03.08.05"),
+            # O 17.06 é exportado pelo Promax como .inf; a API de relatórios
+            # recebe o conteúdo tabular com extensão .csv após a normalização
+            # do nome no bloco de envio abaixo.
+            ("1706_BI_INDICADORES", "17.06"),
             ("030224_RESUMO_LIGA", "03.02.24/Resumo"),
             ("030224_MOTORISTA_LIGA", "03.02.24/Motorista"),
             ("030224_AJUDANTE_LIGA", "03.02.24/Ajudante"),
@@ -1647,7 +1651,10 @@ class PromaxWorker:
                 if (
                     path.is_file()
                     and not path.name.startswith(".")
-                    and path.suffix.lower() in {".csv", ".txt", ".xlsx"}
+                    and (
+                        path.suffix.lower() in {".csv", ".txt", ".xlsx"}
+                        or (routine_id == "1706_BI_INDICADORES" and path.suffix.lower() == ".inf")
+                    )
                     and _arquivo_pertence_execucao_atual(path, run_started_at_epoch)
                 )
             )
@@ -1663,11 +1670,17 @@ class PromaxWorker:
 
             try:
                 self._heartbeat_active_job(job_id, lease_token)
+                upload_files = {path.name: path.read_bytes() for path in files}
+                if routine_id == "1706_BI_INDICADORES":
+                    upload_files = {
+                        _normalize_liga_bi_filename(path.name): path.read_bytes()
+                        for path in files
+                    }
                 response = self.client.import_liga_entrega_files(
                     job_id=job_id,
                     lease_token=lease_token,
                     routine=routine_id,
-                    files={path.name: path.read_bytes() for path in files},
+                    files=upload_files,
                     reference_date=reference_date,
                     competencia=competencia,
                     period=period,
@@ -2340,6 +2353,17 @@ def _arquivo_pertence_execucao_atual(path: Path, min_mtime_epoch: float | None) 
         return path.stat().st_mtime >= min_mtime_epoch
     except OSError:
         return False
+
+
+def _normalize_liga_bi_filename(name: str) -> str:
+    """Map the Promax 17.06 .inf export to the API's accepted CSV name."""
+    raw_name = Path(str(name or "")).name
+    match = re.fullmatch(r"17\.06_(PATOS|SUME)_(\d{4})_(\d{2})\.inf", raw_name, re.IGNORECASE)
+    if match:
+        return f"{match.group(1).upper()}_{match.group(2)}_{match.group(3)}.csv"
+    if re.fullmatch(r"(PATOS|SUME)_SET\.csv", raw_name, re.IGNORECASE):
+        return f"{raw_name.split('_', 1)[0].upper()}_SET.csv"
+    return Path(raw_name).with_suffix(".csv").name
 
 
 def _arquivo_de_unidade_sem_conteudo(path: Path, no_content_units: set[str]) -> bool:

@@ -1912,16 +1912,26 @@ def build_operacao(
     kms = [r for r in rotas if r.get("km_real") is not None and r.get("km_prev") is not None and not r.get("expurgo_km")]
     kr = sum(float(r.get("km_real") or 0) for r in kms)
     kp = sum(float(r.get("km_prev") or 0) for r in kms)
-    devolucoes_volume_hl_detalhe = sum(float(item.get("volume_hl") or 0) for item in devols)
-    devolucoes_volume_hl = devolucoes_volume_hl_resumo if devolucoes_volume_hl_resumo is not None else devolucoes_volume_hl_detalhe
+    active_devols = [item for item in devols if not item.get("excluida")]
+    has_expurgadas = len(active_devols) != len(devols)
+    devolucoes_volume_hl_detalhe = sum(float(item.get("volume_hl") or 0) for item in active_devols)
+    devolucoes_volume_hl = (
+        devolucoes_volume_hl_resumo
+        if devolucoes_volume_hl_resumo is not None and not has_expurgadas
+        else devolucoes_volume_hl_detalhe
+    )
     devolucoes_pdvs_detalhe = {
         f"{filial_code_for_liga(item.get('filial'))}|{norm_code(item.get('cliente_cod'))}"
-        for item in devols if norm_code(item.get("cliente_cod")) != "0"
+        for item in active_devols if norm_code(item.get("cliente_cod")) != "0"
     }
-    devolucoes_pdvs = devolucoes_pdvs_resumo if devolucoes_pdvs_resumo is not None else len(devolucoes_pdvs_detalhe)
+    devolucoes_pdvs = (
+        devolucoes_pdvs_resumo
+        if devolucoes_pdvs_resumo is not None and not has_expurgadas
+        else len(devolucoes_pdvs_detalhe)
+    )
     devolucoes_nfs = {
         f"{filial_code_for_liga(item.get('filial'))}|{norm_code(item.get('nota'))}|{str(item.get('serie') or '').strip()}"
-        for item in devols if norm_code(item.get("nota")) != "0"
+        for item in active_devols if norm_code(item.get("nota")) != "0"
     }
     entregas_pdvs = entregas_pdvs or set()
     entregas_nfs = entregas_nfs or set()
@@ -1938,7 +1948,7 @@ def build_operacao(
         "devolucoes_nfs": len(devolucoes_nfs), "entregas_hl": round(entregas_hl, 2),
         "entregas_pdvs": entregas_pdvs_count, "entregas_nfs": len(entregas_nfs),
         "devolucao_hl_pct": hl_pct, "devolucao_pdv_pct": pdv_pct, "devolucao_nf_pct": nf_pct,
-        "devolucao_total_pct": total_pct, "devolucoes_valor": round(devolucoes_valor_resumo if devolucoes_valor_resumo is not None else sum(float(item.get("valor") or 0) for item in devols), 2),
+        "devolucao_total_pct": total_pct, "devolucoes_valor": round(devolucoes_valor_resumo if devolucoes_valor_resumo is not None and not has_expurgadas else sum(float(item.get("valor") or 0) for item in active_devols), 2),
         "saida_pct": pct(len(saidas_ok) / len(saidas) * 100) if saidas else None,
         "km_desv": pct(max(0, kr - kp) / kp * 100) if kp else None, "rotas": len(rotas),
         "motoristas_elegiveis": len([x for x in motoristas if x.get("elegivel")]),

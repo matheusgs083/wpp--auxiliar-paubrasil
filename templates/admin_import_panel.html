@@ -5491,9 +5491,12 @@
       const period = ["all", "7", "30"].includes(String(state.entregaDevolucoesPeriod)) ? String(state.entregaDevolucoesPeriod) : "all";
       const dateOf = row => String(row.data_devolucao || row.data || "").slice(0, 10);
       const chartRoutes = routes.filter(route => !branch || String(route.filial || "").trim().toUpperCase() === branch);
-      const timestamps = rows.map(row => Date.parse(`${dateOf(row)}T00:00:00Z`)).filter(Number.isFinite);
+      // A aba Devoluções é operacional e exibe todos os registros, inclusive
+      // os expurgados. A exclusão do cálculo ocorre somente na Liga.
+      const analysisRows = rows;
+      const timestamps = analysisRows.map(row => Date.parse(`${dateOf(row)}T00:00:00Z`)).filter(Number.isFinite);
       const latest = timestamps.length ? Math.max(...timestamps) : NaN;
-      const chartRows = period === "all" || !Number.isFinite(latest) ? rows : rows.filter(row => {
+      const chartRows = period === "all" || !Number.isFinite(latest) ? analysisRows : analysisRows.filter(row => {
         const stamp = Date.parse(`${dateOf(row)}T00:00:00Z`);
         return Number.isFinite(stamp) && latest - stamp <= Number(period) * 86400000;
       });

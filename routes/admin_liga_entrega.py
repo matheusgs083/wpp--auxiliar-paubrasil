@@ -259,7 +259,6 @@ def create_admin_liga_entrega_router(
                 report_store=liga_entrega_report_store,
                 drevendas_import_service=drevendas_import_service,
                 raw_sql_import_service=liga_entrega_raw_sql_import_service,
-                route_team_service=liga_entrega_route_team_service,
             ).build_dashboard(competencia=competencia, period=period)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

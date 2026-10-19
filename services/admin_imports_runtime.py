@@ -68,6 +68,8 @@ def _normalize_admin_import_dataset(dataset: str) -> str:
 
 
 def _serialize_admin_import_value(value: Any) -> Any:
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        return _serialize_admin_import_value(value.to_dict())
     if isinstance(value, datetime):
         if value.tzinfo is not None:
             value = value.astimezone(timezone.utc)
