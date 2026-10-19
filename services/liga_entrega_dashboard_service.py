@@ -585,7 +585,11 @@ class LigaEntregaDashboardService:
                 item["setor"] = str(base.get("setor") or item.get("setor") or "").strip()
                 item["rn"] = str(base.get("rn") or item.get("rn") or item.get("setor") or "").strip()
                 item["area"] = str(base.get("area") or item.get("area") or "").strip()
-                item["gv"] = str(base.get("gv") or "").strip()
+                # O dClientes traz o GV original mesmo quando o setor ainda
+                # não existe no dSetores. Nunca apagar um GV já presente no
+                # relatório só porque o enriquecimento não encontrou uma
+                # linha correspondente.
+                item["gv"] = str(base.get("gv") or item.get("gv") or "").strip()
 
         for item in devols:
             motivo = MOTIVOS_DEVOLUCAO.get(norm_code(item.get("resp")), {})

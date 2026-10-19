@@ -610,13 +610,19 @@ class DClientesImportService:
             """
             UPDATE {}.dclientes_snapshot AS s
             SET
-                gv_vde_resolved = '',
+                -- O GV original do dClientes e a fonte de contingencia. O
+                -- campo resolvido nunca deve ficar vazio apenas porque o
+                -- setor ainda nao existe no cadastro dSetores.
+                gv_vde_resolved = COALESCE(NULLIF(BTRIM(s.gv_vde), ''), ''),
                 dc_vde = '',
                 filial_setor_key = CASE
                     WHEN BTRIM(COALESCE(s.setor_vde, '')) <> '' THEN CONCAT(s.filial, '_', s.setor_vde)
                     ELSE ''
                 END,
-                filial_gv_key = '',
+                filial_gv_key = CASE
+                    WHEN BTRIM(COALESCE(s.gv_vde, '')) <> '' THEN CONCAT(s.filial, '_', BTRIM(s.gv_vde))
+                    ELSE ''
+                END,
                 filial_dc_key = ''
             {}
             """
@@ -628,10 +634,11 @@ class DClientesImportService:
             """
             UPDATE {}.dclientes_snapshot AS s
             SET
-                gv_vde_resolved = COALESCE(NULLIF(ds.gv, ''), ''),
+                gv_vde_resolved = COALESCE(NULLIF(BTRIM(ds.gv), ''), NULLIF(BTRIM(s.gv_vde), ''), ''),
                 dc_vde = COALESCE(NULLIF(ds.dc, ''), ''),
                 filial_gv_key = CASE
-                    WHEN BTRIM(COALESCE(ds.gv, '')) <> '' THEN CONCAT(s.filial, '_', ds.gv)
+                    WHEN COALESCE(NULLIF(BTRIM(ds.gv), ''), NULLIF(BTRIM(s.gv_vde), ''), '') <> ''
+                        THEN CONCAT(s.filial, '_', COALESCE(NULLIF(BTRIM(ds.gv), ''), NULLIF(BTRIM(s.gv_vde), ''), ''))
                     ELSE ''
                 END,
                 filial_dc_key = CASE
