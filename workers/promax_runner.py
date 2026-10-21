@@ -116,6 +116,11 @@ class PromaxRunner:
         payload = job.get("payload")
         if not isinstance(payload, Mapping):
             payload = job
+        site = str(payload.get("site") or job.get("site") or "promax").strip().lower()
+        if site == "cora":
+            return self._build_cora_command(job, payload)
+        if site != "promax":
+            raise ValueError(f"Unsupported worker site: {site!r}.")
         job_type = str(job.get("job_type") or "").strip()
         operation = str(payload.get("operation") or "").strip()
         job_id = str(job.get("id") or job.get("job_id") or "").strip()
@@ -281,6 +286,23 @@ class PromaxRunner:
             command.extend(["--download-workers", str(normalized_workers)])
         return command
 
+    def _build_cora_command(self, job: Mapping[str, Any], payload: Mapping[str, Any]) -> list[str]:
+        operation = str(payload.get("operation") or job.get("job_type") or "").strip()
+        if not _IDENTIFIER_PATTERN.fullmatch(operation):
+            raise ValueError("Cora job requires a valid operation identifier.")
+        cli_path = self.config.driver_dir / "cora-web-driver" / "cli.py"
+        if not cli_path.is_file():
+            raise PromaxRunnerConfigurationError(f"Cora cli.py was not found: {cli_path}")
+        command = [
+            str(self.config.python_executable),
+            str(cli_path),
+            "executar", "--operacao", operation,
+        ]
+        job_id = str(job.get("id") or job.get("job_id") or "").strip()
+        if job_id:
+            command.extend(["--job-id", job_id])
+        return command
+
     def run(
         self,
         job: Mapping[str, Any],
@@ -292,7 +314,9 @@ class PromaxRunner:
         stop_requested: ControlCallback | None = None,
     ) -> PromaxRunResult:
         command = self.build_command(job)
-        on_line("stdout", f"Comando Promax: {subprocess.list2cmdline(command)}")
+        payload = job.get("payload")
+        site = str((payload.get("site") if isinstance(payload, Mapping) else job.get("site")) or "promax").strip().lower()
+        on_line("stdout", f"Comando {site.capitalize()}: {subprocess.list2cmdline(command)}")
         environment = os.environ.copy()
         credentials = job.get("promax_credentials")
         if isinstance(credentials, Mapping):
@@ -303,6 +327,14 @@ class PromaxRunner:
                 # to this child process and never rendered in the command/log.
                 environment["PROMAX_RUNTIME_USER"] = username
                 environment["PROMAX_RUNTIME_PASS"] = password
+        if site == "cora":
+            cora_credentials = job.get("cora_credentials")
+            if isinstance(cora_credentials, Mapping):
+                username = str(cora_credentials.get("username") or "").strip()
+                password = str(cora_credentials.get("password") or "")
+                if username and password:
+                    environment["CORA_RUNTIME_USER"] = username
+                    environment["CORA_RUNTIME_PASS"] = password
         run_started_at_epoch = self._wall_time()
         process = self._popen_factory(
             command,
@@ -416,7 +448,7 @@ class PromaxRunner:
                 last_stderr = line
             result_event = _parse_job_event(line) if stream == "stdout" else None
             if result_event is not None:
-                if result_event.get("event") == "promax_partial_result":
+                if str(result_event.get("event") or "").endswith("_partial_result"):
                     if on_event is not None:
                         on_event(result_event)
                     continue
@@ -532,7 +564,7 @@ def _parse_job_event(line: str) -> dict[str, Any] | None:
         payload = json.loads(clean_line)
     except (json.JSONDecodeError, TypeError):
         return None
-    if not isinstance(payload, dict) or payload.get("event") not in {"promax_job_result", "promax_partial_result"}:
+    if not isinstance(payload, dict) or payload.get("event") not in {"promax_job_result", "promax_partial_result", "cora_job_result", "cora_partial_result"}:
         return None
     return payload
 

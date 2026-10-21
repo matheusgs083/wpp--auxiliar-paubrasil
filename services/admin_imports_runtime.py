@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
@@ -1059,6 +1060,54 @@ def _store_admin_import_uploads(
         raise
 
 
+def _run_admin_critica_geral_import(
+    upload: UploadFile,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Upload and import one mixed critique CSV for every configured operation."""
+    if Path(str(upload.filename or "")).suffix.lower() != ".csv":
+        try:
+            upload.file.close()
+        except Exception:
+            pass
+        raise HTTPException(status_code=400, detail="O arquivo geral da Critica deve ser CSV.")
+    buffer = BytesIO()
+    try:
+        _copy_upload_with_limit(upload, buffer)
+    finally:
+        try:
+            upload.file.close()
+        except Exception:
+            pass
+    payload = buffer.getvalue()
+    filename = str(upload.filename or "critica_operacao.csv")
+    targets = sorted(
+        (name for name in ADMIN_IMPORT_DATASETS if name.startswith("critica_op_")),
+        key=lambda name: int(name.rsplit("_", 1)[-1]) if name.rsplit("_", 1)[-1].isdigit() else name,
+    )
+    if callable(_panel_context_allowed_import_datasets):
+        allowed = _panel_context_allowed_import_datasets(context, targets)
+        if allowed is not None:
+            targets = [name for name in targets if name in allowed]
+    if not targets:
+        raise HTTPException(status_code=403, detail="Este perfil não possui operação de crítica liberada.")
+
+    uploads: dict[str, dict[str, Any]] = {}
+    for dataset in targets:
+        clone = UploadFile(filename=filename, file=BytesIO(payload))
+        uploads[dataset] = _store_admin_import_uploads(dataset, [clone], context)
+
+    imports: dict[str, dict[str, Any]] = {}
+    for dataset in targets:
+        imports[dataset] = _run_admin_import(dataset)
+
+    return {
+        "ok": True,
+        "filename": filename,
+        "datasets": targets,
+        "uploads": _serialize_admin_import_value(uploads),
+        "imports": _serialize_admin_import_value(imports),
+    }
 def _list_admin_import_status() -> dict[str, Any]:
     dataset_rows: dict[str, dict[str, Any]] = {}
     database_error = ""

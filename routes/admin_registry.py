@@ -67,6 +67,7 @@ def _register_admin_import_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             run_admin_import_validation=deps["run_admin_import_validation"],
             queue_admin_import=deps["queue_admin_import"],
             store_admin_import_uploads=deps["store_admin_import_uploads"],
+            run_admin_critica_geral_import=deps["run_admin_critica_geral_import"],
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps["record_admin_panel_action"],
         )

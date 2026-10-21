@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -14,6 +15,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from bot_api.commercial_scope import normalize_numeric_code
+from bot_api.services.filial_labels import FILIAL_LABELS
 from bot_api.services.critica_rn_import_service import (
     _clean_text,
     _detect_delimiter,
@@ -78,6 +80,42 @@ HEADER_ALIASES = {
     "ocorrencia1": "Ocorrencia 1",
     "ocorrencia2": "Ocorrencia 2",
     "te": "TE",
+}
+
+NEW_REPORT_HEADER_ALIASES = {
+    "codunidadeentrega": "Cód. unidade entrega",
+    "descunidadeentrega": "Desc. unidade entrega",
+    "dataentrega": "Data entrega",
+    "numeropedido": "Número pedido",
+    "situacaopedido": "Situação pedido",
+    "situacaoatendpedido": "Situação atend. pedido",
+    "codcliente": "Cód. cliente",
+    "nomecliente": "Nome cliente",
+    "nomefantasia": "Nome fantasia",
+    "codsetor": "Cód. setor",
+    "codoperacao": "Cód. operação",
+    "descoperacao": "Desc. operação",
+    "codtipomovimento": "Cód. tipo movimento",
+    "desctipomovimento": "Desc. tipo movimento",
+    "valortotal": "Valor total",
+    "valorunitarioliquido": "Valor unitário líquido",
+    "valorunitariosemadf": "Valor unitário sem ADF",
+    "valorpedidominimo": "Valor pedido mínimo",
+    "codproduto": "Cód. produto",
+    "descproduto": "Desc. produto",
+    "quantvenda": "Quant. venda",
+    "unidadevenda": "Unidade venda",
+    "pesoitem": "Peso item",
+    "volumehectolitro": "Volume hectolitro",
+    "situacaoatenditem": "Situação atend. item",
+    "criticas1": "Críticas 1",
+    "criticas2": "Críticas 2",
+    "criticasitem1": "Críticas item 1",
+    "criticasitem2": "Críticas item 2",
+    "codvendedor": "Cód. vendedor",
+    "canalorigem": "Origem Pedido",
+    "tipocanalorigem": "Tipo Canal Origem",
+    "origempedido": "Origem Pedido",
 }
 
 
@@ -633,17 +671,27 @@ def _load_critica_operacao_rows(path: Path, *, expected_filial: str) -> list[Cri
             if reader.fieldnames is None:
                 raise ValueError("Arquivo sem cabecalho.")
             headers = [str(header or "").strip() for header in reader.fieldnames]
-            header_map = _build_header_map(headers)
             raw_rows = [
                 {str(key or "").strip(): str(value or "").strip() for key, value in raw_row.items() if key is not None}
                 for raw_row in reader
             ]
-            rows = _build_critica_operacao_rows_from_mapping_rows(
-                raw_rows,
-                headers=headers,
-                header_map=header_map,
-                row_number_offset=2,
-            )
+            if _is_new_order_report(headers):
+                header_map = _build_new_report_header_map(headers)
+                rows = _build_new_report_critica_rows_from_mapping_rows(
+                    raw_rows,
+                    headers=headers,
+                    header_map=header_map,
+                    expected_filial=expected_filial,
+                    row_number_offset=2,
+                )
+            else:
+                header_map = _build_header_map(headers)
+                rows = _build_critica_operacao_rows_from_mapping_rows(
+                    raw_rows,
+                    headers=headers,
+                    header_map=header_map,
+                    row_number_offset=2,
+                )
             last_error = ""
             break
         except ValueError as exc:
@@ -658,6 +706,126 @@ def _load_critica_operacao_rows(path: Path, *, expected_filial: str) -> list[Cri
         labels = ", ".join(found_filiais)
         raise ValueError(
             f"Arquivo invalido para a operacao {expected_filial}. Filial Origem encontrada: {labels or '-'}."
+        )
+    return rows
+
+
+def _normalized_header(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    return "".join(char for char in ascii_text.lower() if char.isalnum())
+
+
+def _is_new_order_report(headers: list[str]) -> bool:
+    normalized = {_normalized_header(header) for header in headers}
+    required = {
+        "codunidadeentrega",
+        "descunidadeentrega",
+        "numeropedido",
+        "codcliente",
+        "codsetor",
+        "codproduto",
+        "pesoitem",
+    }
+    return required.issubset(normalized)
+
+
+def _build_new_report_header_map(headers: list[str]) -> dict[str, str]:
+    header_map: dict[str, str] = {}
+    for actual in headers:
+        canonical = NEW_REPORT_HEADER_ALIASES.get(_normalized_header(actual))
+        if canonical and canonical not in header_map:
+            header_map[canonical] = actual
+    missing = [name for name in ("Desc. unidade entrega", "Número pedido", "Cód. cliente", "Cód. setor", "Cód. produto", "Peso item") if name not in header_map]
+    if missing:
+        raise ValueError(f"Arquivo novo de pedidos invalido. Colunas ausentes: {', '.join(missing)}")
+    return header_map
+
+
+def _resolve_new_report_filial(operation_name: str, raw_unit_code: str, expected_filial: str = "") -> str:
+    normalized_operation = _normalized_header(operation_name)
+    for code, label in FILIAL_LABELS.items():
+        if _normalized_header(label) and _normalized_header(label) in normalized_operation:
+            return normalize_numeric_code(code)
+    candidate = normalize_numeric_code(raw_unit_code)
+    if candidate in FILIAL_LABELS:
+        return candidate
+    return normalize_numeric_code(expected_filial)
+
+
+def _build_new_report_critica_rows_from_mapping_rows(
+    raw_rows: list[dict[str, Any]],
+    *,
+    headers: list[str],
+    header_map: dict[str, str],
+    expected_filial: str,
+    row_number_offset: int,
+) -> list[CriticaOperacaoRow]:
+    rows: list[CriticaOperacaoRow] = []
+    orders_with_total: set[tuple[str, str]] = set()
+
+    def value(row: dict[str, Any], name: str) -> str:
+        actual = header_map.get(name, "")
+        return str(row.get(actual, "") if actual else "").strip()
+
+    for index, row in enumerate(raw_rows, start=row_number_offset):
+        if not any(str(item or "").strip() for item in row.values()):
+            continue
+        operation_name = _clean_text(value(row, "Desc. unidade entrega"))
+        filial = _resolve_new_report_filial(operation_name, value(row, "Cód. unidade entrega"), expected_filial)
+        if expected_filial and filial != normalize_numeric_code(expected_filial):
+            continue
+        pedido = normalize_numeric_code(value(row, "Número pedido"))
+        setor = normalize_numeric_code(value(row, "Cód. setor"))
+        cod_pdv = normalize_numeric_code(value(row, "Cód. cliente"))
+        produto_codigo = normalize_numeric_code(value(row, "Cód. produto"))
+        if not filial or not pedido or not setor or not cod_pdv or not produto_codigo:
+            continue
+        if _clean_text(value(row, "Situação atend. item")).upper() == "FALTA":
+            continue
+        ocorrencias = [
+            _clean_text(value(row, "Críticas 1")),
+            _clean_text(value(row, "Críticas 2")),
+            _clean_text(value(row, "Críticas item 1")),
+            _clean_text(value(row, "Críticas item 2")),
+        ]
+        order_key = (filial, pedido)
+        total_pedido = _parse_decimal_value(value(row, "Valor total")) if order_key not in orders_with_total else Decimal("0")
+        orders_with_total.add(order_key)
+        payload = _row_to_payload(headers, row)
+        canal_origem = _clean_text(value(row, "Origem Pedido"))
+        tipo_canal_origem = _clean_text(value(row, "Tipo Canal Origem"))
+        origem_pedido = tipo_canal_origem if tipo_canal_origem.upper() == "DIGITADO" else canal_origem
+        if origem_pedido:
+            payload["Origem Pedido"] = origem_pedido
+        rows.append(
+            CriticaOperacaoRow(
+                filial=filial,
+                pedido=pedido,
+                operacao=filial,
+                cod_pdv=cod_pdv,
+                nome_pdv=_clean_text(value(row, "Nome fantasia") or value(row, "Nome cliente")),
+                setor=setor,
+                filial_setor_key=f"{filial}_{setor}",
+                status_pedido=_clean_text(value(row, "Situação pedido") or value(row, "Situação atend. pedido")),
+                total_pedido=total_pedido,
+                total_cliente=total_pedido,
+                critica_text=" | ".join(item for item in ocorrencias if item),
+                produto_codigo=produto_codigo,
+                produto_key=produto_codigo,
+                nome_produto=_clean_text(value(row, "Desc. produto")),
+                quantidade=_parse_decimal_value(value(row, "Quant. venda")),
+                unid_venda=_clean_text(value(row, "Unidade venda")),
+                preco_unitario=_parse_decimal_value(value(row, "Valor unitário líquido")),
+                preco_sem_adf=_parse_decimal_value(value(row, "Valor unitário sem ADF")),
+                minimo_politica=_parse_decimal_value(value(row, "Valor pedido mínimo")),
+                tipo_movimento=normalize_numeric_code(value(row, "Cód. tipo movimento")) or _clean_text(value(row, "Desc. tipo movimento")),
+                codigo_gv=normalize_numeric_code(value(row, "Cód. vendedor")),
+                codigo_pgv="",
+                te_codigo="",
+                source_row_number=index,
+                payload=payload,
+            )
         )
     return rows
 

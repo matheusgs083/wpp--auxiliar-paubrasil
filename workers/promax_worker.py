@@ -501,6 +501,7 @@ class PromaxWorker:
                         self._import_0112_dmateriais_if_needed(job, job_id, lease_token, result)
                         self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
                         self._import_030111_critica_if_needed(job, job_id, lease_token, result)
+                        self._import_cora_critica_if_needed(job, job_id, lease_token, result)
                         post_import_attempted = True
                     if not sync_completed:
                         self._sync_pending_partial_results(job, job_id, lease_token)
@@ -1968,6 +1969,48 @@ class PromaxWorker:
                 pending.remove((sync_scope, partial_result))
             except ValueError:
                 pass
+
+    def _import_cora_critica_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        if normalize_status(result.status) != "success":
+            return
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping):
+            payload = {}
+        if str(payload.get("site") or job.get("site") or "").strip().lower() != "cora":
+            return
+        operation = str(payload.get("operation") or job.get("job_type") or "").strip().lower()
+        if operation not in {"critica", "consulta_critica"}:
+            return
+        raw_files = (result.details or {}).get("downloaded_files")
+        if not isinstance(raw_files, Sequence) or isinstance(raw_files, (str, bytes, bytearray)):
+            raise ValueError("O driver Cora não informou os arquivos baixados da Critica.")
+        files: dict[str, bytes] = {}
+        for raw_path in raw_files:
+            path = Path(str(raw_path or "")).expanduser()
+            if not path.is_file():
+                raise OSError(f"Arquivo de Critica do Cora não encontrado: {path}")
+            files[path.name] = path.read_bytes()
+        if not files:
+            raise ValueError("O driver Cora não baixou nenhum arquivo de Critica.")
+        response = self.client.import_critica_csvs(
+            job_id=job_id,
+            lease_token=lease_token,
+            files=files,
+            reference_date=str(payload.get("reference_date") or _current_reference_date()),
+        )
+        self._send_log(
+            job_id,
+            lease_token,
+            f"Critica do Cora enviada ao servidor: {len(files)} arquivo(s).",
+            "info",
+            {"event": "cora_critica_auto_import_uploaded", "files": list(files), "result": response},
+        )
 
     def _import_csv_folder_if_needed(
         self,

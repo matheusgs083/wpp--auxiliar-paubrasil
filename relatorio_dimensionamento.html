@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dimensionamento de Entregas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.3/papaparse.min.js"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { ink: '#08111f', panel: '#101c2d', accent: '#60a5fa' } } } };
+  </script>
+</head>
+<body class="min-h-screen bg-ink text-slate-100">
+  <main class="mx-auto max-w-7xl p-4 sm:p-8">
+    <header class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[.25em] text-sky-300">Pilar Entrega</p>
+        <h1 class="mt-2 text-3xl font-bold tracking-tight">Dimensionamento de rotas</h1>
+        <p class="mt-2 max-w-3xl text-sm text-slate-400">Importe relatórios CSV, separe por UNB e dimensione motoristas e ajudantes considerando o limite de peso e a cobertura de folgas.</p>
+      </div>
+      <div class="rounded-2xl border border-slate-700 bg-panel px-4 py-3 text-sm text-slate-300">Arquivos carregados: <span id="fileCount" class="font-bold text-white">0</span></div>
+    </header>
+
+    <section class="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+      <div class="rounded-2xl border border-slate-700 bg-panel p-5 shadow-2xl">
+        <h2 class="text-lg font-semibold">Importação</h2>
+        <p class="mt-1 text-sm text-slate-400">CSV separado por ponto e vírgula, em UTF-8 ou Latin-1. É possível selecionar vários arquivos.</p>
+        <label class="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-sky-400/60 bg-sky-400/10 px-4 py-8 text-center transition hover:bg-sky-400/20">
+          <span><span class="block text-sm font-semibold text-sky-200">Escolher arquivos CSV</span><span class="mt-1 block text-xs text-slate-400">Relatórios de transporte/logística</span></span>
+          <input id="csvFiles" type="file" accept=".csv,text/csv" multiple class="hidden">
+        </label>
+        <div id="status" class="mt-4 rounded-lg bg-slate-900/70 px-3 py-2 text-sm text-slate-400">Nenhum arquivo importado.</div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-700 bg-panel p-5 shadow-2xl">
+        <h2 class="text-lg font-semibold">Configuração da equipe</h2>
+        <div class="mt-4 grid grid-cols-2 gap-3">
+          <label class="text-sm text-slate-300">Motoristas disponíveis<input id="drivers" type="number" min="0" value="20" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white"></label>
+          <label class="text-sm text-slate-300">Ajudantes disponíveis<input id="helpers" type="number" min="0" value="30" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white"></label>
+          <label class="text-sm text-slate-300">Limite de peso (kg)<input id="weightLimit" type="number" min="0" value="3000" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white"></label>
+          <label class="text-sm text-slate-300">Fator de cobertura<input id="coverage" type="number" min="1" step="0.01" value="1" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white"></label>
+        </div>
+        <p class="mt-3 text-xs text-slate-400">Até o limite: 1 motorista + 1 ajudante. Acima do limite: 1 motorista + 2 ajudantes. Para 5 dias de operação com as 2 folgas nos dias sem operação, o fator padrão é 1,00.</p>
+      </div>
+    </section>
+
+    <section class="mt-6 rounded-2xl border border-slate-700 bg-panel p-5 shadow-2xl">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><h2 class="text-lg font-semibold">Visão operacional</h2><p id="selectionLabel" class="text-sm text-slate-400">Resumo geral / consolidado</p></div>
+        <button id="export" class="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">Exportar resultado</button>
+      </div>
+      <div id="tabs" class="mt-4 flex flex-wrap gap-2"></div>
+      <div id="routeFilters" class="mt-3 flex flex-wrap gap-2"></div>
+      <div id="cards" class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"></div>
+      <div id="capacityNotice" class="mt-4 rounded-xl border px-4 py-3 text-sm"></div>
+      <div class="mt-6 overflow-x-auto rounded-xl border border-slate-700">
+        <table class="min-w-full text-left text-sm"><thead class="bg-slate-900 text-xs uppercase tracking-wide text-slate-400"><tr><th class="px-4 py-3">Mapa/rota</th><th class="px-4 py-3">Data</th><th class="px-4 py-3">UNB</th><th class="px-4 py-3">Tipo</th><th class="px-4 py-3">Motorista</th><th class="px-4 py-3">Peso (kg)</th><th class="px-4 py-3">Entregas</th><th class="px-4 py-3">Motoristas</th><th class="px-4 py-3">Ajudantes</th></tr></thead><tbody id="rows" class="divide-y divide-slate-800"></tbody></table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const UNBS = [[1,'SOUSA'],[2,'ITAPORANGA'],[3,'PATOS'],[4,'SUME'],[5,'GUARABIRA'],[6,'BRUMADO'],[7,'BARRA'],[8,'CACULE']];
+    let records = [], active = 'all', routeType = 'all';
+    const $ = id => document.getElementById(id);
+    const key = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const field = (r, names) => { const wanted = names.map(key); const k = Object.keys(r).find(x => wanted.includes(key(x))); return k ? r[k] : ''; };
+    const number = v => { let s = String(v ?? '').trim().replace(/[^0-9,.-]/g,''); if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g,'').replace(',','.') : s.replace(/,/g,''); else if (s.includes(',')) s = s.replace(',','.'); const n = Number(s); return Number.isFinite(n) ? n : 0; };
+    function nativeCsv(text){ const lines=[]; let row=[], cell='', quoted=false; for(let i=0;i<text.length;i++){ const c=text[i], next=text[i+1]; if(c==='"'){ if(quoted&&next==='"'){cell+='"';i++;} else quoted=!quoted; } else if(c===';'&&!quoted){row.push(cell);cell='';} else if((c==='\n'||c==='\r')&&!quoted){ if(c==='\r'&&next==='\n')i++; row.push(cell);cell=''; if(row.some(v=>v.trim()!=='')){lines.push(row); } row=[]; } else cell+=c; } if(cell!==''||row.length){row.push(cell);lines.push(row);} if(!lines.length)return []; const headers=lines.shift().map(h=>h.trim()); return lines.map(values=>Object.fromEntries(headers.map((h,i)=>[h,values[i]??'']))); }
+    const unb = r => { const raw = field(r,['UNB','Codigo UNB','Filial','Nome UNB','Nome Filial','Nome Revenda']) || r.__sourceFile || ''; const s = key(raw); const found = UNBS.find(([n,name]) => s.includes(key(name))); if (found) return found[0]; const code = Number(String(raw).match(/\b[1-8]\b/)?.[0]); return code >= 1 && code <= 8 ? code : null; };
+    const normalize = r => { const code = unb(r), tempoPrev = field(r,['TempoPrev','Tempo Prev','Tempo previsto']); const tempoMin = timeMinutes(tempoPrev); return { raw:r, unb:code, unbName: UNBS.find(x=>x[0]===code)?.[1] || 'Não identificado', map: field(r,['Nro do Mapa','Numero do Mapa','Mapa','RoadShow','Nro Rota','Rota']) || '—', date: field(r,['Data Entrega','Data','Data Movimento','Data Rota']) || '—', driver: field(r,['Motorista','Nome Motorista','Condutor','CdMot']) || '—', weight: number(field(r,['Total peso','Peso total','Peso','Peso Kg','Peso (kg)','PesoCargaKG'])), deliveries: number(field(r,['Entregas','Total entregas','PDVs','Quantidade entregas'])), tempoPrev, pernoite: tempoMin > 14*60 }; };
+    const timeMinutes = v => { const m=String(v??'').trim().match(/^(\d+):(\d{2})/); return m ? Number(m[1])*60+Number(m[2]) : number(v); };
+    const readFile = file => new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => { try { const bytes = new Uint8Array(reader.result); let text; try { text = new TextDecoder('utf-8',{fatal:true}).decode(bytes); } catch (_) { text = new TextDecoder('windows-1252').decode(bytes); } const finish=rows=>resolve(rows.map(r=>({...r,__sourceFile:file.name}))); if(typeof Papa==='undefined'){ finish(nativeCsv(text)); return; } const rows=[]; Papa.parse(text,{header:true,delimiter:';',skipEmptyLines:true,chunkSize:1024*1024,transformHeader:h=>h.trim(),chunk:r=>rows.push(...r.data),complete:()=>finish(rows),error:reject}); } catch(err) { reject(err); } }; reader.onerror = () => reject(reader.error || new Error('Falha ao ler o arquivo')); reader.readAsArrayBuffer(file); });
+    const fmt = n => new Intl.NumberFormat('pt-BR',{maximumFractionDigits:2}).format(n);
+    function activeRecords(){ let source = active === 'all' ? records : records.filter(r=>r.unb === Number(active)); if(routeType==='pernoite') source=source.filter(r=>r.pernoite); if(routeType==='normal') source=source.filter(r=>!r.pernoite); const seen = new Set(); return source.filter((r,i)=>{ const token = `${r.unb||'x'}|${r.date}|${r.map}`; if (r.map !== '—' && seen.has(token)) return false; if (r.map !== '—') seen.add(token); return true; }); }
+    function renderTabs(){ $('tabs').innerHTML = `<button data-tab="all" class="tab rounded-lg px-3 py-2 text-sm font-semibold">Resumo geral</button>` + UNBS.map(([n,name])=>`<button data-tab="${n}" class="tab rounded-lg px-3 py-2 text-sm font-semibold">${n} - ${name}</button>`).join(''); document.querySelectorAll('.tab').forEach(b=>{ const on=b.dataset.tab===String(active); b.classList.toggle('bg-sky-500',on); b.classList.toggle('text-slate-950',on); b.classList.toggle('bg-slate-800',!on); b.addEventListener('click',()=>{active=b.dataset.tab==='all'?'all':b.dataset.tab; render();}); }); $('routeFilters').innerHTML=[['all','Todas'],['normal','Rotas do dia'],['pernoite','Pernoite']].map(([id,label])=>`<button data-route-type="${id}" class="route-type rounded-lg border px-3 py-2 text-xs font-semibold">${label}</button>`).join(''); document.querySelectorAll('.route-type').forEach(b=>{const on=b.dataset.routeType===routeType;b.classList.toggle('border-sky-400',on);b.classList.toggle('bg-sky-500/20',on);b.classList.toggle('border-slate-700',!on);b.addEventListener('click',()=>{routeType=b.dataset.routeType;render();});}); }
+    function render(){ const data=activeRecords(), limit=number($('weightLimit').value), factor=Math.max(1,number($('coverage').value)||1), availableDrivers=Math.max(0,number($('drivers').value)), availableHelpers=Math.max(0,number($('helpers').value)); let weight=0, deliveries=0, helpers=0; const days=new Map(); data.forEach(r=>{weight+=r.weight; deliveries+=r.deliveries; const day=days.get(r.date)||{routes:0,helpers:0}; day.routes+=1; day.helpers+=r.weight>limit?2:1; days.set(r.date,day); helpers+=r.weight>limit?2:1;}); const dayCount=days.size||1, averageRoutes=data.length/dayCount, averageHelpers=helpers/dayCount, neededDrivers=Math.ceil(averageRoutes*factor), neededHelpers=Math.ceil(averageHelpers*factor); const pernoites=data.filter(r=>r.pernoite).length; const cards=[['Rotas importadas',data.length],['Média de rotas/dia',fmt(averageRoutes)],['Pernoites',pernoites],['Motoristas necessários',`${neededDrivers} / ${availableDrivers}`],['Ajudantes necessários',`${neededHelpers} / ${availableHelpers}`]]; $('cards').innerHTML=cards.map(([a,b])=>`<div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4"><div class="text-xs uppercase tracking-wide text-slate-400">${a}</div><div class="mt-1 text-2xl font-bold text-white">${b}</div><div class="mt-1 text-xs text-slate-500">${a.includes('necessários')?'necessários / disponíveis':a.includes('média')?`${dayCount} dia(s) de operação`:a==='Pernoites'?'Tempo previsto acima de 14h':''}</div></div>`).join(''); const enough=neededDrivers<=availableDrivers&&neededHelpers<=availableHelpers; $('capacityNotice').className=`mt-4 rounded-xl border px-4 py-3 text-sm ${enough?'border-emerald-500/40 bg-emerald-500/10 text-emerald-200':'border-rose-500/40 bg-rose-500/10 text-rose-200'}`; $('capacityNotice').textContent=data.length?`${enough?'Equipe suficiente':'Atenção: falta equipe'} — média de ${fmt(averageRoutes)} rota(s)/dia em ${dayCount} dia(s). Necessidade: ${neededDrivers} motorista(s) e ${neededHelpers} ajudante(s), com fator ${factor.toFixed(2)}. Disponíveis: ${availableDrivers} motorista(s) e ${availableHelpers} ajudante(s).`:'Importe os arquivos para calcular a necessidade de equipe.'; $('selectionLabel').textContent=active==='all'?'Resumo geral / consolidado':`${UNBS.find(x=>x[0]===Number(active))?.[0]} - ${UNBS.find(x=>x[0]===Number(active))?.[1]}`; const visible=data.slice(0,1000); $('rows').innerHTML=visible.length?visible.map(r=>`<tr class="hover:bg-slate-900/60"><td class="px-4 py-3 font-semibold">${esc(r.map)}</td><td class="px-4 py-3">${esc(r.date)}</td><td class="px-4 py-3">${r.unb?`${r.unb} - ${esc(r.unbName)}`:'Não identificado'}</td><td class="px-4 py-3"><span class="rounded-full px-2 py-1 text-xs ${r.pernoite?'bg-violet-500/20 text-violet-200':'bg-slate-800 text-slate-300'}">${r.pernoite?'Pernoite':'Rotas do dia'}</span></td><td class="px-4 py-3">${esc(r.driver)}</td><td class="px-4 py-3">${fmt(r.weight)}</td><td class="px-4 py-3">${fmt(r.deliveries)}</td><td class="px-4 py-3">1</td><td class="px-4 py-3">${r.weight>limit?2:1}</td></tr>`).join(''):`<tr><td colspan="9" class="px-4 py-10 text-center text-slate-500">Importe um ou mais CSVs para visualizar as rotas.</td></tr>`; if(data.length>1000) $('rows').insertAdjacentHTML('beforeend',`<tr><td colspan="9" class="px-4 py-3 text-center text-xs text-slate-500">Mostrando 1.000 de ${fmt(data.length)} rotas. Os cálculos usam todos os registros.</td></tr>`); renderTabs(); }
+    const esc = v => String(v ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    $('csvFiles').addEventListener('change',async e=>{ const files=[...e.target.files]; if(!files.length)return; $('status').textContent='Lendo arquivos...'; try{ const batches=await Promise.all(files.map(readFile)); records=batches.flat().map(normalize); $('fileCount').textContent=files.length; $('status').textContent=`${records.length} rota(s) processada(s).`; active='all'; render(); }catch(err){ $('status').textContent=`Erro ao ler CSV: ${err.message}`; } });
+    ['drivers','helpers','weightLimit','coverage'].forEach(id=>$(id).addEventListener('input',render));
+    $('export').addEventListener('click',()=>{ const data=activeRecords(); if(!data.length)return; const limit=number($('weightLimit').value); const out=data.map(r=>({'Mapa/rota':r.map,Data:r.date,UNB:r.unb?`${r.unb} - ${r.unbName}`:'Não identificado',Tipo:r.pernoite?'Pernoite':'Rotas do dia','Tempo previsto':r.tempoPrev,Motorista:r.driver,'Peso (kg)':r.weight,Entregas:r.deliveries,Motoristas:1,Ajudantes:r.weight>limit?2:1})); const csv=typeof Papa!=='undefined'?Papa.unparse(out,{delimiter:';'}):[Object.keys(out[0]).join(';'),...out.map(row=>Object.values(row).join(';'))].join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='dimensionamento_entregas.csv'; a.click(); URL.revokeObjectURL(a.href); });
+    render();
+  </script>
+</body>
+</html>

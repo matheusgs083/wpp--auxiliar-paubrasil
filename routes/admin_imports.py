@@ -25,6 +25,7 @@ def create_admin_imports_router(
     run_admin_import_validation: Callable[..., dict[str, Any]],
     queue_admin_import: Callable[..., dict[str, Any]],
     store_admin_import_uploads: Callable[..., dict[str, Any]],
+    run_admin_critica_geral_import: Callable[..., dict[str, Any]],
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
@@ -193,5 +194,37 @@ def create_admin_imports_router(
             metadata={"files": len(files), "reference_date": result.get("reference_date")},
         )
         return {"ok": True, **result}
+
+    @router.post("/api/admin/imports/critica-geral", status_code=200)
+    def api_admin_imports_critica_geral(
+        request: Request,
+        file: UploadFile = File(...),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_panel_auth(
+            request=request,
+            authorization=authorization,
+            x_api_token=x_api_token,
+            x_admin_token=x_admin_token,
+        )
+        require_admin_panel_feature(context, "critica_import")
+        result = access_call(run_admin_critica_geral_import, file, context)
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_import_critica_geral",
+            decision="allowed",
+            reason=str(file.filename or ""),
+        )
+        record_panel_action(
+            request,
+            context,
+            action="importar_critica_geral",
+            target_id="critica_geral",
+            metadata={"filename": str(file.filename or ""), "datasets": result.get("datasets", [])},
+        )
+        return result
 
     return router

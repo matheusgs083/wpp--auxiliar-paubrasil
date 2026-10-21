@@ -1864,6 +1864,23 @@
           </div>
         </section>
 
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cloud-download me-2 text-primary"></i>Cora — Critica</h2>
+              <div class="form-text">Abre o Cora como revenda, gera o relatório completo, baixa o CSV e importa automaticamente na Critica.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+              <div>
+                <label class="form-label small mb-1" for="coraCriticaTargetWorker">Bot que executará</label>
+                <select class="form-select form-select-sm" id="coraCriticaTargetWorker"><option value="">Automático</option></select>
+              </div>
+              <button class="btn btn-primary btn-sm" id="coraCriticaQueueBtn" type="button"><i class="bi bi-play-fill me-1"></i>Baixar Critica Cora</button>
+            </div>
+          </div>
+          <div class="form-text mt-2" id="coraCriticaQueueStatus">A tarefa será executada pelo worker selecionado e aparecerá na lista de execuções.</div>
+        </section>
+
         <section class="panel-card mb-3">
           <header class="px-3 pt-3 pb-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
             <h2 class="h6 mb-0 fw-bold"><i class="bi bi-list-task me-2 text-primary"></i>Execucoes</h2>
@@ -2265,6 +2282,25 @@
             </div>
           </div>
           <div class="recolha-dashboard-grid mb-3" id="criticaDashboardCards"></div>
+        </section>
+        <section class="panel-card p-3 mb-3 border-primary">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Importação geral da Crítica</h2>
+              <div class="form-text">Envie um único CSV com todas as operações. O sistema separa automaticamente as linhas por filial e atualiza todos os cards.</div>
+            </div>
+            <span class="pill">CSV completo</span>
+          </div>
+          <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-8">
+              <label class="form-label small fw-semibold mb-1" for="criticaGeralFile">CSV completo da Crítica</label>
+              <input class="form-control form-control-sm" id="criticaGeralFile" type="file" accept=".csv">
+            </div>
+            <div class="col-12 col-md-auto">
+              <button class="btn btn-primary btn-sm" id="criticaGeralImportBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Importar todas as operações</button>
+            </div>
+          </div>
+          <div class="form-text mt-2" id="criticaGeralStatus">Nenhum arquivo selecionado.</div>
         </section>
         <section class="panel-card p-3 mb-3">
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
@@ -3327,7 +3363,8 @@
           history: "/api/admin/imports/history",
           validate: "/api/admin/imports/validate",
           run: "/api/admin/imports/run",
-          upload: "/api/admin/imports/upload"
+          upload: "/api/admin/imports/upload",
+          criticaGeral: "/api/admin/imports/critica-geral"
         },
         ligaEntrega: {
           expurgos: "/api/admin/liga-entrega/expurgos",
@@ -3411,6 +3448,7 @@
         promax: {
           catalog: "/api/admin/promax/catalog",
           jobs: "/api/admin/promax/jobs",
+          coraCriticaJobs: "/api/admin/promax/cora/critica/jobs",
           jobsBatch: "/api/admin/promax/jobs/batch",
           gradeJobs: "/api/admin/promax/grade/jobs",
           grade020304Jobs: "/api/admin/promax/grade-020304/jobs",
@@ -3695,7 +3733,7 @@
     function datasetGroupNote(apiName) {
       const name = String(apiName || "").toLowerCase();
       if (DATASET_UI_OVERRIDES[name] && DATASET_UI_OVERRIDES[name].groupNote) return DATASET_UI_OVERRIDES[name].groupNote;
-      if (name.startsWith("critica_op_")) return "Upload separado por filial. A consolidacao final do bot passa a sair desta aba.";
+      if (name.startsWith("critica_op_")) return "Use o card de Importacao geral para um CSV completo ou envie um arquivo separado nesta operacao.";
       if (name.startsWith("estoque_020304_op_")) return "Upload separado por filial. O bot envia o PDF ativo pelo comando estoque filial.";
       if (name.startsWith("relatorio_031120_op_")) return "Upload separado por filial. Rotina 031120 com classificacao Mapa e armazem central.";
       if (name === "relatorio_03114902_geo") return "Relatorio unico para todas as operacoes. Rotina 03114902 gerada pelo botao Gerar CSV.";
@@ -3822,6 +3860,9 @@
       authState: document.getElementById("authState"),
       operationalGrid: document.getElementById("operationalDatasetGrid"),
       criticaGrid: document.getElementById("criticaDatasetGrid"),
+      criticaGeralFile: document.getElementById("criticaGeralFile"),
+      criticaGeralImportBtn: document.getElementById("criticaGeralImportBtn"),
+      criticaGeralStatus: document.getElementById("criticaGeralStatus"),
       reportGrid: document.getElementById("reportDatasetGrid"),
       powerBiGrid: document.getElementById("powerBiDatasetGrid"),
       historyTable: document.getElementById("historyBody"),
@@ -3893,6 +3934,9 @@
       promaxPublish: document.getElementById("promaxPublish"),
       promaxRunTargetWorker: document.getElementById("promaxRunTargetWorker"),
       promaxRunBtn: document.getElementById("promaxRunBtn"),
+      coraCriticaTargetWorker: document.getElementById("coraCriticaTargetWorker"),
+      coraCriticaQueueBtn: document.getElementById("coraCriticaQueueBtn"),
+      coraCriticaQueueStatus: document.getElementById("coraCriticaQueueStatus"),
       promaxGradeFile: document.getElementById("promaxGradeFile"),
       promaxGradeUnit: document.getElementById("promaxGradeUnit"),
       promaxGradeTargetWorker: document.getElementById("promaxGradeTargetWorker"),
@@ -6992,6 +7036,7 @@
       renderPromaxWorkers(workers);
       renderPromaxWorkerAssignments(workers);
       renderPromaxTargetWorkerSelect(E.promaxRunTargetWorker, workers);
+      renderPromaxTargetWorkerSelect(E.coraCriticaTargetWorker, workers);
       renderPromaxTargetWorkerSelect(E.promaxGradeTargetWorker, workers);
       renderPromaxTargetWorkerSelect(E.promaxGrade020304Worker, workers);
       renderPromaxGradeResellerSelect(E.promaxGradeUnit);
@@ -7450,6 +7495,31 @@
         addLog(`Falha ao adicionar execucao Promax: ${err.message}`, "err");
       } finally {
         updatePromaxActionState();
+      }
+    }
+
+    async function queueCoraCritica() {
+      const button = E.coraCriticaQueueBtn;
+      const status = E.coraCriticaQueueStatus;
+      if (button) button.disabled = true;
+      if (status) status.textContent = "Adicionando a Critica Cora à fila...";
+      try {
+        const worker = String(E.coraCriticaTargetWorker && E.coraCriticaTargetWorker.value || "").trim();
+        const response = await req(CONFIG.endpoints.promax.coraCriticaJobs, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target_worker_id: worker || null }),
+          timeoutMs: 30000
+        });
+        const job = response && response.job ? response.job : {};
+        if (status) status.textContent = `Tarefa Cora adicionada à fila: ${String(job.id || "").slice(0, 8) || "ok"}. O worker fará o download e a importação.`;
+        addLog("Critica Cora adicionada à fila.", "ok");
+        await syncPromax({ silent: true });
+      } catch (err) {
+        if (status) status.textContent = `Falha ao adicionar Critica Cora: ${err.message}`;
+        addLog(`Falha ao adicionar Critica Cora: ${err.message}`, "err");
+      } finally {
+        if (button) button.disabled = false;
       }
     }
 
@@ -10850,6 +10920,7 @@
         if (workerId) state.promax.credentialUserDrafts[workerId] = input.value;
       });
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
+      if (E.coraCriticaQueueBtn) E.coraCriticaQueueBtn.addEventListener("click", queueCoraCritica);
       document.querySelectorAll("[data-armazem-routine]").forEach(button => button.addEventListener("click", () => setArmazemRoutine(button.dataset.armazemRoutine)));
       if (E.promaxGradeFile) E.promaxGradeFile.addEventListener("change", () => previewArmazemCsv(E.promaxGradeFile.files[0], E.promaxGradeStatus, "020105"));
       if (E.promaxGrade020304File) E.promaxGrade020304File.addEventListener("change", () => previewArmazemCsv(E.promaxGrade020304File.files[0], E.promaxGrade020304Status, "020304"));
@@ -11207,6 +11278,7 @@
       if (E.giroRecolhaBlockSearch) E.giroRecolhaBlockSearch.addEventListener("input", scheduleGiroBlockSearchUpdate);
       if (E.giroRecolhaNewRouteBtn) E.giroRecolhaNewRouteBtn.addEventListener("click", createGiroRecolhaManualRoute);
       if (E.criticaDashboardRefreshBtn) E.criticaDashboardRefreshBtn.addEventListener("click", () => syncCriticaDashboard({ silent: false }));
+      if (E.criticaGeralImportBtn) E.criticaGeralImportBtn.addEventListener("click", importCriticaGeral);
       if (E.criticaOperationPdfBtn) E.criticaOperationPdfBtn.addEventListener("click", () => exportCriticaOperationPdf({ summaryOnly: false }));
       if (E.criticaOperationSummaryPdfBtn) E.criticaOperationSummaryPdfBtn.addEventListener("click", () => exportCriticaOperationPdf({ summaryOnly: true }));
       if (E.criticaOperationSingle) E.criticaOperationSingle.addEventListener("change", () => syncCriticaDashboard({ silent: false }));
@@ -17120,6 +17192,50 @@
       } finally {
         state.datasetBusy[dsId] = false;
         renderGridPanels();
+      }
+    }
+
+    async function importCriticaGeral() {
+      updateTokens();
+      if (!hasPanelAuth()) { addLog("Sessao do painel nao validada.", "warn"); return; }
+      const input = E.criticaGeralFile;
+      const file = input && input.files && input.files[0] ? input.files[0] : null;
+      if (!file) { addLog("Selecione o CSV completo da Critica.", "warn"); return; }
+      if (!String(file.name || "").toLowerCase().endsWith(".csv")) {
+        addLog("O arquivo da Critica deve ser CSV.", "warn");
+        return;
+      }
+      const confirmed = await askConfirmation(`Importar ${file.name} para todas as operacoes da Critica?`);
+      if (!confirmed) return;
+      const button = E.criticaGeralImportBtn;
+      const previousLabel = button ? button.innerHTML : "";
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Importando todas';
+      }
+      if (E.criticaGeralStatus) E.criticaGeralStatus.textContent = "Enviando e atualizando as operações...";
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const payload = await req(CONFIG.endpoints.import.criticaGeral, {
+          method: "POST",
+          headers: {},
+          body: formData,
+          timeoutMs: 900000
+        });
+        const datasets = Array.isArray(payload && payload.datasets) ? payload.datasets.join(", ") : "todas as operações";
+        if (E.criticaGeralStatus) E.criticaGeralStatus.textContent = `Concluído: ${datasets}.`;
+        addLog("CSV geral da Critica importado e atualizado.", "ok");
+        if (input) input.value = "";
+        await syncAll();
+      } catch (err) {
+        if (E.criticaGeralStatus) E.criticaGeralStatus.textContent = `Falha: ${err.message || "não foi possível importar"}.`;
+        addLog(`Erro na importacao geral da Critica: ${err.message}`, "err");
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = previousLabel;
+        }
       }
     }
 

@@ -13,10 +13,32 @@ if str(ROOT) not in sys.path:
 from bot_api.services.critica_operacao_import_service import (
     CriticaOperacaoImportService,
     _build_critica_operacao_rows_from_mapping_rows,
+    _load_critica_operacao_rows,
 )
 
 
 class CriticaOperacaoImportServiceTests(unittest.TestCase):
+    def test_new_order_report_is_loaded_by_header_names_and_filtered_by_filial(self) -> None:
+        csv_content = ";".join([
+            "Cód. unidade entrega", "Desc. unidade entrega", "Número pedido", "Situação pedido",
+            "Cód. cliente", "Nome fantasia", "Cód. setor", "Cód. tipo movimento", "Valor total",
+            "Cód. produto", "Desc. produto", "Quant. venda", "Unidade venda", "Valor unitário líquido",
+            "Peso item", "Situação atend. item", "Canal origem", "Tipo canal origem",
+        ]) + "\n" + "\n".join([
+            "747530;Pau Brasil Filial Patos;1001;NORMAL;123;FANTASIA PATOS;107;51;100,00;1;PRODUTO;2;un;50,00;3,5;ATENDIDO;BEES;B2B_APP",
+            "747548;Pau Brasil Filial Sume;1002;NORMAL;456;FANTASIA SUME;504;51;200,00;2;PRODUTO 2;1;un;200,00;4,0;ATENDIDO;BEES;DIGITADO",
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "consulta-pedidos.csv"
+            path.write_text(csv_content, encoding="utf-8")
+            patos = _load_critica_operacao_rows(path, expected_filial="3")
+            sume = _load_critica_operacao_rows(path, expected_filial="4")
+        self.assertEqual([(row.filial, row.setor, row.pedido, row.nome_pdv) for row in patos], [("3", "107", "1001", "FANTASIA PATOS")])
+        self.assertEqual([(row.filial, row.setor, row.pedido, row.nome_pdv) for row in sume], [("4", "504", "1002", "FANTASIA SUME")])
+        self.assertEqual(patos[0].filial_setor_key, "3_107")
+        self.assertEqual(patos[0].payload["Origem Pedido"], "BEES")
+        self.assertEqual(sume[0].payload["Origem Pedido"], "DIGITADO")
+
     def test_build_rows_generates_dynamic_criticas_from_minimum_price_without_exposing_te(self) -> None:
         headers = [
             "Filial Origem",

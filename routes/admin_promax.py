@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, 
 
 from bot_api.services.promax_jobs_service import LeaseLostError
 from bot_api.services.promax_grade_input_service import MAX_CSV_BYTES, parse_grade_csv, parse_grade_020304_csv
+from bot_api.services.filial_labels import FILIAL_LABELS
 
 
 _CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
@@ -386,6 +387,13 @@ class PromaxJobCreateRequest(_StrictPayload):
     def validate_dates(self) -> PromaxJobCreateRequest:
         _validate_date_range(self.start_date, self.end_date)
         return self
+
+
+class PromaxCoraCriticaJobRequest(_StrictPayload):
+    """Solicitacao controlada para baixar a Critica no portal Cora."""
+
+    target_worker_id: str | None = Field(default=None, min_length=1, max_length=160)
+    reference_date: date | None = None
 
 
 class PromaxGradeCsvRequest(_StrictPayload):
@@ -866,6 +874,38 @@ def _detect_critica_filial(csv_bytes: bytes) -> str:
     return ""
 
 
+def _detect_critica_filiais(csv_bytes: bytes) -> list[str]:
+    """Detect all filiais in either the legacy critique CSV or the new orders CSV."""
+    text = _decode_csv_text(csv_bytes)
+    delimiter = _detect_csv_delimiter(text)
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    headers = list(reader.fieldnames or [])
+    header_map = {_csv_header_key(header): header for header in headers}
+    filial_field = header_map.get("filialorigem") or header_map.get("filial")
+    operation_field = header_map.get("descunidadeentrega")
+    unit_field = header_map.get("codunidadeentrega")
+    found: set[str] = set()
+    for row in reader:
+        if filial_field:
+            filial = _normalize_promax_filial_code(row.get(filial_field, ""))
+        elif operation_field:
+            operation = _csv_header_key(row.get(operation_field, ""))
+            filial = ""
+            for code, label in FILIAL_LABELS.items():
+                if _csv_header_key(label) in operation:
+                    filial = _normalize_promax_filial_code(code)
+                    break
+            if not filial and unit_field:
+                candidate = _normalize_promax_filial_code(row.get(unit_field, ""))
+                if candidate in FILIAL_LABELS:
+                    filial = candidate
+        else:
+            filial = ""
+        if filial:
+            found.add(filial)
+    return sorted(found, key=lambda value: int(value) if value.isdigit() else value)
+
+
 class PromaxWorkerClientClaimRequest(_StrictPayload):
     worker_id: str = Field(min_length=1, max_length=120)
 
@@ -1297,6 +1337,38 @@ def create_admin_promax_router(
             target_type="job",
             target_id=str(job.get("id") if isinstance(job, Mapping) else ""),
             metadata={"category": payload.category, "routines": payload.routines, "units": payload.units},
+        )
+        return _item_response(job, key="job")
+
+    @router.post("/api/admin/promax/cora/critica/jobs", status_code=202)
+    def api_admin_promax_create_cora_critica_job(
+        request: Request,
+        payload: PromaxCoraCriticaJobRequest,
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        job_payload: dict[str, Any] = {
+            "site": "cora",
+            "operation": "critica",
+            "category": "cora_critica",
+            "routines": ["critica"],
+            "units": [],
+            "target_worker_id": payload.target_worker_id,
+        }
+        if payload.reference_date is not None:
+            job_payload["reference_date"] = payload.reference_date.isoformat()
+        job = service.enqueue_job(
+            job_type="cora_critica",
+            payload=job_payload,
+            created_by=context_actor(context),
+        )
+        record_admin_event(request, "admin_promax_cora_critica_job_create")
+        record_panel_action(
+            request,
+            context,
+            action="executar_cora_critica",
+            target_type="job",
+            target_id=str(job.get("id") if isinstance(job, Mapping) else ""),
+            metadata={"site": "cora", "operation": "critica", "worker": payload.target_worker_id or "auto"},
         )
         return _item_response(job, key="job")
 
@@ -2657,26 +2729,32 @@ def create_admin_promax_router(
                 raise HTTPException(status_code=400, detail="Arquivo CSV em base64 invalido.") from exc
             if not csv_bytes.strip():
                 raise HTTPException(status_code=400, detail=f"Arquivo CSV vazio: {item.filename}.")
-            filial = _detect_critica_filial(csv_bytes)
-            if not filial:
+            filiais = _detect_critica_filiais(csv_bytes)
+            if not filiais:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Nao consegui identificar a Filial Origem no CSV da critica: {item.filename}.",
+                    detail=f"Nao consegui identificar a filial no CSV da critica: {item.filename}.",
                 )
-            import_service = critica_import_services.get(filial)
-            if import_service is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Importador de critica nao configurado para a filial {filial}.",
-                )
-            decoded_items.append((item, csv_bytes, filial, import_service))
+            for filial in filiais:
+                import_service = critica_import_services.get(filial)
+                if import_service is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Importador de critica nao configurado para a filial {filial}.",
+                    )
+                decoded_items.append((item, csv_bytes, filial, import_service))
 
         imports: list[dict[str, Any]] = []
         rows_total = 0
+        used_source_names: set[str] = set()
         with tempfile.TemporaryDirectory(prefix="promax_030111_") as temp_dir:
             temp_root = FilePath(temp_dir)
             for item, csv_bytes, filial, import_service in decoded_items:
-                file_path = temp_root / item.filename
+                source_name = item.filename
+                file_path = temp_root / source_name
+                if source_name in used_source_names:
+                    file_path = temp_root / f"{filial}_{source_name}"
+                used_source_names.add(source_name)
                 file_path.write_bytes(csv_bytes)
                 result = import_service.import_source(
                     file_path,

@@ -30,6 +30,7 @@ class AdminImportsRoutesTest(unittest.TestCase):
                 run_admin_import_validation=lambda dataset: {"dataset": dataset, "valid": True},
                 queue_admin_import=lambda dataset, **kwargs: {"dataset": dataset, "reference_date": kwargs.get("reference_date")},
                 store_admin_import_uploads=lambda dataset, *_args: {"dataset": dataset, "total_files": 1},
+                run_admin_critica_geral_import=lambda *_args: {"ok": True, "datasets": ["critica_op_3"]},
                 record_security_event=record_security_event,
             )
         )
@@ -56,6 +57,18 @@ class AdminImportsRoutesTest(unittest.TestCase):
         self.assertEqual(response.json()["dataset"], "normalized_dclientes")
         self.assertTrue(response.json()["queued"])
         self.assertEqual(events[0]["event_type"], "admin_import_run")
+
+    def test_critica_geral_accepts_one_csv(self) -> None:
+        client, events = self.make_client()
+
+        response = client.post(
+            "/api/admin/imports/critica-geral",
+            files={"file": ("critica.csv", b"cabecalho\nvalor\n", "text/csv")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["datasets"], ["critica_op_3"])
+        self.assertEqual(events[0]["event_type"], "admin_import_critica_geral")
 
 
 if __name__ == "__main__":

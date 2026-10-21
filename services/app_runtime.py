@@ -365,6 +365,7 @@ def configure_app_runtime(
     _queue_admin_import = admin_imports_runtime._queue_admin_import
     _run_admin_import_maintenance = admin_imports_runtime._run_admin_import_maintenance
     _store_admin_import_uploads = admin_imports_runtime._store_admin_import_uploads
+    _run_admin_critica_geral_import = admin_imports_runtime._run_admin_critica_geral_import
     _list_admin_import_status = admin_imports_runtime._list_admin_import_status
     _list_admin_import_history = admin_imports_runtime._list_admin_import_history
     _filter_admin_import_status_for_context = admin_imports_runtime._filter_admin_import_status_for_context
@@ -651,6 +652,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "run_admin_import_validation": runtime["_run_admin_import_validation"],
         "queue_admin_import": runtime["_queue_admin_import"],
         "store_admin_import_uploads": runtime["_store_admin_import_uploads"],
+        "run_admin_critica_geral_import": runtime["_run_admin_critica_geral_import"],
         "build_admin_giro_recolha_dashboard": runtime["_build_admin_giro_recolha_dashboard"],
         "build_admin_giro_recolha_filter_options": runtime["_build_admin_giro_recolha_filter_options"],
         "build_admin_giro_recolha_routes": runtime["_build_admin_giro_recolha_routes"],
