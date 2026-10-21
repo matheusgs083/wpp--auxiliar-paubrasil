@@ -11,6 +11,7 @@ import logging
 import re
 import secrets
 import shutil
+import tempfile
 import time
 
 import psycopg
@@ -1087,6 +1088,33 @@ def _run_admin_critica_geral_import(
         (name for name in ADMIN_IMPORT_DATASETS if name.startswith("critica_op_")),
         key=lambda name: int(name.rsplit("_", 1)[-1]) if name.rsplit("_", 1)[-1].isdigit() else name,
     )
+    # O CSV geral do Cora pode conter apenas parte das operações selecionadas
+    # (por exemplo, somente PATOS e SUME). Detectamos as filiais presentes
+    # antes de criar os uploads por dataset; tentar validar um arquivo misto
+    # contra uma filial ausente transforma uma importação válida em erro.
+    detected_targets: list[str] = []
+    probe_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="critica_geral_", suffix=".csv", delete=False) as probe:
+            probe.write(payload)
+            probe_path = Path(probe.name)
+        for dataset in targets:
+            service = ADMIN_IMPORT_DATASETS[dataset].get("service")
+            validate = getattr(service, "validate_source", None)
+            if not callable(validate):
+                continue
+            validation = validate(probe_path)
+            if int(getattr(validation, "total_rows", 0) or 0) > 0:
+                detected_targets.append(dataset)
+    finally:
+        if probe_path is not None:
+            probe_path.unlink(missing_ok=True)
+    targets = detected_targets
+    if not targets:
+        raise HTTPException(
+            status_code=400,
+            detail="Nao encontrei nenhuma filial de operacao no CSV geral da Critica.",
+        )
     if callable(_panel_context_allowed_import_datasets):
         allowed = _panel_context_allowed_import_datasets(context, targets)
         if allowed is not None:
