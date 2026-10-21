@@ -1864,23 +1864,6 @@
           </div>
         </section>
 
-        <section class="panel-card p-3 mb-3">
-          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between">
-            <div>
-              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cloud-download me-2 text-primary"></i>Cora — Critica</h2>
-              <div class="form-text">Abre o Cora como revenda, gera o relatório completo, baixa o CSV e importa automaticamente na Critica.</div>
-            </div>
-            <div class="d-flex flex-wrap gap-2 align-items-end">
-              <div>
-                <label class="form-label small mb-1" for="coraCriticaTargetWorker">Bot que executará</label>
-                <select class="form-select form-select-sm" id="coraCriticaTargetWorker"><option value="">Automático</option></select>
-              </div>
-              <button class="btn btn-primary btn-sm" id="coraCriticaQueueBtn" type="button"><i class="bi bi-play-fill me-1"></i>Baixar Critica Cora</button>
-            </div>
-          </div>
-          <div class="form-text mt-2" id="coraCriticaQueueStatus">A tarefa será executada pelo worker selecionado e aparecerá na lista de execuções.</div>
-        </section>
-
         <section class="panel-card mb-3">
           <header class="px-3 pt-3 pb-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
             <h2 class="h6 mb-0 fw-bold"><i class="bi bi-list-task me-2 text-primary"></i>Execucoes</h2>
@@ -3934,9 +3917,6 @@
       promaxPublish: document.getElementById("promaxPublish"),
       promaxRunTargetWorker: document.getElementById("promaxRunTargetWorker"),
       promaxRunBtn: document.getElementById("promaxRunBtn"),
-      coraCriticaTargetWorker: document.getElementById("coraCriticaTargetWorker"),
-      coraCriticaQueueBtn: document.getElementById("coraCriticaQueueBtn"),
-      coraCriticaQueueStatus: document.getElementById("coraCriticaQueueStatus"),
       promaxGradeFile: document.getElementById("promaxGradeFile"),
       promaxGradeUnit: document.getElementById("promaxGradeUnit"),
       promaxGradeTargetWorker: document.getElementById("promaxGradeTargetWorker"),
@@ -4570,8 +4550,8 @@
     function promaxCatalogCategories() {
       const catalog = state.promax.catalog;
       const categories = catalog && typeof catalog === "object" ? catalog.categories : null;
-      if (!categories || typeof categories !== "object" || Array.isArray(categories)) return [];
-      return Object.entries(categories).map(([categoryId, value]) => {
+      const result = categories && typeof categories === "object" && !Array.isArray(categories)
+        ? Object.entries(categories).map(([categoryId, value]) => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return null;
         const id = String(categoryId || "").trim();
         if (!id) return null;
@@ -4583,7 +4563,19 @@
           routines: normalizePromaxCatalogItems(value.routines),
           units: normalizePromaxCatalogItems(value.units)
         };
-      }).filter(Boolean);
+          }).filter(Boolean)
+        : [];
+      if (!result.some(category => category.id === "cora_critica")) {
+        result.push({
+          id: "cora_critica",
+          name: "Cora — Crítica",
+          section: "Cora",
+          description: "Baixa e importa o CSV completo da Crítica pelo portal Cora.",
+          routines: [{ id: "critica", name: "Crítica Cora" }],
+          units: []
+        });
+      }
+      return result;
     }
 
     function promaxCatalogCategory(categoryId) {
@@ -4802,7 +4794,7 @@
       const runRoutines = promaxRunSelectedRoutines();
       const runEnabled = Boolean(
         runCategories.length
-        && promaxRunSelectedUnits().length
+        && (runCategories.every(categoryId => categoryId === "cora_critica") || promaxRunSelectedUnits().length)
         && runCategories.every(categoryId => (runRoutines[categoryId] || []).length)
       );
       const scheduleCategories = promaxScheduleSelectedCategories();
@@ -4849,6 +4841,10 @@
           label: category.name,
           section: category.section || "Geral"
         }));
+        if (scope !== "run") {
+          const coraIndex = options.findIndex(item => item.value === "cora_critica");
+          if (coraIndex >= 0) options.splice(coraIndex, 1);
+        }
         const values = new Set(options.map(item => item.value));
         promaxSelectionSelectedCategories(scope).forEach(categoryId => {
           if (!values.has(categoryId)) {
@@ -5946,6 +5942,13 @@
         }
         return { category: categoryId, routines };
       });
+      if (groups.some(group => group.category === "cora_critica")) {
+        if (groups.length > 1) throw new Error("Execute a Critica Cora separadamente dos grupos Promax.");
+        return {
+          cora_critica: true,
+          target_worker_id: String(E.promaxRunTargetWorker && E.promaxRunTargetWorker.value || "") || null
+        };
+      }
       const units = promaxRunSelectedUnits();
       if (!units.length) throw new Error("Selecione pelo menos uma revenda.");
       const startDate = String(E.promaxStartDate && E.promaxStartDate.value || "");
@@ -7036,7 +7039,6 @@
       renderPromaxWorkers(workers);
       renderPromaxWorkerAssignments(workers);
       renderPromaxTargetWorkerSelect(E.promaxRunTargetWorker, workers);
-      renderPromaxTargetWorkerSelect(E.coraCriticaTargetWorker, workers);
       renderPromaxTargetWorkerSelect(E.promaxGradeTargetWorker, workers);
       renderPromaxTargetWorkerSelect(E.promaxGrade020304Worker, workers);
       renderPromaxGradeResellerSelect(E.promaxGradeUnit);
@@ -7469,6 +7471,27 @@
         addLog(err.message, "warn");
         return;
       }
+      if (payload.cora_critica) {
+        const confirmedCora = await askConfirmation("Adicionar a Critica Cora à fila para baixar e importar automaticamente?");
+        if (!confirmedCora) return;
+        E.promaxRunBtn.disabled = true;
+        try {
+          const response = await req(CONFIG.endpoints.promax.coraCriticaJobs, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ target_worker_id: payload.target_worker_id }),
+            timeoutMs: 30000
+          });
+          const job = response && response.job ? response.job : {};
+          addLog(`Critica Cora adicionada à fila: ${String(job.id || "").slice(0, 8) || "ok"}.`, "ok");
+          await syncPromax({ silent: true });
+        } catch (err) {
+          addLog(`Falha ao adicionar Critica Cora: ${err.message}`, "err");
+        } finally {
+          updatePromaxActionState();
+        }
+        return;
+      }
       const groupNames = payload.groups.map(item => {
         const category = promaxCatalogCategory(item.category);
         return category ? category.name : item.category;
@@ -7495,31 +7518,6 @@
         addLog(`Falha ao adicionar execucao Promax: ${err.message}`, "err");
       } finally {
         updatePromaxActionState();
-      }
-    }
-
-    async function queueCoraCritica() {
-      const button = E.coraCriticaQueueBtn;
-      const status = E.coraCriticaQueueStatus;
-      if (button) button.disabled = true;
-      if (status) status.textContent = "Adicionando a Critica Cora à fila...";
-      try {
-        const worker = String(E.coraCriticaTargetWorker && E.coraCriticaTargetWorker.value || "").trim();
-        const response = await req(CONFIG.endpoints.promax.coraCriticaJobs, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ target_worker_id: worker || null }),
-          timeoutMs: 30000
-        });
-        const job = response && response.job ? response.job : {};
-        if (status) status.textContent = `Tarefa Cora adicionada à fila: ${String(job.id || "").slice(0, 8) || "ok"}. O worker fará o download e a importação.`;
-        addLog("Critica Cora adicionada à fila.", "ok");
-        await syncPromax({ silent: true });
-      } catch (err) {
-        if (status) status.textContent = `Falha ao adicionar Critica Cora: ${err.message}`;
-        addLog(`Falha ao adicionar Critica Cora: ${err.message}`, "err");
-      } finally {
-        if (button) button.disabled = false;
       }
     }
 
@@ -10920,7 +10918,6 @@
         if (workerId) state.promax.credentialUserDrafts[workerId] = input.value;
       });
       if (E.promaxRunBtn) E.promaxRunBtn.addEventListener("click", promaxRunNow);
-      if (E.coraCriticaQueueBtn) E.coraCriticaQueueBtn.addEventListener("click", queueCoraCritica);
       document.querySelectorAll("[data-armazem-routine]").forEach(button => button.addEventListener("click", () => setArmazemRoutine(button.dataset.armazemRoutine)));
       if (E.promaxGradeFile) E.promaxGradeFile.addEventListener("change", () => previewArmazemCsv(E.promaxGradeFile.files[0], E.promaxGradeStatus, "020105"));
       if (E.promaxGrade020304File) E.promaxGrade020304File.addEventListener("change", () => previewArmazemCsv(E.promaxGrade020304File.files[0], E.promaxGrade020304Status, "020304"));
