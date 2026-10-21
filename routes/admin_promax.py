@@ -895,6 +895,10 @@ def _detect_critica_filiais(csv_bytes: bytes) -> list[str]:
                 if _csv_header_key(label) in operation:
                     filial = _normalize_promax_filial_code(code)
                     break
+            # O Cora envia a unidade 2 como "Itapora" em alguns relatórios,
+            # enquanto o cadastro da aplicação usa "Itaporanga".
+            if not filial and "itapora" in operation:
+                filial = "2"
             if not filial and unit_field:
                 candidate = _normalize_promax_filial_code(row.get(unit_field, ""))
                 if candidate in FILIAL_LABELS:
