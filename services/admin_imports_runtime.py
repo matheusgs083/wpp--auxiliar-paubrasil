@@ -1081,6 +1081,8 @@ def _run_admin_critica_geral_import(
             pass
     payload = buffer.getvalue()
     filename = str(upload.filename or "critica_operacao.csv")
+    if not payload.strip():
+        raise HTTPException(status_code=400, detail="O CSV geral da Critica esta vazio.")
     targets = sorted(
         (name for name in ADMIN_IMPORT_DATASETS if name.startswith("critica_op_")),
         key=lambda name: int(name.rsplit("_", 1)[-1]) if name.rsplit("_", 1)[-1].isdigit() else name,

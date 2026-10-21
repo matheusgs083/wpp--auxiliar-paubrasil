@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, File, Form, Header, Query, Request, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
+
+
+logger = logging.getLogger(__name__)
 
 
 class AdminImportActionRequest(BaseModel):
@@ -210,7 +214,19 @@ def create_admin_imports_router(
             x_admin_token=x_admin_token,
         )
         require_admin_panel_feature(context, "critica_import")
-        result = access_call(run_admin_critica_geral_import, file, context)
+        try:
+            result = access_call(run_admin_critica_geral_import, file, context)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "Falha inesperada na importacao geral da Critica (arquivo=%s)",
+                str(file.filename or ""),
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Falha interna ao importar o CSV geral da Critica. Consulte os logs do bot_api.",
+            ) from exc
         record_security_event(
             request,
             channel="api",
