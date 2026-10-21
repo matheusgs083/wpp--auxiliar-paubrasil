@@ -1116,7 +1116,7 @@ def _run_admin_critica_geral_import(
             detail="Nao encontrei nenhuma filial de operacao no CSV geral da Critica.",
         )
     if callable(_panel_context_allowed_import_datasets):
-        allowed = _panel_context_allowed_import_datasets(context, targets)
+        allowed = _panel_context_allowed_import_datasets(context)
         if allowed is not None:
             targets = [name for name in targets if name in allowed]
     if not targets:
