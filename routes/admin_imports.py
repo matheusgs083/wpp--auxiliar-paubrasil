@@ -223,9 +223,15 @@ def create_admin_imports_router(
                 "Falha inesperada na importacao geral da Critica (arquivo=%s)",
                 str(file.filename or ""),
             )
+            reason = str(exc).strip().replace("\r", " ").replace("\n", " ")
+            if len(reason) > 240:
+                reason = reason[:237] + "..."
             raise HTTPException(
                 status_code=500,
-                detail="Falha interna ao importar o CSV geral da Critica. Consulte os logs do bot_api.",
+                detail=(
+                    "Falha interna ao importar o CSV geral da Critica. "
+                    f"{type(exc).__name__}: {reason or 'erro sem detalhe'}"
+                ),
             ) from exc
         record_security_event(
             request,
