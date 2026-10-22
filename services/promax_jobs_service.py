@@ -1908,6 +1908,11 @@ class PromaxJobsService:
         schedule_id = str(schedule["id"])
         job_type = str(schedule["job_type"])
         payload = self._apply_worker_assignment(job_type, dict(schedule["payload"] or {}), cur=cur)
+        # Keep scheduled Cora jobs on the dedicated site even when the
+        # schedule was created before the site/operation fields were added to
+        # the scheduler payload.
+        if job_type == "cora_critica":
+            payload.update({"site": "cora", "operation": "critica"})
         idempotency_key = (
             _schedule_trigger_idempotency_key(schedule_id, triggered_by_job_id)
             if triggered_by_job_id is not None
