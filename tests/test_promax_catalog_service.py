@@ -96,6 +96,7 @@ class PromaxCatalogServiceTest(unittest.TestCase):
                 "adf",
                 "bot_zap",
                 "botzapfechamento",
+                "cora_critica",
                 "estoque",
                 "fluxo_caixa",
                 "giro",

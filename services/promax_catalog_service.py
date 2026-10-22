@@ -194,6 +194,14 @@ class PromaxCatalogService:
                 continue
             if not catalog["categories"]:
                 continue
+            # The worker catalog is authoritative for the routines it discovers,
+            # but older workers may still be online while a newly added site is
+            # being rolled out. Keep the Cora scheduler entry available from the
+            # server fallback so saving a Cora schedule does not depend on the
+            # heartbeat having refreshed first.
+            cora_category = self.fallback_catalog["categories"].get("cora_critica")
+            if cora_category is not None:
+                catalog["categories"].setdefault("cora_critica", cora_category)
             catalog["source"] = "worker"
             catalog["worker_id"] = str(worker.get("worker_id") or "")
             warnings = raw_catalog.get("warnings") if isinstance(raw_catalog, Mapping) else None
