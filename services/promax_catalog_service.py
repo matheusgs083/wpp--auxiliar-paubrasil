@@ -36,6 +36,15 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
             ],
             "units": [],
         },
+        "cora_critica": {
+            "name": "Cora — Crítica",
+            "section": "Cora",
+            "description": "Baixa e importa o CSV completo da Crítica pelo portal Cora.",
+            "routines": [
+                {"id": "critica", "name": "Crítica Cora"},
+            ],
+            "units": [],
+        },
         "botzapfechamento": {
             "name": "Bot Zap Fechamento",
             "description": "Relatorios de fechamento executados pelo main dedicado de fechamento.",

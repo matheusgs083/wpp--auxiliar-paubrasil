@@ -874,7 +874,11 @@ def _detect_critica_filial(csv_bytes: bytes) -> str:
     return ""
 
 
-def _detect_critica_filiais(csv_bytes: bytes) -> list[str]:
+def _detect_critica_filiais(
+    csv_bytes: bytes,
+    *,
+    puxada_to_filial: Mapping[str, str] | None = None,
+) -> list[str]:
     """Detect all filiais in either the legacy critique CSV or the new orders CSV."""
     text = _decode_csv_text(csv_bytes)
     delimiter = _detect_csv_delimiter(text)
@@ -891,8 +895,12 @@ def _detect_critica_filiais(csv_bytes: bytes) -> list[str]:
         elif operation_field:
             operation = _csv_header_key(row.get(operation_field, ""))
             filial = ""
+            if unit_field and puxada_to_filial:
+                filial = _normalize_promax_filial_code(
+                    puxada_to_filial.get(_normalize_promax_filial_code(row.get(unit_field, "")), "")
+                )
             for code, label in FILIAL_LABELS.items():
-                if _csv_header_key(label) in operation:
+                if not filial and _csv_header_key(label) in operation:
                     filial = _normalize_promax_filial_code(code)
                     break
             # O Cora envia a unidade 2 como "Itapora" em alguns relatórios,
@@ -977,6 +985,7 @@ def create_admin_promax_router(
     dclientes_import_service: Any | None = None,
     dmateriais_import_service: Any | None = None,
     documentacao_pendente_import_service: Any | None = None,
+    drevendas_import_service: Any | None = None,
     critica_operacao_import_services: Mapping[str, Any] | None = None,
     liga_entrega_report_store: Any | None = None,
     liga_entrega_raw_sql_import_service: Any | None = None,
@@ -1769,6 +1778,8 @@ def create_admin_promax_router(
                 "enabled",
             },
         )
+        if payload.category == "cora_critica":
+            schedule_payload.update({"site": "cora", "operation": "critica"})
         try:
             schedule = service.create_schedule(
                 name=payload.name,
@@ -1831,6 +1842,7 @@ def create_admin_promax_router(
                 "payload": {
                     "category": group.category,
                     "routines": group.routines,
+                    **({"site": "cora", "operation": "critica"} if group.category == "cora_critica" else {}),
                     **common_payload,
                 },
             }
@@ -2733,7 +2745,19 @@ def create_admin_promax_router(
                 raise HTTPException(status_code=400, detail="Arquivo CSV em base64 invalido.") from exc
             if not csv_bytes.strip():
                 raise HTTPException(status_code=400, detail=f"Arquivo CSV vazio: {item.filename}.")
-            filiais = _detect_critica_filiais(csv_bytes)
+            puxada_to_filial: dict[str, str] = {}
+            if drevendas_import_service is not None:
+                try:
+                    labels_by_puxada = drevendas_import_service.latest_labels_by_puxada()
+                    for puxada, name in (labels_by_puxada or {}).items():
+                        normalized_name = _csv_header_key(name)
+                        for code, label in FILIAL_LABELS.items():
+                            if normalized_name == _csv_header_key(label) or _csv_header_key(label) in normalized_name:
+                                puxada_to_filial[_normalize_promax_filial_code(puxada)] = code
+                                break
+                except Exception:
+                    puxada_to_filial = {}
+            filiais = _detect_critica_filiais(csv_bytes, puxada_to_filial=puxada_to_filial)
             if not filiais:
                 raise HTTPException(
                     status_code=400,

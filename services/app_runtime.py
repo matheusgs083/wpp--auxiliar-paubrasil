@@ -715,6 +715,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "dclientes_import_service": runtime["services"].dclientes_import_service,
         "dmateriais_import_service": runtime["services"].dmateriais_import_service,
         "documentacao_pendente_import_service": runtime["services"].documentacao_pendente_import_service,
+        "drevendas_import_service": runtime["services"].drevendas_import_service,
         "critica_operacao_import_services": runtime["services"].critica_operacao_import_services,
         "liga_entrega_report_store": runtime["liga_entrega_report_store"],
         "liga_entrega_snapshot_store": runtime["liga_entrega_snapshot_store"],

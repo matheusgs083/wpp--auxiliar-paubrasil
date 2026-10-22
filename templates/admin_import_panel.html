@@ -4841,10 +4841,6 @@
           label: category.name,
           section: category.section || "Geral"
         }));
-        if (scope !== "run") {
-          const coraIndex = options.findIndex(item => item.value === "cora_critica");
-          if (coraIndex >= 0) options.splice(coraIndex, 1);
-        }
         const values = new Set(options.map(item => item.value));
         promaxSelectionSelectedCategories(scope).forEach(categoryId => {
           if (!values.has(categoryId)) {
