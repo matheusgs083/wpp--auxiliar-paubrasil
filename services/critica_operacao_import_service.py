@@ -116,6 +116,9 @@ NEW_REPORT_HEADER_ALIASES = {
     "canalorigem": "Origem Pedido",
     "tipocanalorigem": "Tipo Canal Origem",
     "origempedido": "Origem Pedido",
+    "tipopedido": "Tipo pedido",
+    "condicaodepagamento": "Condição de pagamento",
+    "condicaopagamento": "Condição de pagamento",
 }
 
 
@@ -781,6 +784,8 @@ def _build_new_report_critica_rows_from_mapping_rows(
         produto_codigo = normalize_numeric_code(value(row, "Cód. produto"))
         if not filial or not pedido or not setor or not cod_pdv or not produto_codigo:
             continue
+        if _is_cancelled_status(value(row, "Situação pedido") or value(row, "Situação atend. pedido")):
+            continue
         if _clean_text(value(row, "Situação atend. item")).upper() == "FALTA":
             continue
         ocorrencias = [
@@ -795,9 +800,15 @@ def _build_new_report_critica_rows_from_mapping_rows(
         payload = _row_to_payload(headers, row)
         canal_origem = _clean_text(value(row, "Origem Pedido"))
         tipo_canal_origem = _clean_text(value(row, "Tipo Canal Origem"))
-        origem_pedido = tipo_canal_origem if tipo_canal_origem.upper() == "DIGITADO" else canal_origem
+        tipo_pedido = _clean_text(value(row, "Tipo pedido"))
+        origem_pedido = tipo_pedido or (
+            tipo_canal_origem if tipo_canal_origem.upper() == "DIGITADO" else canal_origem
+        )
         if origem_pedido:
             payload["Origem Pedido"] = origem_pedido
+        cond_pagamento = _clean_text(value(row, "Condição de pagamento"))
+        if cond_pagamento:
+            payload["Cond Pgto"] = cond_pagamento
         rows.append(
             CriticaOperacaoRow(
                 filial=filial,
@@ -860,6 +871,8 @@ def _build_critica_operacao_rows_from_mapping_rows(
         cod_pdv = normalize_numeric_code(row.get(header_map["Cod. Cliente"], ""))
         produto_codigo = normalize_numeric_code(row.get(header_map["Cod. Produto"], ""))
         if not filial or not pedido or not setor or not cod_pdv:
+            continue
+        if _is_cancelled_status(row.get(header_map["Status Pedido"], "")):
             continue
 
         nome_produto = _clean_text(row.get(header_map["Nome Produto"], ""))
@@ -929,13 +942,22 @@ def _is_meaningful_minimum(value: Decimal) -> bool:
 
 
 def _should_append_minimum_price_critica(preco_unitario: Decimal, minimo_politica: Decimal, origem_pedido: str) -> bool:
+    if _normalize_origin(origem_pedido) != "DIGITADO":
+        return False
     if not _is_meaningful_minimum(minimo_politica):
         return False
     if preco_unitario >= (minimo_politica - Decimal("0.01")):
         return False
-    if str(origem_pedido or "").strip().upper() in B2B_PRICE_ORIGINS:
-        return abs((preco_unitario - minimo_politica) / minimo_politica) >= B2B_PRICE_TOLERANCE
     return True
+
+
+def _normalize_origin(value: Any) -> str:
+    return _clean_text(value).strip().upper().replace("-", "_").replace(" ", "_")
+
+
+def _is_cancelled_status(value: Any) -> bool:
+    normalized = _clean_text(value).strip().upper()
+    return normalized == "CANCELADO" or normalized.startswith("CANCELADO ")
 
 
 def _format_decimal_text(value: Decimal) -> str:

@@ -1418,6 +1418,7 @@ class CriticaRnQueryService:
         context_params.append(normalized_filiais)
         context_filters.append(sql.SQL("c.cod_pdv = ANY(%s)"))
         context_params.append(normalized_cod_pdvs)
+        context_filters.append(sql.SQL("COALESCE(UPPER(TRIM(c.status_pedido)), '') NOT LIKE 'CANCELADO%'"))
         context_params.append(50000)
         query = sql.SQL(
             """
@@ -1447,6 +1448,7 @@ class CriticaRnQueryService:
         return [_row_to_duplicate_context_record(row) for row in rows]
 
     def _build_records_query(self, *, conn: Any, relation: str, filters: list[sql.Composed]) -> sql.Composed:
+        filters = [*filters, sql.SQL("COALESCE(UPPER(TRIM(c.status_pedido)), '') NOT LIKE 'CANCELADO%'")]
         ctes = [
             _dprecos_reference_cte(self.schema, conn),
             _dprodutos_reference_cte(self.schema, conn),
@@ -1503,12 +1505,28 @@ class CriticaRnQueryService:
                 COALESCE(NULLIF(c.payload ->> 'Mapa', ''), '') AS mapa_codigo,
                 COALESCE(NULLIF(c.payload ->> 'Cod. Vendedor', ''), '') AS vendedor_codigo,
                 COALESCE(NULLIF(c.payload ->> 'Cod. Area', ''), '') AS area_codigo,
-                COALESCE(NULLIF(c.payload ->> 'Cond Pgto', ''), '') AS cond_pag_pedido_codigo,
-                COALESCE(NULLIF(dcp.descricao, ''), NULLIF(c.payload ->> 'Cond Pgto', ''), '') AS cond_pag_pedido,
+                COALESCE(
+                    NULLIF(c.payload ->> 'Cond Pgto', ''),
+                    NULLIF(c.payload ->> 'Condição de pagamento', ''),
+                    NULLIF(c.payload ->> 'Condicao de pagamento', ''),
+                    ''
+                ) AS cond_pag_pedido_codigo,
+                COALESCE(
+                    NULLIF(dcp.descricao, ''),
+                    NULLIF(c.payload ->> 'Cond Pgto', ''),
+                    NULLIF(c.payload ->> 'Condição de pagamento', ''),
+                    NULLIF(c.payload ->> 'Condicao de pagamento', ''),
+                    ''
+                ) AS cond_pag_pedido,
                 COALESCE(NULLIF(c.payload ->> 'Forma Pgto', ''), '') AS forma_pgto,
                 COALESCE(NULLIF(c.payload ->> 'Prazo em Dias', ''), '') AS prazo_dias,
                 COALESCE(NULLIF(c.payload ->> 'DS Segmento Cerveja', ''), '') AS segmento_cerveja,
-                COALESCE(NULLIF(c.payload ->> 'Origem Pedido', ''), '') AS origem_pedido,
+                COALESCE(
+                    NULLIF(c.payload ->> 'Origem Pedido', ''),
+                    NULLIF(c.payload ->> 'Tipo pedido', ''),
+                    NULLIF(c.payload ->> 'Tipo Pedido', ''),
+                    ''
+                ) AS origem_pedido,
                 COALESCE(NULLIF(c.payload ->> 'Maior Atraso', ''), '') AS maior_atraso_pedido,
                 COALESCE(NULLIF(c.payload ->> 'Ocorrencia 1', ''), '') AS ocorrencia_1,
                 COALESCE(NULLIF(c.payload ->> 'Ocorrencia 2', ''), '') AS ocorrencia_2,
@@ -1578,7 +1596,15 @@ class CriticaRnQueryService:
             relation=sql.Identifier(relation),
             pedido_condicao_key_sql=sql.SQL(
                 "CONCAT(COALESCE(c.filial, ''), '_', {codigo_sql})"
-            ).format(codigo_sql=_normalized_code_sql(sql.SQL("c.payload ->> 'Cond Pgto'"))),
+            ).format(
+                codigo_sql=_normalized_code_sql(
+                    sql.SQL(
+                        "COALESCE(NULLIF(c.payload ->> 'Cond Pgto', ''), "
+                        "NULLIF(c.payload ->> 'Condição de pagamento', ''), "
+                        "NULLIF(c.payload ->> 'Condicao de pagamento', ''))"
+                    )
+                )
+            ),
             cliente_condicao_key_sql=sql.SQL(
                 "CONCAT(COALESCE(c.filial, ''), '_', {codigo_sql})"
             ).format(codigo_sql=_normalized_code_sql(sql.SQL("d.cond_pag_atual"))),
@@ -3721,7 +3747,11 @@ def _build_problem_labels(record: CriticaRnRecord) -> tuple[str, ...]:
         )
     if _has_price_alert(record):
         labels.append(_price_alert_label(record))
-    if not record.produto_encontrado_dprecos and record.produto_codigo and not _is_b2b_price_origin(record):
+    if (
+        not record.produto_encontrado_dprecos
+        and record.produto_codigo
+        and _is_digitado_order(record)
+    ):
         labels.append("Produto sem referencia na DPrecos")
     if record.order_above_average:
         labels.append(
@@ -3759,14 +3789,19 @@ def _has_price_alert(record: CriticaRnRecord) -> bool:
 
 
 def _should_report_price_problem(record: CriticaRnRecord) -> bool:
+    if not _is_digitado_order(record):
+        return False
     if record.price_delta_pct is None:
         return True
     if not _is_sale_order(record):
         return abs(record.price_delta_pct) >= NON_SALE_PRICE_TOLERANCE
-    if _is_b2b_price_origin(record):
-        return abs(record.price_delta_pct) >= B2B_PRICE_TOLERANCE
     tolerance = PRICE_TOLERANCE_OP1 if record.filial == "1" else PRICE_TOLERANCE_DEFAULT
     return abs(record.price_delta_pct) >= tolerance
+
+
+def _is_digitado_order(record: CriticaRnRecord) -> bool:
+    value = str(record.origem_pedido or "").strip().upper()
+    return value in {"DIGITADO", "DIGITADA"}
 
 
 def _is_b2b_price_origin(record: CriticaRnRecord) -> bool:
