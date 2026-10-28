@@ -41,12 +41,27 @@ def money(value: float) -> str:
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def load_mapping() -> tuple[dict[str, str], dict[tuple[str, str], str]]:
+def load_mapping() -> tuple[dict[str, str], dict[str, str], dict[tuple[str, str], str]]:
     revendas: dict[str, str] = {}
+    delivery_unbs: dict[str, str] = {}
     wb = load_workbook(REVENDAS_PATH, read_only=True, data_only=True)
-    for unb, name in wb.active.iter_rows(min_row=2, values_only=True):
+    rows = wb.active.iter_rows(values_only=True)
+    header = next(rows, ())
+    columns = {norm(value): index for index, value in enumerate(header)}
+    unb_index = columns.get("UNB")
+    name_index = columns.get("NOME")
+    puxada_index = columns.get("PUXADA")
+    if unb_index is None or name_index is None:
+        raise ValueError("dRevendas precisa conter as colunas UNB e NOME.")
+    for row in rows:
+        unb = row[unb_index] if unb_index < len(row) else None
+        name = row[name_index] if name_index < len(row) else None
         if unb is not None:
             revendas[str(unb).strip()] = str(name or "").strip()
+            if puxada_index is not None and puxada_index < len(row):
+                puxada = str(row[puxada_index] or "").strip()
+                if puxada:
+                    delivery_unbs[puxada] = str(unb).strip()
     setores: dict[tuple[str, str], str] = {}
     with SETORES_PATH.open("r", encoding="utf-8-sig", newline="") as stream:
         for row in csv.DictReader(stream, delimiter=";"):
@@ -55,21 +70,29 @@ def load_mapping() -> tuple[dict[str, str], dict[tuple[str, str], str]]:
             gv = str(row.get("Gv") or "").strip()
             if filial and setor and gv:
                 setores[(filial, setor)] = gv
-    return revendas, setores
+    return revendas, delivery_unbs, setores
 
 
-def resolve_unb(raw_code: str, operation: str, revendas: dict[str, str]) -> str:
+def resolve_unb(
+    raw_code: str,
+    operation: str,
+    revendas: dict[str, str],
+    delivery_unbs: dict[str, str],
+) -> str:
     # The order export's delivery-unit code is a depot code (for example 747530),
     # while dRevendas uses the UNB code. Resolve by the named delivery operation.
+    raw = str(raw_code).strip()
+    if raw in delivery_unbs:
+        return delivery_unbs[raw]
     op = norm(operation)
     for unb, name in revendas.items():
         if norm(name) and norm(name) in op:
             return unb
-    return raw_code
+    return raw
 
 
 def read_orders() -> list[dict[str, object]]:
-    revendas, setores = load_mapping()
+    revendas, delivery_unbs, setores = load_mapping()
     with CSV_PATH.open("r", encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream, delimiter=";")
         headers = {norm(h): h for h in (reader.fieldnames or [])}
@@ -89,7 +112,7 @@ def read_orders() -> list[dict[str, object]]:
             if norm(col(raw, "Situação atend. item")) == norm("FALTA"):
                 continue
             raw_unit = col(raw, "Cód. unidade entrega")
-            unb = resolve_unb(raw_unit, operation, revendas)
+            unb = resolve_unb(raw_unit, operation, revendas, delivery_unbs)
             order = col(raw, "Número pedido")
             sector = col(raw, "Cód. setor")
             city = col(raw, "Desc. município")
