@@ -1418,7 +1418,7 @@ class CriticaRnQueryService:
         context_params.append(normalized_filiais)
         context_filters.append(sql.SQL("c.cod_pdv = ANY(%s)"))
         context_params.append(normalized_cod_pdvs)
-        context_filters.append(sql.SQL("COALESCE(UPPER(TRIM(c.status_pedido)), '') NOT LIKE 'CANCELADO%'"))
+        context_filters.append(sql.SQL("COALESCE(UPPER(TRIM(c.status_pedido)), '') NOT LIKE 'CANCELADO%%'"))
         context_params.append(50000)
         query = sql.SQL(
             """
@@ -1448,7 +1448,7 @@ class CriticaRnQueryService:
         return [_row_to_duplicate_context_record(row) for row in rows]
 
     def _build_records_query(self, *, conn: Any, relation: str, filters: list[sql.Composed]) -> sql.Composed:
-        filters = [*filters, sql.SQL("COALESCE(UPPER(TRIM(c.status_pedido)), '') NOT LIKE 'CANCELADO%'")]
+        filters = [*filters, sql.SQL("COALESCE(UPPER(TRIM(c.status_pedido)), '') NOT LIKE 'CANCELADO%%'")]
         ctes = [
             _dprecos_reference_cte(self.schema, conn),
             _dprodutos_reference_cte(self.schema, conn),
@@ -1737,7 +1737,7 @@ class CriticaRnQueryService:
             SELECT EXISTS (
                 SELECT 1
                 FROM {}.dataset_state
-                WHERE dataset_name LIKE 'critica_op_%'
+                WHERE dataset_name LIKE 'critica_op_%%'
                   AND active_batch_id IS NOT NULL
             ) AS has_active
             """
