@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Plano 5x2 · Dimensionamento de Rotas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+    tailwind.config={theme:{extend:{colors:{ink:'#0f172a',brand:'#2563eb',mist:'#eff6ff'}}}}
+  </script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <main class="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
+    <header class="mb-6 flex flex-col gap-4 rounded-2xl bg-slate-950 p-6 text-white shadow-xl sm:flex-row sm:items-end sm:justify-between">
+      <div><p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-blue-300">Planejamento de capacidade</p><h1 class="text-2xl font-black sm:text-3xl">Plano de ação · Escala 5x2</h1><p class="mt-2 max-w-2xl text-sm text-slate-300">Importe a 03.08.05, simule o peso por mapa e veja a equipe mínima do dia de maior necessidade.</p></div>
+      <button id="exportBtn" disabled class="rounded-lg border border-blue-400 bg-blue-600 px-4 py-2 text-sm font-bold transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">Exportar resultado CSV</button>
+    </header>
+
+    <section class="mb-6 grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
+      <label class="group flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-blue-300 bg-white p-6 text-center shadow-sm transition hover:border-blue-500 hover:bg-blue-50">
+        <input id="fileInput" class="hidden" type="file" accept=".csv,text/csv" multiple>
+        <span class="mb-2 text-3xl">⇪</span><span class="font-bold">Carregar 03.08.05</span><span class="mt-1 text-sm text-slate-500">PATOS, SUME e demais unidades · UTF-8 ou Latin-1 · separado por ;</span>
+      </label>
+      <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 class="font-bold">Como o cenário 5x2 é calculado</h2>
+        <ol class="mt-3 space-y-2 text-sm leading-5 text-slate-600"><li><b>1.</b> Cada mapa recebe 1 motorista e 1 ou 2 ajudantes conforme o peso.</li><li><b>2.</b> A necessidade diária é multiplicada por <b>dias de operação ÷ dias trabalhados</b>.</li><li><b>3.</b> Em 7 dias de operação com escala 5x2, o fator é <b>1,40</b>: a equipe tem dois dias de folga por semana sem deixar a operação descoberta.</li></ol>
+      </div>
+    </section>
+
+    <section class="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 class="font-bold">Configuração do cenário</h2><p class="text-sm text-slate-500">A disponibilidade é comparada com o quadro necessário já considerando as folgas.</p></div><button id="resetBtn" class="text-sm font-semibold text-blue-700 hover:underline">Restaurar padrão</button></div>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+        <label class="text-sm font-semibold">Motoristas disponíveis<input id="driversAvailable" class="cfg mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal outline-none focus:border-blue-500" type="number" min="0" value="0"></label>
+        <label class="text-sm font-semibold">Ajudantes disponíveis<input id="helpersAvailable" class="cfg mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal outline-none focus:border-blue-500" type="number" min="0" value="0"></label>
+        <label class="text-sm font-semibold">Limite de peso (kg)<input id="weightLimit" class="cfg mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal outline-none focus:border-blue-500" type="number" min="0" value="6000"></label>
+        <label class="text-sm font-semibold">Dias de operação/semana<input id="operationDays" class="cfg mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal outline-none focus:border-blue-500" type="number" min="1" max="7" value="7"></label>
+        <label class="text-sm font-semibold">Dias trabalhados/pessoa<input id="workDays" class="cfg mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal outline-none focus:border-blue-500" type="number" min="1" max="7" value="5"></label>
+        <label class="text-sm font-semibold">Pernoites abertos no dia<input id="overnightsOpen" class="cfg mt-1 w-full rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 font-normal outline-none focus:border-violet-500" type="number" min="0" value="0"></label>
+        <label class="text-sm font-semibold">Unidade dos pernoites<select id="overnightsUnb" class="cfg mt-1 w-full rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 font-normal outline-none focus:border-violet-500"><option value="1">SOUSA</option><option value="2">ITAPORANGA</option><option value="3" selected>PATOS</option><option value="4">SUME</option><option value="5">GUARABIRA</option><option value="6">BRUMADO</option><option value="7">BARRA</option><option value="8">CACULE</option></select></label>
+      </div>
+      <p id="ruleText" class="mt-4 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900"></p>
+    </section>
+
+    <section id="emptyState" class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-sm"><div class="text-4xl">▦</div><p class="mt-3 font-semibold text-slate-700">Nenhum relatório carregado</p><p class="mt-1 text-sm">Carregue o CSV para criar os cenários por UNB.</p></section>
+    <section id="results" class="hidden">
+      <div id="summaryCards" class="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></div>
+      <div id="alertBox" class="mb-5 hidden rounded-xl border p-4 text-sm"></div>
+      <div class="mb-4 flex gap-2 overflow-x-auto border-b border-slate-200" id="tabs"></div>
+      <div class="rounded-2xl border border-slate-200 bg-white shadow-sm"><div id="content"></div></div>
+    </section>
+  </main>
+
+<script>
+const UNBS={"1":"SOUSA","2":"ITAPORANGA","3":"PATOS","4":"SUME","5":"GUARABIRA","6":"BRUMADO","7":"BARRA","8":"CACULE"};
+const state={rows:[],pernoites:new Map(),active:'ALL'};
+const $=id=>document.getElementById(id);
+const num=v=>{const s=String(v??'').trim().replace(/\./g,'').replace(',','.').replace(/[^0-9.-]/g,'');return Number(s)||0};
+const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const config=()=>({drivers:Math.max(0,num($('driversAvailable').value)),helpers:Math.max(0,num($('helpersAvailable').value)),limit:Math.max(0,num($('weightLimit').value)),opDays:Math.max(1,num($('operationDays').value)),workDays:Math.max(1,num($('workDays').value)),overnights:Math.max(0,num($('overnightsOpen').value)),overnightsUnb:$('overnightsUnb').value});
+const factor=()=>{const c=config();return c.opDays/c.workDays};
+const fmt=v=>Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:2});
+const escape=s=>String(s??'—').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+
+function value(row,...names){const keys=Object.keys(row);for(const name of names){const found=keys.find(k=>norm(k)===norm(name));if(found!==undefined&&String(row[found]).trim()!=='')return row[found]}return ''}
+function parseFile(file){return new Promise(resolve=>{Papa.parse(file,{header:true,skipEmptyLines:'greedy',encoding:'',delimiter:'',complete:r=>{let data=r.data;if(!data.length||Object.keys(data[0]).length<2){Papa.parse(file,{header:true,skipEmptyLines:'greedy',encoding:'ISO-8859-1',delimiter:';',complete:x=>resolve(x.data)})}else resolve(data)}})})}
+const mapKey=v=>String(v??'').replace(/\D/g,'').replace(/^0+/,'')||String(v??'').trim();
+const timeMinutes=v=>{const m=String(v??'').trim().match(/^(\d{1,3}):(\d{2})/);return m?Number(m[1])*60+Number(m[2]):num(v)};
+function unbFromFile(file){const name=file.name.toUpperCase();const found=Object.entries(UNBS).find(([,unb])=>name.includes(unb));return found||['0','NÃO IDENTIFICADA']}
+function normalizeRows(raw,file){return raw.map((r,i)=>{const sourceUnb=unbFromFile(file);const code=String(value(r,'UNB','Unidade','Filial','Cod UNB')).trim().replace(/^0+/,'')||sourceUnb[0];const name=String(value(r,'Nome UNB','UNB Nome','Unidade Nome','Filial Nome')).trim()||sourceUnb[1];const weight=num(value(r,'Total peso','Peso total','Peso','Peso Kg','PesoCargaKG'));const route=String(value(r,'Nro do Mapa','Número do Mapa','Mapa','Rota','Numero mapa','Numero carga','Viagem','Carga')).trim()||`${file.name} · linha ${i+2}`;const minutes=timeMinutes(value(r,'TempoPrev','Tempo Prev'));return {unb:UNBS[code]?code:(Object.entries(UNBS).find(([,n])=>name.toUpperCase().includes(n))||['0'])[0],unbName:name||UNBS[code]||'NÃO IDENTIFICADA',date:String(value(r,'Data','Data Entrega','Dt Entrega')).trim()||file.name,route,weight,deliveries:num(value(r,'Entregas','Qtd Entregas','Quantidade Entregas')),driver:String(value(r,'Motorista','Nome Motorista','CdMot')).trim(),minutes,pernoite:minutes>840,source:file.name,row:i+2,raw:r}}).filter(r=>r.route&&r.weight>0)}
+function importRows(raw,file){const rows=normalizeRows(raw,file);rows.forEach(r=>{const key=mapKey(r.route);if(key&&r.minutes)state.pernoites.set(key,{minutes:r.minutes,pernoite:r.pernoite})});return rows}
+
+function calc(rows){const c=config(),f=factor();const totals=rows.reduce((a,r)=>{const helpers=r.weight>c.limit?2:1;a.weight+=r.weight;a.deliveries+=r.deliveries;a.routes++;a.drivers++;a.helpers+=helpers;return a},{weight:0,deliveries:0,routes:0,drivers:0,helpers:0});const includePernoites=rows.some(r=>r.unb===c.overnightsUnb);const pernoiteDrivers=includePernoites?c.overnights:0;const pernoiteHelpers=pernoiteDrivers*2;const driversAtivos=totals.drivers+pernoiteDrivers,helpersAtivos=totals.helpers+pernoiteHelpers;return {...totals,factor:f,pernoiteDrivers,pernoiteHelpers,driversAtivos,helpersAtivos,driversCovered:Math.ceil(driversAtivos*f),helpersCovered:Math.ceil(helpersAtivos*f),driverGap:c.drivers-Math.ceil(driversAtivos*f),helperGap:c.helpers-Math.ceil(helpersAtivos*f)} }
+function dailyScenarios(rows){const groups=new Map();rows.forEach(r=>{const key=r.date||r.source;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r)});return [...groups.entries()].map(([date,list])=>({date,rows:list,data:calc(list)})).sort((a,b)=>a.date.localeCompare(b.date,'pt-BR'))}
+function metric(label,value,detail,tone='blue'){return `<article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase tracking-wide text-slate-500">${label}</p><p class="mt-2 text-2xl font-black text-${tone}-700">${value}</p><p class="mt-1 text-xs text-slate-500">${detail}</p></article>`}
+function render(){const c=config();$('ruleText').innerHTML=`Regra ativa: até <b>${fmt(c.limit)} kg</b> = 1 motorista + 1 ajudante; acima disso = 1 motorista + 2 ajudantes. Cenário: <b>${c.overnights} pernoite(s)</b> aberto(s) em <b>${UNBS[c.overnightsUnb]}</b>, bloqueando ${c.overnights} motorista(s) e até ${c.overnights*2} ajudante(s). Cobertura ${c.opDays}÷${c.workDays} = <b>${factor().toLocaleString('pt-BR',{maximumFractionDigits:2})}×</b>.`;
+if(!state.rows.length){$('emptyState').classList.remove('hidden');$('results').classList.add('hidden');return} $('emptyState').classList.add('hidden');$('results').classList.remove('hidden');
+const all=calc(state.rows),daily=dailyScenarios(state.rows),peakDay=daily.reduce((peak,d)=>d.data.driversCovered>peak.data.driversCovered?d:peak,daily[0]),peakDrivers=peakDay.data.driversCovered,peakHelpers=Math.max(...daily.map(d=>d.data.helpersCovered)),pernoites=state.rows.filter(r=>r.pernoite).length;$('summaryCards').innerHTML=[metric('Peso no período',`${fmt(all.weight)} kg`,`${fmt(all.deliveries)} entregas`),metric('Mapas / rotas',fmt(all.routes),`${pernoites} pernoite(s) identificado(s)`),metric('Motoristas no pico',peakDrivers,`${peakDay.data.drivers} em rota + ${peakDay.data.pernoiteDrivers} bloqueado(s)`),metric('Ajudantes no pico',peakHelpers,`${peakDay.data.helpers} em rota + ${peakDay.data.pernoiteHelpers} bloqueado(s)`),metric('Fator 5x2',`${fmt(all.factor)}×`,`${c.opDays} dias de operação / ${c.workDays} trabalhados`,'violet')].join('');
+const shortage=[];if(c.drivers&&c.drivers<peakDrivers)shortage.push(`faltam <b>${peakDrivers-c.drivers}</b> motorista(s)`);if(c.helpers&&c.helpers<peakHelpers)shortage.push(`faltam <b>${peakHelpers-c.helpers}</b> ajudante(s)`);const alert=$('alertBox');if(shortage.length){alert.className='mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900';alert.innerHTML=`<b>Atenção ao cenário:</b> ${shortage.join(' e ')} no dia de maior necessidade.`;alert.classList.remove('hidden')}else if(c.drivers||c.helpers){alert.className='mb-5 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900';alert.innerHTML='<b>Cobertura suficiente:</b> o quadro informado suporta o dia de maior necessidade.';alert.classList.remove('hidden')}else alert.classList.add('hidden');
+const present=[...new Set(state.rows.map(r=>r.unb))].sort((a,b)=>+a-+b);$('tabs').innerHTML=[['ALL','Resumo geral'],...present.map(k=>[k,`${k} · ${UNBS[k]||state.rows.find(r=>r.unb===k)?.unbName}`])].map(([k,label])=>`<button data-tab="${k}" class="whitespace-nowrap border-b-2 px-4 py-3 text-sm font-bold ${state.active===k?'border-blue-600 text-blue-700':'border-transparent text-slate-500 hover:text-slate-800'}">${escape(label)}</button>`).join('');
+const rows=state.active==='ALL'?state.rows:state.rows.filter(r=>r.unb===state.active);const x=calc(rows);const days=dailyScenarios(rows);const peakDayUnit=days.reduce((peak,d)=>d.data.driversCovered>peak.data.driversCovered?d:peak,days[0]),peakDriver=peakDayUnit.data.driversCovered,peakHelper=Math.max(...days.map(d=>d.data.helpersCovered));const name=state.active==='ALL'?'Consolidado geral':`${state.active} · ${UNBS[state.active]||rows[0]?.unbName}`;const shown=rows.slice(0,150);
+$('content').innerHTML=`<div class="border-b border-slate-200 p-5"><div class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-xl font-black">${escape(name)}</h2><p class="mt-1 text-sm text-slate-500">O quadro necessário usa o dia de maior demanda e soma os pernoites que você definiu como ainda abertos.</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">${fmt(x.routes)} rota(s)</span></div><div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">${metric('Peso no período',`${fmt(x.weight)} kg`,`${fmt(x.deliveries)} entregas`)}${metric('Pico de motoristas',peakDriver,`${peakDayUnit.data.drivers} rota(s) + ${peakDayUnit.data.pernoiteDrivers} pernoite(s)`)}${metric('Pico de ajudantes',peakHelper,`${peakDayUnit.data.helpers} em rota + ${peakDayUnit.data.pernoiteHelpers} bloqueado(s)`)}${metric('Acima de 6 t',fmt(rows.filter(r=>r.weight>c.limit).length),'1 motorista + 2 ajudantes','amber')}</div><div class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">${days.map(d=>`<div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"><b>${escape(d.date)}</b><span class="mt-1 block text-slate-600">${d.data.routes} mapas + ${d.data.pernoiteDrivers} pernoite(s) · ${d.data.driversCovered} mot. · ${d.data.helpersCovered} ajd.</span></div>`).join('')}</div></div><div class="border-b border-slate-100 px-5 py-3 text-sm text-slate-500">Exibindo ${fmt(shown.length)} de ${fmt(rows.length)} rotas para manter a análise rápida. O CSV exportado inclui todas.</div><div class="overflow-x-auto"><table class="min-w-full text-left text-sm"><thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-3">Data</th><th class="px-4 py-3">UNB</th><th class="px-4 py-3">Mapa / rota</th><th class="px-4 py-3 text-right">Peso</th><th class="px-4 py-3 text-right">Entregas</th><th class="px-4 py-3">Motorista</th><th class="px-4 py-3 text-center">Motoristas</th><th class="px-4 py-3 text-center">Ajudantes</th><th class="px-4 py-3">Pernoite / regra</th></tr></thead><tbody class="divide-y divide-slate-100">${shown.map(r=>{const high=r.weight>c.limit;return `<tr class="hover:bg-slate-50"><td class="px-4 py-3">${escape(r.date)}</td><td class="px-4 py-3 font-bold">${escape(r.unb)}<span class="block text-xs font-normal text-slate-500">${escape(UNBS[r.unb]||r.unbName)}</span></td><td class="px-4 py-3 font-medium">${escape(r.route)}</td><td class="px-4 py-3 text-right font-semibold">${fmt(r.weight)} kg</td><td class="px-4 py-3 text-right">${fmt(r.deliveries)}</td><td class="px-4 py-3">${escape(r.driver)}</td><td class="px-4 py-3 text-center">1</td><td class="px-4 py-3 text-center font-bold">${high?2:1}</td><td class="px-4 py-3"><span class="rounded-full px-2 py-1 text-xs font-bold ${r.pernoite?'bg-violet-100 text-violet-800':high?'bg-amber-100 text-amber-800':'bg-emerald-100 text-emerald-800'}">${r.pernoite?`Pernoite · ${fmt(r.minutes/60)} h`:high?'Acima de 6 t':'Até 6 t'}</span></td></tr>`}).join('')||'<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Nenhuma rota nesta UNB.</td></tr>'}</tbody></table></div>`;
+}
+
+$('fileInput').addEventListener('change',async e=>{const files=[...e.target.files];state.pernoites.clear();const lists=await Promise.all(files.map(async f=>importRows(await parseFile(f),f)));state.rows=lists.flat();state.active='ALL';$('exportBtn').disabled=!state.rows.length;render()});
+document.addEventListener('click',e=>{const tab=e.target.closest('[data-tab]');if(tab){state.active=tab.dataset.tab;render()}});
+document.querySelectorAll('.cfg').forEach(el=>el.addEventListener('input',render));
+$('resetBtn').addEventListener('click',()=>{Object.assign($('driversAvailable'),{value:0});Object.assign($('helpersAvailable'),{value:0});Object.assign($('weightLimit'),{value:6000});Object.assign($('operationDays'),{value:7});Object.assign($('workDays'),{value:5});Object.assign($('overnightsOpen'),{value:0});Object.assign($('overnightsUnb'),{value:'3'});render()});
+$('exportBtn').addEventListener('click',()=>{const c=config(),f=factor();const data=state.rows.map(r=>({Data:r.date,UNB:r.unb,'Nome UNB':UNBS[r.unb]||r.unbName,'Mapa/Rota':r.route,'Peso kg':r.weight,Entregas:r.deliveries,Motorista:r.driver,'Tempo previsto (min)':r.minutes,Pernoite:r.pernoite?'Sim':'Não','Motoristas por rota':1,'Ajudantes por rota':r.weight>c.limit?2:1,'Equipe com folgas':`Fator ${f.toFixed(2)}`}));const csv=Papa.unparse(data,{delimiter:';'});const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'}));a.download='plano-acao-5x2.csv';a.click();URL.revokeObjectURL(a.href)});
+render();
+</script>
+</body>
+</html>

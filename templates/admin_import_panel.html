@@ -5648,16 +5648,11 @@
       return `<article class="entrega-devolucao-chart ${featured ? "featured" : ""}"><h3>${escapeHtml(title)}</h3><div class="chart-caption">${metricLabel} por categoria · passe o mouse para o detalhe</div>${items.length ? `<div class="devolucao-bars" role="img" aria-label="${escapeHtml(title)} por ${escapeHtml(metricLabel.toLowerCase())}">${bars}</div><details><summary>Ver dados</summary><table><thead><tr><th>Categoria</th><th class="text-end">Volume</th><th class="text-end">Valor</th><th class="text-end">Registros</th></tr></thead><tbody>${dataTable}</tbody></table></details>` : '<div class="text-secondary small py-4">Sem dados para este gráfico.</div>'}</article>`;
     }
 
-    function renderEntregaDevolucaoTrend(rows, routes = [], metas = {}) {
+    function renderEntregaDevolucaoTrend(rows, metric = "volume_hl") {
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-      const trigger = null;
-      const target = null;
-      const deliveriesByDate = new Map();
-      routes.forEach(route => {
-        const key = String(route.data || "").slice(0, 10);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
-        deliveriesByDate.set(key, (deliveriesByDate.get(key) || 0) + Number(route.entregas || 0));
-      });
+      const metricLabel = metric === "valor" ? "Valor devolvido" : metric === "registros" ? "Registros de devolução" : "Volume devolvido";
+      const metricValue = item => metric === "valor" ? item.valor : metric === "registros" ? item.count : item.volume;
+      const metricFmt = value => metric === "valor" ? `R$ ${fmt(value)}` : metric === "registros" ? fmt(value) : `${fmt(value)} HL`;
       const totals = new Map();
       rows.forEach(row => {
         const key = String(row.data_devolucao || row.data || "").slice(0, 10);
@@ -5668,19 +5663,18 @@
         item.count += 1;
         totals.set(key, item);
       });
-      const items = [...totals.values()].map(item => ({ ...item, pct: deliveriesByDate.get(item.date) ? item.count / deliveriesByDate.get(item.date) * 100 : null })).filter(item => item.pct !== null).sort((a, b) => a.date.localeCompare(b.date));
-      if (!items.length) return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">DEV total em porcentagem</div><div class="text-secondary small py-4">Sem datas válidas para este gráfico.</div></article>`;
+      const items = [...totals.values()].map(item => ({ ...item, value: metricValue(item) })).sort((a, b) => a.date.localeCompare(b.date));
+      if (!items.length) return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">${escapeHtml(metricLabel)} no período</div><div class="text-secondary small py-4">Sem datas válidas para este gráfico.</div></article>`;
       const width = 760; const height = 205; const pad = { left: 42, right: 14, top: 16, bottom: 30 };
-      const max = Math.max(...items.map(item => item.pct), target, trigger, 1); const innerW = width - pad.left - pad.right; const innerH = height - pad.top - pad.bottom;
+      const max = Math.max(...items.map(item => item.value), 1); const innerW = width - pad.left - pad.right; const innerH = height - pad.top - pad.bottom;
       const yFor = value => pad.top + innerH - (value / max) * innerH;
-      const point = (item, index) => `${(pad.left + (items.length === 1 ? innerW / 2 : index * innerW / (items.length - 1))).toFixed(1)},${yFor(item.pct).toFixed(1)}`;
+      const point = (item, index) => `${(pad.left + (items.length === 1 ? innerW / 2 : index * innerW / (items.length - 1))).toFixed(1)},${yFor(item.value).toFixed(1)}`;
       const points = items.map(point).join(" ");
       const area = `${pad.left},${pad.top + innerH} ${points} ${pad.left + innerW},${pad.top + innerH}`;
-      const grid = [0, .5, 1].map(ratio => { const y = pad.top + innerH - ratio * innerH; return `<line class="trend-grid" x1="${pad.left}" x2="${pad.left + innerW}" y1="${y}" y2="${y}"/><text x="2" y="${y + 4}">${escapeHtml(fmt(max * ratio))}%</text>`; }).join("");
-      const targetLines = "";
-      const dots = items.map((item, index) => { const [x, y] = point(item, index).split(","); return `<circle class="trend-dot" cx="${x}" cy="${y}" r="3.5"><title>${escapeHtml(formatDate(item.date))}: ${escapeHtml(`${fmt(item.pct)}% (${item.count}/${deliveriesByDate.get(item.date)})`)}</title></circle>`; }).join("");
+      const grid = [0, .5, 1].map(ratio => { const y = pad.top + innerH - ratio * innerH; return `<line class="trend-grid" x1="${pad.left}" x2="${pad.left + innerW}" y1="${y}" y2="${y}"/><text x="2" y="${y + 4}">${escapeHtml(metricFmt(max * ratio))}</text>`; }).join("");
+      const dots = items.map((item, index) => { const [x, y] = point(item, index).split(","); return `<circle class="trend-dot" cx="${x}" cy="${y}" r="3.5"><title>${escapeHtml(formatDate(item.date))}: ${escapeHtml(`${metricFmt(item.value)} (${item.count} registro(s))`)}</title></circle>`; }).join("");
       const labels = items.filter((_, index) => index === 0 || index === items.length - 1 || index === Math.floor((items.length - 1) / 2)).map(item => `<text x="${pad.left + items.indexOf(item) * innerW / Math.max(items.length - 1, 1)}" y="${height - 6}" text-anchor="middle">${escapeHtml(formatDate(item.date).slice(0, 5))}</text>`).join("");
-      return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">Percentual diário sobre as entregas do relatório operacional</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Percentual de devolução por dia"><defs><linearGradient id="devolucaoTrendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#7c5cff" stop-opacity="0"/></linearGradient></defs>${grid}${targetLines}<polygon class="trend-area" points="${area}"/><polyline class="trend-line" points="${points}"/>${dots}${labels}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Data</th><th class="text-end">DEV total</th><th class="text-end">Devoluções/entregas</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(formatDate(item.date))}</td><td class="text-end">${escapeHtml(`${fmt(item.pct)}%`)}</td><td class="text-end">${item.count}/${deliveriesByDate.get(item.date)}</td></tr>`).join("")}</tbody></table></details></article>`;
+      return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">${escapeHtml(metricLabel)} no período filtrado</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(metricLabel)} por dia"><defs><linearGradient id="devolucaoTrendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#7c5cff" stop-opacity="0"/></linearGradient></defs>${grid}<polygon class="trend-area" points="${area}"/><polyline class="trend-line" points="${points}"/>${dots}${labels}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Data</th><th class="text-end">${escapeHtml(metricLabel)}</th><th class="text-end">Registros</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(formatDate(item.date))}</td><td class="text-end">${escapeHtml(metricFmt(item.value))}</td><td class="text-end">${item.count}</td></tr>`).join("")}</tbody></table></details></article>`;
     }
 
     function renderEntregaDevolucoes(dashboard = {}) {
@@ -5706,7 +5700,6 @@
           gerente_nome: managerNames.get(`${filial}|${gv}`) || managerNames.get(`|${gv}`) || entriesFor("gerentes").find(item => String(item.codigo || "").trim() === gv && String(item.nome || "").trim() && operationLabels.get(String(item.filial || "").trim().toUpperCase())?.includes(filial))?.nome || row.gerente_nome || gv,
         };
       });
-      const routes = [];
       const branch = String(state.entregaDevolucoesBranch || "").toUpperCase();
       const responsibility = String(state.entregaDevolucoesResponsibility || "").trim();
       const responsibilityOf = row => String(row.motivo_responsabilidade || row.resp || "Não informado").trim() || "Não informado";
@@ -5750,7 +5743,6 @@
       const filtered = activeRows;
       const metric = ["volume_hl", "valor", "registros"].includes(state.entregaDevolucoesMetric) ? state.entregaDevolucoesMetric : "volume_hl";
       const topN = [5, 8, 10, 15].includes(Number(state.entregaDevolucoesTopN)) ? Number(state.entregaDevolucoesTopN) : 10;
-      const chartRoutes = routes.filter(route => !branch || String(route.filial || "").trim().toUpperCase() === branch);
       // A aba Devoluções é operacional e exibe todos os registros, inclusive
       // os expurgados. A exclusão do cálculo ocorre somente na Liga.
       const analysisRows = activeRows;
@@ -5760,6 +5752,7 @@
       const escape = value => escapeHtml(value === null || value === undefined || value === "" ? "-" : value);
       const body = filtered.map(row => `<tr><td>${escape(formatDate(row.data))}</td><td>${escape(formatDate(row.data_devolucao))}</td><td>${escape(row.filial)}</td><td>${escape(row.motorista || row.cod)}</td><td>${escape(row.nota)}</td><td>${escape(row.cliente || row.cliente_cod)}</td><td>${escape(row.setor_nome || row.setor)}</td><td>${escape(row.gerente_nome || row.gv)}</td><td>${escape(row.motivo_operacional || row.motivo || row.resp)}</td><td>${escape(row.motivo_responsabilidade)}</td><td class="text-end">${fmt(row.volume_hl)}</td><td class="text-end">${fmt(row.valor)}</td></tr>`).join("");
       const charts = [
+        renderEntregaDevolucaoTrend(chartRows, metric),
         renderEntregaDevolucaoChart("Devolução por GV", chartRows, "gerente_nome", topN, false, metric),
         renderEntregaDevolucaoChart("Devolução por motivo", chartRows, "motivo_operacional", topN, false, metric),
         renderEntregaDevolucaoChart("Devolução por setor", chartRows, "setor_nome", topN, false, metric),
