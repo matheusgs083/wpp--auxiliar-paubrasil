@@ -40,6 +40,8 @@ from bot_api.services.liga_entrega_dashboard_snapshot_store import LigaEntregaDa
 from bot_api.services.liga_entrega_route_team_service import LigaEntregaRouteTeamService
 from bot_api.services.liga_entrega_raw_sql_import_service import LigaEntregaRawSqlImportService
 from bot_api.services.liga_entrega_status_service import LigaEntregaStatusService
+from bot_api.services.liga_entrega_rules_service import LigaEntregaRulesService
+from bot_api.services.devolucoes_operacionais_service import DevolucoesCadastrosService
 from bot_api.services.promax_scheduler import PromaxScheduler
 from bot_api.services.webhook_runtime import WebhookRuntime
 from bot_api.security.http_auth import HttpAuthDependencies
@@ -114,6 +116,8 @@ def configure_app_runtime(
     LIGA_ENTREGA_REPORTS_ROOT = PROJECT_ROOT / "exports" / "liga_entrega_reports"
     LIGA_ENTREGA_EXPURGOS_PATH = PROJECT_ROOT / "exports" / "liga_entrega_expurgos.json"
     LIGA_ENTREGA_STATUS_PATH = PROJECT_ROOT / "exports" / "liga_entrega_status.json"
+    LIGA_ENTREGA_RULES_PATH = PROJECT_ROOT / "exports" / "liga_entrega_rules.json"
+    DEVOLUCOES_CADASTROS_PATH = PROJECT_ROOT / "exports" / "devolucoes_operacionais_cadastros.json"
     liga_entrega_report_store = LigaEntregaReportStore(LIGA_ENTREGA_REPORTS_ROOT)
     liga_entrega_snapshot_store = LigaEntregaDashboardSnapshotStore(
         database_url=settings.reports_database_url,
@@ -132,6 +136,8 @@ def configure_app_runtime(
     )
     liga_entrega_expurgo_service = LigaEntregaExpurgoService(LIGA_ENTREGA_EXPURGOS_PATH)
     liga_entrega_status_service = LigaEntregaStatusService(LIGA_ENTREGA_STATUS_PATH)
+    liga_entrega_rules_service = LigaEntregaRulesService(LIGA_ENTREGA_RULES_PATH)
+    devolucoes_cadastros_service = DevolucoesCadastrosService(DEVOLUCOES_CADASTROS_PATH)
 
     def _rebuild_liga_snapshots_after_sql_import(
         manifests: dict[str, list[dict[str, Any]]],
@@ -722,8 +728,11 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "liga_entrega_raw_sql_import_service": runtime["liga_entrega_raw_sql_import_service"],
         "liga_entrega_expurgo_service": runtime["liga_entrega_expurgo_service"],
         "liga_entrega_status_service": runtime["liga_entrega_status_service"],
+        "liga_entrega_rules_service": runtime["liga_entrega_rules_service"],
+        "devolucoes_cadastros_service": runtime["devolucoes_cadastros_service"],
         "liga_entrega_route_team_service": runtime["liga_entrega_route_team_service"],
         "dclientes_query_service": runtime["services"].dclientes_query_service,
+        "dsetores_import_service": runtime["services"].dsetores_import_service,
         "after_critica_operacao_import": runtime["_after_critica_operacao_auto_import"],
         "require_webhook_token": runtime["_require_webhook_token"],
         "require_meta_cloud_signature": runtime["_require_meta_cloud_signature"],

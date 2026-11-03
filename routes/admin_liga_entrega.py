@@ -2,16 +2,20 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 import re
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from bot_api.services.liga_entrega_dashboard_service import CANONICAL_AJUDANTES, CANONICAL_MOTORISTAS, LigaEntregaDashboardService, invalidate_dashboard_cache, refresh_snapshot_from_sql
+from bot_api.services.liga_entrega_dashboard_service import CANONICAL_AJUDANTES, CANONICAL_MOTORISTAS, LigaEntregaDashboardService, apply_liga_rules_to_dashboard, invalidate_dashboard_cache, refresh_snapshot_from_sql
 from bot_api.services.liga_entrega_pdf_service import build_liga_entrega_dashboard_pdf
 from bot_api.services.operational_indicators_service import OperationalIndicatorsService
 from bot_api.services.monthly_map_cities_service import MonthlyMapCitiesService
+from bot_api.services.liga_entrega_operational_maps_service import LigaEntregaOperationalMapsService
+from bot_api.services.liga_entrega_operational_maps_pdf_service import build_liga_entrega_operational_maps_pdf
+from bot_api.services.devolucoes_operacionais_service import build_devolucoes_operacionais_dashboard, list_dsetores_catalog
 
 
 LIGA_ENTREGA_REPORTS = (
@@ -65,15 +69,34 @@ class LigaEntregaRouteTeamRequest(BaseModel):
     ajudantes: list[str] = Field(default_factory=list, description="Ate dois codigos de ajudante")
 
 
+class LigaEntregaRulesRequest(BaseModel):
+    competencia: str = Field(..., description="AAAA-MM")
+    operation: str = Field(..., description="PATOS ou SUME")
+    rules: dict[str, Any]
+
+
+class LigaEntregaOperationalMapsPdfRequest(BaseModel):
+    competencia: str = Field(default="", max_length=7)
+    maps: list[dict[str, Any]] = Field(default_factory=list, max_length=1500)
+
+
+class DevolucoesCadastrosRequest(BaseModel):
+    setores: list[dict[str, Any]] = Field(default_factory=list, max_length=1000)
+    gerentes: list[dict[str, Any]] = Field(default_factory=list, max_length=1000)
+
+
 def create_admin_liga_entrega_router(
     *,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     liga_entrega_expurgo_service: Any,
     liga_entrega_status_service: Any | None = None,
+    liga_entrega_rules_service: Any | None = None,
+    devolucoes_cadastros_service: Any | None = None,
+    dsetores_import_service: Any | None = None,
+    drevendas_import_service: Any | None = None,
     dclientes_query_service: Any | None = None,
     dprodutos_import_service: Any | None = None,
-    drevendas_import_service: Any | None = None,
     liga_entrega_report_store: Any | None = None,
     liga_entrega_snapshot_store: Any | None = None,
     liga_entrega_raw_sql_import_service: Any | None = None,
@@ -115,6 +138,7 @@ def create_admin_liga_entrega_router(
         context: dict[str, Any] | None,
         *,
         action: str,
+        target_type: str = "expurgo",
         target_id: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> None:
@@ -125,10 +149,107 @@ def create_admin_liga_entrega_router(
             context=context,
             module="liga_entrega",
             action=action,
-            target_type="expurgo",
+            target_type=target_type,
             target_id=target_id,
             metadata=metadata or {},
         )
+
+    def apply_current_rules(payload: dict[str, Any]) -> dict[str, Any]:
+        competencia = str((payload or {}).get("competencia") or "").strip()
+        rules = liga_entrega_rules_service.all_rules(competencia=competencia) if liga_entrega_rules_service is not None else None
+        return apply_liga_rules_to_dashboard(payload, rules)
+
+    def devolucoes_source(competencia: str | None, period: str) -> dict[str, Any]:
+        if liga_entrega_snapshot_store is None:
+            raise HTTPException(status_code=503, detail="Dados operacionais de devoluções indisponíveis.")
+        selected = str(competencia or "").strip()
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", selected):
+            selected = date.today().strftime("%Y-%m")
+        latest = liga_entrega_snapshot_store.get_latest(competencia=selected, period=period)
+        if latest is None or not isinstance(latest[1], dict):
+            raise HTTPException(status_code=404, detail="Não há devoluções importadas para a competência selecionada.")
+        return latest[1]
+
+    @router.get("/api/admin/liga-entrega/devolucoes")
+    def api_admin_devolucoes_operacionais(
+        request: Request,
+        competencia: str | None = Query(default=None),
+        period: str = Query(default="atual", pattern="^(atual|fechado)$"),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        cadastros = devolucoes_cadastros_service.list() if devolucoes_cadastros_service is not None else {"setores": [], "gerentes": []}
+        cadastros["operacoes"] = list_dsetores_catalog(dsetores_import_service, drevendas_import_service).get("operacoes", [])
+        result = build_devolucoes_operacionais_dashboard(devolucoes_source(competencia, period), cadastros)
+        record_security_event(request, channel="api", event_type="admin_devolucoes_operacionais", decision="allowed", reason=f"linhas={len(result['rows'])}")
+        return result
+
+    @router.get("/api/admin/liga-entrega/devolucoes/cadastros")
+    def api_admin_devolucoes_cadastros(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if devolucoes_cadastros_service is None:
+            raise HTTPException(status_code=503, detail="Cadastro de setores e gerentes indisponível.")
+        return {"ok": True, **devolucoes_cadastros_service.list(), "catalogo": list_dsetores_catalog(dsetores_import_service, drevendas_import_service)}
+
+    @router.put("/api/admin/liga-entrega/devolucoes/cadastros")
+    def api_admin_devolucoes_cadastros_update(
+        request: Request,
+        payload: DevolucoesCadastrosRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if devolucoes_cadastros_service is None:
+            raise HTTPException(status_code=503, detail="Cadastro de setores e gerentes indisponível.")
+        try:
+            result = devolucoes_cadastros_service.replace(payload.model_dump(), actor=actor_from_context(context))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_panel_action(request, context, action="salvar_cadastros_devolucoes", target_type="cadastro_devolucoes", target_id="setores-gerentes", metadata={"setores": len(result["setores"]), "gerentes": len(result["gerentes"])})
+        return {"ok": True, **result}
+
+    @router.get("/api/admin/liga-entrega/regras")
+    def api_admin_liga_entrega_rules(
+        request: Request,
+        competencia: str = Query(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_rules_service is None:
+            raise HTTPException(status_code=503, detail="Regras da Liga indisponíveis.")
+        return {"ok": True, "competencia": competencia, "operations": liga_entrega_rules_service.all_rules(competencia=competencia)}
+
+    @router.put("/api/admin/liga-entrega/regras/{operation}")
+    def api_admin_liga_entrega_rules_update(
+        request: Request,
+        operation: str,
+        payload: LigaEntregaRulesRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if liga_entrega_rules_service is None:
+            raise HTTPException(status_code=503, detail="Regras da Liga indisponíveis.")
+        if str(payload.operation or "").strip().upper() != str(operation or "").strip().upper():
+            raise HTTPException(status_code=400, detail="A operação da URL deve ser igual à operação informada.")
+        try:
+            item = liga_entrega_rules_service.set_rules(competencia=payload.competencia, operation=operation, payload=payload.rules, actor=actor_from_context(context))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        invalidate_dashboard_cache("")
+        record_panel_action(request, context, action="salvar_regras", target_id=f"{item.get('competencia', '')}:{item.get('operation', '')}", metadata=item.get("rules") or {})
+        return {"ok": True, **item, "operations": liga_entrega_rules_service.all_rules(competencia=str(item.get("competencia") or ""))}
 
 
     @router.get("/api/admin/liga-entrega/relatorios")
@@ -232,6 +353,7 @@ def create_admin_liga_entrega_router(
             ).build_dashboard(competencia=competencia, period=period)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        result = apply_current_rules(result)
         summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
         record_security_event(
             request,
@@ -284,6 +406,57 @@ def create_admin_liga_entrega_router(
         record_security_event(request, channel="api", event_type="admin_liga_mapas_mensais", decision="allowed", reason=f"mapas={result['summary']['mapas']}")
         return result
 
+    @router.get("/api/admin/liga-entrega/mapas-operacionais")
+    def api_admin_liga_entrega_mapas_operacionais(
+        request: Request,
+        competencia: str | None = Query(default=None),
+        period: str = Query(default="atual", pattern="^(atual|fechado)$"),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        result = LigaEntregaOperationalMapsService(
+            raw_sql_import_service=liga_entrega_raw_sql_import_service,
+        ).build_dashboard(competencia=competencia, period=period)
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_liga_mapas_operacionais",
+            decision="allowed",
+            reason=f"mapas={result['summary']['mapas']}",
+        )
+        return result
+
+    @router.post("/api/admin/liga-entrega/mapas-operacionais/pdf")
+    def api_admin_liga_entrega_mapas_operacionais_pdf(
+        request: Request,
+        payload: LigaEntregaOperationalMapsPdfRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> Response:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        try:
+            content, filename = build_liga_entrega_operational_maps_pdf(
+                competencia=payload.competencia,
+                maps=payload.maps,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_security_event(
+            request,
+            channel="api",
+            event_type="admin_liga_mapas_operacionais_pdf",
+            decision="allowed",
+            reason=f"mapas={len(payload.maps)}",
+        )
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     @router.get("/api/admin/liga-entrega/dashboard/pdf")
     def api_admin_liga_entrega_dashboard_pdf(
         request: Request,
@@ -315,6 +488,7 @@ def create_admin_liga_entrega_router(
                 raw_sql_import_service=liga_entrega_raw_sql_import_service,
                 allow_source_files=liga_entrega_snapshot_store is None and liga_entrega_raw_sql_import_service is None,
             ).build_dashboard(competencia=competencia, period=period)
+            dashboard = apply_current_rules(dashboard)
             content, filename = build_liga_entrega_dashboard_pdf(dashboard, view=view)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

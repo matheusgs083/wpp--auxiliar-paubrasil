@@ -27,6 +27,20 @@ def test_coverage_is_limited_to_dashboard_competence():
     assert [row["data"] for row in coverage] == ["2026-10-01", "2026-10-02"]
 
 
+def test_coverage_marks_route_that_exists_only_in_031129_as_pending_030805():
+    coverage = build_cobertura([
+        {"data": "2026-10-29", "mapa": "101", "mot": "M1", "tem_030805": True},
+        {"data": "2026-10-29", "mapa": "102", "mot": "M2", "tem_030805": False},
+    ])
+
+    assert coverage == [{
+        "data": "2026-10-29", "rotas": 2, "rotas_030805": 1,
+        "rotas_pendentes_030805": 1, "entregas_0805": 0,
+        "mapas": ["101", "102"], "motoristas": 2, "ajudantes": 0,
+        "status": "Pendente: 1 rota(s) sem 03.08.05",
+    }]
+
+
 def test_route_and_expurgo_dates_accept_only_selected_month():
     assert _record_competencia("2026-10-02") == "2026-10"
     assert _record_competencia("02/10/2026") == "2026-10"

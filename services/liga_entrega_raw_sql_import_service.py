@@ -27,7 +27,7 @@ def _payload_competencia(payload: dict[str, Any]) -> str:
         month_int = int(month)
         if 1 <= month_int <= 12:
             return f"{year}-{month_int:02d}"
-    for key in ("Data", "Data Entrega", "Data Movimento", "Dt. Operacao", "Dt Operacao", "Data Operacao", "reference_date"):
+    for key in ("Data", "Data Entrega", "Data Movimento", "DtOper", "Dt. Oper", "Dt Oper", "Dt. Operacao", "Dt Operacao", "Data Operacao", "reference_date"):
         value = str(payload.get(key) or "").strip()
         iso = re.search(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", value)
         if iso:

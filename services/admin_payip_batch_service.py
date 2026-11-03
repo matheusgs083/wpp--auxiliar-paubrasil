@@ -326,12 +326,26 @@ class AdminPayipBatchService:
                     + ("..." if len(missing_codes) > 20 else "")
                 ),
             )
-        result = self.payip_payments_service.import_promax_batch(
-            filial=options.filial,
-            date_start=options.start_date,
-            date_end=options.end_date,
-            totp_code=options.mfa_code,
-        )
+        try:
+            result = self.payip_payments_service.import_promax_batch(
+                filial=options.filial,
+                date_start=options.start_date,
+                date_end=options.end_date,
+                totp_code=options.mfa_code,
+            )
+        except PayipMfaRequired as exc:
+            raise HTTPException(status_code=400, detail="Token MFA PayIP nao validou. Confira o codigo e tente novamente.") from exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self.logger.exception(
+                "Falha ao efetivar importacao automatizada PayIP filial=%s data=%s..%s: %s",
+                options.filial,
+                options.start_date,
+                options.end_date,
+                exc,
+            )
+            raise HTTPException(status_code=503, detail=f"Falha ao importar na PayIP: {_short_error(str(exc))}") from exc
         return _promax_import_payload(result, client_creation=client_creation, imported=True)
 
     def queue(self, payload: Any, context: dict[str, Any] | None) -> dict[str, Any]:

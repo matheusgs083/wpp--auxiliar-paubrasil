@@ -87,7 +87,7 @@ def build_liga_entrega_dashboard_pdf(
 
     story.append(Spacer(1, 2 * mm))
 
-    headers = ["#", "COLABORADOR", "FILIAL", "ROTAS", "DEVOLUÇÃO\n≤1,4%", "SAÍDA ≤07:30\n≥90%", "DESVIO KM\n≤10%", "CHECKLIST\ndesde 13/07", "TOTAL", "PRÊMIO"]
+    headers = ["#", "COLABORADOR", "FILIAL", "ROTAS", "DEVOLUÇÃO", "SAÍDA", "DESVIO KM", "CHECKLIST\ndesde 13/07", "TOTAL", "PRÊMIO"]
     widths = [10 * mm, 69 * mm, 24 * mm, 14 * mm, 28 * mm, 30 * mm, 26 * mm, 33 * mm, 22 * mm, 21 * mm]
     views = [normalized_view] if normalized_view != "completo" else ["motoristas", "ajudantes"]
     for role_view in views:
@@ -107,6 +107,14 @@ def build_liga_entrega_dashboard_pdf(
             check_detail = ""
             if row.get("check_f") is not None and row.get("check_e") is not None:
                 check_detail = f"{_fmt(row.get('check_f'))}/{_fmt(row.get('check_e'))}"
+            rules = _rules_for_row(dashboard, row)
+            metas = rules.get("metas") or {}
+            indicadores = rules.get("indicadores") or {}
+            devolucao_detail = (
+                f"≤{_fmt_pct(metas.get('devol'))}\n{_fmt(row.get('devol_hl'))} HL/{_fmt(row.get('entregas_hl'))} HL"
+                if row.get("devolucao_base") == "hl"
+                else f"≤{_fmt_pct(metas.get('devol'))}\n{_fmt(row.get('devol'))}/{_fmt(row.get('entregas'))}"
+            )
             table_data.append([
                 _rank_cell(position, cell_right_style),
                 _p(str(row.get("nome") or row.get("cod") or "-"), ParagraphStyle(
@@ -114,9 +122,9 @@ def build_liga_entrega_dashboard_pdf(
                 )),
                 _p(str(row.get("filial") or "-"), cell_style),
                 _p(_fmt(row.get("rotas")), cell_right_style),
-                _metric_cell(row.get("pdev"), 1.4, False, f"{_fmt(row.get('devol'))}/{_fmt(row.get('entregas'))}"),
-                _metric_cell(row.get("psaida"), 90, True),
-                _metric_cell(row.get("km_desv"), 10, False),
+                _metric_cell(row.get("pdev"), _number(metas.get("devol")), False, devolucao_detail) if indicadores.get("devolucao", True) else _not_applied_cell(),
+                _metric_cell(row.get("psaida"), _number(metas.get("saida_pct")), True, f"≤{escape(str(metas.get('saida') or '-'))} / ≥{_fmt_pct(metas.get('saida_pct'))}") if indicadores.get("tml", True) else _not_applied_cell(),
+                _metric_cell(row.get("km_desv"), _number(metas.get("km")), False, f"≤{_fmt_pct(metas.get('km'))}") if indicadores.get("km", True) else _not_applied_cell(),
                 _metric_cell(row.get("check_pct"), 100, True, check_detail),
                 _score_cell(row.get("total"), cell_right_style),
                 _prize_cell(position, role_view, cell_right_style),
@@ -174,11 +182,23 @@ def _metric_cell(value: Any, target: float, higher_is_better: bool, detail: str 
     number = _number(value)
     good = number >= target if higher_is_better else number <= target
     color = GREEN if good else RED
-    detail_html = f'<br/><font color="#91a0ba" size="6">{escape(detail)}</font>' if detail else ""
+    detail_html = f'<br/><font color="#91a0ba" size="6">{escape(detail).replace(chr(10), "<br/>")}</font>' if detail else ""
     return Paragraph(
         f'<font color="{color}"><b>{escape(_fmt_pct(number))}</b></font>{detail_html}',
         ParagraphStyle("LigaPdfMetric", alignment=TA_RIGHT, fontSize=7.2, leading=8.5),
     )
+
+
+def _not_applied_cell() -> Paragraph:
+    return Paragraph('<font color="#91a0ba">Não aplicado</font>', ParagraphStyle("LigaPdfMetricDisabled", alignment=TA_RIGHT, fontSize=7.2, leading=8.5))
+
+
+def _rules_for_row(dashboard: Mapping[str, Any], row: Mapping[str, Any]) -> Mapping[str, Any]:
+    operations = dashboard.get("regras_operacao")
+    operation = str(row.get("filial") or "").strip().upper()
+    if isinstance(operations, Mapping) and isinstance(operations.get(operation), Mapping):
+        return operations[operation]
+    return {"metas": dashboard.get("metas") if isinstance(dashboard.get("metas"), Mapping) else {}}
 
 
 def _score_cell(value: Any, style: ParagraphStyle) -> Paragraph:

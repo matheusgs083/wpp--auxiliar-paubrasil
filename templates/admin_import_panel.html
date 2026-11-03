@@ -339,6 +339,59 @@
     @media (max-width: 900px) { #entregaPane .entrega-devolucao-analytics-grid, #entregaPane .devolucao-dashboard-grid { grid-template-columns: 1fr 1fr; } #entregaPane .devolucao-dashboard-grid .devolucao-chart-wide { grid-column: span 2; } }
     @media print { #entregaPane .entrega-devolucao-chart { height: auto; min-height: 278px; } #entregaPane .devolucao-bars { max-height: none; overflow: visible; } }
     @media (max-width: 600px) { #entregaPane .devolucao-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } #entregaPane .devolucao-analysis-toolbar > div { flex: 1 1 140px; } #entregaPane .devolucao-analysis-toolbar .form-select { width: 100%; min-width: 0; } #entregaPane .devolucao-bar-row { grid-template-columns: minmax(70px, 30%) minmax(55px, 1fr) max-content; gap: .35rem; } #entregaPane .devolucao-bar-label, #entregaPane .devolucao-bar-value { font-size: .66rem; } #entregaPane .devolucao-dashboard-grid, #entregaPane .entrega-devolucao-analytics-grid { grid-template-columns: 1fr; } #entregaPane .devolucao-dashboard-grid .devolucao-chart-wide { grid-column: auto; } }
+    #entregaFechamentoModule .fechamento-workspace { overflow: hidden; padding: 0; border-color: #2b3b55; background: linear-gradient(145deg, rgba(20,29,45,.98), rgba(11,18,31,.98)); }
+    #entregaFechamentoModule .fechamento-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.15rem 1.2rem; border-bottom: 1px solid #293951; background: linear-gradient(90deg, rgba(37,99,235,.12), transparent 58%); }
+    #entregaFechamentoModule .fechamento-title-wrap { display: flex; align-items: flex-start; gap: .75rem; }
+    #entregaFechamentoModule .fechamento-title-icon { display: grid; width: 2.35rem; height: 2.35rem; place-items: center; border: 1px solid rgba(96,165,250,.42); border-radius: .7rem; color: #93c5fd; background: rgba(37,99,235,.16); box-shadow: 0 0 20px rgba(37,99,235,.13); }
+    #entregaFechamentoModule .fechamento-title-icon i { font-size: 1.05rem; }
+    #entregaFechamentoModule .fechamento-source-tag { padding: .18rem .45rem; border: 1px solid #35557c; border-radius: 999px; color: #bfdbfe; font-size: .68rem; font-weight: 800; letter-spacing: .04em; background: rgba(30,64,175,.18); }
+    #entregaFechamentoModule .fechamento-refresh { min-width: 110px; }
+    #entregaFechamentoModule .fechamento-filter-panel { margin: 1rem 1.2rem .8rem; padding: .85rem; border: 1px solid #2b3b55; border-radius: .8rem; background: #0d1626; }
+    #entregaFechamentoModule .fechamento-filter-heading { display: flex; align-items: center; gap: .42rem; margin-bottom: .7rem; color: #dce9fa; font-size: .74rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+    #entregaFechamentoModule .fechamento-filter-heading i { color: #60a5fa; }
+    #entregaFechamentoModule .fechamento-filter-grid { display: grid; grid-template-columns: repeat(6, minmax(118px, 1fr)); gap: .6rem; align-items: end; }
+    #entregaFechamentoModule .fechamento-filter-grid .form-label { display: block; margin: 0 0 .28rem; color: #95a8c3; font-size: .67rem; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
+    #entregaFechamentoModule .fechamento-filter-grid .form-control, #entregaFechamentoModule .fechamento-filter-grid .form-select, #entregaFechamentoModule .fechamento-filter-grid .input-group-text { min-height: 32px; border-color: #334966; color: #e6eefb; background-color: #101b2d; }
+    #entregaFechamentoModule .fechamento-filter-grid .form-control:focus, #entregaFechamentoModule .fechamento-filter-grid .form-select:focus { border-color: #60a5fa; box-shadow: 0 0 0 .18rem rgba(96,165,250,.14); }
+    #entregaFechamentoModule .fechamento-search { min-width: 185px; }
+    #entregaFechamentoModule .fechamento-day-picker { margin-top: .75rem; padding-top: .72rem; border-top: 1px solid #263953; }
+    #entregaFechamentoModule .fechamento-day-picker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .45rem; margin-bottom: .45rem; color: #a6b8cf; font-size: .68rem; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
+    #entregaFechamentoModule .fechamento-day-picker-head .btn { padding-top: 0; padding-bottom: 0; color: #93c5fd; font-size: .68rem; font-weight: 800; text-transform: none; }
+    #entregaFechamentoModule .fechamento-day-options { display: flex; flex-wrap: wrap; gap: .35rem; max-height: 96px; overflow-y: auto; padding-right: .2rem; }
+    #entregaFechamentoModule .fechamento-day-option { border: 1px solid #344963; border-radius: 999px; color: #9fb2cd; background: #101b2d; font-size: .72rem; font-weight: 800; line-height: 1; padding: .42rem .56rem; cursor: pointer; transition: color .18s ease, border-color .18s ease, background .18s ease; }
+    #entregaFechamentoModule .fechamento-day-option:hover { border-color: #60a5fa; color: #dbeafe; }
+    #entregaFechamentoModule .fechamento-day-option.is-selected { border-color: #3b82f6; color: #eff6ff; background: #1d4ed8; box-shadow: 0 0 0 1px rgba(96,165,250,.2); }
+    #entregaFechamentoModule .fechamento-filter-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .72rem; }
+    #entregaFechamentoModule .fechamento-threshold-note { margin-left: auto; color: #9aacC5; font-size: .71rem; font-weight: 600; }
+    #entregaFechamentoModule .fechamento-threshold-note i { color: #fbbf24; }
+    #entregaFechamentoModule .fechamento-kpi-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; padding: .2rem 1.2rem .55rem; color: #dbeafe; font-size: .78rem; font-weight: 800; }
+    #entregaFechamentoModule .fechamento-kpi-heading small { color: #8fa1bd; font-size: .7rem; font-weight: 600; }
+    #entregaFechamentoModule .fechamento-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; padding: 0 1.2rem 1rem; }
+    #entregaFechamentoModule .fechamento-kpi { position: relative; min-width: 0; min-height: 92px; padding: .78rem .85rem .7rem; border: 1px solid #2d405d; border-radius: .75rem; background: #101a2b; overflow: hidden; }
+    #entregaFechamentoModule .fechamento-kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: #3b82f6; }
+    #entregaFechamentoModule .fechamento-kpi.is-warning::before { background: #fbbf24; }
+    #entregaFechamentoModule .fechamento-kpi.is-danger::before { background: #fb7185; }
+    #entregaFechamentoModule .fechamento-kpi .label { display: block; color: #a3b2c8; font-size: .67rem; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
+    #entregaFechamentoModule .fechamento-kpi .value { display: block; margin-top: .3rem; color: #edf4ff; font-size: 1.45rem; font-weight: 900; letter-spacing: -.035em; line-height: 1; }
+    #entregaFechamentoModule .fechamento-kpi.is-warning .value { color: #fcd34d; }
+    #entregaFechamentoModule .fechamento-kpi.is-danger .value { color: #fda4af; }
+    #entregaFechamentoModule .fechamento-kpi .note { display: block; margin-top: .38rem; color: #92a4bd; font-size: .69rem; line-height: 1.3; }
+    #entregaFechamentoModule .fechamento-days { display: grid; gap: .62rem; padding: 0 1.2rem 1.2rem; }
+    #entregaFechamentoModule .fechamento-day { overflow: hidden; border: 1px solid #2d405d; border-radius: .75rem; background: #0f1929; }
+    #entregaFechamentoModule .fechamento-day > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding: .78rem .9rem; cursor: pointer; list-style: none; transition: background .18s ease; }
+    #entregaFechamentoModule .fechamento-day > summary::-webkit-details-marker { display: none; }
+    #entregaFechamentoModule .fechamento-day > summary:hover, #entregaFechamentoModule .fechamento-day[open] > summary { background: #142238; }
+    #entregaFechamentoModule .fechamento-day-date { color: #f3f7ff; font-size: .98rem; font-weight: 900; }
+    #entregaFechamentoModule .fechamento-day-summary { color: #9fb2cd; font-size: .73rem; font-weight: 700; }
+    #entregaFechamentoModule .fechamento-table-scroll { max-height: min(62vh, 570px); border-top: 1px solid #2d405d; }
+    #entregaFechamentoModule .fechamento-table-scroll .table { --bs-table-color: #dbe7f8; --bs-table-bg: #0f1929; --bs-table-hover-bg: #16243a; }
+    #entregaFechamentoModule .fechamento-table-scroll .table thead th { color: #aabbd3; background: #111d30; border-color: #2d405d; font-size: .65rem; }
+    #entregaFechamentoModule .fechamento-table-scroll .table td { border-color: #22334c; color: #e3edf9; font-size: .78rem; white-space: nowrap; }
+    #entregaFechamentoModule .fechamento-table-scroll .table td:last-child { min-width: 210px; white-space: normal; }
+    #entregaFechamentoModule .fechamento-row-alert td { background: rgba(251,191,36,.055) !important; }
+    #entregaFechamentoModule .fechamento-alert { display: inline-flex; margin: .24rem .2rem 0 0; padding: .16rem .35rem; border: 1px solid rgba(251,113,133,.4); border-radius: 999px; color: #fecdd3; background: rgba(190,24,93,.2); font-size: .62rem; font-weight: 800; line-height: 1.2; }
+    @media (max-width: 1200px) { #entregaFechamentoModule .fechamento-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } #entregaFechamentoModule .fechamento-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 700px) { #entregaFechamentoModule .fechamento-header { padding: .9rem; } #entregaFechamentoModule .fechamento-filter-panel { margin: .75rem .9rem; } #entregaFechamentoModule .fechamento-filter-grid, #entregaFechamentoModule .fechamento-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } #entregaFechamentoModule .fechamento-search { grid-column: 1 / -1; } #entregaFechamentoModule .fechamento-threshold-note { width: 100%; margin-left: 0; } #entregaFechamentoModule .fechamento-kpi-heading, #entregaFechamentoModule .fechamento-days { padding-left: .9rem; padding-right: .9rem; } }
     .liga-expurgo-mark { display: inline-flex; padding: 0.1rem 0.34rem; border-radius: 999px; background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; font-size: 0.65rem; font-weight: 800; }
     .table { --bs-table-color: var(--ink-900); --bs-table-bg: transparent; --bs-table-hover-bg: rgba(37, 99, 235, 0.07); margin-bottom: 0; }
     .table-scroll thead th, .table thead th { position: sticky; top: 0; z-index: 3; color: var(--ink-700); background: var(--surface-soft); border-bottom: 1px solid var(--line-strong); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -1642,7 +1695,9 @@
         <div class="btn-group btn-group-sm mb-3" role="tablist" aria-label="Módulos de Entrega">
           <button class="btn btn-primary entrega-module-tab" id="entregaLigaModuleTab" data-entrega-module="liga" type="button">Liga Entrega</button>
           <button class="btn btn-outline-primary entrega-module-tab" id="entregaIndicadoresModuleTab" data-entrega-module="indicadores" type="button">Indicadores BI</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaFechamentoModuleTab" data-entrega-module="fechamento" type="button">Fechamento</button>
           <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesModuleTab" data-entrega-module="devolucoes" type="button">Devoluções</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesCadastrosModuleTab" data-entrega-module="devolucoes-cadastros" type="button">Setores e gerentes</button>
         </div>
         <div id="entregaLigaModule">
         <section class="panel-card p-3 mb-3" id="entregaLigaOverviewSection">
@@ -1723,6 +1778,12 @@
               <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-speedometer2 me-2 text-primary"></i>Indicadores operacionais</h2><div class="form-text" id="entregaIndicadoresStatus">Caixas por viagem e ocupação, consolidadas a partir do BI 17.06.</div></div>
               <button class="btn btn-outline-primary btn-sm" id="entregaIndicadoresRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
             </div>
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-3" aria-label="Filtros dos indicadores">
+              <div><label class="form-label small mb-1" for="entregaIndicadoresFilial">Operação</label><select class="form-select form-select-sm" id="entregaIndicadoresFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaIndicadoresSituacao">Situação</label><select class="form-select form-select-sm" id="entregaIndicadoresSituacao"><option value="">Todas</option><option value="meta">Dentro das metas</option><option value="fora">Fora de alguma meta</option></select></div>
+              <button class="btn btn-outline-secondary btn-sm" id="entregaIndicadoresLimparFiltrosBtn" type="button">Limpar filtros</button>
+              <span class="form-text mb-1">A competência é definida pelo seletor mensal da Liga.</span>
+            </div>
             <div class="recolha-dashboard-grid mb-3" id="entregaIndicadoresCards"></div>
             <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Operação</th><th>Puxada</th><th class="text-end">Caixas / viagem</th><th class="text-end">Ocupação</th></tr></thead><tbody id="entregaIndicadoresBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando importação do BI 17.06.</td></tr></tbody></table></div>
           </section>
@@ -1730,6 +1791,31 @@
             <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-geo-alt me-2 text-primary"></i>Cidades por mapa · mensal</h2><div class="form-text" id="entregaMapasMensaisStatus">Card independente da 03.11.49.02 já usada pela Liga.</div></div><button class="btn btn-outline-primary btn-sm" id="entregaMapasMensaisRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
             <div class="recolha-dashboard-grid mb-3" id="entregaMapasMensaisCards"></div>
             <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Filial</th><th>Mapa</th><th>Cidade</th><th>Data</th></tr></thead><tbody id="entregaMapasMensaisBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando o lote mensal.</td></tr></tbody></table></div>
+          </section>
+        </div>
+
+        <div id="entregaFechamentoModule" class="d-none">
+          <section class="panel-card fechamento-workspace mb-3">
+            <header class="fechamento-header">
+              <div class="fechamento-title-wrap"><span class="fechamento-title-icon"><i class="bi bi-clipboard2-check"></i></span><div><div class="d-flex align-items-center gap-2 flex-wrap"><h2 class="h5 fw-bold mb-0">Fechamento de mapas</h2><span class="fechamento-source-tag">03.11.20</span></div><div class="form-text mt-1" id="entregaMapasOperacionaisStatus">Entrada, saída, fechamentos e tempo interno por dia operacional.</div></div></div>
+              <div class="d-flex gap-2"><button class="btn btn-outline-primary btn-sm" id="entregaMapasOperacionaisPdfBtn" type="button"><i class="bi bi-file-earmark-pdf me-1"></i>PDF da seleção</button><button class="btn btn-primary btn-sm fechamento-refresh" id="entregaMapasOperacionaisRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
+            </header>
+            <section class="fechamento-filter-panel" aria-label="Filtros do fechamento">
+              <div class="fechamento-filter-heading"><i class="bi bi-funnel"></i><span>Filtros do acompanhamento</span></div>
+              <div class="fechamento-filter-grid">
+                <div><label class="form-label" for="entregaMapasOperacionaisDataInicio">Data inicial</label><input class="form-control form-control-sm" id="entregaMapasOperacionaisDataInicio" type="date"></div>
+                <div><label class="form-label" for="entregaMapasOperacionaisDataFim">Data final</label><input class="form-control form-control-sm" id="entregaMapasOperacionaisDataFim" type="date"></div>
+                <div><label class="form-label" for="entregaMapasOperacionaisFilial">Operação</label><select class="form-select form-select-sm" id="entregaMapasOperacionaisFilial"><option value="">Todas as operações</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+                <div><label class="form-label" for="entregaMapasOperacionaisSituacao">Situação</label><select class="form-select form-select-sm" id="entregaMapasOperacionaisSituacao"><option value="">Todas as situações</option><option value="aberto">Mapas abertos</option><option value="pendente">Pendentes</option><option value="fechado">Fechados</option><option value="retornou">Retornaram</option></select></div>
+                <div><label class="form-label" for="entregaMapasOperacionaisAlertas">Alertas</label><select class="form-select form-select-sm" id="entregaMapasOperacionaisAlertas"><option value="">Todos os mapas</option><option value="com_alerta">Somente com alerta</option><option value="ti_total">TI total acima de 30 min</option><option value="rota_48h">Rota acima de 48 h</option><option value="pulou_mpd">Pulou MPD</option><option value="sem_alerta">Sem alerta</option></select></div>
+                <div class="fechamento-search"><label class="form-label" for="entregaMapasOperacionaisBusca">Mapa ou placa</label><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control" id="entregaMapasOperacionaisBusca" placeholder="Ex.: 95772 ou RLR8F59"></div></div>
+              </div>
+              <div class="fechamento-day-picker"><div class="fechamento-day-picker-head"><span>Dias exibidos</span><div><button class="btn btn-link btn-sm" id="entregaMapasOperacionaisSelecionarTodosBtn" type="button">Selecionar todos</button><button class="btn btn-link btn-sm" id="entregaMapasOperacionaisLimparDiasBtn" type="button">Limpar dias</button></div></div><div class="fechamento-day-options" id="entregaMapasOperacionaisDias"><span class="text-secondary small">Os dias disponíveis aparecem após o carregamento.</span></div></div>
+              <div class="fechamento-filter-actions"><button class="btn btn-outline-secondary btn-sm" id="entregaMapasOperacionaisTodasDatasBtn" type="button"><i class="bi bi-calendar-range me-1"></i>Todo o mês</button><button class="btn btn-link btn-sm" id="entregaMapasOperacionaisLimparFiltrosBtn" type="button">Limpar filtros</button><span class="fechamento-threshold-note"><i class="bi bi-info-circle"></i> Alertas: TI total &gt; 30 min · Rota &gt; 48 h · Pulou MPD</span></div>
+            </section>
+            <div class="fechamento-kpi-heading"><span>Visão do período</span><small>Os indicadores acompanham os filtros aplicados.</small></div>
+            <div class="fechamento-kpi-grid" id="entregaMapasOperacionaisCards"></div>
+            <div id="entregaMapasOperacionaisDetails" class="fechamento-days"><div class="text-center text-secondary py-4">Aguardando importação da 03.11.20.</div></div>
           </section>
         </div>
 
@@ -1744,6 +1830,15 @@
             </div>
             <div class="recolha-dashboard-grid devolucao-kpi-grid mb-3" id="entregaDevolucoesCards"></div>
             <div class="source-box" id="entregaDevolucoesDetails"><div class="small text-secondary">Fonte</div><div class="source-path">Aguardando a leitura do relatório de devoluções.</div></div>
+          </section>
+        </div>
+        <div id="entregaDevolucoesCadastrosModule" class="d-none">
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-person-vcard me-2 text-primary"></i>Setores e gerentes</h2><div class="form-text">Defina o nome exibido para cada código de setor e GV. Este cadastro é operacional e vale para todas as competências.</div></div>
+              <button class="btn btn-primary btn-sm" type="button" id="entregaDevolucoesCadastrosSaveBtn"><i class="bi bi-floppy me-1"></i>Salvar</button>
+            </div>
+            <div id="entregaDevolucoesCadastrosDetails" class="source-box"><div class="text-secondary small">Carregando cadastros…</div></div>
           </section>
         </div>
       </div>
@@ -3354,10 +3449,15 @@
           equipe: "/api/admin/liga-entrega/equipe",
           equipeCadastro: "/api/admin/liga-entrega/equipe/cadastro",
           rotaEquipe: "/api/admin/liga-entrega/rotas/equipe",
+          rules: "/api/admin/liga-entrega/regras",
           reports: "/api/admin/liga-entrega/relatorios",
           dashboard: "/api/admin/liga-entrega/dashboard",
           indicadores: "/api/admin/liga-entrega/indicadores",
           mapasMensais: "/api/admin/liga-entrega/mapas-mensais",
+          mapasOperacionais: "/api/admin/liga-entrega/mapas-operacionais",
+          mapasOperacionaisPdf: "/api/admin/liga-entrega/mapas-operacionais/pdf",
+          devolucoes: "/api/admin/liga-entrega/devolucoes",
+          devolucoesCadastros: "/api/admin/liga-entrega/devolucoes/cadastros",
           dashboardPdf: "/api/admin/liga-entrega/dashboard/pdf"
         },
         usage: {
@@ -3609,7 +3709,9 @@
       datasetBusy: {},
       lazyTabs: {},
       ligaEntregaSyncPromise: null,
-      ligaEntregaSyncNeedsRefresh: false
+      ligaEntregaSyncNeedsRefresh: false,
+      devolucoesOperacionais: null,
+      devolucoesCadastros: { setores: [], gerentes: [] }
     };
 
     let DATASET_MAP = {};
@@ -3873,23 +3975,48 @@
       entregaLigaMes: document.getElementById("entregaLigaMes"),
       entregaIndicadoresModule: document.getElementById("entregaIndicadoresModule"),
       entregaIndicadoresModuleTab: document.getElementById("entregaIndicadoresModuleTab"),
+      entregaFechamentoModule: document.getElementById("entregaFechamentoModule"),
+      entregaFechamentoModuleTab: document.getElementById("entregaFechamentoModuleTab"),
       entregaIndicadoresRefreshBtn: document.getElementById("entregaIndicadoresRefreshBtn"),
       entregaIndicadoresStatus: document.getElementById("entregaIndicadoresStatus"),
       entregaIndicadoresCards: document.getElementById("entregaIndicadoresCards"),
       entregaIndicadoresBody: document.getElementById("entregaIndicadoresBody"),
+      entregaIndicadoresFilial: document.getElementById("entregaIndicadoresFilial"),
+      entregaIndicadoresSituacao: document.getElementById("entregaIndicadoresSituacao"),
+      entregaIndicadoresLimparFiltrosBtn: document.getElementById("entregaIndicadoresLimparFiltrosBtn"),
       entregaMapasMensaisRefreshBtn: document.getElementById("entregaMapasMensaisRefreshBtn"),
       entregaMapasMensaisStatus: document.getElementById("entregaMapasMensaisStatus"),
       entregaMapasMensaisCards: document.getElementById("entregaMapasMensaisCards"),
       entregaMapasMensaisBody: document.getElementById("entregaMapasMensaisBody"),
+      entregaMapasOperacionaisRefreshBtn: document.getElementById("entregaMapasOperacionaisRefreshBtn"),
+      entregaMapasOperacionaisStatus: document.getElementById("entregaMapasOperacionaisStatus"),
+      entregaMapasOperacionaisCards: document.getElementById("entregaMapasOperacionaisCards"),
+      entregaMapasOperacionaisDetails: document.getElementById("entregaMapasOperacionaisDetails"),
+      entregaMapasOperacionaisDataInicio: document.getElementById("entregaMapasOperacionaisDataInicio"),
+      entregaMapasOperacionaisDataFim: document.getElementById("entregaMapasOperacionaisDataFim"),
+      entregaMapasOperacionaisTodasDatasBtn: document.getElementById("entregaMapasOperacionaisTodasDatasBtn"),
+      entregaMapasOperacionaisFilial: document.getElementById("entregaMapasOperacionaisFilial"),
+      entregaMapasOperacionaisSituacao: document.getElementById("entregaMapasOperacionaisSituacao"),
+      entregaMapasOperacionaisAlertas: document.getElementById("entregaMapasOperacionaisAlertas"),
+      entregaMapasOperacionaisBusca: document.getElementById("entregaMapasOperacionaisBusca"),
+      entregaMapasOperacionaisLimparFiltrosBtn: document.getElementById("entregaMapasOperacionaisLimparFiltrosBtn"),
+      entregaMapasOperacionaisDias: document.getElementById("entregaMapasOperacionaisDias"),
+      entregaMapasOperacionaisSelecionarTodosBtn: document.getElementById("entregaMapasOperacionaisSelecionarTodosBtn"),
+      entregaMapasOperacionaisLimparDiasBtn: document.getElementById("entregaMapasOperacionaisLimparDiasBtn"),
+      entregaMapasOperacionaisPdfBtn: document.getElementById("entregaMapasOperacionaisPdfBtn"),
       entregaDevolucoesModule: document.getElementById("entregaDevolucoesModule"),
+      entregaDevolucoesCadastrosModule: document.getElementById("entregaDevolucoesCadastrosModule"),
       entregaDevolucoesStatus: document.getElementById("entregaDevolucoesStatus"),
       entregaDevolucoesCards: document.getElementById("entregaDevolucoesCards"),
       entregaDevolucoesDetails: document.getElementById("entregaDevolucoesDetails"),
       entregaDevolucoesRefreshBtn: document.getElementById("entregaDevolucoesRefreshBtn"),
+      entregaDevolucoesCadastrosDetails: document.getElementById("entregaDevolucoesCadastrosDetails"),
+      entregaDevolucoesCadastrosSaveBtn: document.getElementById("entregaDevolucoesCadastrosSaveBtn"),
       entregaLigaModule: document.getElementById("entregaLigaModule"),
       entregaLigaCollapseBtn: document.getElementById("entregaLigaCollapseBtn"),
       entregaLigaModuleTab: document.getElementById("entregaLigaModuleTab"),
       entregaDevolucoesModuleTab: document.getElementById("entregaDevolucoesModuleTab"),
+      entregaDevolucoesCadastrosModuleTab: document.getElementById("entregaDevolucoesCadastrosModuleTab"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
@@ -5227,6 +5354,72 @@
       renderLigaEntregaDashboard(items, summary);
     }
 
+    function renderLigaRulesEditor(rulesByOperation) {
+      const operation = state.ligaEntregaRulesOperation === "SUME" ? "SUME" : "PATOS";
+      const rule = rulesByOperation[operation] || {};
+      const metas = rule.metas || {};
+      const indicadores = rule.indicadores || {};
+      const pesos = rule.pesos || {};
+      const mot = pesos.motorista || {};
+      const aju = pesos.ajudante || {};
+      const indicatorFor = key => key.includes("devol") ? "devolucao" : (key.includes("saida") ? "tml" : (key.includes("km") ? "km" : ""));
+      const disabled = key => { const indicator = indicatorFor(key); return indicator && !indicadores[indicator] ? "disabled" : ""; };
+      const input = (key, value, label, step = "0.1", hint = "") => `<div class="col-md-6 col-xl-3"><label class="form-label small fw-semibold mb-1">${label}</label><input class="form-control form-control-sm liga-rule-input" data-liga-rule-operation="${operation}" data-liga-rule-key="${key}" type="number" min="0" step="${step}" value="${escapeHtml(String(value ?? ""))}" ${disabled(key)}>${hint ? `<div class="form-text small">${hint}</div>` : ""}</div>`;
+      const weightInput = (role, key, value, label) => `<div class="col-sm-4"><label class="form-label small mb-1">${label}</label><div class="input-group input-group-sm"><input class="form-control liga-rule-input" data-liga-rule-operation="${operation}" data-liga-rule-key="pesos.${role}.${key}" type="number" min="0" step="1" value="${escapeHtml(String(value ?? ""))}" ${disabled(key)}><span class="input-group-text">pts</span></div></div>`;
+      const toggle = (key, label, description) => `<div class="col-md-4"><label class="border rounded-3 p-3 d-flex gap-2 h-100 align-items-start"><input class="form-check-input mt-1 liga-rule-input liga-rule-toggle" data-liga-rule-operation="${operation}" data-liga-rule-key="indicadores.${key}" type="checkbox" ${indicadores[key] !== false ? "checked" : ""}><span><b class="d-block">${label}</b><small class="text-secondary">${description}</small></span></label></div>`;
+      const name = operation === "PATOS" ? "Patos" : "Sumé";
+      const competencia = String((state.ligaEntregaDashboard || {}).competencia || ensureLigaMesFilter() || "");
+      return `<div class="p-3 p-md-4 liga-rules-editor">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+          <div><h3 class="h5 mb-1">Regras da Liga</h3><div class="text-secondary small">Regras válidas somente para a competência selecionada: <b>${escapeHtml(competencia || "não definida")}</b>.</div></div>
+          <div class="btn-group" role="group" aria-label="Operação das regras"><button type="button" class="btn btn-sm ${operation === "PATOS" ? "btn-primary" : "btn-outline-primary"} liga-rules-operation" data-liga-rules-operation="PATOS">Patos</button><button type="button" class="btn btn-sm ${operation === "SUME" ? "btn-primary" : "btn-outline-primary"} liga-rules-operation" data-liga-rules-operation="SUME">Sumé</button></div>
+        </div>
+        <div class="alert alert-info small py-2 mb-3"><b>Operação em edição: ${name}.</b> As regras de ${operation === "PATOS" ? "Sumé" : "Patos"} e dos outros meses não serão alteradas.</div>
+        <section class="border rounded-3 p-3 mb-3"><h4 class="h6 mb-1">Indicadores que valem neste mês</h4><p class="small text-secondary mb-3">Desative o que não deve compor a nota. É preciso manter ao menos um indicador ativo.</p><div class="row g-2">${toggle("devolucao", "Devolução", "Percentual de devoluções")}${toggle("tml", "TML / saída", "Saída dentro do horário configurado")}${toggle("km", "Desvio de KM", "KM realizado acima do previsto")}</div></section>
+        <section class="border rounded-3 p-3 mb-3"><h4 class="h6 mb-3">Metas de ${name}</h4><div class="row g-3">
+          <div class="col-md-6 col-xl-3"><label class="form-label small fw-semibold mb-1">Base da devolução</label><select class="form-select form-select-sm liga-rule-input" data-liga-rule-operation="${operation}" data-liga-rule-key="metas.devolucao_base"><option value="hl" ${(metas.devolucao_base || "hl") === "hl" ? "selected" : ""}>Volume devolvido (HL)</option><option value="entregas" ${metas.devolucao_base === "entregas" ? "selected" : ""}>Quantidade de entregas</option></select><div class="form-text small">HL usa os itens da 03.02.37.</div></div>
+          ${input("metas.devol", metas.devol, "Devolução máxima", "0.1", "Percentual")}
+          ${input("metas.saida_pct", metas.saida_pct, "Saídas no horário", "0.1", "Percentual mínimo")}
+          ${input("metas.km", metas.km, "Desvio de KM", "0.1", "Percentual máximo")}
+          ${input("metas.min_rotas", metas.min_rotas, "Mínimo de rotas", "1", "Para entrar no ranking")}
+          <div class="col-md-6 col-xl-3"><label class="form-label small fw-semibold mb-1">Hora limite de saída</label><input class="form-control form-control-sm liga-rule-input" data-liga-rule-operation="${operation}" data-liga-rule-key="metas.saida" type="time" value="${escapeHtml(metas.saida || "07:30")}" ${disabled("saida")}></div>
+          ${input("metas.tempo", metas.tempo, "Tempo normal", "0.1", "% do tempo previsto")}
+          ${input("metas.tempo_pern", metas.tempo_pern, "Tempo com pernoite", "0.1", "% do tempo previsto")}
+        </div></section>
+        <div class="row g-3"><section class="col-lg-6"><div class="border rounded-3 p-3 h-100"><h4 class="h6 mb-1">Pesos — motoristas</h4><p class="small text-secondary mb-3">Definem a importância de cada indicador na nota.</p><div class="row g-2">${weightInput("motorista", "devol", mot.devol, "Devolução")}${weightInput("motorista", "saida", mot.saida, "Saída")}${weightInput("motorista", "km", mot.km, "KM")}</div></div></section><section class="col-lg-6"><div class="border rounded-3 p-3 h-100"><h4 class="h6 mb-1">Pesos — ajudantes</h4><p class="small text-secondary mb-3">Definem a importância de cada indicador na nota.</p><div class="row g-2">${weightInput("ajudante", "devol", aju.devol, "Devolução")}${weightInput("ajudante", "saida", aju.saida, "Saída")}${weightInput("ajudante", "km", aju.km, "KM")}</div></div></section></div>
+        <div class="d-flex justify-content-end mt-4"><button type="button" class="btn btn-primary liga-rules-save" data-liga-rules-operation="${operation}"><i class="bi bi-floppy me-1"></i>Salvar regras de ${name}</button></div>
+      </div>`;
+    }
+
+    async function saveLigaRules(operation) {
+      const container = E.entregaLigaDashboardDetails;
+      const competencia = String((state.ligaEntregaDashboard || {}).competencia || ensureLigaMesFilter() || "");
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) throw new Error("Selecione uma competência válida antes de salvar as regras.");
+      const rules = { metas: {}, indicadores: {}, pesos: { motorista: {}, ajudante: {} } };
+      container.querySelectorAll(`.liga-rule-input[data-liga-rule-operation="${operation}"]`).forEach(input => {
+        const [group, role, key] = input.dataset.ligaRuleKey.split(".");
+        const value = input.type === "checkbox" ? input.checked : ((input.type === "time" || input.tagName === "SELECT") ? input.value : Number(input.value));
+        if (role && key) rules[group][role][key] = value;
+        else rules[group][role] = value;
+      });
+      const result = await req(`${CONFIG.endpoints.ligaEntrega.rules}/${encodeURIComponent(operation)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia, operation, rules }) });
+      state.ligaEntregaRules = result.operations || {};
+      state.ligaEntregaDashboard = null;
+      await syncLigaEntregaReports({ silent: false, force: true });
+      addLog(`Regras da Liga para ${operation} salvas para ${competencia}.`, "ok");
+    }
+
+    function updateLigaRuleInputs(operation) {
+      const container = E.entregaLigaDashboardDetails;
+      if (!container) return;
+      const active = key => Boolean(container.querySelector(`.liga-rule-toggle[data-liga-rule-operation="${operation}"][data-liga-rule-key="indicadores.${key}"]`)?.checked);
+      const indicatorFor = key => key.includes("devol") ? "devolucao" : (key.includes("saida") ? "tml" : (key.includes("km") ? "km" : ""));
+      container.querySelectorAll(`.liga-rule-input[data-liga-rule-operation="${operation}"]:not(.liga-rule-toggle)`).forEach(input => {
+        const indicator = indicatorFor(input.dataset.ligaRuleKey || "");
+        if (indicator) input.disabled = !active(indicator);
+      });
+    }
+
     function renderLigaEntregaDashboard(items = [], summary = {}) {
       const dashboard = state.ligaEntregaDashboard || {};
       const dashSummary = dashboard.summary || {};
@@ -5313,7 +5506,6 @@
           </div>
           ${warnings.length ? `<div class="alert alert-warning small mt-3 mb-0"><b>Avisos de leitura:</b><br>${warnings.slice(0, 5).map(w => escapeHtml(w)).join("<br>")}</div>` : ""}`;
         renderLigaEntregaOperationalViews(dashboard);
-        renderEntregaDevolucoes(dashboard);
       }
     }
 
@@ -5399,19 +5591,20 @@
       const pct = value => value === null || value === undefined ? "-" : `${fmt(value)}%`;
       const table = (head, body) => `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="12" class="text-center text-secondary py-3">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div>`;
       const personRows = (rows, role) => {
-        const metric = (value, meta, higherIsBetter = false, detail = "") => {
+        const metric = (value, meta, higherIsBetter = false, detail = "", enabled = true) => {
+          if (!enabled) return `<span class="text-secondary small">Não aplicado</span>`;
           const valid = value !== null && value !== undefined;
           const good = valid && (higherIsBetter ? Number(value) >= meta : Number(value) <= meta);
           return `<span class="liga-kpi ${valid ? (good ? "good" : "bad") : ""}"><b>${pct(value)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</span>`;
         };
         const prizes = role === "motoristas" ? [700, 600, 500, 450, 400, 350, 300, 300, 250, 250, 250, "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE"] : [500, 400, 350, 300, 250, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 150, 150, "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE", "BRINDE"];
         const prize = pos => { const value = pos ? prizes[Number(pos) - 1] : null; return value === "BRINDE" ? '<span class="liga-prize gift"><i class="bi bi-gift-fill me-1"></i>Brinde</span>' : value ? `<span class="liga-prize">R$ ${fmt(value)}</span>` : '<span class="text-secondary">—</span>'; };
-        return `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0 liga-ranking-table"><thead><tr><th># <i class="bi bi-caret-up-fill text-warning"></i></th><th>Colaborador</th><th>Filial</th><th class="text-end">Rotas</th><th class="text-end">Devolução<span class="sub">≤${(dashboard.metas || {}).devol || 1.4}%</span></th><th class="text-end">Saída ≤${(dashboard.metas || {}).saida || "07:30"}<span class="sub">≥${(dashboard.metas || {}).saida_pct || 90}%</span></th><th class="text-end">Desvio KM<span class="sub">≤${(dashboard.metas || {}).km || 10}%</span></th><th class="text-end">Total</th><th class="text-end">Prêmio</th></tr></thead><tbody>${filter(rows.filter(row => String(row.status || "ativo") === "ativo")).map(row => { const pos = Number(row.pos || 0); const medal = pos ? `${pos}º` : "—"; const score = Math.max(0, Math.min(100, Number(row.total || 0))); return `<tr class="${pos ? `top-${pos}` : ""}"><td><span class="liga-rank ${pos && pos <= 3 ? "top" : ""}">${medal}</span></td><td><button type="button" class="btn btn-link p-0 liga-person-name liga-person-detail" data-liga-person="${escapeHtml(row.cod || "")}">${escapeHtml(row.nome || row.cod || "-")}</button></td><td>${escapeHtml(row.filial || "-")}</td><td class="text-end"><b>${fmt(row.rotas)}</b></td><td class="text-end">${metric(row.pdev, Number((dashboard.metas || {}).devol || 1.4), false, `${fmt(row.devol)}/${fmt(row.entregas)}`)}</td><td class="text-end">${metric(row.psaida, Number((dashboard.metas || {}).saida_pct || 90), true)}</td><td class="text-end">${metric(row.km_desv, Number((dashboard.metas || {}).km || 10), false)}</td><td class="text-end"><span class="liga-score-wrap"><span class="liga-score-bar ${pos === 1 ? "gold" : ""}"><i style="width:${score}%"></i></span><span class="liga-score">${fmt(row.total)}</span></span></td><td class="text-end">${prize(row.pos)}</td></tr>`; }).join("") || '<tr><td colspan="9" class="text-center text-secondary py-4">Nenhum colaborador para este filtro.</td></tr>'}</tbody></table></div>`;
+        return `<div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0 liga-ranking-table"><thead><tr><th># <i class="bi bi-caret-up-fill text-warning"></i></th><th>Colaborador</th><th>Filial</th><th class="text-end">Rotas</th><th class="text-end">Devolução<span class="sub">≤${(dashboard.metas || {}).devol || 1.4}%</span></th><th class="text-end">Saída ≤${(dashboard.metas || {}).saida || "07:30"}<span class="sub">≥${(dashboard.metas || {}).saida_pct || 90}%</span></th><th class="text-end">Desvio KM<span class="sub">≤${(dashboard.metas || {}).km || 10}%</span></th><th class="text-end">Total</th><th class="text-end">Prêmio</th></tr></thead><tbody>${filter(rows.filter(row => String(row.status || "ativo") === "ativo")).map(row => { const pos = Number(row.pos || 0); const medal = pos ? `${pos}º` : "—"; const score = Math.max(0, Math.min(100, Number(row.total || 0))); const active = row.indicadores_ativos || {}; const devDetail = row.devolucao_base === "hl" ? `${fmt(row.devol_hl)} HL/${fmt(row.entregas_hl)} HL` : `${fmt(row.devol)}/${fmt(row.entregas)}`; return `<tr class="${pos ? `top-${pos}` : ""}"><td><span class="liga-rank ${pos && pos <= 3 ? "top" : ""}">${medal}</span></td><td><button type="button" class="btn btn-link p-0 liga-person-name liga-person-detail" data-liga-person="${escapeHtml(row.cod || "")}">${escapeHtml(row.nome || row.cod || "-")}</button></td><td>${escapeHtml(row.filial || "-")}</td><td class="text-end"><b>${fmt(row.rotas)}</b></td><td class="text-end">${metric(row.pdev, Number((dashboard.metas || {}).devol || 1.4), false, devDetail, active.devol !== false)}</td><td class="text-end">${metric(row.psaida, Number((dashboard.metas || {}).saida_pct || 90), true, "", active.saida !== false)}</td><td class="text-end">${metric(row.km_desv, Number((dashboard.metas || {}).km || 10), false, "", active.km !== false)}</td><td class="text-end"><span class="liga-score-wrap"><span class="liga-score-bar ${pos === 1 ? "gold" : ""}"><i style="width:${score}%"></i></span><span class="liga-score">${fmt(row.total)}</span></span></td><td class="text-end">${prize(row.pos)}</td></tr>`; }).join("") || '<tr><td colspan="9" class="text-center text-secondary py-4">Nenhum colaborador para este filtro.</td></tr>'}</tbody></table></div>`;
       };
       let content = "";
       if (view === "motoristas" || view === "ajudantes") content = personRows(Array.isArray(rankings[view]) ? rankings[view] : [], view);
       if (view === "devolucoes") content = renderLigaDevolucoesExpurgoCard(dashboard, filter);
-      if (view === "rotas") content = table('<th>Data</th><th>Mapa</th><th>Filial</th><th>Motorista</th><th>Ajudantes</th><th>Cidade</th><th class="text-end">KM real/prev.</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th>Expurgos</th><th>Ações</th>', filter(routes).slice().reverse().map(row => { const suspect = Number(row.km_real || 0) > Number(row.km_prev || 0) + 50; const late = String(row.hr_sai || "") > "12:00"; const expurgos = [row.expurgo_saida ? '<span class="badge text-bg-warning me-1">TML</span>' : "", row.expurgo_km ? '<span class="badge text-bg-warning">KM</span>' : ""].filter(Boolean).join("") || '<span class="text-secondary">—</span>'; const helperNames = (row.aju || []).map(code => (team.find(p => p.cod === code) || {}).nome || code).join(", "); return `<tr><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.mapa || "-")}${row.equipe_override ? ' <span class="badge text-bg-info">ajustada</span>' : ""}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml((team.find(p => p.cod === row.mot) || {}).nome || row.mot || "-")}</td><td>${escapeHtml(helperNames || "—")}</td><td>${escapeHtml(row.cidade || "-")}</td><td class="text-end ${suspect ? "text-warning fw-bold" : ""}">${fmt(row.km_real)} / ${fmt(row.km_prev)}${suspect ? " ⚠" : ""}</td><td class="text-end ${late ? "text-warning fw-bold" : ""}">${escapeHtml(row.hr_sai || "-")}${late ? " ⚠" : ""}</td><td class="text-end">${pct(row.tempo_pct)}</td><td>${expurgos}</td><td><button class="btn btn-outline-primary btn-sm py-0 liga-route-team" type="button" data-route-data="${escapeHtml(row.data || "")}" data-route-filial="${escapeHtml(row.filial || "")}" data-route-mapa="${escapeHtml(row.mapa || "")}" data-route-mot="${escapeHtml(row.mot || "")}" data-route-aju="${escapeHtml((row.aju || []).join(","))}">Equipe</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">KM</button></td></tr>`; }).join(""));
+      if (view === "rotas") content = table('<th>Data</th><th>Mapa</th><th>Filial</th><th>Motorista</th><th>Ajudantes</th><th>Cidade</th><th class="text-end">KM real/prev.</th><th class="text-end">Saída</th><th class="text-end">Tempo</th><th>Expurgos</th><th>Ações</th>', filter(routes).slice().reverse().map(row => { const suspect = Number(row.km_real || 0) > Number(row.km_prev || 0) + 50; const late = String(row.hr_sai || "") > "12:00"; const expurgos = [row.expurgo_saida ? '<span class="badge text-bg-warning me-1">TML</span>' : "", row.expurgo_km ? '<span class="badge text-bg-warning">KM</span>' : ""].filter(Boolean).join("") || '<span class="text-secondary">—</span>'; const helperNames = (row.aju || []).map(code => (team.find(p => p.cod === code) || {}).nome || code).join(", "); const pending030805 = row.pendente_030805 ? ' <span class="badge text-bg-warning">sem 03.08.05</span>' : ""; return `<tr><td>${escapeHtml(formatDate(row.data) || "-")}</td><td>${escapeHtml(row.mapa || "-")}${row.equipe_override ? ' <span class="badge text-bg-info">ajustada</span>' : ""}${pending030805}</td><td>${escapeHtml(row.filial || "-")}</td><td>${escapeHtml((team.find(p => p.cod === row.mot) || {}).nome || row.mot || "-")}</td><td>${escapeHtml(helperNames || "—")}</td><td>${escapeHtml(row.cidade || "-")}</td><td class="text-end ${suspect ? "text-warning fw-bold" : ""}">${fmt(row.km_real)} / ${fmt(row.km_prev)}${suspect ? " ⚠" : ""}</td><td class="text-end ${late ? "text-warning fw-bold" : ""}">${escapeHtml(row.hr_sai || "-")}${late ? " ⚠" : ""}</td><td class="text-end">${pct(row.tempo_pct)}</td><td>${expurgos}</td><td><button class="btn btn-outline-primary btn-sm py-0 liga-route-team" type="button" data-route-data="${escapeHtml(row.data || "")}" data-route-filial="${escapeHtml(row.filial || "")}" data-route-mapa="${escapeHtml(row.mapa || "")}" data-route-mot="${escapeHtml(row.mot || "")}" data-route-aju="${escapeHtml((row.aju || []).join(","))}">Equipe</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="tml" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">TML</button> <button class="btn btn-outline-secondary btn-sm py-0 liga-expurgo-route" type="button" data-expurgo-tipo="km" data-expurgo-data="${escapeHtml(row.data || "")}" data-expurgo-filial="${escapeHtml(row.filial || "")}" data-expurgo-mapa="${escapeHtml(row.mapa || "")}">KM</button></td></tr>`; }).join(""));
       if (view === "equipe") {
         const pending = state.ligaEntregaTeamChanges || {};
         const pendingCount = Object.keys(pending).length;
@@ -5426,8 +5619,8 @@
         const candidateCard = candidates.length ? `<details class="liga-roster-candidates mb-3"><summary><i class="bi bi-person-plus me-1"></i>Encontrados nos relatórios, fora da Liga <span class="badge text-bg-info ms-1">${candidates.length}</span></summary><div class="row g-2 mt-1">${candidates.map(item => `<div class="col-xl-4 col-md-6"><div class="border rounded p-2 h-100 d-flex align-items-center justify-content-between gap-2"><div class="text-truncate"><div class="small fw-semibold text-uppercase">${escapeHtml(item.funcao || "-")} · ${escapeHtml(item.filial || "-")}</div><div class="text-truncate" title="${escapeHtml(item.nome || "-")}">${escapeHtml(item.nome || "-")}</div><small class="text-secondary">Código ${escapeHtml(item.cod || "-")}</small></div><button type="button" class="btn btn-sm btn-primary flex-shrink-0 liga-roster-add" data-roster-cod="${escapeHtml(item.cod || "")}" data-roster-nome="${escapeHtml(item.nome || "")}" data-roster-filial="${escapeHtml(item.filial || "")}" data-roster-funcao="${escapeHtml(item.funcao || "")}">Adicionar</button></div></div>`).join("")}</div></details>` : "";
         content = `${candidateCard}<div class="liga-team-pending"><small>${pendingCount ? `${pendingCount} alteração(ões) pendente(s). Revise a equipe antes de gravar.` : "Altere os status livremente; nada será sincronizado até você salvar."}</small><button type="button" class="btn btn-primary btn-sm liga-team-save" ${pendingCount ? "" : "disabled"}><i class="bi bi-floppy me-1"></i>Salvar alterações${pendingCount ? ` (${pendingCount})` : ""}</button></div>${table('<th>Função</th><th>Colaborador</th><th>Filial</th><th>Status</th><th>Expurgos</th><th>Código</th>', rows)}`;
       }
-      if (view === "cobertura") content = `<div class="row g-2">${coverage.map(row => `<div class="col-md-4"><div class="border rounded p-2"><b>${escapeHtml(formatDate(row.data) || "-")}</b><div>${fmt(row.rotas)} rota(s) • ${fmt(row.motoristas || row.mot || 0)} motorista(s)</div><div class="small text-secondary">${escapeHtml(row.status || "Cobertura calculada")}</div></div></div>`).join("") || '<div class="text-secondary">Sem cobertura diária calculada.</div>'}</div>`;
-      if (view === "regras") content = `<div class="row g-3"><div class="col-md-6"><h3 class="h6">Metas</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.metas || {}, null, 2))}</pre></div><div class="col-md-6"><h3 class="h6">Pesos do ranking</h3><pre class="source-box mb-0">${escapeHtml(JSON.stringify(dashboard.pesos || {}, null, 2))}</pre></div></div>`;
+      if (view === "cobertura") content = `<div class="row g-2">${coverage.map(row => { const pending = Number(row.rotas_pendentes_030805 || 0); return `<div class="col-md-4"><div class="border rounded p-2"><b>${escapeHtml(formatDate(row.data) || "-")}</b><div>${fmt(row.rotas)} rota(s) • ${fmt(row.motoristas || row.mot || 0)} motorista(s)</div>${pending ? `<div class="small text-warning fw-semibold">${fmt(pending)} rota(s) pendente(s) da 03.08.05</div>` : ""}<div class="small ${pending ? "text-warning" : "text-secondary"}">${escapeHtml(row.status || "Cobertura calculada")}</div></div></div>`; }).join("") || '<div class="text-secondary">Sem cobertura diária calculada.</div>'}</div>`;
+      if (view === "regras") content = renderLigaRulesEditor(dashboard.regras_operacao || state.ligaEntregaRules || {});
       const tabs = [["motoristas","Motoristas"],["ajudantes","Ajudantes"],["devolucoes","Devoluções"],["rotas","Rotas"],["equipe","Equipe"],["cobertura","Cobertura"],["regras","Regras"]].map(([key,label]) => `<button class="btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"} liga-view" data-liga-view="${key}" type="button">${label}</button>`).join(" ");
       const warnings = Array.isArray(dashboard.warnings) ? dashboard.warnings : [];
       E.entregaLigaDashboardDetails.innerHTML = `<section class="liga-dash-shell"><div class="liga-dash-controls"><div class="liga-dash-context"><b>${escapeHtml(dashboard.competencia || "Liga Entrega")}</b>${fmt(routes.length)} rotas processadas</div><div class="liga-dash-tools"><div class="liga-view-tabs" role="tablist">${tabs}</div><div class="liga-filters"><select class="form-select form-select-sm liga-filter-branch" aria-label="Filial"><option value="">Todas filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control liga-filter-search" value="${escapeHtml(filters.q || "")}" placeholder="Buscar pessoa, mapa ou cliente"></div><div class="liga-pdf-actions"><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="motoristas"><i class="bi bi-file-earmark-pdf me-1"></i>PDF motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-print" data-liga-print="motoristas"><i class="bi bi-printer me-1"></i>Imprimir motoristas</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-pdf" data-liga-pdf="ajudantes"><i class="bi bi-file-earmark-pdf me-1"></i>PDF ajudantes</button><button type="button" class="btn btn-sm btn-outline-primary liga-dashboard-print" data-liga-print="ajudantes"><i class="bi bi-printer me-1"></i>Imprimir ajudantes</button></div></div></div></div><div id="ligaOperationalView" class="liga-operational-view">${content}</div>${warnings.length ? `<div class="alert alert-warning small m-3"><b>Leitura parcial:</b> ${warnings.slice(0, 3).map(w => escapeHtml(w)).join(" · ")}</div>` : ""}</section>`;
@@ -5457,8 +5650,8 @@
 
     function renderEntregaDevolucaoTrend(rows, routes = [], metas = {}) {
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-      const trigger = 1.36;
-      const target = Number(metas.devol || 1.4);
+      const trigger = null;
+      const target = null;
       const deliveriesByDate = new Map();
       routes.forEach(route => {
         const key = String(route.data || "").slice(0, 10);
@@ -5484,15 +5677,36 @@
       const points = items.map(point).join(" ");
       const area = `${pad.left},${pad.top + innerH} ${points} ${pad.left + innerW},${pad.top + innerH}`;
       const grid = [0, .5, 1].map(ratio => { const y = pad.top + innerH - ratio * innerH; return `<line class="trend-grid" x1="${pad.left}" x2="${pad.left + innerW}" y1="${y}" y2="${y}"/><text x="2" y="${y + 4}">${escapeHtml(fmt(max * ratio))}%</text>`; }).join("");
-      const targetLines = `<line class="trend-trigger" x1="${pad.left}" x2="${pad.left + innerW}" y1="${yFor(trigger)}" y2="${yFor(trigger)}"/><line class="trend-target" x1="${pad.left}" x2="${pad.left + innerW}" y1="${yFor(target)}" y2="${yFor(target)}"/><text class="trend-line-label" x="${pad.left + innerW * .5}" y="${yFor(trigger) - 4}" text-anchor="middle">Gatilho ${fmt(trigger)}%</text><text class="trend-line-label" x="${pad.left + innerW * .72}" y="${yFor(target) - 4}" text-anchor="middle">Meta ${fmt(target)}%</text>`;
+      const targetLines = "";
       const dots = items.map((item, index) => { const [x, y] = point(item, index).split(","); return `<circle class="trend-dot" cx="${x}" cy="${y}" r="3.5"><title>${escapeHtml(formatDate(item.date))}: ${escapeHtml(`${fmt(item.pct)}% (${item.count}/${deliveriesByDate.get(item.date)})`)}</title></circle>`; }).join("");
       const labels = items.filter((_, index) => index === 0 || index === items.length - 1 || index === Math.floor((items.length - 1) / 2)).map(item => `<text x="${pad.left + items.indexOf(item) * innerW / Math.max(items.length - 1, 1)}" y="${height - 6}" text-anchor="middle">${escapeHtml(formatDate(item.date).slice(0, 5))}</text>`).join("");
-      return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">DEV total · percentual diário sobre as entregas · passe o mouse nos pontos</div><div class="devolucao-trend-legend"><span class="devolucao-trend-pill">Exibindo: DEV total</span><span class="devolucao-trend-key trigger">Gatilho ${fmt(trigger)}%</span><span class="devolucao-trend-key target">Meta ${fmt(target)}%</span></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Percentual de devolução por dia"><defs><linearGradient id="devolucaoTrendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#7c5cff" stop-opacity="0"/></linearGradient></defs>${grid}${targetLines}<polygon class="trend-area" points="${area}"/><polyline class="trend-line" points="${points}"/>${dots}${labels}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Data</th><th class="text-end">DEV total</th><th class="text-end">Devoluções/entregas</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(formatDate(item.date))}</td><td class="text-end">${escapeHtml(`${fmt(item.pct)}%`)}</td><td class="text-end">${item.count}/${deliveriesByDate.get(item.date)}</td></tr>`).join("")}</tbody></table></details></article>`;
+      return `<article class="entrega-devolucao-chart devolucao-trend-chart devolucao-chart-wide"><h3>Devolução por dia</h3><div class="chart-caption">Percentual diário sobre as entregas do relatório operacional</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Percentual de devolução por dia"><defs><linearGradient id="devolucaoTrendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#7c5cff" stop-opacity="0"/></linearGradient></defs>${grid}${targetLines}<polygon class="trend-area" points="${area}"/><polyline class="trend-line" points="${points}"/>${dots}${labels}</svg><details><summary>Ver dados</summary><table><thead><tr><th>Data</th><th class="text-end">DEV total</th><th class="text-end">Devoluções/entregas</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(formatDate(item.date))}</td><td class="text-end">${escapeHtml(`${fmt(item.pct)}%`)}</td><td class="text-end">${item.count}/${deliveriesByDate.get(item.date)}</td></tr>`).join("")}</tbody></table></details></article>`;
     }
 
     function renderEntregaDevolucoes(dashboard = {}) {
-      const allRows = Array.isArray(dashboard.devolucoes_auxiliares) ? dashboard.devolucoes_auxiliares : (Array.isArray(dashboard.devolucoes) ? dashboard.devolucoes : []);
-      const routes = Array.isArray(dashboard.rotas) ? dashboard.rotas : [];
+      const persistedNames = dashboard.cadastros && typeof dashboard.cadastros === "object" ? dashboard.cadastros : {};
+      const entriesFor = kind => [
+        ...(Array.isArray(persistedNames[kind]) ? persistedNames[kind] : []),
+        ...(Array.isArray(state.devolucoesCadastros?.[kind]) ? state.devolucoesCadastros[kind] : []),
+      ];
+      const operationLabels = new Map([
+        ...(Array.isArray(persistedNames.operacoes) ? persistedNames.operacoes : []),
+        ...(Array.isArray(state.devolucoesCadastros?.catalogo?.operacoes) ? state.devolucoesCadastros.catalogo.operacoes : []),
+      ].map(item => [String(item.codigo || "").trim().toUpperCase(), String(item.nome || "").trim().toUpperCase()]));
+      const makeNameMap = kind => new Map(entriesFor(kind).map(item => [`${String(item.filial || "").trim().toUpperCase()}|${String(item.codigo || "").trim()}`, String(item.nome || "").trim()]));
+      const sectorNames = makeNameMap("setores");
+      const managerNames = makeNameMap("gerentes");
+      const allRows = (Array.isArray(dashboard.rows) ? dashboard.rows : []).map(row => {
+        const filial = String(row.filial || "").trim().toUpperCase();
+        const setor = String(row.setor || "").trim();
+        const gv = String(row.gv || "").trim();
+        return {
+          ...row,
+          setor_nome: sectorNames.get(`${filial}|${setor}`) || sectorNames.get(`|${setor}`) || entriesFor("setores").find(item => String(item.codigo || "").trim() === setor && String(item.nome || "").trim() && operationLabels.get(String(item.filial || "").trim().toUpperCase())?.includes(filial))?.nome || row.setor_nome || setor,
+          gerente_nome: managerNames.get(`${filial}|${gv}`) || managerNames.get(`|${gv}`) || entriesFor("gerentes").find(item => String(item.codigo || "").trim() === gv && String(item.nome || "").trim() && operationLabels.get(String(item.filial || "").trim().toUpperCase())?.includes(filial))?.nome || row.gerente_nome || gv,
+        };
+      });
+      const routes = [];
       const branch = String(state.entregaDevolucoesBranch || "").toUpperCase();
       const responsibility = String(state.entregaDevolucoesResponsibility || "").trim();
       const responsibilityOf = row => String(row.motivo_responsabilidade || row.resp || "Não informado").trim() || "Não informado";
@@ -5500,52 +5714,58 @@
       const responsibilityOptions = [...new Set(branchRows.map(responsibilityOf))].sort((a, b) => a.localeCompare(b, "pt-BR"));
       const rows = branchRows.filter(row => !responsibility || responsibilityOf(row) === responsibility);
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-      const totalVolume = rows.reduce((sum, row) => sum + Number(row.volume_hl || 0), 0);
-      const totalValue = rows.reduce((sum, row) => sum + Number(row.valor || 0), 0);
-      const expurgados = rows.filter(row => row.excluida).length;
-      const unique = field => new Set(rows.map(row => String(row[field] || "").trim()).filter(Boolean)).size;
-      const operacaoGeral = dashboard.operacao && typeof dashboard.operacao === "object" ? dashboard.operacao : {};
-      const operacaoFilial = branch && operacaoGeral.filiais && typeof operacaoGeral.filiais === "object" ? operacaoGeral.filiais[branch] : null;
-      const operacao = operacaoFilial || operacaoGeral;
-      const fmtPct = value => value === null || value === undefined || value === "" ? "-" : `${fmt(value)}%`;
-      const hlBaseDisponivel = Number(operacao.entregas_hl || 0) > 0;
+      const q = String(state.entregaDevolucoesFilter || "").trim().toLowerCase();
+      const selectedRows = rows.filter(row => !q || JSON.stringify(row).toLowerCase().includes(q));
+      const period = ["all", "7", "30"].includes(String(state.entregaDevolucoesPeriod)) ? String(state.entregaDevolucoesPeriod) : "all";
+      const dateOf = row => String(row.data_devolucao || row.data || "").slice(0, 10);
+      const stamps = selectedRows.map(row => Date.parse(`${dateOf(row)}T00:00:00Z`)).filter(Number.isFinite);
+      const latestStamp = stamps.length ? Math.max(...stamps) : NaN;
+      const activeRows = period === "all" || !Number.isFinite(latestStamp) ? selectedRows : selectedRows.filter(row => {
+        const stamp = Date.parse(`${dateOf(row)}T00:00:00Z`);
+        return Number.isFinite(stamp) && latestStamp - stamp <= Number(period) * 86400000;
+      });
+      const totalVolume = activeRows.reduce((sum, row) => sum + Number(row.volume_hl || 0), 0);
+      const totalValue = activeRows.reduce((sum, row) => sum + Number(row.valor || 0), 0);
+      const unique = field => new Set(activeRows.map(row => String(row[field] || "").trim()).filter(Boolean)).size;
+      const bases = dashboard.bases_entrega && typeof dashboard.bases_entrega === "object" ? dashboard.bases_entrega : {};
+      const base = branch && bases.filiais && bases.filiais[branch] ? bases.filiais[branch] : (bases.geral || {});
+      const pct = (value, denominator) => Number(denominator || 0) > 0 ? value / Number(denominator) * 100 : null;
+      const fmtPct = value => value === null || !Number.isFinite(value) ? "-" : `${fmt(value)}%`;
+      const pdvs = unique("cliente_cod") || unique("cliente");
+      const nfs = unique("nota");
+      const hlPct = pct(totalVolume, base.entregas_hl);
+      const pdvPct = pct(pdvs, base.entregas_pdvs);
+      const nfPct = pct(nfs, base.entregas_nfs);
       const cards = [
-        ["HL devolvido", fmtPct(operacao.devolucao_hl_pct), `${fmt(operacao.devolucoes_volume_hl ?? totalVolume)} HL${hlBaseDisponivel ? "" : " · base de entrega indisponível"}`, false],
-        ["PDVs devolvidos", fmtPct(operacao.devolucao_pdv_pct), `${fmt(operacao.devolucoes_pdvs ?? (unique("cliente_cod") || unique("cliente")))} PDVs`, false],
-        ["NFs devolvidas", fmtPct(operacao.devolucao_nf_pct), `${fmt(operacao.devolucoes_nfs ?? unique("nota"))} NFs`, false],
-        ["Devolução total", fmtPct(operacao.devolucao_total_pct), "HL% + PDV%", true],
-        ["Valor devolvido", `R$ ${fmt(operacao.devolucoes_valor ?? totalValue)}`, "Total em dinheiro", false]
+        ["HL devolvido", fmtPct(hlPct), `${fmt(totalVolume)} HL`, false],
+        ["PDVs devolvidos", fmtPct(pdvPct), `${fmt(pdvs)} PDVs`, false],
+        ["NFs devolvidas", fmtPct(nfPct), `${fmt(nfs)} NFs`, false],
+        ["Devolução total", fmtPct((hlPct || 0) + (pdvPct || 0)), "HL% + PDV%", true],
+        ["Valor devolvido", `R$ ${fmt(totalValue)}`, "Total financeiro", false]
       ];
       if (E.entregaDevolucoesCards) E.entregaDevolucoesCards.innerHTML = cards.map(([label, value, sub, highlight]) => `<article class="devolucao-kpi-card ${highlight ? "is-highlight" : ""}"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(value)}</span><span class="sub">${escapeHtml(sub)}</span></article>`).join("");
       const competencia = String(dashboard.competencia || ensureLigaMesFilter() || "");
-      if (E.entregaDevolucoesStatus) E.entregaDevolucoesStatus.textContent = rows.length ? `${rows.length} registros do 03.02.24 Motorista · competência ${competencia}${branch ? ` · filial ${branch === "SUME" ? "Sumé" : "Patos"}` : ""}. Esta análise usa exclusivamente o mês selecionado.` : (branch ? `Nenhum registro de devoluções para ${branch === "SUME" ? "Sumé" : "Patos"} na competência ${competencia}.` : `Nenhum relatório de devoluções carregado para a competência ${competencia}.`);
+      if (E.entregaDevolucoesStatus) E.entregaDevolucoesStatus.textContent = activeRows.length ? `${activeRows.length} registros operacionais do 03.02.24 Motorista · competência ${competencia}. Não utiliza metas, expurgos ou pontuação da Liga.` : `Nenhum registro de devoluções para os filtros da competência ${competencia}.`;
       if (!E.entregaDevolucoesDetails) return;
-      const q = String(state.entregaDevolucoesFilter || "").trim().toLowerCase();
-      const filtered = rows.filter(row => !q || JSON.stringify(row).toLowerCase().includes(q));
+      const filtered = activeRows;
       const metric = ["volume_hl", "valor", "registros"].includes(state.entregaDevolucoesMetric) ? state.entregaDevolucoesMetric : "volume_hl";
       const topN = [5, 8, 10, 15].includes(Number(state.entregaDevolucoesTopN)) ? Number(state.entregaDevolucoesTopN) : 10;
-      const period = ["all", "7", "30"].includes(String(state.entregaDevolucoesPeriod)) ? String(state.entregaDevolucoesPeriod) : "all";
-      const dateOf = row => String(row.data_devolucao || row.data || "").slice(0, 10);
       const chartRoutes = routes.filter(route => !branch || String(route.filial || "").trim().toUpperCase() === branch);
       // A aba Devoluções é operacional e exibe todos os registros, inclusive
       // os expurgados. A exclusão do cálculo ocorre somente na Liga.
-      const analysisRows = rows;
+      const analysisRows = activeRows;
       const timestamps = analysisRows.map(row => Date.parse(`${dateOf(row)}T00:00:00Z`)).filter(Number.isFinite);
       const latest = timestamps.length ? Math.max(...timestamps) : NaN;
-      const chartRows = period === "all" || !Number.isFinite(latest) ? analysisRows : analysisRows.filter(row => {
-        const stamp = Date.parse(`${dateOf(row)}T00:00:00Z`);
-        return Number.isFinite(stamp) && latest - stamp <= Number(period) * 86400000;
-      });
+      const chartRows = analysisRows;
       const escape = value => escapeHtml(value === null || value === undefined || value === "" ? "-" : value);
-      const body = filtered.map(row => `<tr class="${row.excluida ? "opacity-50" : ""}"><td>${escape(formatDate(row.data))}</td><td>${escape(formatDate(row.data_devolucao))}</td><td>${escape(row.filial)}</td><td>${escape(row.motorista || row.cod)}</td><td>${escape(row.nota)}</td><td>${escape(row.cliente || row.cliente_cod)}</td><td>${escape(row.setor)}</td><td>${escape(row.gv)}</td><td>${escape(row.motivo_operacional || row.motivo || row.resp)}</td><td>${escape(row.motivo_responsabilidade)}</td><td class="text-end">${fmt(row.volume_hl)}</td><td class="text-end">${fmt(row.valor)}</td><td>${row.excluida ? '<span class="badge text-bg-secondary">Expurgada</span>' : ""}</td></tr>`).join("");
+      const body = filtered.map(row => `<tr><td>${escape(formatDate(row.data))}</td><td>${escape(formatDate(row.data_devolucao))}</td><td>${escape(row.filial)}</td><td>${escape(row.motorista || row.cod)}</td><td>${escape(row.nota)}</td><td>${escape(row.cliente || row.cliente_cod)}</td><td>${escape(row.setor_nome || row.setor)}</td><td>${escape(row.gerente_nome || row.gv)}</td><td>${escape(row.motivo_operacional || row.motivo || row.resp)}</td><td>${escape(row.motivo_responsabilidade)}</td><td class="text-end">${fmt(row.volume_hl)}</td><td class="text-end">${fmt(row.valor)}</td></tr>`).join("");
       const charts = [
-        renderEntregaDevolucaoChart("Devolução por GV", chartRows, "gv", topN, false, metric),
+        renderEntregaDevolucaoChart("Devolução por GV", chartRows, "gerente_nome", topN, false, metric),
         renderEntregaDevolucaoChart("Devolução por motivo", chartRows, "motivo_operacional", topN, false, metric),
-        renderEntregaDevolucaoChart("Devolução por vendedor · Top 8", chartRows, "rn", 8, false, metric),
-        renderEntregaDevolucaoTrend(chartRows, chartRoutes, dashboard.metas || {}),
+        renderEntregaDevolucaoChart("Devolução por setor", chartRows, "setor_nome", topN, false, metric),
         renderEntregaDevolucaoChart("Devolução por responsabilidade", chartRows, "motivo_responsabilidade", topN, false, metric)
       ].join("");
-      E.entregaDevolucoesDetails.innerHTML = `<div class="devolucao-insight-head d-flex flex-wrap gap-3 align-items-center justify-content-between mb-3"><div><div class="small text-secondary">Análise operacional</div><div class="source-path">Concentração por GV, motivo, vendedor e responsabilidade. Os valores são calculados somente a partir dos registros importados.</div></div><div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control entrega-devolucoes-filter" value="${escapeHtml(state.entregaDevolucoesFilter || "")}" placeholder="Filtrar registros"></div></div><div class="devolucao-analysis-toolbar mb-3"><div><label class="form-label" for="entregaDevolucoesBranch">Filial</label><select id="entregaDevolucoesBranch" class="form-select form-select-sm entrega-devolucoes-control"><option value="" ${!branch ? "selected" : ""}>Todas as filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select></div><div><label class="form-label" for="entregaDevolucoesMetric">Métrica dos gráficos</label><select id="entregaDevolucoesMetric" class="form-select form-select-sm entrega-devolucoes-control"><option value="volume_hl" ${metric === "volume_hl" ? "selected" : ""}>Volume (HL)</option><option value="valor" ${metric === "valor" ? "selected" : ""}>Valor (R$)</option><option value="registros" ${metric === "registros" ? "selected" : ""}>Registros</option></select></div><div><label class="form-label" for="entregaDevolucoesPeriod">Período dos gráficos</label><select id="entregaDevolucoesPeriod" class="form-select form-select-sm entrega-devolucoes-control"><option value="all" ${period === "all" ? "selected" : ""}>Todo o período</option><option value="7" ${period === "7" ? "selected" : ""}>Últimos 7 dias</option><option value="30" ${period === "30" ? "selected" : ""}>Últimos 30 dias</option></select></div><div><label class="form-label" for="entregaDevolucoesTopN">Categorias exibidas</label><select id="entregaDevolucoesTopN" class="form-select form-select-sm entrega-devolucoes-control"><option value="5" ${topN === 5 ? "selected" : ""}>Top 5</option><option value="8" ${topN === 8 ? "selected" : ""}>Top 8</option><option value="10" ${topN === 10 ? "selected" : ""}>Top 10</option><option value="15" ${topN === 15 ? "selected" : ""}>Top 15</option></select></div><button type="button" class="btn btn-outline-primary btn-sm entrega-devolucoes-print"><i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF</button><div class="devolucao-analysis-note flex-grow-1">${chartRows.length} registro(s) no recorte visual · ${metric === "volume_hl" ? "hectolitros devolvidos" : metric === "valor" ? "valor financeiro" : "linhas do relatório"}. A tabela abaixo mantém o filtro textual independente.</div></div><div class="devolucao-dashboard-grid mb-3">${charts}</div><details class="devolucao-table-wrap"><summary><i class="bi bi-table me-2"></i>Ver registros detalhados (${filtered.length})</summary><div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>GV</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th><th></th></tr></thead><tbody>${body || '<tr><td colspan="13" class="text-center text-secondary py-4">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div></details>`;
+      E.entregaDevolucoesDetails.innerHTML = `<div class="devolucao-insight-head d-flex flex-wrap gap-3 align-items-center justify-content-between mb-3"><div><div class="small text-secondary">Análise operacional independente</div><div class="source-path">Todos os totais, gráficos e tabela seguem os filtros abaixo e usam somente os registros importados.</div></div><div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control entrega-devolucoes-filter" value="${escapeHtml(state.entregaDevolucoesFilter || "")}" placeholder="Filtrar registros"></div></div><div class="devolucao-analysis-toolbar mb-3"><div><label class="form-label" for="entregaDevolucoesBranch">Filial</label><select id="entregaDevolucoesBranch" class="form-select form-select-sm entrega-devolucoes-control"><option value="" ${!branch ? "selected" : ""}>Todas as filiais</option><option value="PATOS" ${branch === "PATOS" ? "selected" : ""}>Patos</option><option value="SUME" ${branch === "SUME" ? "selected" : ""}>Sumé</option></select></div><div><label class="form-label" for="entregaDevolucoesMetric">Métrica dos gráficos</label><select id="entregaDevolucoesMetric" class="form-select form-select-sm entrega-devolucoes-control"><option value="volume_hl" ${metric === "volume_hl" ? "selected" : ""}>Volume (HL)</option><option value="valor" ${metric === "valor" ? "selected" : ""}>Valor (R$)</option><option value="registros" ${metric === "registros" ? "selected" : ""}>Registros</option></select></div><div><label class="form-label" for="entregaDevolucoesPeriod">Período</label><select id="entregaDevolucoesPeriod" class="form-select form-select-sm entrega-devolucoes-control"><option value="all" ${period === "all" ? "selected" : ""}>Todo o período</option><option value="7" ${period === "7" ? "selected" : ""}>Últimos 7 dias</option><option value="30" ${period === "30" ? "selected" : ""}>Últimos 30 dias</option></select></div><div><label class="form-label" for="entregaDevolucoesTopN">Categorias exibidas</label><select id="entregaDevolucoesTopN" class="form-select form-select-sm entrega-devolucoes-control"><option value="5" ${topN === 5 ? "selected" : ""}>Top 5</option><option value="8" ${topN === 8 ? "selected" : ""}>Top 8</option><option value="10" ${topN === 10 ? "selected" : ""}>Top 10</option><option value="15" ${topN === 15 ? "selected" : ""}>Top 15</option></select></div><button type="button" class="btn btn-outline-primary btn-sm entrega-devolucoes-print"><i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF</button><div class="devolucao-analysis-note flex-grow-1">${chartRows.length} registro(s) no recorte visual.</div></div><div class="devolucao-dashboard-grid mb-3">${charts}</div><details class="devolucao-table-wrap"><summary><i class="bi bi-table me-2"></i>Ver registros detalhados (${filtered.length})</summary><div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Data devolução</th><th>Revenda</th><th>Motorista</th><th>Nota</th><th>Cliente</th><th>Setor</th><th>Gerente</th><th>Motivo</th><th>Responsabilidade</th><th class="text-end">Volume (HL)</th><th class="text-end">Valor</th></tr></thead><tbody>${body || '<tr><td colspan="12" class="text-center text-secondary py-4">Nenhum registro para este filtro.</td></tr>'}</tbody></table></div></details>`;
       const toolbar = E.entregaDevolucoesDetails.querySelector(".devolucao-analysis-toolbar");
       if (toolbar) {
         const control = document.createElement("div");
@@ -5555,12 +5775,18 @@
     }
 
     function renderIndicadores(payload = {}) {
-      const branches = Array.isArray(payload.branches) ? payload.branches : [];
+      const allBranches = Array.isArray(payload.branches) ? payload.branches : [];
       const fmtNumber = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
       const fmtPercent = value => `${Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
-      if (E.entregaIndicadoresStatus) E.entregaIndicadoresStatus.textContent = branches.length ? `${payload.competencia || ""} · ${branches.length} operação(ões) · última importação ${payload.summary && payload.summary.stored_at || ""}` : ((payload.warnings || ["Nenhum lote importado."])[0]);
       const targetOccupation = 72.81;
       const targetBoxes = 285.69;
+      const selectedBranch = String(E.entregaIndicadoresFilial?.value || "").toUpperCase();
+      const selectedSituation = String(E.entregaIndicadoresSituacao?.value || "");
+      const matchesBranch = item => !selectedBranch || String(item.filial || "").toUpperCase().includes(selectedBranch);
+      const withinGoal = item => Number(item.metrics?.ocupacao || 0) >= targetOccupation && Number(item.metrics?.caixas_por_viagem || 0) >= targetBoxes;
+      const branches = allBranches.filter(item => matchesBranch(item) && (!selectedSituation || (selectedSituation === "meta" ? withinGoal(item) : !withinGoal(item))));
+      const filterNote = selectedBranch || selectedSituation ? ` · ${branches.length} no filtro` : "";
+      if (E.entregaIndicadoresStatus) E.entregaIndicadoresStatus.textContent = allBranches.length ? `${payload.competencia || ""} · ${allBranches.length} operação(ões)${filterNote} · última importação ${payload.summary && payload.summary.stored_at || ""}` : ((payload.warnings || ["Nenhum lote importado."])[0]);
       const progress = (value, target, max = 100) => Math.max(0, Math.min(100, Number(value || 0) / Math.max(Number(target || 1), 1) * max));
       const goalBadge = (value, target, unit = "") => {
         const ok = Number(value || 0) >= Number(target || 0);
@@ -5617,17 +5843,230 @@
       }
     }
 
+    function renderMapasOperacionais(payload = {}) {
+      const days = Array.isArray(payload.days) ? payload.days : [];
+      const number = value => Number(value || 0).toLocaleString("pt-BR");
+      const allDates = days.map(day => String(day.data || "")).filter(Boolean).sort();
+      const minimumDate = allDates[0] || "";
+      const maximumDate = allDates[allDates.length - 1] || "";
+      const competencia = String(payload.competencia || "");
+      if (state.ligaMapasOperacionaisSelectedCompetencia !== competencia) {
+        state.ligaMapasOperacionaisSelectedCompetencia = competencia;
+        state.ligaMapasOperacionaisSelectedDays = maximumDate ? [maximumDate] : [];
+      }
+      const selectedDays = new Set((Array.isArray(state.ligaMapasOperacionaisSelectedDays) ? state.ligaMapasOperacionaisSelectedDays : []).filter(day => allDates.includes(day)));
+      state.ligaMapasOperacionaisSelectedDays = [...selectedDays];
+      if (E.entregaMapasOperacionaisDias) E.entregaMapasOperacionaisDias.innerHTML = allDates.slice().reverse().map(day => `<button class="fechamento-day-option ${selectedDays.has(day) ? "is-selected" : ""}" type="button" data-fechamento-dia="${escapeHtml(day)}" aria-pressed="${selectedDays.has(day)}">${escapeHtml(formatDate(day) || day)}</button>`).join("") || '<span class="text-secondary small">Nenhum dia disponível.</span>';
+      [E.entregaMapasOperacionaisDataInicio, E.entregaMapasOperacionaisDataFim].forEach(input => {
+        if (!input) return;
+        input.min = minimumDate;
+        input.max = maximumDate;
+        if (input.value && (input.value < minimumDate || input.value > maximumDate)) input.value = "";
+      });
+      let startDate = String(E.entregaMapasOperacionaisDataInicio?.value || "");
+      let endDate = String(E.entregaMapasOperacionaisDataFim?.value || "");
+      if (startDate && endDate && startDate > endDate) [startDate, endDate] = [endDate, startDate];
+      const branch = String(E.entregaMapasOperacionaisFilial?.value || "").toUpperCase();
+      const situation = String(E.entregaMapasOperacionaisSituacao?.value || "");
+      const alertFilter = String(E.entregaMapasOperacionaisAlertas?.value || "");
+      const search = String(E.entregaMapasOperacionaisBusca?.value || "").trim().toUpperCase();
+      const matches = map => {
+        const hasAlert = Array.isArray(map.alertas) && map.alertas.length > 0;
+        if (branch && String(map.filial || "").toUpperCase() !== branch) return false;
+        const financeiroFechado = map.fechamento_financeiro && map.fechamento_financeiro !== "-";
+        if (situation === "aberto" && financeiroFechado) return false;
+        if (situation === "pendente" && financeiroFechado) return false;
+        if (situation === "fechado" && !financeiroFechado) return false;
+        if (situation === "retornou" && map.status_operacional !== "Retornou") return false;
+        if (alertFilter === "com_alerta" && !hasAlert) return false;
+        if (alertFilter === "sem_alerta" && hasAlert) return false;
+        if (alertFilter === "ti_total" && !map.ti_total_acima_30min) return false;
+        if (alertFilter === "rota_48h" && !map.em_rota_acima_2dias) return false;
+        if (alertFilter === "pulou_mpd" && !map.pulou_mpd) return false;
+        return !search || `${map.mapa || ""} ${map.placa || ""}`.toUpperCase().includes(search);
+      };
+      const visibleDays = days
+        .filter(day => selectedDays.has(day.data) && (!startDate || day.data >= startDate) && (!endDate || day.data <= endDate))
+        .map(day => ({ ...day, maps: (Array.isArray(day.maps) ? day.maps : []).filter(matches) }))
+        .filter(day => day.maps.length > 0);
+      const maps = visibleDays.flatMap(day => Array.isArray(day.maps) ? day.maps : []);
+      state.ligaMapasOperacionaisVisibleMaps = maps;
+      const summary = {
+        mapas: maps.length,
+        dias: visibleDays.length,
+        retornados: maps.filter(map => map.status_operacional === "Retornou").length,
+        fisico_fechado: maps.filter(map => map.fechamento_fisico && map.fechamento_fisico !== "-").length,
+        financeiro_fechado: maps.filter(map => map.fechamento_financeiro && map.fechamento_financeiro !== "-").length,
+        pendentes: maps.filter(map => !map.fechamento_financeiro || map.fechamento_financeiro === "-").length,
+        ti_total_acima_30min: maps.filter(map => map.ti_total_acima_30min).length,
+        em_rota_acima_2dias: maps.filter(map => map.em_rota_acima_2dias).length,
+        pulou_mpd: maps.filter(map => map.pulou_mpd).length,
+      };
+      const filterCount = [branch, situation, alertFilter, search].filter(Boolean).length;
+      const range = startDate || endDate ? ` · ${startDate ? formatDate(startDate) : "início"} até ${endDate ? formatDate(endDate) : "fim"}` : "";
+      if (E.entregaMapasOperacionaisStatus) E.entregaMapasOperacionaisStatus.textContent = days.length
+        ? `${payload.competencia || ""} · ${summary.dias} dia(s) · ${summary.mapas} mapa(s)${range}${filterCount ? ` · ${filterCount} filtro(s) ativo(s)` : ""}`
+        : ((payload.warnings || ["Nenhuma 03.11.20 importada para este mês."])[0]);
+      if (E.entregaMapasOperacionaisCards) E.entregaMapasOperacionaisCards.innerHTML = [
+        ["Mapas no recorte", summary.mapas, `${summary.dias || 0} dia(s) operacional(is)`, ""],
+        ["Retornaram", summary.retornados, "com entrada registrada", ""],
+        ["Fechamento físico", summary.fisico_fechado, "físico registrado", ""],
+        ["Pendentes", summary.pendentes, "sem fechamento completo", summary.pendentes ? "is-warning" : ""],
+        ["TI total > 30 min", summary.ti_total_acima_30min, "entrada até financeiro", summary.ti_total_acima_30min ? "is-warning" : ""],
+        ["Rota > 48 h", summary.em_rota_acima_2dias, "saída sem retorno em até 48 h", summary.em_rota_acima_2dias ? "is-danger" : ""],
+        ["Pulou MPD", summary.pulou_mpd, "fechado financeiramente sem MPD", summary.pulou_mpd ? "is-warning" : ""],
+      ].map(([label, value, note, tone]) => `<article class="fechamento-kpi ${tone}"><span class="label">${label}</span><b class="value">${number(value)}</b><small class="note">${note}</small></article>`).join("");
+      if (!E.entregaMapasOperacionaisDetails) return;
+      const badge = map => map.status_tone === "ok" ? "text-bg-success" : map.status_tone === "warning" ? "text-bg-warning" : "text-bg-secondary";
+      E.entregaMapasOperacionaisDetails.innerHTML = visibleDays.map((day, index) => {
+        const dailyMaps = day.maps || [];
+        const daily = {
+          mapas: dailyMaps.length,
+          retornados: dailyMaps.filter(map => map.status_operacional === "Retornou").length,
+          financeiro_fechado: dailyMaps.filter(map => map.fechamento_financeiro && map.fechamento_financeiro !== "-").length,
+          pendentes: dailyMaps.filter(map => !map.fechamento_financeiro || map.fechamento_financeiro === "-").length,
+        };
+        const rows = (day.maps || []).map(map => {
+          const alerts = Array.isArray(map.alertas) ? map.alertas : [];
+          const alertText = alerts.length ? `<div>${alerts.map(alert => `<span class="fechamento-alert">${escapeHtml(alert)}</span>`).join("")}</div>` : "";
+          return `<tr class="${alerts.length ? "fechamento-row-alert" : ""}"><td>${escapeHtml(map.filial || "-")}</td><td><b>${escapeHtml(map.mapa || "-")}</b></td><td>${escapeHtml(map.placa || "-")}</td><td>${escapeHtml(map.carregado || "-")}</td><td>${escapeHtml(map.saida || "-")}</td><td>${escapeHtml(map.entrada || "-")}</td><td>${escapeHtml(map.fechamento_fisico || "-")}</td><td>${escapeHtml(map.fechamento_financeiro || "-")}</td><td>${escapeHtml(map.tempo_rota || "-")}</td><td>${escapeHtml(map.tempo_interno_fisico || "-")}</td><td>${escapeHtml(map.tempo_interno_financeiro || "-")}</td><td>${escapeHtml(map.tempo_interno_total || "-")}</td><td><span class="badge ${badge(map)}">${escapeHtml(map.status_operacional || "-")}</span><div class="small text-secondary mt-1">${escapeHtml(map.status_fechamento || "-")}</div>${alertText}</td></tr>`;
+        }).join("");
+        return `<details class="fechamento-day" ${index === 0 ? "open" : ""}><summary><span class="fechamento-day-date"><i class="bi bi-calendar3 me-2 text-primary"></i>${escapeHtml(formatDate(day.data) || day.data || "-")}</span><span class="fechamento-day-summary">${number(daily.mapas)} mapas · ${number(daily.retornados)} retornaram · ${number(daily.financeiro_fechado)} fechados · ${number(daily.pendentes)} pendentes <i class="bi bi-chevron-down ms-2"></i></span></summary><div class="table-scroll fechamento-table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Filial</th><th>Mapa</th><th>Placa</th><th>Carregado</th><th>Saída</th><th>Entrada</th><th>Fech. físico</th><th>Fech. financeiro</th><th>Tempo rota</th><th>Entrada → físico</th><th>Físico → financeiro</th><th>Tempo interno</th><th>Status e alertas</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+      }).join("") || '<div class="text-center text-secondary py-4">Nenhum mapa no período selecionado.</div>';
+    }
+
+    async function syncMapasOperacionais({ silent = true } = {}) {
+      if (!hasPanelAuth()) return;
+      if (E.entregaMapasOperacionaisRefreshBtn) E.entregaMapasOperacionaisRefreshBtn.disabled = true;
+      try {
+        const competencia = ensureLigaMesFilter();
+        const monthQuery = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
+        state.ligaMapasOperacionais = await req(`${CONFIG.endpoints.ligaEntrega.mapasOperacionais}${monthQuery}`, { timeoutMs: 30000 }) || {};
+        renderMapasOperacionais(state.ligaMapasOperacionais);
+        if (!silent) addLog("Acompanhamento da 03.11.20 atualizado.", "ok");
+      } catch (err) {
+        if (E.entregaMapasOperacionaisStatus) E.entregaMapasOperacionaisStatus.textContent = `Falha ao carregar acompanhamento dos mapas: ${err.message}`;
+        if (!silent) addLog(`Falha ao carregar acompanhamento dos mapas: ${err.message}`, "err");
+      } finally {
+        if (E.entregaMapasOperacionaisRefreshBtn) E.entregaMapasOperacionaisRefreshBtn.disabled = false;
+      }
+    }
+
+    async function syncDevolucoesOperacionais({ silent = true } = {}) {
+      if (!hasPanelAuth()) return;
+      try {
+        const competencia = ensureLigaMesFilter();
+        const query = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
+        state.devolucoesOperacionais = await req(`${CONFIG.endpoints.ligaEntrega.devolucoes}${query}`, { timeoutMs: 30000 }) || {};
+        renderEntregaDevolucoes(state.devolucoesOperacionais);
+        if (!silent) addLog("Devoluções operacionais atualizadas.", "ok");
+      } catch (err) {
+        if (E.entregaDevolucoesStatus) E.entregaDevolucoesStatus.textContent = `Falha ao carregar devoluções: ${err.message}`;
+        if (!silent) addLog(`Falha ao carregar devoluções: ${err.message}`, "err");
+      }
+    }
+
+    function renderDevolucoesCadastros(data = state.devolucoesCadastros || {}) {
+      if (!E.entregaDevolucoesCadastrosDetails) return;
+      const operation = String(state.devolucoesCadastrosOperation || "").trim().toUpperCase();
+      const operations = data.catalogo && Array.isArray(data.catalogo.operacoes) ? data.catalogo.operacoes : [];
+      const sourceRows = Array.isArray(state.devolucoesOperacionais?.rows) ? state.devolucoesOperacionais.rows : [];
+      const hydrate = (kind, codeField) => {
+        const existing = Array.isArray(data[kind]) ? data[kind] : [];
+        const indexed = new Map(existing.map(item => [`${String(item.filial || "").toUpperCase()}|${String(item.codigo || "")}`, item]));
+        (data.catalogo && Array.isArray(data.catalogo[kind]) ? data.catalogo[kind] : []).forEach(item => {
+          const filial = String(item.filial || "").trim().toUpperCase();
+          const codigo = String(item.codigo || "").trim();
+          if (codigo && !indexed.has(`${filial}|${codigo}`)) indexed.set(`${filial}|${codigo}`, { filial, codigo, nome: "" });
+        });
+        sourceRows.forEach(row => {
+          const filial = String(row.filial || "").trim().toUpperCase();
+          const codigo = String(row[codeField] || "").trim();
+          if (!codigo) return;
+          const key = `${filial}|${codigo}`;
+          if (!indexed.has(key)) indexed.set(key, { filial, codigo, nome: "" });
+        });
+        return [...indexed.values()].sort((a, b) => String(a.filial).localeCompare(String(b.filial), "pt-BR") || String(a.codigo).localeCompare(String(b.codigo), "pt-BR", { numeric: true }));
+      };
+      const visible = { setores: hydrate("setores", "setor"), gerentes: hydrate("gerentes", "gv") };
+      const table = (kind, title) => {
+        const rows = visible[kind].filter(row => !operation || String(row.filial || "").trim().toUpperCase() === operation);
+        const body = rows.map(row => `<tr><td><input class="form-control form-control-sm dev-cadastro-filial" value="${escapeHtml(row.filial || "")}" placeholder="Todas/PATOS/SUME"></td><td><input class="form-control form-control-sm dev-cadastro-codigo" value="${escapeHtml(row.codigo || "")}" placeholder="Código"></td><td><input class="form-control form-control-sm dev-cadastro-nome" value="${escapeHtml(row.nome || "")}" placeholder="Nome exibido"></td><td><button type="button" class="btn btn-outline-danger btn-sm dev-cadastro-remove" data-kind="${kind}" data-key="${escapeHtml(`${row.filial || ""}|${row.codigo || ""}`)}">Remover</button></td></tr>`).join("");
+        return `<div class="mb-4"><div class="d-flex justify-content-between align-items-center mb-2"><h3 class="h6 mb-0">${title}</h3><button type="button" class="btn btn-outline-primary btn-sm dev-cadastro-add" data-kind="${kind}">Adicionar</button></div><div class="table-scroll"><table class="table table-sm align-middle"><thead><tr><th>Filial</th><th>Código</th><th>Nome exibido</th><th></th></tr></thead><tbody data-kind="${kind}">${body || '<tr><td colspan="4" class="text-secondary">Nenhum cadastro.</td></tr>'}</tbody></table></div></div>`;
+      };
+      E.entregaDevolucoesCadastrosDetails.innerHTML = `<div class="d-flex flex-wrap gap-3 align-items-end mb-3"><div style="min-width:260px"><label class="form-label" for="devolucoesCadastrosOperation">Operação</label><select class="form-select form-select-sm" id="devolucoesCadastrosOperation"><option value="">Selecione uma operação</option>${operations.map(item => `<option value="${escapeHtml(item.codigo || "")}" ${operation === String(item.codigo || "").toUpperCase() ? "selected" : ""}>${escapeHtml(`${item.codigo || ""} - ${item.nome || ""}`)}</option>`).join("")}</select></div><div class="form-text mb-1">Escolha a operação para editar somente seus setores e GVs.</div></div><div class="form-text mb-3">A lista usa todo o cadastro ativo da dSetores; os códigos que aparecem nas devoluções do mês também são mantidos. Preencha apenas o nome exibido.</div>${operation ? `${table("setores", "Setores")} ${table("gerentes", "Gerentes (GV)")}` : '<div class="text-secondary py-4">Selecione uma operação acima para visualizar os setores e GVs.</div>'}`;
+    }
+
+    async function syncDevolucoesCadastros() {
+      state.devolucoesCadastros = await req(CONFIG.endpoints.ligaEntrega.devolucoesCadastros, { timeoutMs: 30000 }) || { setores: [], gerentes: [], catalogo: { operacoes: [] } };
+      renderDevolucoesCadastros();
+    }
+
+    function readDevolucoesCadastros() {
+      const operation = String(state.devolucoesCadastrosOperation || "").trim().toUpperCase();
+      const read = kind => [...(E.entregaDevolucoesCadastrosDetails?.querySelectorAll(`tbody[data-kind="${kind}"] tr`) || [])].map(row => ({
+        filial: row.querySelector(".dev-cadastro-filial")?.value || "", codigo: row.querySelector(".dev-cadastro-codigo")?.value || "", nome: row.querySelector(".dev-cadastro-nome")?.value || ""
+      })).filter(row => row.codigo.trim() || row.nome.trim());
+      const merge = kind => [
+        ...(Array.isArray(state.devolucoesCadastros?.[kind]) ? state.devolucoesCadastros[kind] : []).filter(item => String(item.filial || "").trim().toUpperCase() !== operation),
+        ...read(kind),
+      ];
+      return { setores: merge("setores"), gerentes: merge("gerentes") };
+    }
+
+    async function downloadMapasOperacionaisPdf() {
+      const maps = Array.isArray(state.ligaMapasOperacionaisVisibleMaps) ? state.ligaMapasOperacionaisVisibleMaps : [];
+      if (!maps.length) {
+        addLog("Selecione ao menos um dia com mapas para gerar o PDF.", "warn");
+        return;
+      }
+      updateTokens();
+      const button = E.entregaMapasOperacionaisPdfBtn;
+      const original = button?.innerHTML || "";
+      if (button) { button.disabled = true; button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Gerando PDF'; }
+      try {
+        const headers = { "Content-Type": "application/json" };
+        if (state.tokens.api) headers["x-api-token"] = state.tokens.api;
+        if (state.tokens.admin) headers["x-admin-token"] = state.tokens.admin;
+        const response = await fetch(`${CONFIG.api}${CONFIG.endpoints.ligaEntrega.mapasOperacionaisPdf}`, {
+          method: "POST", credentials: "same-origin", headers,
+          body: JSON.stringify({ competencia: state.ligaMapasOperacionais?.competencia || "", maps }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.detail || `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const name = (response.headers.get("content-disposition") || "").match(/filename="?([^";]+)"?/i)?.[1] || "fechamento-mapas.pdf";
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+        addLog(`PDF do fechamento baixado: ${maps.length} mapa(s).`, "ok");
+      } catch (err) {
+        addLog(`Falha ao gerar PDF do fechamento: ${err.message}`, "err");
+      } finally {
+        if (button) { button.disabled = false; button.innerHTML = original; }
+      }
+    }
+
     function setEntregaModule(module = "liga") {
       const indicadores = module === "indicadores";
+      const fechamento = module === "fechamento";
       const devolucoes = module === "devolucoes";
-      if (E.entregaLigaModule) E.entregaLigaModule.classList.toggle("d-none", indicadores || devolucoes);
+      const devolucoesCadastros = module === "devolucoes-cadastros";
+      if (E.entregaLigaModule) E.entregaLigaModule.classList.toggle("d-none", indicadores || fechamento || devolucoes || devolucoesCadastros);
       if (E.entregaIndicadoresModule) E.entregaIndicadoresModule.classList.toggle("d-none", !indicadores);
+      if (E.entregaFechamentoModule) E.entregaFechamentoModule.classList.toggle("d-none", !fechamento);
       if (E.entregaDevolucoesModule) E.entregaDevolucoesModule.classList.toggle("d-none", !devolucoes);
-      if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.className = `btn ${!indicadores && !devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
+      if (E.entregaDevolucoesCadastrosModule) E.entregaDevolucoesCadastrosModule.classList.toggle("d-none", !devolucoesCadastros);
+      if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.className = `btn ${!indicadores && !fechamento && !devolucoes && !devolucoesCadastros ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.className = `btn ${indicadores ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
+      if (E.entregaFechamentoModuleTab) E.entregaFechamentoModuleTab.className = `btn ${fechamento ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.className = `btn ${devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
+      if (E.entregaDevolucoesCadastrosModuleTab) E.entregaDevolucoesCadastrosModuleTab.className = `btn ${devolucoesCadastros ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (indicadores) { syncIndicadores({ silent: true }); syncMapasMensais({ silent: true }); }
-      if (devolucoes) renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
+      if (fechamento) syncMapasOperacionais({ silent: true });
+      if (devolucoes) syncDevolucoesOperacionais({ silent: true });
+      if (devolucoesCadastros) Promise.all([syncDevolucoesOperacionais({ silent: true }), syncDevolucoesCadastros()]).then(() => renderDevolucoesCadastros()).catch(err => { if (E.entregaDevolucoesCadastrosDetails) E.entregaDevolucoesCadastrosDetails.textContent = `Falha ao carregar cadastros: ${err.message}`; });
     }
 
     function updateLigaEntregaExpurgoForm() {
@@ -5846,7 +6285,13 @@
         const previous = select.value;
         select.innerHTML = options;
         select.dataset.ligaYear = String(year);
-        if (previous && select.querySelector(`option[value="${previous}"]`)) select.value = previous;
+        const currentCompetencia = `${year}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        // Ao inserir as opções, o navegador escolhe automaticamente a
+        // primeira (janeiro). Definimos explicitamente a competência atual
+        // quando não há uma escolha anterior válida do usuário.
+        select.value = previous && select.querySelector(`option[value="${previous}"]`)
+          ? previous
+          : currentCompetencia;
       }
       if (!select.value) {
         const target = new Date(year, now.getMonth(), 1);
@@ -10944,6 +11389,7 @@
         syncLigaEntregaReports({ silent: false, force: true });
         syncIndicadores({ silent: false });
         syncMapasMensais({ silent: false });
+        syncMapasOperacionais({ silent: false });
       });
       if (E.entregaLigaMes) {
         ensureLigaMesFilter();
@@ -10951,12 +11397,52 @@
           syncLigaEntregaReports({ silent: false, force: true });
           syncIndicadores({ silent: false });
           syncMapasMensais({ silent: false });
+          syncMapasOperacionais({ silent: false });
         });
       }
       if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.addEventListener("click", () => setEntregaModule("liga"));
       if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.addEventListener("click", () => setEntregaModule("indicadores"));
+      if (E.entregaFechamentoModuleTab) E.entregaFechamentoModuleTab.addEventListener("click", () => setEntregaModule("fechamento"));
       if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.addEventListener("click", () => syncIndicadores({ silent: false }));
+      [E.entregaIndicadoresFilial, E.entregaIndicadoresSituacao].forEach(input => input?.addEventListener("change", () => renderIndicadores(state.ligaIndicadores || {})));
+      if (E.entregaIndicadoresLimparFiltrosBtn) E.entregaIndicadoresLimparFiltrosBtn.addEventListener("click", () => {
+        if (E.entregaIndicadoresFilial) E.entregaIndicadoresFilial.value = "";
+        if (E.entregaIndicadoresSituacao) E.entregaIndicadoresSituacao.value = "";
+        renderIndicadores(state.ligaIndicadores || {});
+      });
       if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.addEventListener("click", () => syncMapasMensais({ silent: false }));
+      if (E.entregaMapasOperacionaisRefreshBtn) E.entregaMapasOperacionaisRefreshBtn.addEventListener("click", () => syncMapasOperacionais({ silent: false }));
+      if (E.entregaMapasOperacionaisPdfBtn) E.entregaMapasOperacionaisPdfBtn.addEventListener("click", downloadMapasOperacionaisPdf);
+      [E.entregaMapasOperacionaisDataInicio, E.entregaMapasOperacionaisDataFim].forEach(input => input?.addEventListener("change", () => renderMapasOperacionais(state.ligaMapasOperacionais || {})));
+      [E.entregaMapasOperacionaisFilial, E.entregaMapasOperacionaisSituacao, E.entregaMapasOperacionaisAlertas].forEach(input => input?.addEventListener("change", () => renderMapasOperacionais(state.ligaMapasOperacionais || {})));
+      if (E.entregaMapasOperacionaisBusca) E.entregaMapasOperacionaisBusca.addEventListener("input", () => renderMapasOperacionais(state.ligaMapasOperacionais || {}));
+      if (E.entregaMapasOperacionaisTodasDatasBtn) E.entregaMapasOperacionaisTodasDatasBtn.addEventListener("click", () => {
+        if (E.entregaMapasOperacionaisDataInicio) E.entregaMapasOperacionaisDataInicio.value = "";
+        if (E.entregaMapasOperacionaisDataFim) E.entregaMapasOperacionaisDataFim.value = "";
+        state.ligaMapasOperacionaisSelectedDays = (state.ligaMapasOperacionais?.days || []).map(day => day.data).filter(Boolean);
+        renderMapasOperacionais(state.ligaMapasOperacionais || {});
+      });
+      if (E.entregaMapasOperacionaisLimparFiltrosBtn) E.entregaMapasOperacionaisLimparFiltrosBtn.addEventListener("click", () => {
+        [E.entregaMapasOperacionaisDataInicio, E.entregaMapasOperacionaisDataFim, E.entregaMapasOperacionaisFilial, E.entregaMapasOperacionaisSituacao, E.entregaMapasOperacionaisAlertas, E.entregaMapasOperacionaisBusca].forEach(input => { if (input) input.value = ""; });
+        renderMapasOperacionais(state.ligaMapasOperacionais || {});
+      });
+      if (E.entregaMapasOperacionaisDias) E.entregaMapasOperacionaisDias.addEventListener("click", event => {
+        const button = event.target.closest("[data-fechamento-dia]");
+        if (!button) return;
+        const selected = new Set(Array.isArray(state.ligaMapasOperacionaisSelectedDays) ? state.ligaMapasOperacionaisSelectedDays : []);
+        const day = String(button.dataset.fechamentoDia || "");
+        if (selected.has(day)) selected.delete(day); else selected.add(day);
+        state.ligaMapasOperacionaisSelectedDays = [...selected];
+        renderMapasOperacionais(state.ligaMapasOperacionais || {});
+      });
+      if (E.entregaMapasOperacionaisSelecionarTodosBtn) E.entregaMapasOperacionaisSelecionarTodosBtn.addEventListener("click", () => {
+        state.ligaMapasOperacionaisSelectedDays = (state.ligaMapasOperacionais?.days || []).map(day => day.data).filter(Boolean);
+        renderMapasOperacionais(state.ligaMapasOperacionais || {});
+      });
+      if (E.entregaMapasOperacionaisLimparDiasBtn) E.entregaMapasOperacionaisLimparDiasBtn.addEventListener("click", () => {
+        state.ligaMapasOperacionaisSelectedDays = [];
+        renderMapasOperacionais(state.ligaMapasOperacionais || {});
+      });
       if (E.entregaLigaCollapseBtn) E.entregaLigaCollapseBtn.addEventListener("click", () => {
         const collapsed = E.entregaLigaModule && E.entregaLigaModule.classList.toggle("is-collapsed");
         E.entregaLigaCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
@@ -10965,15 +11451,38 @@
           : '<i class="bi bi-chevron-up me-1"></i>Minimizar';
       });
       if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.addEventListener("click", () => setEntregaModule("devolucoes"));
+      if (E.entregaDevolucoesCadastrosModuleTab) E.entregaDevolucoesCadastrosModuleTab.addEventListener("click", () => setEntregaModule("devolucoes-cadastros"));
       if (E.entregaDevolucoesRefreshBtn) E.entregaDevolucoesRefreshBtn.addEventListener("click", async () => {
         E.entregaDevolucoesRefreshBtn.disabled = true;
         try {
-          state.ligaEntregaDashboard = null;
-          await syncLigaEntregaReports({ silent: false, force: true });
-          renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
+          await syncDevolucoesOperacionais({ silent: false });
         } finally {
           E.entregaDevolucoesRefreshBtn.disabled = false;
         }
+      });
+      if (E.entregaDevolucoesCadastrosSaveBtn) E.entregaDevolucoesCadastrosSaveBtn.addEventListener("click", async () => {
+        const button = E.entregaDevolucoesCadastrosSaveBtn;
+        button.disabled = true;
+        try {
+          const result = await req(CONFIG.endpoints.ligaEntrega.devolucoesCadastros, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(readDevolucoesCadastros()) });
+          state.devolucoesCadastros = { ...(state.devolucoesCadastros || {}), ...(result || { setores: [], gerentes: [] }) };
+          renderDevolucoesCadastros();
+          renderEntregaDevolucoes(state.devolucoesOperacionais || {});
+          await syncDevolucoesOperacionais({ silent: true });
+          addLog("Cadastros de setores e gerentes salvos.", "ok");
+        } catch (err) { addLog(`Falha ao salvar cadastros: ${err.message}`, "err"); }
+        finally { button.disabled = false; }
+      });
+      if (E.entregaDevolucoesCadastrosDetails) E.entregaDevolucoesCadastrosDetails.addEventListener("click", event => {
+        const add = event.target.closest(".dev-cadastro-add");
+        if (add) { const kind = add.dataset.kind; const filial = String(state.devolucoesCadastrosOperation || "").trim().toUpperCase(); state.devolucoesCadastros[kind] = [...(state.devolucoesCadastros[kind] || []), { filial, codigo: "", nome: "" }]; renderDevolucoesCadastros(); return; }
+        const remove = event.target.closest(".dev-cadastro-remove");
+        if (remove) { const kind = remove.dataset.kind; const key = remove.dataset.key || ""; state.devolucoesCadastros[kind] = (state.devolucoesCadastros[kind] || []).filter(item => `${item.filial || ""}|${item.codigo || ""}` !== key); renderDevolucoesCadastros(); }
+      });
+      if (E.entregaDevolucoesCadastrosDetails) E.entregaDevolucoesCadastrosDetails.addEventListener("change", event => {
+        if (event.target.id !== "devolucoesCadastrosOperation") return;
+        state.devolucoesCadastrosOperation = event.target.value || "";
+        renderDevolucoesCadastros();
       });
       if (E.entregaLigaExpurgoTipo) E.entregaLigaExpurgoTipo.addEventListener("change", updateLigaEntregaExpurgoForm);
       if (E.entregaLigaExpurgoEscopo) E.entregaLigaExpurgoEscopo.addEventListener("change", updateLigaEntregaExpurgoForm);
@@ -10985,6 +11494,28 @@
         if (button) removeLigaEntregaExpurgo(button.dataset.expurgoId || "").catch(err => addLog(`Falha ao remover expurgo: ${err.message}`, "err"));
       });
       if (E.entregaLigaDashboardDetails) E.entregaLigaDashboardDetails.addEventListener("click", async event => {
+        const rulesToggle = event.target.closest(".liga-rule-toggle");
+        if (rulesToggle) {
+          updateLigaRuleInputs(rulesToggle.dataset.ligaRuleOperation || "PATOS");
+          return;
+        }
+        const rulesOperationButton = event.target.closest(".liga-rules-operation");
+        if (rulesOperationButton) {
+          state.ligaEntregaRulesOperation = rulesOperationButton.dataset.ligaRulesOperation === "SUME" ? "SUME" : "PATOS";
+          renderLigaEntregaDashboard((state.ligaEntregaReports || {}).items || [], (state.ligaEntregaReports || {}).summary || {});
+          return;
+        }
+        const rulesSaveButton = event.target.closest(".liga-rules-save");
+        if (rulesSaveButton) {
+          rulesSaveButton.disabled = true;
+          try {
+            await saveLigaRules(rulesSaveButton.dataset.ligaRulesOperation || "");
+          } catch (error) {
+            rulesSaveButton.disabled = false;
+            addLog(`Falha ao salvar regras da Liga: ${error && error.message ? error.message : error}`, "err");
+          }
+          return;
+        }
         const saveTeamButton = event.target.closest(".liga-team-save");
         if (saveTeamButton) {
           saveTeamButton.disabled = true;
@@ -11094,7 +11625,7 @@
       if (E.entregaDevolucoesDetails) E.entregaDevolucoesDetails.addEventListener("input", event => {
         if (!event.target.matches(".entrega-devolucoes-filter")) return;
         state.entregaDevolucoesFilter = event.target.value || "";
-        renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
+        renderEntregaDevolucoes(state.devolucoesOperacionais || {});
       });
       if (E.entregaDevolucoesDetails) E.entregaDevolucoesDetails.addEventListener("change", event => {
         if (!event.target.matches(".entrega-devolucoes-control")) return;
@@ -11106,7 +11637,7 @@
         if (event.target.id === "entregaDevolucoesMetric") state.entregaDevolucoesMetric = event.target.value || "volume_hl";
         if (event.target.id === "entregaDevolucoesPeriod") state.entregaDevolucoesPeriod = event.target.value || "all";
         if (event.target.id === "entregaDevolucoesTopN") state.entregaDevolucoesTopN = event.target.value || "10";
-        renderEntregaDevolucoes(state.ligaEntregaDashboard || {});
+        renderEntregaDevolucoes(state.devolucoesOperacionais || {});
       });
       if (E.entregaDevolucoesDetails) E.entregaDevolucoesDetails.addEventListener("click", event => {
         if (!event.target.closest(".entrega-devolucoes-print")) return;
