@@ -1763,6 +1763,9 @@ def liga_rules_for_operation(operation: Any, rules_by_operation: dict[str, Any] 
         for role in ("motorista", "ajudante"):
             if isinstance(pesos.get(role), dict):
                 base["pesos"][role].update(pesos[role])
+    # A Liga foi revertida para o critério por quantidade de entregas. Não
+    # permita que snapshots/regras legadas reativem o cálculo por HL.
+    base["metas"]["devolucao_base"] = "entregas"
     return base
 
 
@@ -1967,9 +1970,11 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         dev = int(devols.get(cod, 0))
         ent_hl = float(entregas_hl.get(cod) or 0)
         dev_hl = float(devolucoes_hl.get(cod) or 0)
-        base_devolucao = str(metas.get("devolucao_base") or "hl").lower()
-        usa_hl = base_devolucao == "hl" and ent_hl > 0
-        pdev = round((dev_hl / ent_hl if usa_hl else dev / ent) * 100, 2) if (ent_hl if usa_hl else ent) else None
+        # A devolução da Liga é medida por quantidade: devoluções / entregas.
+        # HL permanece no payload para a aba operacional, sem afetar nota,
+        # elegibilidade ou desempate.
+        usa_hl = False
+        pdev = round(dev / ent * 100, 2) if ent else None
         saida_total = int(g["saiTot"] + g["exp_tml"])
         saida_ok = int(g["saiOk"] + g["exp_tml"])
         psaida = pct(saida_ok / saida_total * 100) if saida_total else None
@@ -1998,7 +2003,7 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
     elig = [x for x in rows if x["elegivel"]]
     # Em empate de pontuação, prioriza quem realizou mais entregas. Isso
     # evita que dois 100 pontos sejam ordenados apenas por devolução/rotas.
-    elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -(float(x.get("psaida")) if x.get("indicadores_ativos", {}).get("saida") and x.get("psaida") is not None else 0), float(x.get("km_desv")) if x.get("indicadores_ativos", {}).get("km") and x.get("km_desv") is not None else 999, -float(x.get("entregas_hl") or 0), -int(x.get("rotas") or 0)))
+    elig.sort(key=lambda x: (-float(x.get("total") or 0), x.get("pdev") if x.get("pdev") is not None else 999, -(float(x.get("psaida")) if x.get("indicadores_ativos", {}).get("saida") and x.get("psaida") is not None else 0), float(x.get("km_desv")) if x.get("indicadores_ativos", {}).get("km") and x.get("km_desv") is not None else 999, -int(x.get("entregas") or 0), -int(x.get("rotas") or 0)))
     for i, row in enumerate(elig, 1):
         row["pos"] = i
     rows.sort(key=lambda x: (x.get("pos") is None, x.get("pos") or 9999, -float(x.get("total") or 0), x.get("nome") or ""))

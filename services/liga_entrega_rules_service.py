@@ -10,7 +10,7 @@ from typing import Any
 
 
 DEFAULT_LIGA_RULES: dict[str, Any] = {
-    "metas": {"devol": 1.4, "devolucao_base": "hl", "saida": "07:30", "saida_pct": 90.0, "tempo": 110.0, "tempo_pern": 100.0, "km": 10.0, "min_rotas": 3},
+    "metas": {"devol": 1.4, "devolucao_base": "entregas", "saida": "07:30", "saida_pct": 90.0, "tempo": 110.0, "tempo_pern": 100.0, "km": 10.0, "min_rotas": 3},
     "indicadores": {"devolucao": True, "tml": True, "km": True},
     "pesos": {
         "motorista": {"devol": 60.0, "saida": 25.0, "km": 15.0},
@@ -95,6 +95,10 @@ def _merge_rules(value: Any) -> dict[str, Any]:
         for key in result["indicadores"]:
             if key in indicadores:
                 result["indicadores"][key] = bool(indicadores[key])
+    # HL fica restrito à análise operacional de devoluções. A pontuação da
+    # Liga usa novamente a quantidade de entregas, inclusive em regras já
+    # gravadas antes dessa reversão.
+    result["metas"]["devolucao_base"] = "entregas"
     return result
 
 
@@ -114,10 +118,9 @@ def _validate_rules(value: Any) -> dict[str, Any]:
     if len(horario) != 5 or horario[2] != ":" or not horario.replace(":", "").isdigit() or not (0 <= int(horario[:2]) <= 23 and 0 <= int(horario[3:]) <= 59):
         raise ValueError("Hora limite de saída inválida. Use HH:MM.")
     metas["saida"] = horario
-    base_devolucao = str(metas.get("devolucao_base") or "hl").strip().lower()
-    if base_devolucao not in {"hl", "entregas"}:
-        raise ValueError("Base de devolução inválida. Use hl ou entregas.")
-    metas["devolucao_base"] = base_devolucao
+    # A base é fixa enquanto a Liga estiver no critério padrão de entregas.
+    # Ignora um eventual valor HL enviado por versões anteriores da tela.
+    metas["devolucao_base"] = "entregas"
     indicadores = rules["indicadores"]
     for key in indicadores:
         if not isinstance(indicadores[key], bool):
