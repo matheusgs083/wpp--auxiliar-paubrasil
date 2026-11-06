@@ -385,9 +385,23 @@
     #entregaFechamentoModule .fechamento-day-summary { color: #9fb2cd; font-size: .73rem; font-weight: 700; }
     #entregaFechamentoModule .fechamento-table-scroll { max-height: min(62vh, 570px); border-top: 1px solid #2d405d; }
     #entregaFechamentoModule .fechamento-table-scroll .table { --bs-table-color: #dbe7f8; --bs-table-bg: #0f1929; --bs-table-hover-bg: #16243a; }
-    #entregaFechamentoModule .fechamento-table-scroll .table thead th { color: #aabbd3; background: #111d30; border-color: #2d405d; font-size: .65rem; }
-    #entregaFechamentoModule .fechamento-table-scroll .table td { border-color: #22334c; color: #e3edf9; font-size: .78rem; white-space: nowrap; }
-    #entregaFechamentoModule .fechamento-table-scroll .table td:last-child { min-width: 210px; white-space: normal; }
+    #entregaFechamentoModule .fechamento-table-scroll .table { min-width: 880px; table-layout: fixed; }
+    #entregaFechamentoModule .fechamento-table-scroll .table thead th { color: #aabbd3; background: #111d30; border-color: #2d405d; font-size: .64rem; white-space: nowrap; }
+    #entregaFechamentoModule .fechamento-table-scroll .table td { border-color: #22334c; color: #e3edf9; font-size: .76rem; line-height: 1.25; vertical-align: middle; white-space: nowrap; }
+    #entregaFechamentoModule .fechamento-table-scroll .table th:nth-child(1) { width: 7%; }
+    #entregaFechamentoModule .fechamento-table-scroll .table th:nth-child(2) { width: 7%; }
+    #entregaFechamentoModule .fechamento-table-scroll .table th:nth-child(3) { width: 8%; }
+    #entregaFechamentoModule .fechamento-table-scroll .table th:nth-child(4) { width: 18%; }
+    #entregaFechamentoModule .fechamento-table-scroll .table th:nth-child(5) { width: 24%; }
+    #entregaFechamentoModule .fechamento-table-scroll .table th:nth-child(6) { width: 13%; }
+    #entregaFechamentoModule .fechamento-table-scroll .table th:nth-child(7) { width: 23%; }
+    #entregaFechamentoModule .fechamento-stack { display: grid; gap: .18rem; min-width: 0; }
+    #entregaFechamentoModule .fechamento-stack-line { display: flex; align-items: baseline; gap: .34rem; min-width: 0; }
+    #entregaFechamentoModule .fechamento-stack-label { flex: 0 0 auto; color: #8195b1; font-size: .61rem; font-weight: 800; letter-spacing: .035em; text-transform: uppercase; }
+    #entregaFechamentoModule .fechamento-stack-value { min-width: 0; color: #e7effb; font-variant-numeric: tabular-nums; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+    #entregaFechamentoModule .fechamento-stack-value.is-muted { color: #70839d; font-weight: 600; }
+    #entregaFechamentoModule .fechamento-status-cell { white-space: normal !important; }
+    #entregaFechamentoModule .fechamento-status-cell .badge { font-size: .64rem; }
     #entregaFechamentoModule .fechamento-row-alert td { background: rgba(251,191,36,.055) !important; }
     #entregaFechamentoModule .fechamento-alert { display: inline-flex; margin: .24rem .2rem 0 0; padding: .16rem .35rem; border: 1px solid rgba(251,113,133,.4); border-radius: 999px; color: #fecdd3; background: rgba(190,24,93,.2); font-size: .62rem; font-weight: 800; line-height: 1.2; }
     @media (max-width: 1200px) { #entregaFechamentoModule .fechamento-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } #entregaFechamentoModule .fechamento-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -5919,12 +5933,16 @@
           financeiro_fechado: dailyMaps.filter(map => map.fechamento_financeiro && map.fechamento_financeiro !== "-").length,
           pendentes: dailyMaps.filter(map => !map.fechamento_financeiro || map.fechamento_financeiro === "-").length,
         };
+        const compactCell = (items) => `<div class="fechamento-stack">${items.map(([label, value]) => {
+          const shown = value || "-";
+          return `<div class="fechamento-stack-line"><span class="fechamento-stack-label">${escapeHtml(label)}</span><span class="fechamento-stack-value ${shown === "-" ? "is-muted" : ""}">${escapeHtml(shown)}</span></div>`;
+        }).join("")}</div>`;
         const rows = (day.maps || []).map(map => {
           const alerts = Array.isArray(map.alertas) ? map.alertas : [];
           const alertText = alerts.length ? `<div>${alerts.map(alert => `<span class="fechamento-alert">${escapeHtml(alert)}</span>`).join("")}</div>` : "";
-          return `<tr class="${alerts.length ? "fechamento-row-alert" : ""}"><td>${escapeHtml(map.filial || "-")}</td><td><b>${escapeHtml(map.mapa || "-")}</b></td><td>${escapeHtml(map.placa || "-")}</td><td>${escapeHtml(map.carregado || "-")}</td><td>${escapeHtml(map.saida || "-")}</td><td>${escapeHtml(map.entrada || "-")}</td><td>${escapeHtml(map.fechamento_fisico || "-")}</td><td>${escapeHtml(map.fechamento_financeiro || "-")}</td><td>${escapeHtml(map.tempo_rota || "-")}</td><td>${escapeHtml(map.tempo_interno_fisico || "-")}</td><td>${escapeHtml(map.tempo_interno_financeiro || "-")}</td><td>${escapeHtml(map.tempo_interno_total || "-")}</td><td><span class="badge ${badge(map)}">${escapeHtml(map.status_operacional || "-")}</span><div class="small text-secondary mt-1">${escapeHtml(map.status_fechamento || "-")}</div>${alertText}</td></tr>`;
+          return `<tr class="${alerts.length ? "fechamento-row-alert" : ""}"><td>${escapeHtml(map.filial || "-")}</td><td><b>${escapeHtml(map.mapa || "-")}</b></td><td>${escapeHtml(map.placa || "-")}</td><td>${compactCell([["Carregado", map.carregado], ["Saída", map.saida]])}</td><td>${compactCell([["Entrada", map.entrada], ["Físico", map.fechamento_fisico], ["Financeiro", map.fechamento_financeiro]])}</td><td>${compactCell([["Rota", map.tempo_rota], ["TI total", map.tempo_interno_total]])}</td><td class="fechamento-status-cell"><span class="badge ${badge(map)}">${escapeHtml(map.status_operacional || "-")}</span><div class="small text-secondary mt-1">${escapeHtml(map.status_fechamento || "-")}</div>${alertText}</td></tr>`;
         }).join("");
-        return `<details class="fechamento-day" ${index === 0 ? "open" : ""}><summary><span class="fechamento-day-date"><i class="bi bi-calendar3 me-2 text-primary"></i>${escapeHtml(formatDate(day.data) || day.data || "-")}</span><span class="fechamento-day-summary">${number(daily.mapas)} mapas · ${number(daily.retornados)} retornaram · ${number(daily.financeiro_fechado)} fechados · ${number(daily.pendentes)} pendentes <i class="bi bi-chevron-down ms-2"></i></span></summary><div class="table-scroll fechamento-table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Filial</th><th>Mapa</th><th>Placa</th><th>Carregado</th><th>Saída</th><th>Entrada</th><th>Fech. físico</th><th>Fech. financeiro</th><th>Tempo rota</th><th>Entrada → físico</th><th>Físico → financeiro</th><th>Tempo interno</th><th>Status e alertas</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+        return `<details class="fechamento-day" ${index === 0 ? "open" : ""}><summary><span class="fechamento-day-date"><i class="bi bi-calendar3 me-2 text-primary"></i>${escapeHtml(formatDate(day.data) || day.data || "-")}</span><span class="fechamento-day-summary">${number(daily.mapas)} mapas · ${number(daily.retornados)} retornaram · ${number(daily.financeiro_fechado)} fechados · ${number(daily.pendentes)} pendentes <i class="bi bi-chevron-down ms-2"></i></span></summary><div class="table-scroll fechamento-table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Filial</th><th>Mapa</th><th>Placa</th><th>Operação</th><th>Retorno e fechamento</th><th>Tempos</th><th>Status e alertas</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
       }).join("") || '<div class="text-center text-secondary py-4">Nenhum mapa no período selecionado.</div>';
     }
 
