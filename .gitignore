@@ -10,6 +10,9 @@ __pycache__/
 .tmp_*
 tmp_patch_*.js
 
+# Ferramentas e artefatos locais de apoio
+/tools/
+
 # Secrets: nunca versionar credenciais reais
 .env
 .env.*
