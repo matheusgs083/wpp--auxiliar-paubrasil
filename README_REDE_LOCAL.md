@@ -48,7 +48,7 @@ APP_PORT=8080
 BOT_API_BIND_IP=0.0.0.0
 ```
 
-Depois suba o container:
+	a o container:
 
 ```powershell
 docker compose up -d --build --no-deps bot_api

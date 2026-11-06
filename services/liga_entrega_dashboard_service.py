@@ -41,7 +41,7 @@ MAX_COMPETENCE_SCAN_ROWS = 5000
 CACHE_VERSION = 21
 # Bump when ranking eligibility or point calculation changes so persisted SQL
 # snapshots are recalculated before being returned by the dashboard.
-LIGA_RANKING_VERSION = 7
+LIGA_RANKING_VERSION = 8
 
 R030805 = "030805_LIGA"
 R031120 = "031120_BOT"
@@ -236,9 +236,10 @@ class LigaEntregaDashboardService:
         entregas_pdvs: set[str] = set()
         entregas_nfs: set[str] = set()
         entregas_qtde_por_produto: dict[str, float] = defaultdict(float)
+        # Mantidos vazios no modo padrão da 03.02.37 (sem itens). Eles
+        # existem apenas para manter o payload operacional compatível.
         entregas_qtde_m: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
         entregas_qtde_a: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
-        entregas_itens_030237: list[dict[str, Any]] = []
         entregas_por_filial: dict[str, dict[str, Any]] = defaultdict(
             lambda: {"pdvs": set(), "nfs": set(), "qtde_por_produto": defaultdict(float)}
         )
@@ -444,9 +445,21 @@ class LigaEntregaDashboardService:
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.02.24 motorista {file['filename']}: {exc}")
 
+        # A versão padrão da 03.02.37 traz uma linha por entrega, sem
+        # detalhamento de produto. O vínculo da entrega só é aceito quando a
+        # rota já existe no 03.08.05 da competência selecionada.
+        route_context = {
+            (str(route.get("filial") or "").strip().upper(), norm_mapa(route.get("mapa")), norm_code(route.get("mot")))
+            for route in rotas.values()
+            if _record_competencia(route.get("data")) == comp
+        }
         for manifest in manifests.get(R030237, []):
             for file in stored_files(manifest):
                 filial = filial_from_name(file["filename"])
+                # Mantém a filial no consolidado mesmo se este arquivo não
+                # tiver entrega A/E na janela (os totais resumidos podem vir
+                # da 03.02.24).
+                entregas_por_filial[filial_code_for_liga(filial)]
                 try:
                     for row in rows_from(file["path"]):
                         # A e E são entregas válidas. D é devolução (não pode
@@ -454,22 +467,28 @@ class LigaEntregaDashboardService:
                         status_entrega = str(pick(row, "Status") or "").strip().upper()
                         if status_entrega not in {"A", "E"}:
                             continue
+                        cliente = norm_code(pick(row, "Cliente", "Cod Cliente", "Cod. Cliente"))
+                        filial_code = filial_code_for_liga(filial)
                         mapa = norm_mapa(pick(row, "Mapa"))
                         data_operacao = to_iso(pick(row, "Dt. Operacao", "Dt Operacao", "Data"), fallback=manifest_ref(manifest))
-                        if not mapa or not data_operacao:
+                        mot = remember(pick(row, "Motorista", "CdMot"), filial=filial, funcao="MOTORISTA")
+                        if (str(filial or "").strip().upper(), mapa, mot) not in route_context:
                             continue
-                        entregas_itens_030237.append({
-                            "status": status_entrega,
-                            "filial": filial,
-                            "data": data_operacao,
-                            "mapa": mapa,
-                            "mot_origem": norm_code(pick(row, "Motorista", "CdMot")),
-                            "cliente": norm_code(pick(row, "Cliente", "Cod Cliente", "Cod. Cliente")),
-                            "nota": norm_code(pick(row, "Nota")),
-                            "serie": str(pick(row, "Serie", "Série") or "").strip(),
-                            "produto": norm_code(pick(row, "Produto", "Código Produto", "Cod Produto")),
-                            "quantidade": to_float(pick(row, "Qtde", "Quantidade", "Qtd")),
-                        })
+                        filial_entregas = entregas_por_filial[filial_code]
+                        if cliente != "0":
+                            entregas_pdvs.add(f"{filial_code}|{cliente}")
+                            filial_entregas["pdvs"].add(cliente)
+                        nota = norm_code(pick(row, "Nota"))
+                        if nota != "0":
+                            serie = str(pick(row, "Serie", "Série") or "").strip()
+                            entregas_nfs.add(f"{filial_code}|{nota}|{serie}")
+                            filial_entregas["nfs"].add(f"{nota}|{serie}")
+                        pdv = f"{cliente}|{data_operacao}|{mapa}"
+                        ent_m[mot].add(pdv)
+                        for column in ("ajudante-1", "ajudante 1", "Ajudante 1", "CdAju1", "ajudante-2", "ajudante 2", "Ajudante 2", "CdAju2"):
+                            ajudante = remember(pick(row, column), filial=filial, funcao="AJUDANTE")
+                            if ajudante != "0":
+                                ent_a[ajudante].add(pdv)
                 except Exception as exc:  # noqa: BLE001
                     warnings.append(f"03.02.37 {file['filename']}: {exc}")
 
@@ -562,58 +581,6 @@ class LigaEntregaDashboardService:
             preserve_operational_route_date(rota, equipe)
             if equipe.get("filial") and not rota.get("filial"):
                 rota["filial"] = equipe["filial"]
-
-        # A 03.02.37 detalhada pode trazer status E sem motorista/ajudantes
-        # porque o mapa ainda não foi fechado. Depois de completar as equipes
-        # com 03.08.05/03.11.29, vinculamos cada item por data, filial e mapa.
-        # Não atribuímos itens a uma equipe quando houver ambiguidade.
-        rotas_por_data_filial_mapa: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
-        for rota in rotas.values():
-            key = (str(rota.get("data") or ""), str(rota.get("filial") or "").strip().upper(), norm_mapa(rota.get("mapa")))
-            if all(key):
-                rotas_por_data_filial_mapa[key].append(rota)
-        itens_sem_equipe = 0
-        for item in entregas_itens_030237:
-            key = (str(item["data"]), str(item["filial"] or "").strip().upper(), norm_mapa(item["mapa"]))
-            candidatas = rotas_por_data_filial_mapa.get(key, [])
-            motorista_origem = str(item.get("mot_origem") or "0")
-            if motorista_origem != "0":
-                candidatas = [rota for rota in candidatas if norm_code(rota.get("mot")) == motorista_origem]
-            if len(candidatas) != 1:
-                itens_sem_equipe += 1
-                continue
-            rota = candidatas[0]
-            mot = norm_code(rota.get("mot"))
-            if mot == "0":
-                itens_sem_equipe += 1
-                continue
-            filial_code = filial_code_for_liga(item["filial"])
-            filial_entregas = entregas_por_filial[filial_code]
-            cliente = str(item["cliente"])
-            if cliente != "0":
-                entregas_pdvs.add(f"{filial_code}|{cliente}")
-                filial_entregas["pdvs"].add(cliente)
-            nota = str(item["nota"])
-            if nota != "0":
-                entregas_nfs.add(f"{filial_code}|{nota}|{item['serie']}")
-                filial_entregas["nfs"].add(f"{nota}|{item['serie']}")
-            produto = str(item["produto"])
-            quantidade = float(item["quantidade"] or 0)
-            if produto != "0":
-                entregas_qtde_por_produto[produto] += quantidade
-                filial_entregas["qtde_por_produto"][produto] += quantidade
-                entregas_qtde_m[mot][produto] += quantidade
-            pdv = f"{cliente}|{item['data']}|{item['mapa']}"
-            ent_m[mot].add(pdv)
-            for ajudante in rota.get("aju") or []:
-                aju = norm_code(ajudante)
-                if aju == "0":
-                    continue
-                ent_a[aju].add(pdv)
-                if produto != "0":
-                    entregas_qtde_a[aju][produto] += quantidade
-        if itens_sem_equipe:
-            warnings.append(f"03.02.37: {itens_sem_equipe} item(ns) A/E não vinculado(s) a uma equipe única por data, filial e mapa.")
 
         # A carga pode conter janelas de dias que atravessam competências
         # (principalmente o relatório diário usado pelo Atual).  A
@@ -1984,22 +1951,20 @@ def mount(colab: dict[str, dict[str, str]], agg: dict[str, dict[str, float]], en
         # Rota expurgada de KM conta como dentro da meta. Quando todas as
         # rotas de KM foram expurgadas, a métrica é medida como 0% de desvio.
         km = pct(max(0, g["kmR"] - g["kmP"]) / g["kmP"] * 100) if g["kmP"] else (0.0 if g["exp_km"] else None)
-        # A Liga usa pontuação binária: cada indicador só recebe seu peso
-        # quando a respectiva meta é atingida. Indicador sem dados não entra
-        # no denominador; indicador medido fora da meta recebe zero.
+        # A Liga usa pontuação binária e absoluta: cada indicador só recebe
+        # seu peso quando a meta é atingida. Dado ausente ou meta não
+        # atingida vale zero; nunca reescalamos os demais pesos para 100.
         active = {"saida": bool(indicadores.get("tml")), "devol": bool(indicadores.get("devolucao")), "km": bool(indicadores.get("km"))}
         pts = {
             "saida": float(pesos["saida"]) if active["saida"] and psaida is not None and psaida >= float(metas["saida_pct"]) else 0,
             "devol": float(pesos["devol"]) if active["devol"] and pdev is not None and pdev <= float(metas["devol"]) else 0,
             "km": float(pesos["km"]) if active["km"] and km is not None and km <= float(metas["km"]) else 0,
         }
-        measured = {"saida": active["saida"] and psaida is not None, "devol": active["devol"] and pdev is not None, "km": active["km"] and km is not None}
-        sw = sum(w for k, w in pesos.items() if measured[k])
-        sp = sum(float(pts[k]) for k in pesos if measured[k])
+        sp = sum(float(pts[k]) for k in pesos)
         status = str(info.get("status") or canonical_status(cod))
         if status != "ativo":
             continue
-        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas_total"]), "rotas_validas": int(g["rotas"]), "entregas": ent, "devol": dev, "entregas_hl": round(ent_hl, 2), "devol_hl": round(dev_hl, 2), "devolucao_base": "hl" if usa_hl else "entregas", "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "pts": pts, "indicadores_ativos": active, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp / sw * 100, 1) if sw else 0, "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= int(metas["min_rotas"])), "pos": None, "regras_operacao": str(info.get("filial") or "").upper()})
+        rows.append({"cod": cod, "nome": info.get("nome") or f"COD {cod}", "nome_zap": short_name(info.get("nome") or f"COD {cod}"), "filial": info.get("filial") or "", "rotas": int(g["rotas_total"]), "rotas_validas": int(g["rotas"]), "entregas": ent, "devol": dev, "entregas_hl": round(ent_hl, 2), "devol_hl": round(dev_hl, 2), "devolucao_base": "hl" if usa_hl else "entregas", "pdev": pdev, "psaida": psaida, "tempo_pct": tempo, "km_desv": km, "pts": pts, "indicadores_ativos": active, "expurgos": {"devolucao": int(devols_expurgadas.get(cod, 0)), "km": int(g["exp_km"]), "tml": int(g["exp_tml"])}, "total": round(sp, 1), "status": status, "elegivel": status == "ativo" and (first_week or int(g["rotas"]) >= int(metas["min_rotas"])), "pos": None, "regras_operacao": str(info.get("filial") or "").upper()})
     elig = [x for x in rows if x["elegivel"]]
     # Em empate de pontuação, prioriza quem realizou mais entregas. Isso
     # evita que dois 100 pontos sejam ordenados apenas por devolução/rotas.
