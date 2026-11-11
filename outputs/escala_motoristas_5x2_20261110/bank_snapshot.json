@@ -1,0 +1,736 @@
+{
+  "drivers": [
+    "Adriano Diniz Paulo",
+    "Carlos Alexandre Leite Silva",
+    "Cicero Delfino da Costa",
+    "Cosmo Jackson Monteiro Santana",
+    "Diogo de Medeiros Lima",
+    "Emanuel da Silva Guedes",
+    "Motorista A",
+    "Jofle Luilles Carvalho Leite",
+    "Jose Francileudo Rodrigues",
+    "Jose Vanderlan da Silva Gomes",
+    "Josivaldo Gomes de Oliveira",
+    "Laires Mendes de Sousa",
+    "Leonardo Vieira da Silva",
+    "Pedro Aprigio dos Santos Filho",
+    "Roberto Jorge Almeida dos Santos Junior",
+    "Tulio Belo de Lima",
+    "Willyan de Lima Satorno",
+    "Expedito Acassio de Araujo Roque",
+    "Motorista B"
+  ],
+  "helpers": [
+    "Alexsandro Costa de Araujo",
+    "Antonio de Medeiros Batista",
+    "Antonio Marcio da Silva Filho",
+    "Avany Nobrega Alves",
+    "Carlos Alberto Nascimento de Araujo",
+    "Fabio Junho Mendes Farias",
+    "Francisco Samuel Soares da Silva Rocha",
+    "Gabriel Morais Bezerra",
+    "Gilmar Soares Ferreira",
+    "Irlandir Ferreira de Lira",
+    "Jeferson Gomes Martins Lima",
+    "Jose Anderson Oliveira dos Santos",
+    "Jose Aluizio Paulo de Souza",
+    "Jose Antonio de Maria Neto",
+    "Jose Henrique Dourado da Silva",
+    "Jose Marcelo Galdino Pereira",
+    "Jucielson de Souza Costa",
+    "Luan Victor de Sousa Dantas",
+    "Marcelo Barbosa Lucena",
+    "Marcio Nunes Alves",
+    "Matheus da Silva Almeida",
+    "Mauricio Apolinario Nobrega Filho",
+    "Michell Rodrigo Macedo Dantas",
+    "Nicollas da Silva Lucena",
+    "Pedro Lourenco Medeiros",
+    "Romario da Silva Ferreira",
+    "Ruan Victor Leite Batista",
+    "Uelson Nunes Alves",
+    "Anderson",
+    "Alysson",
+    "Joao Vitor"
+  ],
+  "saturdayDrivers": [
+    "Jose Vanderlan da Silva Gomes",
+    "Willyan de Lima Satorno",
+    "Expedito Acassio de Araujo Roque"
+  ],
+  "saturdayHelpers": [
+    "Anderson",
+    "Michell Rodrigo Macedo Dantas",
+    "Mauricio Apolinario Nobrega Filho",
+    "Matheus da Silva Almeida",
+    "Alysson",
+    "Joao Vitor",
+    "Jeferson Gomes Martins Lima",
+    "Jose Marcelo Galdino Pereira",
+    "Gilmar Soares Ferreira"
+  ],
+  "teams": [
+    [
+      "Equipe 01",
+      "Adriano Diniz Paulo",
+      "Alexsandro Costa de Araujo",
+      "Antonio de Medeiros Batista"
+    ],
+    [
+      "Equipe 02",
+      "Carlos Alexandre Leite Silva",
+      "Antonio Marcio da Silva Filho",
+      "Avany Nobrega Alves"
+    ],
+    [
+      "Equipe 03",
+      "Cicero Delfino da Costa",
+      "Carlos Alberto Nascimento de Araujo",
+      "Fabio Junho Mendes Farias"
+    ],
+    [
+      "Equipe 04",
+      "Cosmo Jackson Monteiro Santana",
+      "Francisco Samuel Soares da Silva Rocha",
+      "Gabriel Morais Bezerra"
+    ],
+    [
+      "Equipe 05",
+      "Diogo de Medeiros Lima",
+      "Gilmar Soares Ferreira",
+      "Irlandir Ferreira de Lira"
+    ],
+    [
+      "Equipe 06",
+      "Emanuel da Silva Guedes",
+      "Jeferson Gomes Martins Lima",
+      "Jose Anderson Oliveira dos Santos"
+    ],
+    [
+      "Equipe 07",
+      "Motorista A",
+      "Jose Aluizio Paulo de Souza",
+      "Jose Antonio de Maria Neto"
+    ],
+    [
+      "Equipe 08",
+      "Jofle Luilles Carvalho Leite",
+      "Jose Henrique Dourado da Silva",
+      "Jose Marcelo Galdino Pereira"
+    ],
+    [
+      "Equipe 09",
+      "Jose Francileudo Rodrigues",
+      "Jucielson de Souza Costa",
+      "Luan Victor de Sousa Dantas"
+    ],
+    [
+      "Equipe 10",
+      "Jose Vanderlan da Silva Gomes",
+      "Marcelo Barbosa Lucena",
+      "Marcio Nunes Alves"
+    ],
+    [
+      "Equipe 11",
+      "Josivaldo Gomes de Oliveira",
+      "Matheus da Silva Almeida",
+      "Mauricio Apolinario Nobrega Filho"
+    ],
+    [
+      "Equipe 12",
+      "Laires Mendes de Sousa",
+      "Michell Rodrigo Macedo Dantas",
+      "Nicollas da Silva Lucena"
+    ],
+    [
+      "Equipe 13",
+      "Leonardo Vieira da Silva",
+      "Pedro Lourenco Medeiros",
+      "Romario da Silva Ferreira"
+    ],
+    [
+      "Equipe 14",
+      "Pedro Aprigio dos Santos Filho",
+      "Ruan Victor Leite Batista",
+      "Uelson Nunes Alves"
+    ],
+    [
+      "Equipe 15",
+      "Roberto Jorge Almeida dos Santos Junior",
+      "Anderson",
+      "Alysson"
+    ]
+  ],
+  "monday": [
+    [
+      "Equipe 01",
+      "Adriano Diniz Paulo",
+      "Alexsandro Costa de Araujo",
+      "Antonio de Medeiros Batista"
+    ],
+    [
+      "Equipe 02",
+      "Carlos Alexandre Leite Silva",
+      "Antonio Marcio da Silva Filho",
+      "Avany Nobrega Alves"
+    ],
+    [
+      "Equipe 03",
+      "Cicero Delfino da Costa",
+      "Carlos Alberto Nascimento de Araujo",
+      "Fabio Junho Mendes Farias"
+    ],
+    [
+      "Equipe 04",
+      "Cosmo Jackson Monteiro Santana",
+      "Francisco Samuel Soares da Silva Rocha",
+      "Gabriel Morais Bezerra"
+    ],
+    [
+      "Equipe 05",
+      "Diogo de Medeiros Lima",
+      "Irlandir Ferreira de Lira",
+      "Jose Anderson Oliveira dos Santos"
+    ],
+    [
+      "Equipe 06",
+      "Emanuel da Silva Guedes",
+      "Jose Aluizio Paulo de Souza",
+      "Jose Antonio de Maria Neto"
+    ],
+    [
+      "Equipe 07",
+      "Motorista A",
+      "Jose Henrique Dourado da Silva",
+      "Jucielson de Souza Costa"
+    ],
+    [
+      "Equipe 08",
+      "Jofle Luilles Carvalho Leite",
+      "Luan Victor de Sousa Dantas",
+      ""
+    ],
+    [
+      "Equipe 09",
+      "Jose Francileudo Rodrigues",
+      "Marcelo Barbosa Lucena",
+      ""
+    ],
+    [
+      "Equipe 10",
+      "Tulio Belo de Lima",
+      "Marcio Nunes Alves",
+      ""
+    ],
+    [
+      "Equipe 11",
+      "Josivaldo Gomes de Oliveira",
+      "Nicollas da Silva Lucena",
+      ""
+    ],
+    [
+      "Equipe 12",
+      "Laires Mendes de Sousa",
+      "Pedro Lourenco Medeiros",
+      ""
+    ],
+    [
+      "Equipe 13",
+      "Leonardo Vieira da Silva",
+      "Romario da Silva Ferreira",
+      ""
+    ],
+    [
+      "Equipe 14",
+      "Pedro Aprigio dos Santos Filho",
+      "Ruan Victor Leite Batista",
+      ""
+    ],
+    [
+      "Equipe 15",
+      "Roberto Jorge Almeida dos Santos Junior",
+      "Uelson Nunes Alves",
+      ""
+    ]
+  ],
+  "sources": {
+    "patos": {
+      "source": "M:/REVENDA/SDPO 2026/DPO/PILAR ENTREGA/RELATORIOS/PONTOMAIS/espelho_matricula/Espelho_NOV_PATOS.csv",
+      "period": "De 01/11/2026 até 10/11/2026",
+      "people": {
+        "ADRIANO DINIZ PAULO": {
+          "name": "ADRIANO DINIZ PAULO",
+          "opening": 2373,
+          "balance": 1547,
+          "date": "Ter, 10/11/2026"
+        },
+        "ALAN LACERDA DE VASCONCELOS FILHO": {
+          "name": "ALAN LACERDA DE VASCONCELOS FILHO",
+          "opening": -2480,
+          "balance": -2778,
+          "date": "Ter, 10/11/2026"
+        },
+        "ALAN MORAIS DE SOUSA": {
+          "name": "ALAN MORAIS DE SOUSA",
+          "opening": -2650,
+          "balance": -4330,
+          "date": "Ter, 10/11/2026"
+        },
+        "ALEXSANDRO COSTA DE ARAUJO": {
+          "name": "ALEXSANDRO COSTA DE ARAUJO",
+          "opening": -3386,
+          "balance": -3804,
+          "date": "Ter, 10/11/2026"
+        },
+        "ANTONIO DE MEDEIROS BATISTA": {
+          "name": "ANTONIO DE MEDEIROS BATISTA",
+          "opening": -1456,
+          "balance": -1398,
+          "date": "Ter, 10/11/2026"
+        },
+        "ANTONIO MARCIO DA SILVA FILHO": {
+          "name": "ANTONIO MARCIO DA SILVA FILHO",
+          "opening": -2777,
+          "balance": -2411,
+          "date": "Ter, 10/11/2026"
+        },
+        "ARIOSVALDO SANTOS ALVES": {
+          "name": "ARIOSVALDO SANTOS ALVES",
+          "opening": 820,
+          "balance": 674,
+          "date": "Ter, 10/11/2026"
+        },
+        "AVANY NOBREGA ALVES": {
+          "name": "AVANY NOBREGA ALVES",
+          "opening": 3251,
+          "balance": 3636,
+          "date": "Ter, 10/11/2026"
+        },
+        "CARLOS ALBERTO NASCIMENTO DE ARAUJO": {
+          "name": "CARLOS ALBERTO NASCIMENTO DE ARAUJO",
+          "opening": -1403,
+          "balance": -918,
+          "date": "Ter, 10/11/2026"
+        },
+        "CARLOS ALEXANDRE LEITE SILVA": {
+          "name": "CARLOS ALEXANDRE LEITE SILVA",
+          "opening": 371,
+          "balance": 780,
+          "date": "Ter, 10/11/2026"
+        },
+        "CICERO DELFINO DA COSTA": {
+          "name": "CICERO DELFINO DA COSTA",
+          "opening": 1603,
+          "balance": 1355,
+          "date": "Ter, 10/11/2026"
+        },
+        "CLISTENES DANTAS DE SOUSA": {
+          "name": "CLÍSTENES DANTAS DE SOUSA",
+          "opening": 0,
+          "balance": 0,
+          "date": "Ter, 10/11/2026"
+        },
+        "COSMO JACKSON MONTEIRO SANTANA": {
+          "name": "COSMO JACKSON MONTEIRO SANTANA",
+          "opening": 6033,
+          "balance": 6509,
+          "date": "Ter, 10/11/2026"
+        },
+        "DIOGO DE MEDEIROS LIMA": {
+          "name": "DIOGO DE MEDEIROS LIMA",
+          "opening": 1531,
+          "balance": 2210,
+          "date": "Ter, 10/11/2026"
+        },
+        "EDILSON OLIVEIRA DOS SANTOS": {
+          "name": "EDILSON OLIVEIRA DOS SANTOS",
+          "opening": 0,
+          "balance": 0,
+          "date": "Ter, 10/11/2026"
+        },
+        "EMANUEL DA SILVA GUEDES": {
+          "name": "EMANUEL DA SILVA GUEDES",
+          "opening": 609,
+          "balance": 196,
+          "date": "Ter, 10/11/2026"
+        },
+        "EVERTOM OLIVEIRA DE MORAIS": {
+          "name": "EVERTOM OLIVEIRA DE MORAIS",
+          "opening": -1033,
+          "balance": -1516,
+          "date": "Ter, 10/11/2026"
+        },
+        "EXPEDITO ACASSIO DE ARAUJO ROQUE": {
+          "name": "EXPEDITO ACASSIO DE ARAUJO ROQUE",
+          "opening": -7633,
+          "balance": -9656,
+          "date": "Ter, 10/11/2026"
+        },
+        "FABIO JUNHO MENDES FARIAS": {
+          "name": "FABIO JUNHO MENDES FARIAS",
+          "opening": -405,
+          "balance": 73,
+          "date": "Ter, 10/11/2026"
+        },
+        "FRANCISCO SAMUEL SOARES DA SILVA ROCHA": {
+          "name": "FRANCISCO SAMUEL SOARES DA SILVA ROCHA",
+          "opening": -811,
+          "balance": -374,
+          "date": "Ter, 10/11/2026"
+        },
+        "GABRIEL MORAIS BEZERRA": {
+          "name": "GABRIEL MORAIS BEZERRA",
+          "opening": -279,
+          "balance": -492,
+          "date": "Ter, 10/11/2026"
+        },
+        "GILMAR SOARES FERREIRA": {
+          "name": "GILMAR SOARES FERREIRA",
+          "opening": -1859,
+          "balance": -2024,
+          "date": "Ter, 10/11/2026"
+        },
+        "IRLANDIR FERREIRA DE LIRA": {
+          "name": "IRLANDIR FERREIRA DE LIRA",
+          "opening": 816,
+          "balance": 779,
+          "date": "Ter, 10/11/2026"
+        },
+        "JEFERSON GOMES MARTINS LIMA": {
+          "name": "JEFERSON GOMES MARTINS LIMA",
+          "opening": -809,
+          "balance": -1775,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOFLE LUILLES CARVALHO LEITE": {
+          "name": "JOFLE LUILLES CARVALHO LEITE",
+          "opening": 1553,
+          "balance": 1553,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE ANDERSON OLIVEIRA DOS SANTOS": {
+          "name": "JOSE ANDERSON OLIVEIRA DOS SANTOS",
+          "opening": 105,
+          "balance": 165,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE FRANCILEUDO RODRIGUES": {
+          "name": "JOSE FRANCILEUDO RODRIGUES",
+          "opening": 4719,
+          "balance": 4985,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE HENRIQUE DOURADO DA SILVA": {
+          "name": "JOSE HENRIQUE DOURADO DA SILVA",
+          "opening": -881,
+          "balance": -1037,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE ALUIZIO PAULO DE SOUZA": {
+          "name": "JOSE ALUIZIO PAULO DE SOUZA",
+          "opening": -3312,
+          "balance": -4604,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE ANTONIO DE MARIA NETO": {
+          "name": "JOSE ANTONIO DE MARIA NETO",
+          "opening": -3982,
+          "balance": -4128,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE HENRIQUE GABRIEL SILVINO DINIZ": {
+          "name": "JOSE HENRIQUE GABRIEL SILVINO DINIZ",
+          "opening": -1468,
+          "balance": -1765,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE MARCELO GALDINO PEREIRA": {
+          "name": "JOSE MARCELO GALDINO PEREIRA",
+          "opening": -9792,
+          "balance": -10694,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE VANDERLAN DA SILVA GOMES": {
+          "name": "JOSE VANDERLAN DA SILVA GOMES",
+          "opening": 3774,
+          "balance": 4135,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSIVALDO GOMES DE OLIVEIRA": {
+          "name": "JOSIVALDO GOMES DE OLIVEIRA",
+          "opening": 1156,
+          "balance": 901,
+          "date": "Ter, 10/11/2026"
+        },
+        "JUCIELSON DE SOUZA COSTA": {
+          "name": "JUCIELSON DE SOUZA COSTA",
+          "opening": -12804,
+          "balance": -13396,
+          "date": "Ter, 10/11/2026"
+        },
+        "LAIRES MENDES DE SOUSA": {
+          "name": "LAIRES MENDES DE SOUSA",
+          "opening": 4711,
+          "balance": 5010,
+          "date": "Ter, 10/11/2026"
+        },
+        "LEONARDO VIEIRA DA SILVA": {
+          "name": "LEONARDO VIEIRA DA SILVA",
+          "opening": 4190,
+          "balance": 4210,
+          "date": "Ter, 10/11/2026"
+        },
+        "LUAN VICTOR DE SOUSA DANTAS": {
+          "name": "LUAN VICTOR DE SOUSA DANTAS",
+          "opening": -2710,
+          "balance": -2293,
+          "date": "Ter, 10/11/2026"
+        },
+        "MANOEL DE SOUSA FELIX": {
+          "name": "MANOEL DE SOUSA FELIX",
+          "opening": 0,
+          "balance": 0,
+          "date": "Ter, 10/11/2026"
+        },
+        "MARCELO BARBOSA LUCENA": {
+          "name": "MARCELO BARBOSA LUCENA",
+          "opening": 1588,
+          "balance": 973,
+          "date": "Ter, 10/11/2026"
+        },
+        "MARCIO NUNES ALVES": {
+          "name": "MARCIO NUNES ALVES",
+          "opening": 3,
+          "balance": 85,
+          "date": "Ter, 10/11/2026"
+        },
+        "MATHEUS DA SILVA ALMEIDA": {
+          "name": "MATHEUS DA SILVA ALMEIDA",
+          "opening": -3698,
+          "balance": -4117,
+          "date": "Ter, 10/11/2026"
+        },
+        "MAURICIO APOLINARIO NOBREGA FILHO": {
+          "name": "MAURICIO APOLINÁRIO NOBREGA FILHO",
+          "opening": 3139,
+          "balance": 3236,
+          "date": "Ter, 10/11/2026"
+        },
+        "MICHELL RODRIGO MACEDO DANTAS": {
+          "name": "MICHELL RODRIGO MACEDO DANTAS",
+          "opening": -366,
+          "balance": -1008,
+          "date": "Ter, 10/11/2026"
+        },
+        "NICOLLAS DA SILVA LUCENA": {
+          "name": "NICOLLAS DA SILVA LUCENA",
+          "opening": -2867,
+          "balance": -2115,
+          "date": "Ter, 10/11/2026"
+        },
+        "PEDRO APRIGIO DOS SANTOS FILHO": {
+          "name": "PEDRO APRIGIO DOS SANTOS FILHO",
+          "opening": -2498,
+          "balance": -2888,
+          "date": "Ter, 10/11/2026"
+        },
+        "PEDRO LOURENCO MEDEIROS": {
+          "name": "PEDRO LOURENÇO MEDEIROS",
+          "opening": -421,
+          "balance": 21,
+          "date": "Ter, 10/11/2026"
+        },
+        "ROBERTO JORGE ALMEIDA DOS SANTOS JUNIOR": {
+          "name": "ROBERTO JORGE ALMEIDA DOS SANTOS JUNIOR",
+          "opening": 4208,
+          "balance": 3814,
+          "date": "Ter, 10/11/2026"
+        },
+        "ROMARIO DA SILVA FERREIRA": {
+          "name": "ROMARIO DA SILVA FERREIRA",
+          "opening": -9052,
+          "balance": -9342,
+          "date": "Ter, 10/11/2026"
+        },
+        "RONALDO DINIZ DOS SANTOS": {
+          "name": "RONALDO DINIZ DOS SANTOS",
+          "opening": -4099,
+          "balance": -4398,
+          "date": "Seg, 09/11/2026"
+        },
+        "RUAN VICTOR LEITE BATISTA": {
+          "name": "RUAN VICTOR LEITE BATISTA",
+          "opening": -16449,
+          "balance": -16739,
+          "date": "Ter, 10/11/2026"
+        },
+        "TULIO BELO DE LIMA": {
+          "name": "TULIO BELO DE LIMA",
+          "opening": 6217,
+          "balance": 5466,
+          "date": "Seg, 09/11/2026"
+        },
+        "UELSON NUNES ALVES": {
+          "name": "UELSON NUNES ALVES",
+          "opening": -1269,
+          "balance": -1269,
+          "date": "Ter, 10/11/2026"
+        },
+        "VINICIUS MENDES GOMES GONCALVES": {
+          "name": "VINICIUS MENDES GOMES GONCALVES",
+          "opening": -10239,
+          "balance": -11100,
+          "date": "Seg, 09/11/2026"
+        },
+        "WALDEMIR DE OLIVEIRA": {
+          "name": "WALDEMIR DE OLIVEIRA",
+          "opening": 1149,
+          "balance": 161,
+          "date": "Ter, 10/11/2026"
+        },
+        "WILLYAN DE LIMA SATORNO": {
+          "name": "WILLYAN DE LIMA SATORNO",
+          "opening": 1066,
+          "balance": 1409,
+          "date": "Ter, 10/11/2026"
+        }
+      }
+    },
+    "sume": {
+      "source": "M:/REVENDA/SDPO 2026/DPO/PILAR ENTREGA/RELATORIOS/PONTOMAIS/espelho_matricula/Espelho_NOV_SUME_.csv",
+      "period": "De 01/11/2026 até 10/11/2026",
+      "people": {
+        "CASSIO CAUE SILVA OLIVEIRA": {
+          "name": "CASSIO CAUE SILVA OLIVEIRA",
+          "opening": 4007,
+          "balance": 4302,
+          "date": "Ter, 10/11/2026"
+        },
+        "FRANCISCO FLORENCIO DA SILVA JUNIOR": {
+          "name": "FRANCISCO FLORENCIO DA SILVA JUNIOR",
+          "opening": 634,
+          "balance": 243,
+          "date": "Ter, 10/11/2026"
+        },
+        "GENILSON JOSE DE SOUSA": {
+          "name": "GENILSON JOSE DE SOUSA",
+          "opening": 5907,
+          "balance": 5985,
+          "date": "Ter, 10/11/2026"
+        },
+        "IRISMARK CLEMENTE DE LIRA": {
+          "name": "IRISMARK CLEMENTE DE LIRA",
+          "opening": 4617,
+          "balance": 4633,
+          "date": "Ter, 10/11/2026"
+        },
+        "JACKSON DE LIMA SILVA": {
+          "name": "JACKSON DE LIMA SILVA",
+          "opening": 1541,
+          "balance": 1090,
+          "date": "Ter, 10/11/2026"
+        },
+        "JEFFERSON BARROS DE MELO": {
+          "name": "JEFFERSON BARROS DE MELO",
+          "opening": 478,
+          "balance": 476,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE LUCAS DE OLIVEIRA DUARTE": {
+          "name": "JOSE LUCAS DE OLIVEIRA DUARTE",
+          "opening": 1925,
+          "balance": 1221,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE MARCIO CORDEIRO DE SOUZA": {
+          "name": "JOSE MARCIO CORDEIRO DE SOUZA",
+          "opening": 1614,
+          "balance": 2065,
+          "date": "Ter, 10/11/2026"
+        },
+        "JOSE ROBSON RIBEIRO DO NASCIMENTO": {
+          "name": "JOSE ROBSON RIBEIRO DO NASCIMENTO",
+          "opening": -1947,
+          "balance": -2261,
+          "date": "Ter, 10/11/2026"
+        },
+        "LEONALDO NUNES DA SILVA": {
+          "name": "LEONALDO NUNES DA SILVA",
+          "opening": 612,
+          "balance": 505,
+          "date": "Ter, 10/11/2026"
+        },
+        "LUIZ CARLOS FERREIRA DA SILVA": {
+          "name": "LUIZ CARLOS FERREIRA DA SILVA",
+          "opening": 4879,
+          "balance": 4953,
+          "date": "Ter, 10/11/2026"
+        },
+        "VALDECI SOARES DE LIMA": {
+          "name": "VALDECI SOARES DE LIMA",
+          "opening": 4134,
+          "balance": 4076,
+          "date": "Ter, 10/11/2026"
+        },
+        "YAN OLIVEIRA PEREIRA": {
+          "name": "YAN OLIVEIRA PEREIRA",
+          "opening": 4248,
+          "balance": 4534,
+          "date": "Ter, 10/11/2026"
+        }
+      }
+    }
+  },
+  "sumeDrivers": [
+    "Yan Oliveira Pereira",
+    "Jose Robson Ribeiro do Nascimento",
+    "Jose Marcio Cordeiro de Souza",
+    "Valdeci Soares de Lima",
+    "Jose Lucas de Oliveira Duarte"
+  ],
+  "sumeHelpers": [
+    "Luiz Carlos Ferreira da Silva",
+    "Jackson de Lima Silva",
+    "Genilson Jose de Sousa",
+    "Jeferson Barros de Melo",
+    "Francisco Florencio da Silva Junior",
+    "Leonaldo Nunes da Silva",
+    "Irismark Clemente de Lira",
+    "Cassio Caue Silva Oliveira",
+    "Ajudante A",
+    "Ajudante B",
+    "Ajudante C"
+  ],
+  "sumeTeams": [
+    [
+      "Equipe 1",
+      "Yan Oliveira Pereira",
+      "Luiz Carlos Ferreira da Silva",
+      "Ajudante A"
+    ],
+    [
+      "Equipe 2",
+      "Jose Robson Ribeiro do Nascimento",
+      "Jackson de Lima Silva",
+      "Ajudante B"
+    ],
+    [
+      "Equipe 3",
+      "Jose Marcio Cordeiro de Souza",
+      "Genilson Jose de Sousa",
+      "Ajudante C"
+    ],
+    [
+      "Equipe 4",
+      "Valdeci Soares de Lima",
+      "Jeferson Barros de Melo",
+      ""
+    ],
+    [
+      "Equipe 5",
+      "Jose Lucas de Oliveira Duarte",
+      "Francisco Florencio da Silva Junior",
+      ""
+    ]
+  ]
+}
