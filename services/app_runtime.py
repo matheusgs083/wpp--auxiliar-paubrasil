@@ -42,6 +42,7 @@ from bot_api.services.liga_entrega_raw_sql_import_service import LigaEntregaRawS
 from bot_api.services.liga_entrega_status_service import LigaEntregaStatusService
 from bot_api.services.liga_entrega_rules_service import LigaEntregaRulesService
 from bot_api.services.devolucoes_operacionais_service import DevolucoesCadastrosService
+from bot_api.services.devolucoes_justificativas_service import DevolucoesJustificativasService
 from bot_api.services.promax_scheduler import PromaxScheduler
 from bot_api.services.webhook_runtime import WebhookRuntime
 from bot_api.security.http_auth import HttpAuthDependencies
@@ -138,6 +139,7 @@ def configure_app_runtime(
     liga_entrega_status_service = LigaEntregaStatusService(LIGA_ENTREGA_STATUS_PATH)
     liga_entrega_rules_service = LigaEntregaRulesService(LIGA_ENTREGA_RULES_PATH)
     devolucoes_cadastros_service = DevolucoesCadastrosService(DEVOLUCOES_CADASTROS_PATH)
+    devolucoes_justificativas_service = DevolucoesJustificativasService(PROJECT_ROOT / 'exports' / 'devolucoes_justificativas.json')
 
     def _rebuild_liga_snapshots_after_sql_import(
         manifests: dict[str, list[dict[str, Any]]],
@@ -730,6 +732,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "liga_entrega_status_service": runtime["liga_entrega_status_service"],
         "liga_entrega_rules_service": runtime["liga_entrega_rules_service"],
         "devolucoes_cadastros_service": runtime["devolucoes_cadastros_service"],
+        "devolucoes_justificativas_service": runtime["devolucoes_justificativas_service"],
         "liga_entrega_route_team_service": runtime["liga_entrega_route_team_service"],
         "dclientes_query_service": runtime["services"].dclientes_query_service,
         "dsetores_import_service": runtime["services"].dsetores_import_service,

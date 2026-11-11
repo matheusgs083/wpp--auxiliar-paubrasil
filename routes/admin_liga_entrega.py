@@ -16,6 +16,7 @@ from bot_api.services.monthly_map_cities_service import MonthlyMapCitiesService
 from bot_api.services.liga_entrega_operational_maps_service import LigaEntregaOperationalMapsService
 from bot_api.services.liga_entrega_operational_maps_pdf_service import build_liga_entrega_operational_maps_pdf
 from bot_api.services.devolucoes_operacionais_service import build_devolucoes_operacionais_dashboard, list_dsetores_catalog
+from bot_api.services.devolucoes_justificativas_service import devolucao_id, JustificativaConflict
 
 
 LIGA_ENTREGA_REPORTS = (
@@ -85,6 +86,12 @@ class DevolucoesCadastrosRequest(BaseModel):
     gerentes: list[dict[str, Any]] = Field(default_factory=list, max_length=1000)
 
 
+class DevolucaoJustificativaRequest(BaseModel):
+    competencia: str = Field(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
+    texto: str = Field(min_length=1, max_length=5000)
+    version: str = Field(default='', max_length=64)
+
+
 def create_admin_liga_entrega_router(
     *,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
@@ -93,6 +100,7 @@ def create_admin_liga_entrega_router(
     liga_entrega_status_service: Any | None = None,
     liga_entrega_rules_service: Any | None = None,
     devolucoes_cadastros_service: Any | None = None,
+    devolucoes_justificativas_service: Any | None = None,
     dsetores_import_service: Any | None = None,
     drevendas_import_service: Any | None = None,
     dclientes_query_service: Any | None = None,
@@ -183,8 +191,49 @@ def create_admin_liga_entrega_router(
         cadastros = devolucoes_cadastros_service.list() if devolucoes_cadastros_service is not None else {"setores": [], "gerentes": []}
         cadastros["operacoes"] = list_dsetores_catalog(dsetores_import_service, drevendas_import_service).get("operacoes", [])
         result = build_devolucoes_operacionais_dashboard(devolucoes_source(competencia, period), cadastros)
+        if devolucoes_justificativas_service is not None:
+            devolucoes_justificativas_service.annotate(result['rows'])
         record_security_event(request, channel="api", event_type="admin_devolucoes_operacionais", decision="allowed", reason=f"linhas={len(result['rows'])}")
         return result
+
+    @router.get('/api/admin/liga-entrega/devolucoes/justificativas')
+    def list_devolucoes_justificativas(
+        request: Request, q: str = Query(default='', max_length=200),
+        authorization: str | None = Header(default=None), x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if devolucoes_justificativas_service is None:
+            raise HTTPException(status_code=503, detail='Justificativas indisponíveis.')
+        return {'ok': True, **devolucoes_justificativas_service.list(q=q)}
+
+    @router.put('/api/admin/liga-entrega/devolucoes/justificativas/{key}')
+    def save_devolucao_justificativa(
+        key: str, payload: DevolucaoJustificativaRequest, request: Request,
+        authorization: str | None = Header(default=None), x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if devolucoes_justificativas_service is None:
+            raise HTTPException(status_code=503, detail='Justificativas indisponíveis.')
+        # Registros já justificados seguem consultáveis mesmo após reimportação.
+        previous = devolucoes_justificativas_service.get(key)
+        if previous:
+            row = previous['devolucao']
+        else:
+            source = devolucoes_source(payload.competencia, 'atual')
+            candidates = source.get('devolucoes_auxiliares') or source.get('devolucoes') or []
+            row = next((r for r in candidates if isinstance(r, dict) and devolucao_id(r) == key), None)
+        if row is None:
+            raise HTTPException(status_code=404, detail='Devolução não encontrada. Atualize os registros.')
+        try:
+            item = devolucoes_justificativas_service.save(row, payload.texto, actor=actor_from_context(context), version=payload.version)
+        except JustificativaConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_panel_action(request, context, action='salvar_justificativa_devolucao', target_type='justificativa_devolucao', target_id=key)
+        return {'ok': True, 'item': item}
 
     @router.get("/api/admin/liga-entrega/devolucoes/cadastros")
     def api_admin_devolucoes_cadastros(
