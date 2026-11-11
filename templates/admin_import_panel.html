@@ -6004,7 +6004,16 @@
           state.justificativasQuery = panel.querySelector('[name="consulta"]').value.trim();
           loadDevolucoesJustificativas();
         });
-        panel.addEventListener('input', event => event.target.setCustomValidity?.(''));
+        panel.addEventListener('input', event => {
+          event.target.setCustomValidity?.('');
+          const row = event.target.closest('[data-dev-record]');
+          if (!row) return;
+          state.justificativasDrafts ||= {};
+          state.justificativasDrafts[row.dataset.devId] = {
+            text: row.querySelector('[data-dev-text]').value,
+            plan: row.querySelector('[data-dev-plan]').value,
+          };
+        });
         panel.addEventListener('click', async event => {
           if (event.target.closest('[data-dev-clear]')) {
             state.justificativasFilters = {};
@@ -6013,15 +6022,6 @@
             return;
           }
           if (event.target.closest('[data-dev-export]')) { exportDevolucoesJustificativas(); return; }
-          const edit = event.target.closest('[data-dev-edit]');
-          if (edit) {
-            const editor = document.getElementById('dev-editor-' + edit.dataset.devEdit);
-            const opening = editor.classList.contains('d-none');
-            editor.classList.toggle('d-none', !opening);
-            edit.setAttribute('aria-expanded', String(opening));
-            if (opening) editor.querySelector('[data-dev-text]').focus();
-            return;
-          }
           const button = event.target.closest('[data-dev-save]');
           if (!button) return;
           const box = button.closest('[data-dev-record]');
@@ -6038,6 +6038,7 @@
             const item = result.item;
             (state.devolucoesOperacionais?.rows || []).forEach(row => { if (row.justificativa_id === item.id) row.justificativa = item; });
             state.justificativasSaved = [item, ...(state.justificativasSaved || []).filter(r => r.id !== item.id)];
+            if (state.justificativasDrafts) delete state.justificativasDrafts[item.id];
             renderDevolucoesJustificativas();
             addLog('Justificativa e plano de ação salvos.', 'ok');
           } catch (err) { message.textContent = err.message; }
@@ -6099,11 +6100,11 @@
       const branches = [...new Set([...records.values()].map(r => r.devolucao?.filial).filter(Boolean)), 'PATOS', 'SUME'];
       if (filters.filial) branches.push(filters.filial);
       const controls = `<div class="d-flex align-items-end flex-wrap gap-2 mb-2">${selectFilter('filial', 'Filial', [['', 'Todas'], ...[...new Set(branches)].sort().map(v => [v, v])])}<div><label class="small form-label mb-1" for="dev-filter-inicio">Devolução de</label><input id="dev-filter-inicio" name="inicio" type="date" class="form-control form-control-sm" value="${escapeHtml(filters.inicio || '')}"></div><div><label class="small form-label mb-1" for="dev-filter-fim">Até</label><input id="dev-filter-fim" name="fim" type="date" class="form-control form-control-sm" value="${escapeHtml(filters.fim || '')}"></div>${selectFilter('status', 'Justificativa', [['', 'Todas'], ['pendente', 'Pendentes'], ['justificada', 'Justificadas']])}${selectFilter('plano', 'Plano de ação', [['', 'Todos'], ['com', 'Com plano'], ['sem', 'Sem plano']])}<button type="button" class="btn btn-sm btn-outline-secondary" data-dev-clear>Limpar filtros</button><button type="button" class="btn btn-sm btn-outline-primary" data-dev-export ${!filteredRows.length ? 'disabled' : ''}>Exportar tabela (CSV)</button></div>`;
-      const preview = value => escapeHtml(String(value || '').slice(0, 70)) + (String(value || '').length > 70 ? '…' : '');
       panel.innerHTML = `<form class="mb-2">${controls}<div class="d-flex align-items-center gap-2"><label class="visually-hidden" for="devolucaoConsulta">Consultar devolução ou justificativa</label><input id="devolucaoConsulta" name="consulta" class="form-control form-control-sm" maxlength="200" value="${escapeHtml(state.justificativasQuery || '')}" placeholder="Cliente, nota, data, justificativa ou plano de ação"><button class="btn btn-sm btn-outline-primary" type="submit">Aplicar filtros</button></div></form><div role="status" class="small text-secondary mb-2">${escapeHtml(state.justificativasError || `${filteredRows.length} registro(s) exibido(s) e exportado(s) · Salvas de todos os meses (até 200 por consulta); pendentes da competência selecionada.`)}</div><div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Devolução</th><th>Filial</th><th>Nota / série</th><th>Cliente</th><th>Status</th><th>Justificativa</th><th>Plano de ação</th><th></th></tr></thead><tbody>${filteredRows.map(item => {
         const row = item.devolucao || {};
         const id = escapeHtml(item.id);
-        return `<tr><td class="text-nowrap">${escapeHtml(formatDate(row.data_devolucao || row.data))}</td><td>${escapeHtml(row.filial || '-')}</td><td class="text-nowrap">${escapeHtml(row.nota || '-')} / ${escapeHtml(row.serie || '-')}</td><td style="max-width:230px"><span class="small text-secondary">${escapeHtml(row.cliente_cod || '-')}</span> ${escapeHtml(row.cliente || '-')}</td><td><span class="badge ${item.text ? 'text-bg-success' : 'text-bg-warning'}">${item.text ? 'Justificada' : 'Pendente'}</span></td><td class="small" style="max-width:220px">${preview(item.text) || '—'}</td><td class="small" style="max-width:220px">${preview(item.action_plan) || '—'}</td><td><button type="button" class="btn btn-sm btn-outline-primary py-0" data-dev-edit="${id}" aria-expanded="false" aria-controls="dev-editor-${id}">Abrir</button></td></tr><tr id="dev-editor-${id}" class="d-none" data-dev-record><td colspan="8" class="p-3 bg-body-tertiary"><div class="small text-secondary mb-2">Motorista: ${escapeHtml(row.motorista || row.cod || '-')} · Motivo: ${escapeHtml(row.motivo_operacional || row.motivo || row.resp || '-')}</div><div class="row g-2"><div class="col-md-6"><label class="form-label small mb-1" for="justificativa-${id}">Justificativa</label><textarea id="justificativa-${id}" data-dev-text class="form-control form-control-sm" rows="2" maxlength="5000">${escapeHtml(item.text || '')}</textarea></div><div class="col-md-6"><label class="form-label small mb-1" for="plano-${id}">Plano de ação</label><textarea id="plano-${id}" data-dev-plan class="form-control form-control-sm" rows="2" maxlength="5000" placeholder="Descreva a ação para tratar ou evitar a devolução">${escapeHtml(item.action_plan || '')}</textarea></div></div><div class="d-flex gap-2 align-items-center mt-2"><button class="btn btn-sm btn-primary" type="button" data-dev-save="${id}" data-version="${escapeHtml(item.version || '')}">Salvar</button><span role="status" class="small"></span><span class="small text-secondary">${item.text ? escapeHtml(item.updated_at || '') + ' · ' + escapeHtml(item.updated_by || '') : ''}</span></div>${item.text ? `<details class="mt-2"><summary class="small">Histórico (${(item.history || []).length})</summary>${(item.history || []).slice().reverse().map(h => `<div class="border-top py-2 small"><b>${escapeHtml(h.at)} · ${escapeHtml(h.actor)}</b><div style="white-space:pre-wrap">Justificativa: ${escapeHtml(h.text)}<br>Plano de ação: ${escapeHtml(h.action_plan || 'Não informado')}</div></div>`).join('')}</details>` : ''}</td></tr>`;
+        const draft = state.justificativasDrafts?.[item.id];
+        return `<tr data-dev-record data-dev-id="${id}"><td class="text-nowrap">${escapeHtml(formatDate(row.data_devolucao || row.data))}</td><td>${escapeHtml(row.filial || '-')}</td><td class="text-nowrap">${escapeHtml(row.nota || '-')} / ${escapeHtml(row.serie || '-')}</td><td style="max-width:230px"><span class="small text-secondary">${escapeHtml(row.cliente_cod || '-')}</span> ${escapeHtml(row.cliente || '-')}<div class="small text-secondary mt-1">${escapeHtml(row.motorista || row.cod || '-')} · ${escapeHtml(row.motivo_operacional || row.motivo || row.resp || '-')}</div></td><td><span class="badge ${item.text ? 'text-bg-success' : 'text-bg-warning'}">${item.text ? 'Justificada' : 'Pendente'}</span></td><td style="min-width:220px"><label class="visually-hidden" for="justificativa-${id}">Justificativa da nota ${escapeHtml(row.nota || '')}</label><textarea id="justificativa-${id}" data-dev-text class="form-control form-control-sm" rows="2" maxlength="5000" style="resize:vertical" placeholder="Informe a justificativa">${escapeHtml(draft?.text ?? item.text ?? '')}</textarea></td><td style="min-width:220px"><label class="visually-hidden" for="plano-${id}">Plano de ação da nota ${escapeHtml(row.nota || '')}</label><textarea id="plano-${id}" data-dev-plan class="form-control form-control-sm" rows="2" maxlength="5000" style="resize:vertical" placeholder="Descreva o plano de ação">${escapeHtml(draft?.plan ?? item.action_plan ?? '')}</textarea></td><td><button class="btn btn-sm btn-primary" type="button" data-dev-save="${id}" data-version="${escapeHtml(item.version || '')}">Salvar</button><div role="status" class="small mt-1"></div>${item.text ? `<details class="mt-1"><summary class="small text-secondary">Histórico</summary><div class="small text-secondary">${escapeHtml(item.updated_by || '')} · ${escapeHtml(item.updated_at || '')}</div>${(item.history || []).slice().reverse().map(h => `<div class="border-top py-2 small" style="white-space:pre-wrap"><b>${escapeHtml(h.at)} · ${escapeHtml(h.actor)}</b><br>Justificativa: ${escapeHtml(h.text)}<br>Plano: ${escapeHtml(h.action_plan || 'Não informado')}</div>`).join('')}</details>` : ''}</td></tr>`;
       }).join('') || '<tr><td colspan="8" class="text-center text-secondary py-3">Nenhuma devolução encontrada. Selecione a competência para consultar outras pendências.</td></tr>'}</tbody></table></div>`;
     }
 
