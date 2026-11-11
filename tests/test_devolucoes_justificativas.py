@@ -43,6 +43,36 @@ class JustificativasTest(unittest.TestCase):
             self.service.save(self.row, '   ', actor='a')
         self.assertEqual(self.service.get(devolucao_id(self.row))['text'], 'Primeira versão')
 
+    def test_action_plan_saved_searched_and_versioned(self):
+        first = self.service.save(self.row, 'Fechado', actor='a', action_plan='Confirmar recebimento antes da saída')
+        self.assertEqual(self.service.list('recebimento')['total'], 1)
+        second = self.service.save(self.row, 'Fechado novamente', actor='b', version=first['version'])
+        self.assertEqual(second['action_plan'], first['action_plan'])
+        third = self.service.save(self.row, 'Fechado', actor='c', version=second['version'], action_plan='Reagendar entrega')
+        self.assertEqual(third['history'][0]['action_plan'], first['action_plan'])
+        self.assertEqual(third['history'][-1]['action_plan'], 'Reagendar entrega')
+        with self.assertRaises(ValueError):
+            self.service.save(self.row, 'Fechado', actor='c', version=third['version'], action_plan='x' * 5001)
+
+    def test_filters_apply_before_limit(self):
+        self.service.save(self.row, 'Fechado', actor='a', action_plan='Reagendar')
+        other = {**self.row, 'filial': 'SUME', 'data_devolucao': '2026-11-11'}
+        self.service.save(other, 'Sem dinheiro', actor='b')
+        result = self.service.list(limit=1, filial='PATOS', inicio='2026-11-10', fim='2026-11-10', status='justificada', plano='com')
+        self.assertEqual(result['total'], 1)
+        self.assertEqual(result['items'][0]['devolucao']['filial'], 'PATOS')
+        self.assertEqual(self.service.list(plano='sem')['total'], 1)
+        self.assertEqual(self.service.list(status='pendente')['total'], 0)
+
+    def test_filter_api_validates_dates_and_status(self):
+        client, _ = self.client()
+        self.service.save(self.row, 'Fechado', actor='a', action_plan='Reagendar')
+        base = '/api/admin/liga-entrega/devolucoes/justificativas'
+        self.assertEqual(client.get(base, params={'filial': 'PATOS', 'plano': 'com', 'inicio': '2026-11-10', 'fim': '2026-11-10'}).json()['total'], 1)
+        self.assertEqual(client.get(base, params={'filial': 'SUME'}).json()['total'], 0)
+        self.assertEqual(client.get(base, params={'inicio': '2026-11-11', 'fim': '2026-11-10'}).status_code, 400)
+        self.assertEqual(client.get(base, params={'status': 'invalido'}).status_code, 422)
+
     def client(self, denied=False):
         def feature(context, name):
             if denied:
@@ -65,9 +95,10 @@ class JustificativasTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         key = response.json()['rows'][0]['justificativa_id']
         url = '/api/admin/liga-entrega/devolucoes/justificativas/' + key
-        response = client.put(url, json={'competencia': '2026-11', 'texto': 'Comércio fechado'})
+        response = client.put(url, json={'competencia': '2026-11', 'texto': 'Comércio fechado', 'plano_acao': 'Agendar recebimento'})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['item']['updated_by'], 'user:42')
+        self.assertEqual(response.json()['item']['action_plan'], 'Agendar recebimento')
         self.assertEqual(client.put(url, json={'competencia': '2026-11', 'texto': 'Mudança'}).status_code, 409)
         source['devolucoes_auxiliares'] = []
         response = client.get('/api/admin/liga-entrega/devolucoes/justificativas?q=fechado')

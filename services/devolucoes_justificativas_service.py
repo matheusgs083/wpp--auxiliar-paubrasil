@@ -45,11 +45,24 @@ class DevolucoesJustificativasService:
             raise ValueError('Arquivo de justificativas inválido.')
         return result
 
-    def list(self, q: str = '', limit: int = 200) -> dict:
+    def list(self, q: str = '', limit: int = 200, *, filial: str = '', inicio: str = '', fim: str = '', status: str = '', plano: str = '') -> dict:
         with self._lock:
             records = list(self._read().values())
         query = _search(q).strip()
         records = [r for r in records if not query or query in _search(json.dumps(r, ensure_ascii=False))]
+        def matches(record):
+            row = record.get('devolucao') or {}
+            day = str(row.get('data_devolucao') or row.get('data') or '')[:10]
+            justified = bool(str(record.get('text') or '').strip())
+            planned = bool(str(record.get('action_plan') or '').strip())
+            return (
+                (not filial or str(row.get('filial') or '').upper() == filial.upper())
+                and (not inicio or day >= inicio)
+                and (not fim or bool(day) and day <= fim)
+                and (not status or justified == (status == 'justificada'))
+                and (not plano or planned == (plano == 'com'))
+            )
+        records = [r for r in records if matches(r)]
         records.sort(key=lambda r: r['updated_at'], reverse=True)
         return {'items': deepcopy(records[:limit]), 'total': len(records)}
 
@@ -64,10 +77,14 @@ class DevolucoesJustificativasService:
         with self._lock:
             return deepcopy(self._read().get(key))
 
-    def save(self, row: dict, text: str, *, actor: str, version: str = '') -> dict:
+    def save(self, row: dict, text: str, *, actor: str, version: str = '', action_plan: str | None = None) -> dict:
         text = text.strip()
         if not text or len(text) > 5000:
             raise ValueError('Informe uma justificativa com até 5.000 caracteres.')
+        if action_plan is not None:
+            action_plan = action_plan.strip()
+            if len(action_plan) > 5000:
+                raise ValueError('O plano de ação deve ter até 5.000 caracteres.')
         if not row.get('filial') or not row.get('nota') or not row.get('cliente_cod'):
             raise ValueError('Devolução sem identificação completa: filial, nota e código do cliente.')
         key = devolucao_id(row)
@@ -76,10 +93,11 @@ class DevolucoesJustificativasService:
             previous = records.get(key)
             if (previous or {}).get('version', '') != version:
                 raise JustificativaConflict('A justificativa foi alterada por outra pessoa. Atualize antes de salvar.')
+            plan = action_plan if action_plan is not None else (previous or {}).get('action_plan', '')
             now = datetime.now(timezone.utc).isoformat(timespec='seconds')
-            revision = {'text': text, 'actor': actor, 'at': now, 'version': uuid4().hex}
+            revision = {'text': text, 'action_plan': plan, 'actor': actor, 'at': now, 'version': uuid4().hex}
             clean = {k: v for k, v in row.items() if k not in ('justificativa', 'justificativa_id')}
-            record = {'id': key, 'devolucao': clean, 'text': text, 'updated_by': actor,
+            record = {'id': key, 'devolucao': clean, 'text': text, 'action_plan': plan, 'updated_by': actor,
                       'updated_at': now, 'version': revision['version'],
                       'history': [*(previous or {}).get('history', []), revision]}
             records[key] = record

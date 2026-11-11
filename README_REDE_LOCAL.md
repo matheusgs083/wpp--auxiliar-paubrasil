@@ -51,7 +51,7 @@ BOT_API_BIND_IP=0.0.0.0
 	a o container:
 
 ```powershell
-docker compose up -d --build --no-deps bot_api
+omdocker compose up -d --build --no-deps bot_api
 ```
 
 Verifique se a porta ficou publicada em `0.0.0.0`:

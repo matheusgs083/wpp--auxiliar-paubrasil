@@ -90,6 +90,7 @@ class DevolucaoJustificativaRequest(BaseModel):
     competencia: str = Field(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
     texto: str = Field(min_length=1, max_length=5000)
     version: str = Field(default='', max_length=64)
+    plano_acao: str | None = Field(default=None, max_length=5000)
 
 
 def create_admin_liga_entrega_router(
@@ -199,13 +200,19 @@ def create_admin_liga_entrega_router(
     @router.get('/api/admin/liga-entrega/devolucoes/justificativas')
     def list_devolucoes_justificativas(
         request: Request, q: str = Query(default='', max_length=200),
+        filial: str = Query(default='', max_length=60),
+        inicio: date | None = Query(default=None), fim: date | None = Query(default=None),
+        status: str = Query(default='', pattern='^(|pendente|justificada)$'),
+        plano: str = Query(default='', pattern='^(|com|sem)$'),
         authorization: str | None = Header(default=None), x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
         require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
         if devolucoes_justificativas_service is None:
             raise HTTPException(status_code=503, detail='Justificativas indisponíveis.')
-        return {'ok': True, **devolucoes_justificativas_service.list(q=q)}
+        if inicio and fim and inicio > fim:
+            raise HTTPException(status_code=400, detail='A data inicial deve ser anterior ou igual à final.')
+        return {'ok': True, **devolucoes_justificativas_service.list(q=q, filial=filial, inicio=inicio.isoformat() if inicio else '', fim=fim.isoformat() if fim else '', status=status, plano=plano)}
 
     @router.put('/api/admin/liga-entrega/devolucoes/justificativas/{key}')
     def save_devolucao_justificativa(
@@ -227,7 +234,7 @@ def create_admin_liga_entrega_router(
         if row is None:
             raise HTTPException(status_code=404, detail='Devolução não encontrada. Atualize os registros.')
         try:
-            item = devolucoes_justificativas_service.save(row, payload.texto, actor=actor_from_context(context), version=payload.version)
+            item = devolucoes_justificativas_service.save(row, payload.texto, actor=actor_from_context(context), version=payload.version, action_plan=payload.plano_acao)
         except JustificativaConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
