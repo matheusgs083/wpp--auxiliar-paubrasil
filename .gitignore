@@ -86,3 +86,7 @@ dump/
 update_ui_*.py
 ops/*backup*
 ops/register_*backup*.ps1
+
+output/
+outputs/
+tools/

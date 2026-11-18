@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import os
 import re
 from threading import Event, Lock, RLock
 from typing import Any
@@ -67,6 +68,7 @@ def configure_app_runtime(
     promax_catalog_service = PromaxCatalogService(
         jobs_service=promax_jobs_service,
         fallback_catalog=DEFAULT_PROMAX_CATALOG,
+        preferred_worker_id=os.getenv("PROMAX_CATALOG_WORKER_ID", "promax-producao").strip(),
     )
     PROMAX_CATALOG = promax_catalog_service.get_catalog
     dclientes_query_service = services.dclientes_query_service

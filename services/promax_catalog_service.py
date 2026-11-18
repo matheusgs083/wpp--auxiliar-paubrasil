@@ -77,6 +77,7 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
             "name": "Fluxo de Caixa",
             "description": "Relatorios usados na consolidacao do fluxo de caixa.",
             "routines": [
+                {"id": "140501", "name": "Rotina 140501"},
                 {"id": "140506", "name": "Rotina 140506"},
                 {"id": "120606", "name": "Rotina 120606"},
                 {"id": "020502_FLUXO_DE_CAIXA", "name": "Rotina 020502 Fluxo de Caixa"},
@@ -164,9 +165,11 @@ class PromaxCatalogService:
         *,
         jobs_service: Any,
         fallback_catalog: Mapping[str, Any],
+        preferred_worker_id: str = "",
     ) -> None:
         self.jobs_service = jobs_service
         self.fallback_catalog = normalize_catalog(fallback_catalog)
+        self.preferred_worker_id = str(preferred_worker_id or "").strip()
 
     def get_catalog(self) -> dict[str, Any]:
         try:
@@ -178,6 +181,8 @@ class PromaxCatalogService:
             logger.warning("Falha ao consultar catalogo dos workers Promax: %s", exc)
             return self._fallback()
 
+        if self.preferred_worker_id:
+            workers = [worker for worker in workers if isinstance(worker, Mapping) and str(worker.get('worker_id') or '') == self.preferred_worker_id]
         for worker in workers:
             if not isinstance(worker, Mapping) or not bool(worker.get("online")):
                 continue
@@ -215,6 +220,9 @@ class PromaxCatalogService:
             **self.fallback_catalog,
             "source": "fallback",
             "worker_id": "",
+            **({"preferred_worker_id": self.preferred_worker_id,
+                "warnings": [f"Worker de catálogo {self.preferred_worker_id} indisponível ou sem catálogo válido; exibindo catálogo do servidor."]}
+               if self.preferred_worker_id else {}),
         }
 
 
