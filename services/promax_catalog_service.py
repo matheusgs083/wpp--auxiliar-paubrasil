@@ -195,7 +195,13 @@ class PromaxCatalogService:
         if self.preferred_worker_id:
             workers = [worker for worker in workers if isinstance(worker, Mapping) and str(worker.get('worker_id') or '') == self.preferred_worker_id]
         for worker in workers:
-            if not isinstance(worker, Mapping) or not bool(worker.get("online")):
+            if not isinstance(worker, Mapping):
+                continue
+            # O worker fixado pode ficar sem heartbeat por alguns minutos enquanto
+            # roda um job longo ou reinicia. Nesse intervalo vale o ultimo catalogo
+            # que ele publicou; o catalogo do servidor nao tem todos os grupos.
+            stale_pinned = bool(self.preferred_worker_id) and not bool(worker.get("online"))
+            if not bool(worker.get("online")) and not stale_pinned:
                 continue
             metadata = worker.get("metadata")
             raw_catalog = metadata.get("catalog") if isinstance(metadata, Mapping) else None
@@ -229,6 +235,11 @@ class PromaxCatalogService:
             warnings = raw_catalog.get("warnings") if isinstance(raw_catalog, Mapping) else None
             if isinstance(warnings, list):
                 catalog["warnings"] = [str(item)[:500] for item in warnings[:50]]
+            if stale_pinned:
+                catalog.setdefault("warnings", []).append(
+                    f"Worker de catálogo {self.preferred_worker_id} sem heartbeat recente; "
+                    f"exibindo o último catálogo publicado ({worker.get('heartbeat_at') or 'sem data'})."
+                )
             return catalog
         return self._fallback()
 

@@ -67,6 +67,19 @@ class PromaxCatalogServiceTest(unittest.TestCase):
         catalog = PromaxCatalogService(jobs_service=FakeJobsService([worker]), fallback_catalog=DEFAULT_PROMAX_CATALOG).get_catalog()
         self.assertIn('grade_estoque', [r['id'] for r in catalog['categories']['cora_estoque']['routines']])
 
+    def test_worker_fixado_sem_heartbeat_mantem_o_ultimo_catalogo(self) -> None:
+        worker = {'worker_id': 'promax-producao', 'online': False, 'heartbeat_at': '2026-11-19T19:58:00+00:00',
+                  'metadata': {'catalog': {'categories': {'nfs_incentivo': {'name': 'NFS Incentivo', 'routines': ['0512']}}}}}
+        catalog = PromaxCatalogService(jobs_service=FakeJobsService([worker]), fallback_catalog=DEFAULT_PROMAX_CATALOG, preferred_worker_id='promax-producao').get_catalog()
+        self.assertEqual(catalog['source'], 'worker')
+        self.assertIn('nfs_incentivo', catalog['categories'])
+        self.assertIn('sem heartbeat recente', catalog['warnings'][-1])
+
+    def test_worker_nao_fixado_offline_continua_ignorado(self) -> None:
+        worker = {'worker_id': 'host-1', 'online': False, 'metadata': {'catalog': FALLBACK}}
+        catalog = PromaxCatalogService(jobs_service=FakeJobsService([worker]), fallback_catalog=DEFAULT_PROMAX_CATALOG).get_catalog()
+        self.assertEqual(catalog['source'], 'fallback')
+
     def test_140501_is_available_in_cashflow_fallback(self) -> None:
         routines = DEFAULT_PROMAX_CATALOG['categories']['fluxo_caixa']['routines']
         self.assertIn('140501', [row['id'] for row in routines])
