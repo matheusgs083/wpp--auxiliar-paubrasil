@@ -8,8 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 _CORA_ESTOQUE_UNIDADE_POR_FILIAL = {
+    "1": "487570",  # Sousa
+    "2": "820288",  # Itaporanga
     "3": "747530",  # Patos
     "4": "747548",  # Sumé
+    "5": "1036580",  # Guarabira
+    "6": "1044303",  # Brumado
+    "7": "1044591",  # Barra
+    "8": "1045180",  # Caculé
 }
 
 
@@ -126,7 +132,7 @@ def create_admin_estoque_router(
                 status_code=422,
                 detail=(
                     "Não há unidade Cora configurada para: " + ", ".join(unsupported)
-                    + ". Atualmente a atualização automática cobre Patos e Sumé."
+                    + ". Atualize a dRevendas ou o mapeamento de unidades Cora."
                 ),
             )
         units = [_CORA_ESTOQUE_UNIDADE_POR_FILIAL[filial] for filial in filiais]
