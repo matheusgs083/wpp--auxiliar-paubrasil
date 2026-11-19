@@ -34,6 +34,7 @@ from bot_api.services.dprodutos_import_service import DProdutosImportService
 from bot_api.services.drevendas_import_service import DRevendasImportService
 from bot_api.services.dsetores_import_service import DSetoresImportService
 from bot_api.services.estoque_020304_service import Estoque020304ImportService, Estoque020304QueryService
+from bot_api.services.cora_estoque_service import CoraEstoqueImportService, CoraEstoqueQueryService
 from bot_api.services.giro_import_service import GiroImportService
 from bot_api.services.giro_query_service import GiroQueryService
 from bot_api.services.inadimplencia_import_service import InadimplenciaImportService
@@ -62,6 +63,8 @@ class AppServices:
     prazo_limite_query_service: PrazoLimiteQueryService
     boletos_query_service: BoletosQueryService
     estoque_020304_query_service: Estoque020304QueryService
+    cora_estoque_import_service: CoraEstoqueImportService
+    cora_estoque_query_service: CoraEstoqueQueryService
     dsetores_import_service: DSetoresImportService
     dprecos_import_service: DPrecosImportService
     doperacoes_import_service: DOperacoesImportService
@@ -170,6 +173,16 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
     estoque_020304_query_service = Estoque020304QueryService(
+        database_url=settings.reports_runtime_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    cora_estoque_import_service = CoraEstoqueImportService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    cora_estoque_query_service = CoraEstoqueQueryService(
         database_url=settings.reports_runtime_database_url,
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -386,6 +399,8 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         prazo_limite_query_service=prazo_limite_query_service,
         boletos_query_service=boletos_query_service,
         estoque_020304_query_service=estoque_020304_query_service,
+        cora_estoque_import_service=cora_estoque_import_service,
+        cora_estoque_query_service=cora_estoque_query_service,
         dsetores_import_service=dsetores_import_service,
         dprecos_import_service=dprecos_import_service,
         doperacoes_import_service=doperacoes_import_service,

@@ -279,9 +279,10 @@ class AdminPanelSessionService:
             "conferencia": {"conferencia"},
             "protestos": {"protestos"},
             "armazem": {"armazem"},
-            "estoque": {"armazem"},
+            "estoque": {"estoque", "armazem"},
             "giro": {"giro"},
             "usage": {"usage"},
+            "pedidos": {"pedidos"},
         }
         return aliases.get(clean, {clean}).intersection(set(PANEL_FEATURES) | {clean})
 

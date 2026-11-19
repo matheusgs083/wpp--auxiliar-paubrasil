@@ -50,6 +50,7 @@ class DClienteRecord:
     total_pendente: str
     total_comodatos_pendentes: int
     ultima_atualizacao_tabela: str
+    gv: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -1136,6 +1137,7 @@ class DClientesQueryService:
                 COALESCE(base.payload ->> 'Telefone(s)', '') AS telefone,
                 COALESCE(base.payload ->> 'Dia de Visita do VDE', '') AS dia_visita,
                 base.setor_vde AS vendedor,
+                COALESCE(current_client.gv_vde_resolved, current_client.gv_vde, '') AS gv,
                 COALESCE(base.status_pdv, '') AS status,
                 COALESCE(base.payload ->> 'Cidade', base.cidade_payload, '') AS cidade,
                 COALESCE(base.payload ->> 'Cond Pag Atual', '') AS cond_pag_atual,
@@ -1144,6 +1146,9 @@ class DClientesQueryService:
                 COALESCE(comod.total_comodatos_pendentes, 0)::int AS total_comodatos_pendentes,
                 base.batch_imported_at
             FROM base
+            LEFT JOIN {schema}.dclientes_latest current_client
+              ON current_client.filial = base.filial
+             AND current_client.cod_pdv = base.cod_pdv
             LEFT JOIN LATERAL (
                 SELECT SUM({valor_pendente_sql}) AS total_pendente
                 FROM {schema}.inadimplencia_latest inad
@@ -1190,6 +1195,7 @@ class DClientesQueryService:
                 total_pendente=_format_money(row.get("total_pendente")),
                 total_comodatos_pendentes=int(row.get("total_comodatos_pendentes") or 0),
                 ultima_atualizacao_tabela=_format_batch_timestamp(row.get("batch_imported_at")),
+                gv=normalize_stored_scope_value(str(row.get("gv") or "")),
             )
             for row in rows
         ]

@@ -125,6 +125,29 @@ class PromaxRunner:
         operation = str(payload.get("operation") or "").strip()
         job_id = str(job.get("id") or job.get("job_id") or "").strip()
         normalized_job_kind = _normalize_job_kind(operation or job_type)
+        if normalized_job_kind == "digitacao_030104":
+            if job_type != "digitacao_030104" or operation != "digitacao_030104":
+                raise ValueError("Invalid Promax order entry job.")
+            digitacao = payload.get("digitacao")
+            if not isinstance(digitacao, Mapping):
+                raise ValueError("Promax order entry requires payload.digitacao.")
+            if not job_id or not _IDENTIFIER_PATTERN.fullmatch(job_id):
+                raise ValueError("Promax order entry requires a valid job id.")
+            input_dir = self.config.driver_dir / "data" / "job_inputs"
+            input_dir.mkdir(parents=True, exist_ok=True)
+            input_path = input_dir / f"digitacao_030104_{job_id}.json"
+            input_path.write_text(json.dumps(dict(digitacao), ensure_ascii=False), encoding="utf-8")
+            command = [str(self.config.python_executable), str(self.config.cli_path), "digitacao-030104", "--arquivo", str(input_path), "--job-id", job_id]
+            unidade_payload = str(payload.get("unidade") or "").strip()
+            unidade_digitacao = str(digitacao.get("unidade") or "").strip()
+            if unidade_payload and unidade_digitacao and unidade_payload != unidade_digitacao:
+                raise ValueError("Promax order entry has conflicting unit values.")
+            unidade = unidade_payload or unidade_digitacao
+            if unidade:
+                command.extend(["--unidade", unidade])
+            if payload.get("salvar") is False:
+                command.append("--nao-salvar")
+            return command
         if normalized_job_kind in {"lancamento_grade", "lancamento_grade_020304"}:
             if job_type != normalized_job_kind or operation != normalized_job_kind:
                 raise ValueError("Invalid Promax grade launch job.")

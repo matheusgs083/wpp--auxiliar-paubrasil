@@ -718,6 +718,8 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "promax_catalog": runtime["PROMAX_CATALOG"],
         "boletos_pdf_import_services": runtime["services"].boletos_pdf_import_services,
         "estoque_020304_import_services": runtime["services"].estoque_020304_import_services,
+        "cora_estoque_import_service": runtime["services"].cora_estoque_import_service,
+        "cora_estoque_query_service": runtime["services"].cora_estoque_query_service,
         "relatorio_031120_import_services": runtime["services"].relatorio_031120_import_services,
         "relatorio_03114902_import_service": runtime["services"].relatorio_03114902_import_service,
         "inadimplencia_import_service": runtime["services"].inadimplencia_import_service,

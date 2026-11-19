@@ -1924,6 +1924,30 @@ class PromaxWorker:
         event_name = str(event.get("event") or "").strip()
         if event_name != "promax_partial_result":
             return
+        job_type = str(job.get("job_type") or "").strip().lower()
+        operation = str((job.get("payload") or {}).get("operation") or "").strip().lower() if isinstance(job.get("payload"), Mapping) else ""
+        if job_type == "digitacao_030104" or operation == "digitacao_030104":
+            pedido = str(event.get("pedido") or "").strip()
+            mapa = str(event.get("mapa") or "").strip()
+            referencia = str(event.get("ref") or "").strip()
+            descricao = "Pedido salvo no Promax"
+            if pedido:
+                descricao += f": {pedido}"
+            if mapa:
+                descricao += f" (mapa {mapa})"
+            self._send_log(
+                job_id,
+                lease_token,
+                descricao,
+                "info",
+                {
+                    "event": "promax_pedido_partial_saved",
+                    "pedido": pedido,
+                    "mapa": mapa,
+                    "ref": referencia,
+                },
+            )
+            return
         scope = str(event.get("sync_scope") or event.get("routine") or "").strip().lower()
         scope_aliases = {
             "030302": "030302",

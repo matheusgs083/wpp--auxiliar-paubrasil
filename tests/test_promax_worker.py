@@ -1824,6 +1824,38 @@ class PromaxRunnerTests(unittest.TestCase):
             self.assertTrue(payload_path.is_file())
             self.assertIn('"codigo": "22177"', payload_path.read_text(encoding="utf-8"))
 
+    def test_runner_writes_order_input_and_uses_controlled_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._config(Path(temp_dir))
+            runner = PromaxRunner(config)
+
+            command = runner.build_command(
+                {
+                    "id": "pedido-job-1",
+                    "job_type": "digitacao_030104",
+                    "payload": {
+                        "operation": "digitacao_030104",
+                        "unidade": "2210003",
+                        "digitacao": {
+                            "unidade": "2210003",
+                            "pedidos": [
+                                {
+                                    "vendedor": "107",
+                                    "cliente": "12345",
+                                    "itens": [{"produto": "988", "quantidade": 2}],
+                                }
+                            ],
+                        },
+                    },
+                }
+            )
+
+            self.assertIn("digitacao-030104", command)
+            self.assertEqual(command[command.index("--unidade") + 1], "2210003")
+            payload_path = Path(command[command.index("--arquivo") + 1])
+            self.assertTrue(payload_path.is_file())
+            self.assertIn('"vendedor": "107"', payload_path.read_text(encoding="utf-8"))
+
     def test_runner_ignores_zero_ponto_apoio_for_fechamento_mapa(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._config(Path(temp_dir))

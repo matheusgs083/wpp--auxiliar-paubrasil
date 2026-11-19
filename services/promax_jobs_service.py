@@ -58,6 +58,7 @@ WORKER_HEARTBEATS_TABLE = "worker_heartbeats"
 QUEUE_STATE_TABLE = "queue_state"
 WORKER_ASSIGNMENTS_TABLE = "worker_assignments"
 WORKER_CREDENTIALS_TABLE = "worker_credentials"
+PEDIDO_DIGITACAO_CONFIG_TABLE = "pedido_digitacao_config"
 
 
 class JobRecord(TypedDict):
@@ -1265,6 +1266,102 @@ class PromaxJobsService:
                 cur.execute(query, params)
                 rows = cur.fetchall()
         return [_job_record(row) for row in rows]
+
+    def get_pedido_digitacao_config(self) -> dict[str, Any]:
+        """Configuration shared by the order-entry panel and its audit view."""
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            self._ensure_pedido_digitacao_config(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL("SELECT motivos, max_caixas_por_produto, limites_por_produto, updated_by, updated_at FROM {schema}.{table} WHERE id = TRUE").format(
+                        schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)
+                    )
+                )
+                row = cur.fetchone()
+        motivos = row.get("motivos") if row else []
+        limites = row.get("limites_por_produto") if row and isinstance(row.get("limites_por_produto"), Mapping) else {}
+        return {
+            "motivos": [str(item).strip() for item in motivos if str(item).strip()],
+            "max_caixas_por_produto": int(row.get("max_caixas_por_produto") or 99_999) if row else 99_999,
+            "limites_por_produto": _pedido_product_limits(limites),
+            "updated_by": str(row.get("updated_by") or "") if row else "",
+            "updated_at": _iso(row.get("updated_at")) if row else None,
+        }
+
+    def update_pedido_digitacao_config(
+        self,
+        *,
+        motivos: Sequence[str],
+        max_caixas_por_produto: int,
+        limites_por_produto: Sequence[Mapping[str, Any]] = (),
+        updated_by: str,
+    ) -> dict[str, Any]:
+        cleaned_motivos = list(dict.fromkeys(str(item).strip() for item in motivos if str(item).strip()))
+        if not cleaned_motivos:
+            raise ValueError("Informe ao menos um motivo de digitação.")
+        if len(cleaned_motivos) > 20 or any(len(item) > 80 for item in cleaned_motivos):
+            raise ValueError("Motivos inválidos.")
+        limit = int(max_caixas_por_produto)
+        if limit < 1 or limit > 99_999:
+            raise ValueError("O limite por produto deve estar entre 1 e 99.999 caixas.")
+        cleaned_limits = _pedido_product_limits_to_mapping(limites_por_produto)
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            self._ensure_pedido_digitacao_config(conn)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        INSERT INTO {schema}.{table} (id, motivos, max_caixas_por_produto, limites_por_produto, updated_by, updated_at)
+                        VALUES (TRUE, %s, %s, %s, %s, NOW())
+                        ON CONFLICT (id) DO UPDATE SET
+                            motivos = EXCLUDED.motivos,
+                            max_caixas_por_produto = EXCLUDED.max_caixas_por_produto,
+                            limites_por_produto = EXCLUDED.limites_por_produto,
+                            updated_by = EXCLUDED.updated_by,
+                            updated_at = NOW()
+                        RETURNING motivos, max_caixas_por_produto, limites_por_produto, updated_by, updated_at
+                        """
+                    ).format(schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)),
+                    (Jsonb(cleaned_motivos), limit, Jsonb(cleaned_limits), str(updated_by or "").strip()),
+                )
+                row = cur.fetchone()
+            conn.commit()
+        return {
+            "motivos": [str(item).strip() for item in (row.get("motivos") or []) if str(item).strip()],
+            "max_caixas_por_produto": int(row["max_caixas_por_produto"]),
+            "limites_por_produto": _pedido_product_limits(row.get("limites_por_produto") if isinstance(row.get("limites_por_produto"), Mapping) else {}),
+            "updated_by": str(row.get("updated_by") or ""),
+            "updated_at": _iso(row.get("updated_at")),
+        }
+
+    def _ensure_pedido_digitacao_config(self, conn: Any) -> None:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql.SQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS {schema}.{table} (
+                        id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),
+                        motivos JSONB NOT NULL DEFAULT '["Fora de rota", "Sem data liberada"]'::jsonb,
+                        max_caixas_por_produto INTEGER NOT NULL DEFAULT 99999 CHECK (max_caixas_por_produto BETWEEN 1 AND 99999),
+                        limites_por_produto JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                        updated_by TEXT NOT NULL DEFAULT '',
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                ).format(schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE))
+            )
+            cur.execute(
+                sql.SQL("ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS limites_por_produto JSONB NOT NULL DEFAULT '{{}}'::jsonb").format(
+                    schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)
+                )
+            )
+            cur.execute(
+                sql.SQL(
+                    "INSERT INTO {schema}.{table} (id) VALUES (TRUE) ON CONFLICT (id) DO NOTHING"
+                ).format(schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE))
+            )
 
     def get_job(self, job_id: str | UUID) -> JobRecord | None:
         normalized_job_id = _uuid_text(job_id, field_name="job_id")
@@ -2875,6 +2972,37 @@ class PromaxJobsService:
                     )
         with self._pool.connection() as conn:
             yield conn
+
+
+def _pedido_product_limits(values: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for product, raw in values.items():
+        code = str(product).strip()
+        source = raw if isinstance(raw, Mapping) else {}
+        try:
+            limit = int(source.get("limite") or 0)
+        except (TypeError, ValueError):
+            continue
+        if code.isdigit() and 1 <= limit <= 99_999:
+            rows.append({"produto": code, "descricao": str(source.get("descricao") or "").strip(), "limite": limit})
+    return sorted(rows, key=lambda item: (item["descricao"] or item["produto"], item["produto"]))
+
+
+def _pedido_product_limits_to_mapping(values: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    if len(values) > 100:
+        raise ValueError("Informe no máximo 100 limites específicos por produto.")
+    result: dict[str, dict[str, Any]] = {}
+    for value in values:
+        code = str(value.get("produto") or "").strip()
+        description = str(value.get("descricao") or "").strip()
+        try:
+            limit = int(value.get("limite") or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Limite específico por produto inválido.") from exc
+        if not code.isdigit() or not 1 <= limit <= 99_999:
+            raise ValueError("Cada produto deve ter código numérico e limite entre 1 e 99.999 caixas.")
+        result[code] = {"descricao": description[:180], "limite": limit}
+    return result
 
 
 def _parse_time(value: str | time) -> time:

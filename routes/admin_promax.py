@@ -741,6 +741,10 @@ class PromaxEstoque020304ImportRequest(_StrictPayload):
         return name
 
 
+class PromaxCoraEstoqueImportRequest(PromaxEstoque020304ImportRequest):
+    """CSV Stock_Product baixado pelo worker Cora para uma filial do painel."""
+
+
 class PromaxCsvImportFile(_StrictPayload):
     filename: str = Field(min_length=1, max_length=255)
     file_base64: str = Field(min_length=1)
@@ -978,6 +982,7 @@ def create_admin_promax_router(
     worker_token: str | None,
     boletos_pdf_import_services: Mapping[str, Any] | None = None,
     estoque_020304_import_services: Mapping[str, Any] | None = None,
+    cora_estoque_import_service: Any | None = None,
     relatorio_031120_import_services: Mapping[str, Any] | None = None,
     relatorio_03114902_import_service: Any | None = None,
     inadimplencia_import_service: Any | None = None,
@@ -999,6 +1004,7 @@ def create_admin_promax_router(
     expected_worker_token = worker_token.strip() if isinstance(worker_token, str) else ""
     boleto_import_services = dict(boletos_pdf_import_services or {})
     estoque_import_services = dict(estoque_020304_import_services or {})
+    cora_stock_import_service = cora_estoque_import_service
     relatorio_031120_import_services_map = dict(relatorio_031120_import_services or {})
     critica_import_services = dict(critica_operacao_import_services or {})
 
@@ -1180,6 +1186,8 @@ def create_admin_promax_router(
         }[status]
 
     def enqueue_auto_retry_if_needed(completed_job: Any, *, worker_id: str) -> dict[str, Any] | None:
+        if str(_mapping_value(completed_job, "job_type", "") or "").strip() == "digitacao_030104":
+            return None
         status = str(_mapping_value(completed_job, "status", "") or "")
         if status not in {"failed", "partial_success"}:
             return None
@@ -2233,6 +2241,58 @@ def create_admin_promax_router(
             ),
             data={
                 "event": "promax_020304_auto_import_success",
+                "filial": payload.filial,
+                "filename": payload.filename,
+                "result": result,
+            },
+        )
+        return {"ok": True, "result": result}
+
+    @router.post("/api/internal/promax/cora-estoque/import")
+    def api_internal_promax_import_cora_estoque_csv(
+        payload: PromaxCoraEstoqueImportRequest,
+        _worker_auth: None = Depends(require_worker_auth),
+    ) -> dict[str, Any]:
+        if cora_stock_import_service is None:
+            raise HTTPException(status_code=400, detail="Importador da grade Stock_Product do Cora não configurado.")
+        lease_token = resolve_job_lease_token(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            provided_lease_token=payload.lease_token,
+        )
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=f"Importacao automatica Cora Estoque iniciada para filial {payload.filial}: {payload.filename}",
+            data={"event": "cora_estoque_auto_import_start", "filial": payload.filial, "filename": payload.filename},
+        )
+        try:
+            csv_bytes = base64.b64decode(payload.file_base64.encode("ascii"), validate=True)
+        except (UnicodeEncodeError, binascii.Error) as exc:
+            raise HTTPException(status_code=400, detail="Arquivo CSV em base64 invalido.") from exc
+        if not csv_bytes.strip():
+            raise HTTPException(status_code=400, detail=f"Arquivo CSV vazio: {payload.filename}.")
+        try:
+            result = cora_stock_import_service.import_csv(
+                filial=payload.filial,
+                filename=payload.filename,
+                content=csv_bytes,
+            )
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=422 if isinstance(exc, ValueError) else 503, detail=str(exc)) from exc
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                "Importacao automatica Cora Estoque concluida para filial "
+                f"{payload.filial}: {result.get('items', 0)} produto(s)."
+            ),
+            data={
+                "event": "cora_estoque_auto_import_success",
                 "filial": payload.filial,
                 "filename": payload.filename,
                 "result": result,
