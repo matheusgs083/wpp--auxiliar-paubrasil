@@ -7614,6 +7614,14 @@
           routines: ["030302", "03030702"]
         });
       }
+      // Pedidos do painel viram jobs "digitacao_030104"; a API procura a regra por esse tipo.
+      if (!categories.some(category => category.id === "digitacao_030104")) {
+        categories.push({
+          id: "digitacao_030104",
+          name: "Digitacao de pedidos",
+          routines: ["030104"]
+        });
+      }
       return categories;
     }
 
