@@ -52,6 +52,21 @@ class PromaxCatalogServiceTest(unittest.TestCase):
         self.assertEqual(result['preferred_worker_id'], 'promax-producao')
         self.assertIn('indisponível', result['warnings'][0])
 
+    def test_cora_estoque_aceita_codigos_promax_mesmo_com_worker_publicando_codigos_cora(self) -> None:
+        worker = {'worker_id': 'host-1', 'online': True, 'metadata': {'catalog': {'categories': {
+            'obz': {'name': 'OBZ', 'routines': ['0512']},
+            'cora_estoque': {'name': 'Cora', 'routines': ['grade_estoque'], 'units': ['487570', '747530']},
+        }}}}
+        catalog = PromaxCatalogService(jobs_service=FakeJobsService([worker]), fallback_catalog=DEFAULT_PROMAX_CATALOG).get_catalog()
+        self.assertEqual(catalog['source'], 'worker')
+        self.assertEqual(catalog['categories']['cora_estoque']['units'], [])
+        self.assertEqual(catalog['categories']['cora_critica']['units'], [])
+
+    def test_worker_antigo_sem_cora_estoque_recebe_a_categoria_do_servidor(self) -> None:
+        worker = {'worker_id': 'host-1', 'online': True, 'metadata': {'catalog': FALLBACK}}
+        catalog = PromaxCatalogService(jobs_service=FakeJobsService([worker]), fallback_catalog=DEFAULT_PROMAX_CATALOG).get_catalog()
+        self.assertIn('grade_estoque', [r['id'] for r in catalog['categories']['cora_estoque']['routines']])
+
     def test_140501_is_available_in_cashflow_fallback(self) -> None:
         routines = DEFAULT_PROMAX_CATALOG['categories']['fluxo_caixa']['routines']
         self.assertIn('140501', [row['id'] for row in routines])
@@ -121,6 +136,7 @@ class PromaxCatalogServiceTest(unittest.TestCase):
                 "bot_zap",
                 "botzapfechamento",
                 "cora_critica",
+                "cora_estoque",
                 "estoque",
                 "fluxo_caixa",
                 "giro",
