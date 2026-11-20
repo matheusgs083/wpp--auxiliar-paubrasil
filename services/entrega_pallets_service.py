@@ -8,8 +8,8 @@ from typing import Any
 from bot_api.commercial_scope import normalize_numeric_code
 from bot_api.services.liga_entrega_dashboard_service import (
     filial_from_name,
+    norm_header,
     norm_mapa,
-    pick,
     rows_from,
     stored_files,
     to_float,
@@ -18,7 +18,7 @@ from bot_api.services.liga_entrega_dashboard_service import (
 R030237 = "030237"
 # A e E são entregas; D (devolução) e C (cancelamento) não saem no caminhão.
 STATUS_ENTREGUES = {"A", "E"}
-CACHE_SEGUNDOS = 600
+CACHE_SEGUNDOS = 60
 
 
 class EntregaPalletsService:
@@ -66,29 +66,36 @@ class EntregaPalletsService:
         # A 03.02.37 é um acumulado do mês: vale só a última remessa.
         return max(candidates, key=lambda m: (str(m.get("stored_at") or ""), str(m.get("batch_id") or "")), default=None)
 
+    @staticmethod
+    def _campo(row: dict[str, str], nome: str) -> str:
+        # Só o nome exato da coluna. A busca aproximada da Liga confundiria, numa
+        # 03.02.37 sem itens, "Produto" com "NF Venda AG/Produto/Material".
+        return str(row.get(norm_header(nome)) or "")
+
     def _calcular(self, manifest: dict[str, Any]) -> dict[str, Any]:
         itens: list[tuple[str, str, str, str, float]] = []
         com_itens = False
         for file in stored_files(manifest):
             filial = filial_from_name(file["filename"])
             for row in rows_from(file["path"]):
-                if str(pick(row, "Status") or "").strip().upper() not in STATUS_ENTREGUES:
+                if self._campo(row, "Status").strip().upper() not in STATUS_ENTREGUES:
                     continue
-                produto = normalize_numeric_code(pick(row, "Produto"))
+                produto = normalize_numeric_code(self._campo(row, "Produto"))
                 if not produto:
                     continue
                 com_itens = True
                 itens.append((
                     filial,
-                    norm_mapa(pick(row, "Mapa")),
+                    norm_mapa(self._campo(row, "Mapa")),
                     produto,
-                    str(pick(row, "Unidade") or "").strip(),
-                    to_float(pick(row, "Qtde")),
+                    self._campo(row, "Unidade").strip(),
+                    to_float(self._campo(row, "Qtde")),
                 ))
         if not com_itens:
             return {"mapas": {}, "batch_id": manifest.get("batch_id", ""), "warnings": ["A última 03.02.37 importada não tem itens (Produto/Qtde)."]}
 
-        paletizacao = self._paletizacao({item[2] for item in itens})
+        produtos = {item[2] for item in itens}
+        paletizacao, erro = self._paletizacao(produtos)
         mapas: dict[tuple[str, str], dict[str, Any]] = defaultdict(lambda: {"pallets": 0.0, "caixas": 0.0, "itens_sem_paletizacao": 0})
         sem_cadastro: set[str] = set()
         for filial, mapa, produto, unidade, qtde in itens:
@@ -108,15 +115,27 @@ class EntregaPalletsService:
             item["pallets"] = round(item["pallets"], 2)
             item["caixas"] = round(item["caixas"], 2)
         warnings = []
-        if not paletizacao:
-            warnings.append("Cadastro de produtos (01.11) sem \"Caixas Pallet\": reimporte a 01.11 completa.")
+        if erro:
+            warnings.append(erro)
+        elif not paletizacao:
+            warnings.append(
+                "Nenhum dos %d produtos da 03.02.37 tem \"Caixas Pallet\" no cadastro de produtos: "
+                "reimporte a 01.11 completa no Cadastro de Produtos." % len(produtos)
+            )
+        elif sem_cadastro:
+            exemplos = ", ".join(sorted(sem_cadastro)[:8])
+            warnings.append(
+                "%d de %d produtos sem \"Caixas Pallet\" na 01.11 (ficam fora dos pallets): %s%s."
+                % (len(sem_cadastro), len(produtos), exemplos, "..." if len(sem_cadastro) > 8 else "")
+            )
         return {"mapas": dict(mapas), "batch_id": manifest.get("batch_id", ""), "warnings": warnings, "produtos_sem_paletizacao": len(sem_cadastro)}
 
-    def _paletizacao(self, produtos: set[str]) -> dict[str, tuple[float, float]]:
+    def _paletizacao(self, produtos: set[str]) -> tuple[dict[str, tuple[float, float]], str]:
+        """(paletização, erro). O erro vai para os avisos da tela em vez de virar zero calado."""
         lookup = getattr(self.dprodutos_import_service, "lookup_paletizacao", None)
         if not callable(lookup):
-            return {}
+            return {}, "Cadastro de produtos indisponível no servidor."
         try:
-            return lookup(produtos)
-        except Exception:
-            return {}
+            return lookup(produtos), ""
+        except Exception as exc:  # noqa: BLE001
+            return {}, f"Falha ao ler o cadastro de produtos (01.11): {exc}"

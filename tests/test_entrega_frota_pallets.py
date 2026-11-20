@@ -127,6 +127,23 @@ def test_pallets_usa_a_ultima_remessa_da_competencia_e_guarda_em_cache(tmp_path:
     assert produtos.calls == 1
 
 
+def test_03_02_37_sem_itens_nao_gera_pallets(tmp_path: Path):
+    # Mesmo cabeçalho da 03.02.37 sem as colunas de item; "NF Venda AG/Produto/Material"
+    # e "Qtde Volumes" não podem ser lidos como produto e quantidade.
+    arquivo = tmp_path / "sem_itens" / "03.02.37_PATOS_NOV.csv"
+    arquivo.parent.mkdir()
+    arquivo.write_text(
+        "Filial;Dt. Operacao;Nota;Serie;Status;Cliente;Mapa;NF Venda AG/Produto/Material;Qtde Volumes\r\n"
+        "0003;03/11/2026;1;003;A;3007; 96.027;123456;168\r\n",
+        encoding="cp1252",
+    )
+    manifest = {"batch_id": "sem", "stored_at": "2026-11-20T10:00:00", "metadata": {"competencia": "2026-11"},
+                "files": [{"filename": arquivo.name, "path": str(arquivo)}]}
+    result = EntregaPalletsService(report_store=FakeReportStore([manifest]), dprodutos_import_service=FakeProdutos()).pallets_por_mapa("2026-11")
+    assert result["mapas"] == {}
+    assert "não tem itens" in result["warnings"][0]
+
+
 def test_sem_03_02_37_avisa_em_vez_de_zerar(tmp_path: Path):
     result = EntregaPalletsService(report_store=FakeReportStore([]), dprodutos_import_service=FakeProdutos()).pallets_por_mapa("2026-11")
     assert result["mapas"] == {}
@@ -160,7 +177,7 @@ def test_ocupacao_em_pallets_compara_com_a_capacidade_e_meta_cadastradas(tmp_pat
     assert veiculo["ocupacao_pallets_pct"] == 50.0
     assert veiculo["meta_ocupacao_pct"] == 65.76
     assert veiculo["caminhao_descricao"] == "Toco"
-    assert result["ocupacao_avisos"] == []
+    assert not any("sem capacidade" in aviso for aviso in result["ocupacao_avisos"])
 
 
 def test_caminhao_sem_cadastro_mostra_pallets_e_avisa(tmp_path: Path):
@@ -170,7 +187,7 @@ def test_caminhao_sem_cadastro_mostra_pallets_e_avisa(tmp_path: Path):
     veiculo = result["vehicles"][0]
     assert veiculo["pallets"] == 3.0
     assert veiculo["ocupacao_pallets_pct"] is None
-    assert "sem capacidade cadastrada" in result["ocupacao_avisos"][0]
+    assert any("sem capacidade cadastrada" in aviso for aviso in result["ocupacao_avisos"])
 
 
 # ------------------------------------------------------ histórico enxuto
@@ -180,3 +197,69 @@ def test_historico_da_03_02_37_guarda_so_as_colunas_da_entrega():
     linha = {"Nota": "1", "Produto": "982", "Qtde": "168", "Mapa": "96.027", "Status": "A", "Chave de Acesso NF-e": "x" * 44, "Valor CBS": "0"}
     assert _payload_historico("030237", linha) == {"Nota": "1", "Produto": "982", "Qtde": "168", "Mapa": "96.027", "Status": "A"}
     assert _payload_historico("030805_LIGA", linha) == linha
+
+
+# --------------------------------------------- diagnóstico da paletização
+
+
+class ProdutosSemCaixasPallet(FakeProdutos):
+    def lookup_paletizacao(self, codigos):
+        return {}
+
+
+class ProdutosComErro(FakeProdutos):
+    def lookup_paletizacao(self, codigos):
+        raise RuntimeError("banco fora do ar")
+
+
+def test_cadastro_sem_caixas_pallet_explica_o_motivo(tmp_path: Path):
+    result = EntregaPalletsService(report_store=FakeReportStore([_manifest(tmp_path)]), dprodutos_import_service=ProdutosSemCaixasPallet()).pallets_por_mapa("2026-11")
+    assert result["mapas"][("PATOS", "96027")]["pallets"] == 0
+    assert "reimporte a 01.11" in result["warnings"][0]
+
+
+def test_erro_no_cadastro_aparece_no_aviso(tmp_path: Path):
+    result = EntregaPalletsService(report_store=FakeReportStore([_manifest(tmp_path)]), dprodutos_import_service=ProdutosComErro()).pallets_por_mapa("2026-11")
+    assert "banco fora do ar" in result["warnings"][0]
+
+
+def test_produto_sem_paletizacao_e_listado(tmp_path: Path):
+    result = EntregaPalletsService(report_store=FakeReportStore([_manifest(tmp_path)]), dprodutos_import_service=FakeProdutos()).pallets_por_mapa("2026-11")
+    # O vasilhame 287241 não está na 01.11.
+    assert "287241" in result["warnings"][0]
+
+
+@pytest.mark.parametrize("chave_caixas, chave_fator", [
+    ("Caixas Pallet", "Fator"),
+    ("CAIXAS_PALLET", "FATOR"),
+    (" Caixas  Pallet ", "Fator "),
+])
+def test_lookup_paletizacao_aceita_variacoes_do_nome_da_coluna(chave_caixas, chave_fator):
+    from bot_api.services.dprodutos_import_service import DProdutosImportService
+
+    linhas = [
+        ("982", {chave_caixas: "0084", chave_fator: "012", "Caixas Pallet 1": "000"}),
+        ("2", {"Descrição": "GAS CARBONICO"}),  # sem a coluna: fica de fora
+    ]
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, query, params):
+            self.params = params
+
+        def fetchall(self):
+            return linhas
+
+    class Conexao(Cursor):
+        def cursor(self):
+            return Cursor()
+
+    service = DProdutosImportService.__new__(DProdutosImportService)
+    service.schema = "reports"
+    service._connect = lambda: Conexao()
+    assert service.lookup_paletizacao({"0000982", "2"}) == {"982": (12.0, 84.0)}

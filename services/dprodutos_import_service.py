@@ -612,25 +612,29 @@ class DProdutosImportService:
         return result
 
     def lookup_paletizacao(self, codigos: set[str] | list[str] | tuple[str, ...]) -> dict[str, tuple[float, float]]:
-        """(Fator, Caixas Pallet) da 01.11 por produto, lidos da linha original importada."""
+        """(Fator, Caixas Pallet) da 01.11 por produto, lidos da linha original importada.
+
+        O nome da coluna é comparado sem acento, espaço ou caixa ("Caixas Pallet",
+        "CAIXAS_PALLET"...). Produto sem a coluna fica de fora do resultado.
+        """
         normalized = sorted({normalize_numeric_code(code) for code in codigos if str(code or "").strip()})
         if not normalized:
             return {}
         placeholders = ", ".join("%s" for _ in normalized)
-        query = (
-            f"SELECT codigo, payload ->> 'Fator', payload ->> 'Caixas Pallet' "
-            f"FROM {self.schema}.dprodutos_latest WHERE codigo IN ({placeholders})"
-        )
-        try:
-            with self._connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(query, normalized)
-                    rows = cur.fetchall()
-        except Exception:
-            return {}
+        query = f"SELECT codigo, payload FROM {self.schema}.dprodutos_latest WHERE codigo IN ({placeholders})"
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, normalized)
+                rows = cur.fetchall()
         result: dict[str, tuple[float, float]] = {}
-        for codigo, fator, caixas_pallet in rows:
-            result[normalize_numeric_code(codigo)] = (_paletizacao_number(fator), _paletizacao_number(caixas_pallet))
+        for codigo, payload in rows:
+            campos = {_paletizacao_header(key): value for key, value in dict(payload or {}).items()}
+            if "caixaspallet" not in campos:
+                continue
+            result[normalize_numeric_code(codigo)] = (
+                _paletizacao_number(campos.get("fator")),
+                _paletizacao_number(campos.get("caixaspallet")),
+            )
         return result
 
     def _connect(self) -> psycopg.Connection[Any]:
@@ -768,6 +772,11 @@ def _sort_numeric(value: str) -> tuple[int, str]:
         except ValueError:
             return (1, cleaned)
     return (2, str(value or "").strip())
+
+
+def _paletizacao_header(value: Any) -> str:
+    text = unicodedata.normalize("NFD", str(value or ""))
+    return "".join(ch for ch in text.lower() if ch.isalnum() and unicodedata.category(ch) != "Mn")
 
 
 def _paletizacao_number(value: Any) -> float:

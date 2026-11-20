@@ -1996,7 +1996,9 @@
               <div><label class="form-label small mb-1" for="entregaJornadaMapasFilial">Operação</label><select class="form-select form-select-sm" id="entregaJornadaMapasFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
               <div><label class="form-label small mb-1" for="entregaJornadaMapasJustificativa">Justificativa</label><select class="form-select form-select-sm" id="entregaJornadaMapasJustificativa"><option value="">Todas</option><option value="pendente">Pendentes</option><option value="justificada">Justificadas</option></select></div>
               <div><label class="form-label small mb-1" for="entregaJornadaMapasDevolucao">Devolução</label><select class="form-select form-select-sm" id="entregaJornadaMapasDevolucao"><option value="">Todas</option><option value="com">Com devolução</option><option value="sem">Sem devolução</option></select></div>
-              <div><label class="form-label small mb-1" for="entregaJornadaMapasOrdem">Ordenar</label><select class="form-select form-select-sm" id="entregaJornadaMapasOrdem"><option value="data">Mais recentes</option><option value="jornada">Maior jornada</option><option value="dif">Mais acima do previsto</option><option value="devolucao">Maior devolução</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasDe">De</label><input class="form-control form-control-sm" id="entregaJornadaMapasDe" type="date"></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasAte">Até</label><input class="form-control form-control-sm" id="entregaJornadaMapasAte" type="date"></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasOrdem">Ordenar</label><select class="form-select form-select-sm" id="entregaJornadaMapasOrdem"><option value="data">Mais recentes</option><option value="jornada">Pior jornada → melhor</option><option value="dif">Mais acima do previsto → menos</option><option value="devolucao">Maior devolução → menor</option></select></div>
               <div class="flex-grow-1" style="min-width:180px"><label class="form-label small mb-1" for="entregaJornadaMapasBusca">Buscar</label><input class="form-control form-control-sm" id="entregaJornadaMapasBusca" placeholder="Mapa, placa, rota ou motorista"></div>
               <button class="btn btn-outline-secondary btn-sm" id="entregaJornadaMapasLimparFiltrosBtn" type="button">Limpar filtros</button>
             </div>
@@ -2009,6 +2011,9 @@
             <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Ocupação por veículo</h2><div class="form-text" id="entregaOcupacaoVeiculosStatus">Ocupação da 03.08.05 por mapa e placa.</div></div></div>
             <div class="d-flex flex-wrap align-items-end gap-2 mb-3" aria-label="Filtros de ocupação por veículo">
               <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosFilial">Operação</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosDe">De</label><input class="form-control form-control-sm" id="entregaOcupacaoVeiculosDe" type="date"></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosAte">Até</label><input class="form-control form-control-sm" id="entregaOcupacaoVeiculosAte" type="date"></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosOrdem">Ordenar</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosOrdem"><option value="data">Mais recentes</option><option value="ocupacao">Pior ocupação → melhor</option><option value="pallets">Menos pallets → mais</option></select></div>
               <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosComparacao">Ocupação</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosComparacao"><option value="maior_igual">Maior ou igual a</option><option value="maior">Maior que</option><option value="menor_igual">Menor ou igual a</option><option value="menor">Menor que</option><option value="igual">Igual a</option></select></div>
               <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosValor">Percentual</label><div class="input-group input-group-sm"><input class="form-control" id="entregaOcupacaoVeiculosValor" type="number" min="0" max="200" step="0.01" value="0" aria-label="Percentual de ocupação"><span class="input-group-text">%</span></div></div>
               <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosJustificativa">Justificativa</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosJustificativa"><option value="">Todas</option><option value="pendente">Pendentes</option><option value="justificada">Justificadas</option></select></div>
@@ -4310,6 +4315,8 @@
       entregaJornadaMapasDevolucao: document.getElementById("entregaJornadaMapasDevolucao"),
       entregaJornadaMapasBusca: document.getElementById("entregaJornadaMapasBusca"),
       entregaJornadaMapasOrdem: document.getElementById("entregaJornadaMapasOrdem"),
+      entregaJornadaMapasDe: document.getElementById("entregaJornadaMapasDe"),
+      entregaJornadaMapasAte: document.getElementById("entregaJornadaMapasAte"),
       entregaJornadaMapasLimparFiltrosBtn: document.getElementById("entregaJornadaMapasLimparFiltrosBtn"),
       entregaOcupacaoVeiculosStatus: document.getElementById("entregaOcupacaoVeiculosStatus"),
       entregaOcupacaoVeiculosCards: document.getElementById("entregaOcupacaoVeiculosCards"),
@@ -4319,6 +4326,9 @@
       entregaOcupacaoVeiculosValor: document.getElementById("entregaOcupacaoVeiculosValor"),
       entregaOcupacaoVeiculosBusca: document.getElementById("entregaOcupacaoVeiculosBusca"),
       entregaOcupacaoVeiculosJustificativa: document.getElementById("entregaOcupacaoVeiculosJustificativa"),
+      entregaOcupacaoVeiculosDe: document.getElementById("entregaOcupacaoVeiculosDe"),
+      entregaOcupacaoVeiculosAte: document.getElementById("entregaOcupacaoVeiculosAte"),
+      entregaOcupacaoVeiculosOrdem: document.getElementById("entregaOcupacaoVeiculosOrdem"),
       entregaOcupacaoVeiculosLimparFiltrosBtn: document.getElementById("entregaOcupacaoVeiculosLimparFiltrosBtn"),
       entregaMapasMensaisRefreshBtn: document.getElementById("entregaMapasMensaisRefreshBtn"),
       entregaMapasMensaisStatus: document.getElementById("entregaMapasMensaisStatus"),
@@ -6209,17 +6219,26 @@
       return text === "SUME" ? "Sumé" : text === "PATOS" ? "Patos" : (value || "-");
     }
 
+    function opsNoPeriodo(row, de, ate) {
+      // row.data vem como AAAA-MM-DD; os campos De/Até usam o mesmo formato.
+      const day = String(row.data || "").slice(0, 10);
+      return (!de || day >= de) && (!ate || day <= ate);
+    }
+
     function renderJornadaMapas(payload = {}) {
       const allRows = Array.isArray(payload.rows) ? payload.rows : [];
       const branch = String(E.entregaJornadaMapasFilial?.value || "").toUpperCase();
       const justification = String(E.entregaJornadaMapasJustificativa?.value || "");
       const returns = String(E.entregaJornadaMapasDevolucao?.value || "");
       const order = String(E.entregaJornadaMapasOrdem?.value || "data");
+      const de = String(E.entregaJornadaMapasDe?.value || "");
+      const ate = String(E.entregaJornadaMapasAte?.value || "");
       const query = String(E.entregaJornadaMapasBusca?.value || "").trim().toLocaleLowerCase("pt-BR");
       const rows = allRows.filter(row => {
         const hasReturn = Number(row.devolucao_caixas || 0) > 0;
         const text = [row.data, row.filial, row.mapa, row.placa, row.rota, row.motorista].join(" ").toLocaleLowerCase("pt-BR");
         return (!branch || String(row.filial || "").toUpperCase() === branch)
+          && opsNoPeriodo(row, de, ate)
           && (!justification || (justification === "justificada" ? Boolean(row.justificada) : !row.justificada))
           && (!returns || (returns === "com" ? hasReturn : !hasReturn))
           && (!query || text.includes(query));
@@ -6289,6 +6308,9 @@
       const comparison = String(E.entregaOcupacaoVeiculosComparacao?.value || "maior_igual");
       const threshold = Number(E.entregaOcupacaoVeiculosValor?.value || 0);
       const justification = String(E.entregaOcupacaoVeiculosJustificativa?.value || "");
+      const de = String(E.entregaOcupacaoVeiculosDe?.value || "");
+      const ate = String(E.entregaOcupacaoVeiculosAte?.value || "");
+      const order = String(E.entregaOcupacaoVeiculosOrdem?.value || "data");
       const query = String(E.entregaOcupacaoVeiculosBusca?.value || "").trim().toLocaleLowerCase("pt-BR");
       const matches = value => ({ maior: value > threshold, maior_igual: value >= threshold, menor: value < threshold, menor_igual: value <= threshold, igual: Math.abs(value - threshold) < .005 }[comparison] ?? true);
       // Ocupação por pallets (03.02.37 com itens ÷ capacidade do caminhão); sem itens, o peso da 03.08.05.
@@ -6297,10 +6319,14 @@
         const occupation = occupationOf(row);
         const text = [row.placa, row.mapa, row.rota, row.data, row.filial, row.caminhao_descricao].join(" ").toLocaleLowerCase("pt-BR");
         return (!branch || String(row.filial || "").toUpperCase() === branch)
+          && opsNoPeriodo(row, de, ate)
           && (occupation === null || matches(occupation))
           && (!justification || (justification === "justificada" ? Boolean(row.ocupacao_justificada) : !row.ocupacao_justificada))
           && (!query || text.includes(query));
       });
+      // Pior → melhor: menor ocupação primeiro; carros sem ocupação calculada vão para o fim.
+      const ascending = { ocupacao: occupationOf, pallets: row => (row.pallets === null || row.pallets === undefined ? null : Number(row.pallets)) }[order];
+      if (ascending) rows.sort((a, b) => (ascending(a) ?? Infinity) - (ascending(b) ?? Infinity));
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
       const toneOf = row => {
         const occupation = row.ocupacao_pallets_pct;
@@ -6319,9 +6345,9 @@
         ? `${rows.length} mapa(s)/veículo(s) no filtro · pallets da 03.02.37 + 01.11${avisos.length ? ` · ${avisos.join(" ")}` : ""}`
         : (avisos[0] || "Nenhum veículo atende aos filtros de ocupação.");
       if (E.entregaOcupacaoVeiculosCards) E.entregaOcupacaoVeiculosCards.innerHTML = opsMetricCards([
-        ["Pallets por carro", averagePallets === null ? "—" : fmt(averagePallets), `média de ${fmt(withPallets.length)} mapa(s) com itens`],
+        ["Pallets por carro", averagePallets === null ? "—" : fmt(averagePallets), withPallets.length ? `média de ${fmt(withPallets.length)} mapa(s) com itens` : "aguardando a 03.02.37 com itens"],
         ["Ocupação média", averageOccupation === null ? "—" : `${fmt(averageOccupation)}%`, metas.length ? `meta ${metas.map(([filial, meta]) => `${opsBranch(filial)} ${fmt(meta)}%`).join(" · ")}` : "cadastre a meta na aba Caminhões"],
-        ["Abaixo da meta", fmt(below.length), `${fmt(withOccupation.length)} carro(s) com capacidade cadastrada`],
+        ["Abaixo da meta", fmt(below.length), withOccupation.length ? `de ${fmt(withOccupation.length)} carro(s) com ocupação em pallets` : "aguardando a 03.02.37 com itens"],
         ["Justificativas pendentes", fmt(below.filter(row => !row.ocupacao_justificada).length), "entre os abaixo da meta"],
       ]);
       if (E.entregaOcupacaoVeiculosLegenda) E.entregaOcupacaoVeiculosLegenda.innerHTML = `<span>Ocupação:</span><span class="ops-chip ok">na meta ou acima</span><span class="ops-chip warn">até 10 p.p. abaixo</span><span class="ops-chip bad">mais de 10 p.p. abaixo</span><span class="ops-chip neutral">sem capacidade ou sem itens</span>`;
@@ -12336,14 +12362,14 @@
         renderIndicadores(state.ligaIndicadores || {});
       });
       if (E.entregaJornadaMapasRefreshBtn) E.entregaJornadaMapasRefreshBtn.addEventListener("click", () => syncJornadaMapas({ silent: false }));
-      [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao, E.entregaJornadaMapasOrdem].forEach(input => input?.addEventListener("change", () => renderJornadaMapas(state.ligaJornadaMapas || {})));
+      [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao, E.entregaJornadaMapasOrdem, E.entregaJornadaMapasDe, E.entregaJornadaMapasAte].forEach(input => input?.addEventListener("change", () => renderJornadaMapas(state.ligaJornadaMapas || {})));
       if (E.entregaJornadaMapasBusca) E.entregaJornadaMapasBusca.addEventListener("input", () => renderJornadaMapas(state.ligaJornadaMapas || {}));
       if (E.entregaJornadaMapasLimparFiltrosBtn) E.entregaJornadaMapasLimparFiltrosBtn.addEventListener("click", () => {
-        [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao, E.entregaJornadaMapasBusca].forEach(input => { if (input) input.value = ""; });
+        [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao, E.entregaJornadaMapasBusca, E.entregaJornadaMapasDe, E.entregaJornadaMapasAte].forEach(input => { if (input) input.value = ""; });
         if (E.entregaJornadaMapasOrdem) E.entregaJornadaMapasOrdem.value = "data";
         renderJornadaMapas(state.ligaJornadaMapas || {});
       });
-      [E.entregaOcupacaoVeiculosFilial, E.entregaOcupacaoVeiculosComparacao, E.entregaOcupacaoVeiculosValor, E.entregaOcupacaoVeiculosJustificativa].forEach(input => input?.addEventListener("change", () => renderOcupacaoVeiculos(state.ligaJornadaMapas || {})));
+      [E.entregaOcupacaoVeiculosFilial, E.entregaOcupacaoVeiculosComparacao, E.entregaOcupacaoVeiculosValor, E.entregaOcupacaoVeiculosJustificativa, E.entregaOcupacaoVeiculosDe, E.entregaOcupacaoVeiculosAte, E.entregaOcupacaoVeiculosOrdem].forEach(input => input?.addEventListener("change", () => renderOcupacaoVeiculos(state.ligaJornadaMapas || {})));
       if (E.entregaOcupacaoVeiculosBusca) E.entregaOcupacaoVeiculosBusca.addEventListener("input", () => renderOcupacaoVeiculos(state.ligaJornadaMapas || {}));
       if (E.entregaOcupacaoVeiculosLimparFiltrosBtn) E.entregaOcupacaoVeiculosLimparFiltrosBtn.addEventListener("click", () => {
         if (E.entregaOcupacaoVeiculosFilial) E.entregaOcupacaoVeiculosFilial.value = "";
@@ -12351,6 +12377,8 @@
         if (E.entregaOcupacaoVeiculosValor) E.entregaOcupacaoVeiculosValor.value = "0";
         if (E.entregaOcupacaoVeiculosBusca) E.entregaOcupacaoVeiculosBusca.value = "";
         if (E.entregaOcupacaoVeiculosJustificativa) E.entregaOcupacaoVeiculosJustificativa.value = "";
+        [E.entregaOcupacaoVeiculosDe, E.entregaOcupacaoVeiculosAte].forEach(input => { if (input) input.value = ""; });
+        if (E.entregaOcupacaoVeiculosOrdem) E.entregaOcupacaoVeiculosOrdem.value = "data";
         renderOcupacaoVeiculos(state.ligaJornadaMapas || {});
       });
       [E.entregaJornadaMapasBody, E.entregaOcupacaoVeiculosBody].forEach(body => {
