@@ -1961,6 +1961,32 @@
             <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Operação</th><th>Puxada</th><th class="text-end">Caixas / viagem</th><th class="text-end">Ocupação</th></tr></thead><tbody id="entregaIndicadoresBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando importação do BI 17.06.</td></tr></tbody></table></div>
           </section>
           <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-signpost-split me-2 text-primary"></i>Jornada por mapa</h2><div class="form-text" id="entregaJornadaMapasStatus">Planejamento da 03.11.49.02 cruzado com execução da 03.08.05. Devolução em caixas retornadas.</div></div><button class="btn btn-outline-primary btn-sm" id="entregaJornadaMapasRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-3" aria-label="Filtros da jornada por mapa">
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasFilial">Operação</label><select class="form-select form-select-sm" id="entregaJornadaMapasFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasJustificativa">Justificativa</label><select class="form-select form-select-sm" id="entregaJornadaMapasJustificativa"><option value="">Todas</option><option value="pendente">Pendentes</option><option value="justificada">Justificadas</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasDevolucao">Devolução</label><select class="form-select form-select-sm" id="entregaJornadaMapasDevolucao"><option value="">Todas</option><option value="com">Com devolução</option><option value="sem">Sem devolução</option></select></div>
+              <div class="flex-grow-1" style="min-width:180px"><label class="form-label small mb-1" for="entregaJornadaMapasBusca">Buscar</label><input class="form-control form-control-sm" id="entregaJornadaMapasBusca" placeholder="Mapa, placa, rota ou motorista"></div>
+              <button class="btn btn-outline-secondary btn-sm" id="entregaJornadaMapasLimparFiltrosBtn" type="button">Limpar filtros</button>
+            </div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaJornadaMapasCards"></div>
+            <div class="source-path mb-2">A coluna <strong>Devolução</strong> é calculada por <strong>CxCarreg − CxEntreg</strong> da 03.08.05; não representa número de notas devolvidas.</div>
+            <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Operação</th><th>Mapa</th><th>Placa</th><th>Rota</th><th class="text-end">Peso</th><th class="text-end">Entregas</th><th class="text-end">Devolução (CX)</th><th>Fontes</th><th style="min-width:260px">Justificativa manual</th></tr></thead><tbody id="entregaJornadaMapasBody"><tr><td colspan="10" class="text-center text-secondary py-4">Aguardando os relatórios da competência.</td></tr></tbody></table></div>
+          </section>
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Ocupação por veículo</h2><div class="form-text" id="entregaOcupacaoVeiculosStatus">Ocupação da 03.08.05 por mapa e placa.</div></div></div>
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-3" aria-label="Filtros de ocupação por veículo">
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosFilial">Operação</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosComparacao">Ocupação</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosComparacao"><option value="maior_igual">Maior ou igual a</option><option value="maior">Maior que</option><option value="menor_igual">Menor ou igual a</option><option value="menor">Menor que</option><option value="igual">Igual a</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosValor">Percentual</label><div class="input-group input-group-sm"><input class="form-control" id="entregaOcupacaoVeiculosValor" type="number" min="0" max="200" step="0.01" value="0" aria-label="Percentual de ocupação"><span class="input-group-text">%</span></div></div>
+              <div class="flex-grow-1" style="min-width:180px"><label class="form-label small mb-1" for="entregaOcupacaoVeiculosBusca">Buscar</label><input class="form-control form-control-sm" id="entregaOcupacaoVeiculosBusca" placeholder="Placa, mapa ou rota"></div>
+              <button class="btn btn-outline-secondary btn-sm" id="entregaOcupacaoVeiculosLimparFiltrosBtn" type="button">Limpar filtros</button>
+            </div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaOcupacaoVeiculosCards"></div>
+            <div class="source-path mb-2">Ocupação informada na 03.08.05. Se ela estiver vazia, o painel calcula <strong>PesoCargaKG ÷ CapacidadeVeiculoKG</strong>.</div>
+            <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Operação</th><th>Placa</th><th>Mapa</th><th>Rota</th><th class="text-end">Peso</th><th class="text-end">Capacidade</th><th class="text-end">Ocupação</th></tr></thead><tbody id="entregaOcupacaoVeiculosBody"><tr><td colspan="8" class="text-center text-secondary py-4">Aguardando a 03.08.05.</td></tr></tbody></table></div>
+          </section>
+          <section class="panel-card p-3 mb-3">
             <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-geo-alt me-2 text-primary"></i>Cidades por mapa · mensal</h2><div class="form-text" id="entregaMapasMensaisStatus">Card independente da 03.11.49.02 já usada pela Liga.</div></div><button class="btn btn-outline-primary btn-sm" id="entregaMapasMensaisRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
             <div class="recolha-dashboard-grid mb-3" id="entregaMapasMensaisCards"></div>
             <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Filial</th><th>Mapa</th><th>Cidade</th><th>Data</th></tr></thead><tbody id="entregaMapasMensaisBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando o lote mensal.</td></tr></tbody></table></div>
@@ -3687,6 +3713,7 @@
           reports: "/api/admin/liga-entrega/relatorios",
           dashboard: "/api/admin/liga-entrega/dashboard",
           indicadores: "/api/admin/liga-entrega/indicadores",
+          jornadaMapas: "/api/admin/liga-entrega/indicadores/jornada-mapas",
           mapasMensais: "/api/admin/liga-entrega/mapas-mensais",
           mapasOperacionais: "/api/admin/liga-entrega/mapas-operacionais",
           mapasOperacionaisPdf: "/api/admin/liga-entrega/mapas-operacionais/pdf",
@@ -4220,6 +4247,23 @@
       entregaIndicadoresFilial: document.getElementById("entregaIndicadoresFilial"),
       entregaIndicadoresSituacao: document.getElementById("entregaIndicadoresSituacao"),
       entregaIndicadoresLimparFiltrosBtn: document.getElementById("entregaIndicadoresLimparFiltrosBtn"),
+      entregaJornadaMapasRefreshBtn: document.getElementById("entregaJornadaMapasRefreshBtn"),
+      entregaJornadaMapasStatus: document.getElementById("entregaJornadaMapasStatus"),
+      entregaJornadaMapasCards: document.getElementById("entregaJornadaMapasCards"),
+      entregaJornadaMapasBody: document.getElementById("entregaJornadaMapasBody"),
+      entregaJornadaMapasFilial: document.getElementById("entregaJornadaMapasFilial"),
+      entregaJornadaMapasJustificativa: document.getElementById("entregaJornadaMapasJustificativa"),
+      entregaJornadaMapasDevolucao: document.getElementById("entregaJornadaMapasDevolucao"),
+      entregaJornadaMapasBusca: document.getElementById("entregaJornadaMapasBusca"),
+      entregaJornadaMapasLimparFiltrosBtn: document.getElementById("entregaJornadaMapasLimparFiltrosBtn"),
+      entregaOcupacaoVeiculosStatus: document.getElementById("entregaOcupacaoVeiculosStatus"),
+      entregaOcupacaoVeiculosCards: document.getElementById("entregaOcupacaoVeiculosCards"),
+      entregaOcupacaoVeiculosBody: document.getElementById("entregaOcupacaoVeiculosBody"),
+      entregaOcupacaoVeiculosFilial: document.getElementById("entregaOcupacaoVeiculosFilial"),
+      entregaOcupacaoVeiculosComparacao: document.getElementById("entregaOcupacaoVeiculosComparacao"),
+      entregaOcupacaoVeiculosValor: document.getElementById("entregaOcupacaoVeiculosValor"),
+      entregaOcupacaoVeiculosBusca: document.getElementById("entregaOcupacaoVeiculosBusca"),
+      entregaOcupacaoVeiculosLimparFiltrosBtn: document.getElementById("entregaOcupacaoVeiculosLimparFiltrosBtn"),
       entregaMapasMensaisRefreshBtn: document.getElementById("entregaMapasMensaisRefreshBtn"),
       entregaMapasMensaisStatus: document.getElementById("entregaMapasMensaisStatus"),
       entregaMapasMensaisCards: document.getElementById("entregaMapasMensaisCards"),
@@ -6044,6 +6088,97 @@
       if (E.entregaIndicadoresBody) E.entregaIndicadoresBody.innerHTML = branches.map(item => `<tr><td>${escapeHtml(item.filial || "-")}</td><td>${escapeHtml(item.puxada || "-")}</td><td class="text-end">${fmtNumber(item.metrics && item.metrics.caixas_por_viagem)}</td><td class="text-end">${fmtPercent(item.metrics && item.metrics.ocupacao)}</td></tr>`).join("") || '<tr><td colspan="4" class="text-center text-secondary py-4">Nenhum lote 17.06 importado ainda.</td></tr>';
     }
 
+    function renderJornadaMapas(payload = {}) {
+      const allRows = Array.isArray(payload.rows) ? payload.rows : [];
+      const branch = String(E.entregaJornadaMapasFilial?.value || "").toUpperCase();
+      const justification = String(E.entregaJornadaMapasJustificativa?.value || "");
+      const returns = String(E.entregaJornadaMapasDevolucao?.value || "");
+      const query = String(E.entregaJornadaMapasBusca?.value || "").trim().toLocaleLowerCase("pt-BR");
+      const rows = allRows.filter(row => {
+        const hasReturn = Number(row.devolucao_caixas || 0) > 0;
+        const text = [row.data, row.filial, row.mapa, row.placa, row.rota, row.motorista].join(" ").toLocaleLowerCase("pt-BR");
+        return (!branch || String(row.filial || "").toUpperCase() === branch)
+          && (!justification || (justification === "justificada" ? Boolean(row.justificada) : !row.justificada))
+          && (!returns || (returns === "com" ? hasReturn : !hasReturn))
+          && (!query || text.includes(query));
+      });
+      const fmtNumber = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      const summary = {
+        mapas: rows.length,
+        devolucao: rows.reduce((total, row) => total + Number(row.devolucao_caixas || 0), 0),
+        comDevolucao: rows.filter(row => Number(row.devolucao_caixas || 0) > 0).length,
+        pendentes: rows.filter(row => !row.justificada).length,
+      };
+      if (E.entregaJornadaMapasStatus) E.entregaJornadaMapasStatus.textContent = rows.length
+        ? `${payload.competencia || ""} · ${rows.length} mapa(s) no filtro · 03.11.49.02 + 03.08.05`
+        : ((payload.warnings || ["Nenhum mapa para os filtros selecionados."])[0]);
+      if (E.entregaJornadaMapasCards) E.entregaJornadaMapasCards.innerHTML = [
+        ["Mapas", fmtNumber(summary.mapas), "no filtro"],
+        ["Com devolução", fmtNumber(summary.comDevolucao), "mapa(s) com caixas retornadas"],
+        ["Devolução", `${fmtNumber(summary.devolucao)} CX`, "CxCarreg − CxEntreg"],
+        ["Justificativas pendentes", fmtNumber(summary.pendentes), "preenchimento manual"],
+      ].map(([label, value, note]) => `<article class="metric-card" style="display:flex;flex-direction:column;align-items:flex-start;gap:.25rem"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b><small>${escapeHtml(note)}</small></article>`).join("");
+      if (!E.entregaJornadaMapasBody) return;
+      E.entregaJornadaMapasBody.innerHTML = rows.map(row => {
+        const current = row.justificativa || {};
+        const sourceBadges = `${row.tem_03114902 ? '<span class="badge text-bg-info me-1">03.11.49.02</span>' : ""}${row.tem_030805 ? '<span class="badge text-bg-success">03.08.05</span>' : '<span class="badge text-bg-warning">sem 03.08.05</span>'}`;
+        const value = row.devolucao_caixas === null || row.devolucao_caixas === undefined ? "—" : `${fmtNumber(row.devolucao_caixas)} CX`;
+        return `<tr><td>${escapeHtml(formatDate(row.data) || row.data || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td class="mono">${escapeHtml(row.mapa || "-")}</td><td>${escapeHtml(row.placa || "-")}</td><td style="min-width:190px">${escapeHtml(row.rota || "-")}</td><td class="text-end">${row.peso_kg === null || row.peso_kg === undefined ? "—" : `${fmtNumber(row.peso_kg)} kg`}</td><td class="text-end">${row.entregas === null || row.entregas === undefined ? "—" : escapeHtml(fmtNumber(row.entregas))}</td><td class="text-end ${Number(row.devolucao_caixas || 0) > 0 ? "text-warning fw-semibold" : ""}">${escapeHtml(value)}</td><td>${sourceBadges}</td><td><div class="d-flex gap-1 align-items-start"><textarea class="form-control form-control-sm jornada-mapa-justificativa" rows="2" data-key="${escapeHtml(row.justificativa_id || "")}" data-version="${escapeHtml(current.version || "")}" placeholder="Justifique este mapa...">${escapeHtml(current.text || "")}</textarea><button type="button" class="btn btn-outline-primary btn-sm jornada-mapa-salvar" data-key="${escapeHtml(row.justificativa_id || "")}" title="Salvar justificativa"><i class="bi bi-check2"></i><span class="visually-hidden">Salvar</span></button></div>${current.updated_by ? `<small class="text-secondary">${escapeHtml(current.updated_by)} · ${escapeHtml(formatDateTime(current.updated_at) || current.updated_at || "")}</small>` : '<small class="text-warning">Pendente</small>'}</td></tr>`;
+      }).join("") || '<tr><td colspan="10" class="text-center text-secondary py-4">Nenhum mapa para os filtros selecionados.</td></tr>';
+      renderOcupacaoVeiculos(payload);
+    }
+
+    function renderOcupacaoVeiculos(payload = {}) {
+      const branch = String(E.entregaOcupacaoVeiculosFilial?.value || "").toUpperCase();
+      const comparison = String(E.entregaOcupacaoVeiculosComparacao?.value || "maior_igual");
+      const threshold = Number(E.entregaOcupacaoVeiculosValor?.value || 0);
+      const query = String(E.entregaOcupacaoVeiculosBusca?.value || "").trim().toLocaleLowerCase("pt-BR");
+      const matches = value => ({ maior: value > threshold, maior_igual: value >= threshold, menor: value < threshold, menor_igual: value <= threshold, igual: Math.abs(value - threshold) < .005 }[comparison] ?? true);
+      const rows = (Array.isArray(payload.vehicles) ? payload.vehicles : []).filter(row => {
+        const occupation = Number(row.ocupacao_percentual);
+        const text = [row.placa, row.mapa, row.rota, row.data, row.filial].join(" ").toLocaleLowerCase("pt-BR");
+        return (!branch || String(row.filial || "").toUpperCase() === branch) && Number.isFinite(occupation) && matches(occupation) && (!query || text.includes(query));
+      });
+      const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      const average = rows.length ? rows.reduce((total, row) => total + Number(row.ocupacao_percentual || 0), 0) / rows.length : 0;
+      if (E.entregaOcupacaoVeiculosStatus) E.entregaOcupacaoVeiculosStatus.textContent = rows.length ? `${rows.length} mapa(s)/veículo(s) no filtro · dados da 03.08.05` : "Nenhum veículo atende aos filtros de ocupação.";
+      if (E.entregaOcupacaoVeiculosCards) E.entregaOcupacaoVeiculosCards.innerHTML = [["Veículos no filtro", fmt(rows.length), "mapas com placa e ocupação"], ["Ocupação média", `${fmt(average)}%`, "nos mapas exibidos"], ["Maior ocupação", rows.length ? `${fmt(Math.max(...rows.map(row => Number(row.ocupacao_percentual || 0))))}%` : "—", "no filtro"]].map(([label, value, note]) => `<article class="metric-card" style="display:flex;flex-direction:column;align-items:flex-start;gap:.25rem"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b><small>${escapeHtml(note)}</small></article>`).join("");
+      if (!E.entregaOcupacaoVeiculosBody) return;
+      E.entregaOcupacaoVeiculosBody.innerHTML = rows.map(row => `<tr><td>${escapeHtml(formatDate(row.data) || row.data || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td class="mono fw-semibold">${escapeHtml(row.placa || "-")}</td><td class="mono">${escapeHtml(row.mapa || "-")}</td><td style="min-width:180px">${escapeHtml(row.rota || "-")}</td><td class="text-end">${row.peso_kg === null || row.peso_kg === undefined ? "—" : `${fmt(row.peso_kg)} kg`}</td><td class="text-end">${row.capacidade_kg === null || row.capacidade_kg === undefined ? "—" : `${fmt(row.capacidade_kg)} kg`}</td><td class="text-end fw-semibold ${Number(row.ocupacao_percentual) < 70 ? "text-warning" : "text-success"}">${fmt(row.ocupacao_percentual)}%</td></tr>`).join("") || '<tr><td colspan="8" class="text-center text-secondary py-4">Nenhum veículo atende aos filtros de ocupação.</td></tr>';
+    }
+
+    async function syncJornadaMapas({ silent = true } = {}) {
+      if (!hasPanelAuth()) return;
+      if (E.entregaJornadaMapasRefreshBtn) E.entregaJornadaMapasRefreshBtn.disabled = true;
+      try {
+        const competencia = ensureLigaMesFilter();
+        const query = competencia ? `?competencia=${encodeURIComponent(competencia)}` : "";
+        state.ligaJornadaMapas = await req(`${CONFIG.endpoints.ligaEntrega.jornadaMapas}${query}`, { timeoutMs: 30000 }) || {};
+        renderJornadaMapas(state.ligaJornadaMapas);
+        if (!silent) addLog("Jornada por mapa atualizada.", "ok");
+      } catch (err) {
+        if (E.entregaJornadaMapasStatus) E.entregaJornadaMapasStatus.textContent = `Falha ao carregar jornada por mapa: ${err.message}`;
+        if (!silent) addLog(`Falha ao carregar jornada por mapa: ${err.message}`, "err");
+      } finally {
+        if (E.entregaJornadaMapasRefreshBtn) E.entregaJornadaMapasRefreshBtn.disabled = false;
+      }
+    }
+
+    async function saveJornadaMapaJustificativa(button) {
+      const key = String(button?.dataset?.key || "");
+      const input = E.entregaJornadaMapasBody?.querySelector(`.jornada-mapa-justificativa[data-key="${CSS.escape(key)}"]`);
+      const texto = String(input?.value || "").trim();
+      if (!key || !texto) { addLog("Informe a justificativa antes de salvar.", "err"); return; }
+      button.disabled = true;
+      try {
+        const competencia = ensureLigaMesFilter();
+        await req(`${CONFIG.endpoints.ligaEntrega.jornadaMapas}/${encodeURIComponent(key)}/justificativa`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia, texto, version: input.dataset.version || "" }) });
+        addLog("Justificativa de jornada salva.", "ok");
+        await syncJornadaMapas({ silent: true });
+      } catch (err) { addLog(err.message || "Não foi possível salvar a justificativa.", "err"); }
+      finally { button.disabled = false; }
+    }
+
     async function syncIndicadores({ silent = true } = {}) {
       if (!hasPanelAuth()) return;
       if (E.entregaIndicadoresRefreshBtn) E.entregaIndicadoresRefreshBtn.disabled = true;
@@ -6471,7 +6606,7 @@
       if (E.entregaFechamentoModuleTab) E.entregaFechamentoModuleTab.className = `btn ${fechamento ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.className = `btn ${devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaDevolucoesCadastrosModuleTab) E.entregaDevolucoesCadastrosModuleTab.className = `btn ${devolucoesCadastros ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
-      if (indicadores) { syncIndicadores({ silent: true }); syncMapasMensais({ silent: true }); }
+      if (indicadores) { syncIndicadores({ silent: true }); syncJornadaMapas({ silent: true }); syncMapasMensais({ silent: true }); }
       if (fechamento) syncMapasOperacionais({ silent: true });
       if (devolucoes) syncDevolucoesOperacionais({ silent: true });
       if (devolucoesCadastros) Promise.all([syncDevolucoesOperacionais({ silent: true }), syncDevolucoesCadastros()]).then(() => renderDevolucoesCadastros()).catch(err => { if (E.entregaDevolucoesCadastrosDetails) E.entregaDevolucoesCadastrosDetails.textContent = `Falha ao carregar cadastros: ${err.message}`; });
@@ -11804,6 +11939,7 @@
       if (E.entregaLigaPeriodo) E.entregaLigaPeriodo.addEventListener("change", () => {
         syncLigaEntregaReports({ silent: false, force: true });
         syncIndicadores({ silent: false });
+        syncJornadaMapas({ silent: false });
         syncMapasMensais({ silent: false });
         syncMapasOperacionais({ silent: false });
       });
@@ -11812,6 +11948,7 @@
         E.entregaLigaMes.addEventListener("change", () => {
           syncLigaEntregaReports({ silent: false, force: true });
           syncIndicadores({ silent: false });
+          syncJornadaMapas({ silent: false });
           syncMapasMensais({ silent: false });
           syncMapasOperacionais({ silent: false });
         });
@@ -11825,6 +11962,26 @@
         if (E.entregaIndicadoresFilial) E.entregaIndicadoresFilial.value = "";
         if (E.entregaIndicadoresSituacao) E.entregaIndicadoresSituacao.value = "";
         renderIndicadores(state.ligaIndicadores || {});
+      });
+      if (E.entregaJornadaMapasRefreshBtn) E.entregaJornadaMapasRefreshBtn.addEventListener("click", () => syncJornadaMapas({ silent: false }));
+      [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao].forEach(input => input?.addEventListener("change", () => renderJornadaMapas(state.ligaJornadaMapas || {})));
+      if (E.entregaJornadaMapasBusca) E.entregaJornadaMapasBusca.addEventListener("input", () => renderJornadaMapas(state.ligaJornadaMapas || {}));
+      if (E.entregaJornadaMapasLimparFiltrosBtn) E.entregaJornadaMapasLimparFiltrosBtn.addEventListener("click", () => {
+        [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao, E.entregaJornadaMapasBusca].forEach(input => { if (input) input.value = ""; });
+        renderJornadaMapas(state.ligaJornadaMapas || {});
+      });
+      [E.entregaOcupacaoVeiculosFilial, E.entregaOcupacaoVeiculosComparacao, E.entregaOcupacaoVeiculosValor].forEach(input => input?.addEventListener("change", () => renderOcupacaoVeiculos(state.ligaJornadaMapas || {})));
+      if (E.entregaOcupacaoVeiculosBusca) E.entregaOcupacaoVeiculosBusca.addEventListener("input", () => renderOcupacaoVeiculos(state.ligaJornadaMapas || {}));
+      if (E.entregaOcupacaoVeiculosLimparFiltrosBtn) E.entregaOcupacaoVeiculosLimparFiltrosBtn.addEventListener("click", () => {
+        if (E.entregaOcupacaoVeiculosFilial) E.entregaOcupacaoVeiculosFilial.value = "";
+        if (E.entregaOcupacaoVeiculosComparacao) E.entregaOcupacaoVeiculosComparacao.value = "maior_igual";
+        if (E.entregaOcupacaoVeiculosValor) E.entregaOcupacaoVeiculosValor.value = "0";
+        if (E.entregaOcupacaoVeiculosBusca) E.entregaOcupacaoVeiculosBusca.value = "";
+        renderOcupacaoVeiculos(state.ligaJornadaMapas || {});
+      });
+      if (E.entregaJornadaMapasBody) E.entregaJornadaMapasBody.addEventListener("click", event => {
+        const button = event.target.closest(".jornada-mapa-salvar");
+        if (button) saveJornadaMapaJustificativa(button);
       });
       if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.addEventListener("click", () => syncMapasMensais({ silent: false }));
       if (E.entregaMapasOperacionaisRefreshBtn) E.entregaMapasOperacionaisRefreshBtn.addEventListener("click", () => syncMapasOperacionais({ silent: false }));

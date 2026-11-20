@@ -17,6 +17,8 @@ from bot_api.services.liga_entrega_operational_maps_service import LigaEntregaOp
 from bot_api.services.liga_entrega_operational_maps_pdf_service import build_liga_entrega_operational_maps_pdf
 from bot_api.services.devolucoes_operacionais_service import build_devolucoes_operacionais_dashboard, list_dsetores_catalog
 from bot_api.services.devolucoes_justificativas_service import devolucao_id, JustificativaConflict
+from bot_api.services.jornada_mapas_indicadores_service import JornadaMapasIndicadoresService
+from bot_api.services.jornada_mapas_justificativas_service import jornada_mapa_id, JornadaMapaJustificativaConflict
 
 
 LIGA_ENTREGA_REPORTS = (
@@ -93,6 +95,12 @@ class DevolucaoJustificativaRequest(BaseModel):
     plano_acao: str | None = Field(default=None, max_length=5000)
 
 
+class JornadaMapaJustificativaRequest(BaseModel):
+    competencia: str = Field(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
+    texto: str = Field(min_length=1, max_length=5000)
+    version: str = Field(default='', max_length=64)
+
+
 def create_admin_liga_entrega_router(
     *,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
@@ -102,6 +110,7 @@ def create_admin_liga_entrega_router(
     liga_entrega_rules_service: Any | None = None,
     devolucoes_cadastros_service: Any | None = None,
     devolucoes_justificativas_service: Any | None = None,
+    jornada_mapas_justificativas_service: Any | None = None,
     dsetores_import_service: Any | None = None,
     drevendas_import_service: Any | None = None,
     dclientes_query_service: Any | None = None,
@@ -178,6 +187,57 @@ def create_admin_liga_entrega_router(
         if latest is None or not isinstance(latest[1], dict):
             raise HTTPException(status_code=404, detail="Não há devoluções importadas para a competência selecionada.")
         return latest[1]
+
+    def jornada_mapas_source(competencia: str | None) -> dict[str, Any]:
+        selected = str(competencia or "").strip()
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", selected):
+            selected = date.today().strftime("%Y-%m")
+        return JornadaMapasIndicadoresService(
+            raw_sql_import_service=liga_entrega_raw_sql_import_service,
+            justificativas_service=jornada_mapas_justificativas_service,
+        ).build_dashboard(competencia=selected)
+
+    @router.get("/api/admin/liga-entrega/indicadores/jornada-mapas")
+    def api_admin_liga_entrega_indicadores_jornada_mapas(
+        request: Request,
+        competencia: str | None = Query(default=None),
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        result = jornada_mapas_source(competencia)
+        record_security_event(request, channel="api", event_type="admin_liga_indicadores_jornada", decision="allowed", reason=f"mapas={result['summary']['mapas']}")
+        return result
+
+    @router.put("/api/admin/liga-entrega/indicadores/jornada-mapas/{key}/justificativa")
+    def save_jornada_mapa_justificativa(
+        key: str,
+        payload: JornadaMapaJustificativaRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if jornada_mapas_justificativas_service is None:
+            raise HTTPException(status_code=503, detail="Justificativas de jornada indisponíveis.")
+        previous = jornada_mapas_justificativas_service.get(key)
+        if previous:
+            row = previous["mapa"]
+        else:
+            rows = jornada_mapas_source(payload.competencia).get("rows") or []
+            row = next((item for item in rows if isinstance(item, dict) and jornada_mapa_id(item) == key), None)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Mapa não encontrado na competência selecionada. Atualize os indicadores.")
+        try:
+            item = jornada_mapas_justificativas_service.save(row, payload.texto, actor=actor_from_context(context), version=payload.version)
+        except JornadaMapaJustificativaConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_panel_action(request, context, action="salvar_justificativa_jornada", target_type="justificativa_jornada", target_id=key)
+        return {"ok": True, "item": item}
 
     @router.get("/api/admin/liga-entrega/devolucoes")
     def api_admin_devolucoes_operacionais(
