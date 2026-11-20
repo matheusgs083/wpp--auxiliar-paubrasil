@@ -19197,28 +19197,27 @@
       const defaultLabel = pedidosUi.client?.cond_pagto ? `Padrão atual do cliente (${pedidosUi.client.cond_pagto})` : "Padrão atual do cliente";
       const options = [`<option value="">${escapeHtml(defaultLabel)}</option>`];
       const clientCondition = String(pedidosUi.client?.cond_pagto || "").trim();
-      if (/^\d+$/.test(clientCondition)) options.push(`<option value="${escapeHtml(clientCondition)}">${escapeHtml(clientCondition)} · Cadastro dClientes</option>`);
       pedidosUi.conditions.forEach(item => {
         const code = String(item.codigo || "").trim();
-        if (!code || code === clientCondition) return;
-        options.push(`<option value="${escapeHtml(code)}">${escapeHtml(code)}${item.descricao ? ` · ${escapeHtml(item.descricao)}` : ""}</option>`);
+        if (!code) return;
+        const label = code === clientCondition ? `${code} · Condição atual` : `${code}${item.descricao ? ` · ${item.descricao}` : ""}`;
+        options.push(`<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`);
       });
       select.innerHTML = options.join("");
       if (pedidosUi.conditions.some(item => String(item.codigo) === previous)) select.value = previous;
-      else if (clientCondition) select.value = clientCondition;
       if (hint) hint.textContent = message;
     }
 
-    async function loadPedidoConditions(filial) {
+    async function loadPedidoConditions(filial, cliente) {
       pedidosUi.conditions = [];
       renderPedidoConditions({ message: "Carregando condições liberadas pelo Promax..." });
       try {
-        const response = await req(`/api/admin/pedidos/condicoes?filial=${encodeURIComponent(filial)}`);
+        const response = await req(`/api/admin/pedidos/condicoes?filial=${encodeURIComponent(filial)}&cliente=${encodeURIComponent(cliente)}`);
         pedidosUi.conditions = Array.isArray(response.condicoes) ? response.condicoes : [];
         const when = response.atualizado_em ? ` Atualizada em ${formatDateTime(response.atualizado_em)}.` : "";
-        renderPedidoConditions({ message: pedidosUi.conditions.length ? `Lista retornada pelo Promax para esta filial.${when}` : `${response.mensagem || "Lista ainda não disponível."} O padrão atual do cliente continuará sendo validado pelo Promax.` });
+        renderPedidoConditions({ message: `${response.mensagem || "Mantenha a condição padrão do cliente."}${when}` });
       } catch (error) {
-        renderPedidoConditions({ message: "Não foi possível carregar a lista agora. O padrão atual do cliente continuará sendo validado pelo Promax." });
+        renderPedidoConditions({ message: "Não foi possível carregar as condições permitidas agora. Mantenha a condição padrão do cliente." });
       }
     }
 
@@ -19256,7 +19255,7 @@
         if (!pedidosUi.client) throw new Error("Cliente não retornado pela API.");
         setPedidoTitle(pedidosUi.client);
         renderPedidoClientDetails(pedidosUi.client);
-        await loadPedidoConditions(pedidosUi.client.filial);
+        await loadPedidoConditions(pedidosUi.client.filial, pedidosUi.client.cliente);
         renderPedidoItens();
         pedidosSetStatus(pedidosUi.client.pedido_liberado ? "Cliente liberado. Informe os itens e envie o pedido." : "Cliente bloqueado pela 12.06.01. A digitação não é permitida.", pedidosUi.client.pedido_liberado ? "ok" : "err");
       } catch (error) {

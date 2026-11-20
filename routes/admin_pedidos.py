@@ -235,6 +235,7 @@ def create_admin_pedidos_router(
     def listar_condicoes_pagamento(
         request: Request,
         filial: str = Query(min_length=1, max_length=8),
+        cliente: str = Query(min_length=1, max_length=20),
         authorization: str | None = Header(default=None),
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
@@ -248,15 +249,37 @@ def create_admin_pedidos_router(
             allowed_filiais = {scope.split("-", 1)[0] for scope in _seller_scopes(context)}
             if filial not in allowed_filiais:
                 raise HTTPException(status_code=403, detail="Sua carteira não permite consultar as condições desta filial.")
+        scopes = None if bool(context.get("is_admin")) else list(_seller_scopes(context))
+        cliente_registro = _load_authorized_client(
+            dclientes_query_service,
+            filial=filial,
+            cliente=str(cliente).strip().lstrip("0") or "0",
+            scopes=scopes,
+        )
         catalogo = _load_promax_conditions_catalog(unidade, promax_jobs_service)
+        condicao_atual = str(cliente_registro.cond_pag_atual or "").strip()
+        condicoes = _allowed_payment_conditions(catalogo["condicoes"], condicao_atual)
+        faixa = _payment_condition_range(condicao_atual)
+        mensagem = _payment_condition_message(condicao_atual, faixa, bool(catalogo["condicoes"]))
         record_security_event(
             request,
             channel="api",
             event_type="admin_pedidos_condicoes",
             decision="allowed",
-            reason=f"filial={filial};condicoes={len(catalogo['condicoes'])}",
+            reason=f"filial={filial};cliente={cliente_registro.cod_pdv};atual={condicao_atual};condicoes={len(condicoes)}",
         )
-        return {"ok": True, "filial": filial, "unidade": unidade, **catalogo}
+        return {
+            "ok": True,
+            "filial": filial,
+            "unidade": unidade,
+            "cliente": str(cliente_registro.cod_pdv),
+            "condicao_atual": condicao_atual,
+            "faixa_liberada": _payment_condition_range_payload(faixa),
+            **catalogo,
+            "condicoes": condicoes,
+            "disponivel": bool(condicoes),
+            "mensagem": mensagem,
+        }
 
     @router.get("/api/admin/pedidos/config")
     def obter_configuracao_pedidos(
@@ -491,6 +514,29 @@ def create_admin_pedidos_router(
         vendedor = str(cliente.vendedor or "").strip()
         if not vendedor:
             raise HTTPException(status_code=422, detail="Cliente sem vendedor/setor na dClientes. O pedido não foi enviado.")
+        if payload.cond_pagto:
+            catalogo_condicoes = _load_promax_conditions_catalog(unidade, promax_jobs_service)
+            if not catalogo_condicoes["condicoes"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail="A lista de condições desta filial ainda não foi retornada pelo Promax. Mantenha a condição padrão do cliente.",
+                )
+            codigos_liberados = {
+                item["codigo"]
+                for item in _allowed_payment_conditions(
+                    catalogo_condicoes["condicoes"],
+                    str(cliente.cond_pag_atual or ""),
+                )
+            }
+            if payload.cond_pagto not in codigos_liberados:
+                faixa = _payment_condition_range(str(cliente.cond_pag_atual or ""))
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Condição {payload.cond_pagto} não é permitida para este cliente. "
+                        f"{_payment_condition_message(str(cliente.cond_pag_atual or ''), faixa, True)}"
+                    ),
+                )
         produtos = [item.produto for item in payload.itens]
         if len(set(produtos)) != len(produtos):
             raise HTTPException(status_code=422, detail="Não inclua o mesmo produto duas vezes no pedido.")
@@ -748,3 +794,63 @@ def _normalize_conditions_catalog(raw: Any, *, updated_at: str | None = None) ->
         "disponivel": bool(conditions),
         "mensagem": "" if conditions else "O robô não retornou condições válidas para esta unidade.",
     }
+
+
+def _payment_condition_range(client_condition: str) -> tuple[int, int] | None:
+    """Retorna as condições permitidas na mesma família até a condição atual.
+
+    Exemplo: condição 605 permite de 601 a 605; 715 permite de 701 a 715.
+    O valor vazio continua mantendo o padrão do cliente no Promax.
+    """
+    value = str(client_condition or "").strip()
+    if not value.isdigit() or len(value) < 3:
+        return None
+    numeric = int(value)
+    family_start = (numeric // 100) * 100 + 1
+    return family_start, numeric
+
+
+def _allowed_payment_conditions(
+    catalog: Sequence[Mapping[str, Any]],
+    client_condition: str,
+) -> list[dict[str, str]]:
+    allowed_range = _payment_condition_range(client_condition)
+    if allowed_range is None:
+        return []
+    start, end = allowed_range
+    conditions = {
+        str(item.get("codigo") or "").strip(): str(item.get("descricao") or "").strip()
+        for item in catalog
+        if str(item.get("codigo") or "").strip().isdigit()
+        and start <= int(str(item.get("codigo") or "").strip()) <= end
+    }
+    # A condição cadastrada é segura por definição e precisa ficar visível
+    # mesmo se o catálogo do Promax estiver desatualizado ou incompleto.
+    conditions.setdefault(str(client_condition).strip(), "Condição atual do cliente")
+    return [
+        {"codigo": code, "descricao": description}
+        for code, description in sorted(conditions.items(), key=lambda item: int(item[0]))
+    ]
+
+
+def _payment_condition_range_payload(value: tuple[int, int] | None) -> dict[str, str] | None:
+    if value is None:
+        return None
+    start, end = value
+    return {"de": str(start), "ate": str(end)}
+
+
+def _payment_condition_message(
+    client_condition: str,
+    allowed_range: tuple[int, int] | None,
+    catalog_available: bool,
+) -> str:
+    if allowed_range is None:
+        return (
+            f"A condição atual do cliente ({client_condition or 'não informada'}) não possui alternativas inferiores "
+            "na mesma família. Mantenha a condição padrão."
+        )
+    start, end = allowed_range
+    if not catalog_available:
+        return f"A condição padrão é {client_condition}. A lista do Promax ainda não está disponível para liberar {start} a {end}."
+    return f"Condição padrão {client_condition}. São permitidas somente as alternativas de {start} a {end}."
