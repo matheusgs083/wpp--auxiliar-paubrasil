@@ -144,6 +144,19 @@ def test_03_02_37_sem_itens_nao_gera_pallets(tmp_path: Path):
     assert "não tem itens" in result["warnings"][0]
 
 
+def test_remessa_sem_itens_mais_nova_nao_esconde_a_que_tem_itens(tmp_path: Path):
+    sem_itens = tmp_path / "nova_sem_itens" / "03.02.37_PATOS_NOV.csv"
+    sem_itens.parent.mkdir()
+    sem_itens.write_text("Filial;Dt. Operacao;Nota;Status;Cliente;Mapa\r\n0003;03/11/2026;1;A;3007; 96.027\r\n", encoding="cp1252")
+    nova = {"batch_id": "nova", "stored_at": "2026-11-20T14:00:00", "metadata": {"competencia": "2026-11"},
+            "files": [{"filename": sem_itens.name, "path": str(sem_itens)}]}
+    store = FakeReportStore([_manifest(tmp_path, batch_id="com_itens", stored_at="2026-11-20T13:00:00"), nova])
+    result = EntregaPalletsService(report_store=store, dprodutos_import_service=FakeProdutos()).pallets_por_mapa("2026-11")
+    assert result["batch_id"] == "com_itens"
+    assert result["mapas"][("PATOS", "96027")]["pallets"] == 3.0
+    assert "veio sem itens" in result["warnings"][0] and "20/11 13:00" in result["warnings"][0]
+
+
 def test_sem_03_02_37_avisa_em_vez_de_zerar(tmp_path: Path):
     result = EntregaPalletsService(report_store=FakeReportStore([]), dprodutos_import_service=FakeProdutos()).pallets_por_mapa("2026-11")
     assert result["mapas"] == {}

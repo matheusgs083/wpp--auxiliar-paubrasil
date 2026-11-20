@@ -12,12 +12,15 @@ from bot_api.services.liga_entrega_dashboard_service import (
     norm_mapa,
     rows_from,
     stored_files,
+    text_encoding,
     to_float,
 )
 
 R030237 = "030237"
 # A e E são entregas; D (devolução) e C (cancelamento) não saem no caminhão.
 STATUS_ENTREGUES = {"A", "E"}
+# Colunas que só existem na 03.02.37 gerada com itens.
+COLUNAS_ITENS = {"produto", "qtde"}
 CACHE_SEGUNDOS = 60
 
 
@@ -45,6 +48,7 @@ class EntregaPalletsService:
             if cached and monotonic() - cached[0] < CACHE_SEGUNDOS:
                 return cached[1]
         result = self._calcular(manifest)
+        result["warnings"] = [*([manifest["_aviso"]] if manifest.get("_aviso") else []), *result["warnings"]]
         with self._lock:
             self._cache = {batch_id: (monotonic(), result)}
         return result
@@ -62,9 +66,38 @@ class EntregaPalletsService:
             comp = str(metadata.get("operational_competencia") or metadata.get("competencia") or "")
             return comp == competencia or (not comp and str(manifest.get("reference_date") or "").startswith(competencia))
 
-        candidates = [m for m in manifests if isinstance(m, dict) and covers(m)]
-        # A 03.02.37 é um acumulado do mês: vale só a última remessa.
-        return max(candidates, key=lambda m: (str(m.get("stored_at") or ""), str(m.get("batch_id") or "")), default=None)
+        candidates = sorted(
+            (m for m in manifests if isinstance(m, dict) and covers(m)),
+            key=lambda m: (str(m.get("stored_at") or ""), str(m.get("batch_id") or "")),
+            reverse=True,
+        )
+        # A 03.02.37 é um acumulado do mês: vale a remessa mais recente que tenha itens.
+        # Uma remessa posterior sem itens (worker ainda no layout antigo) não apaga os pallets.
+        com_itens = next((m for m in candidates if self._tem_itens(m)), None)
+        if com_itens is not None and com_itens is not candidates[0]:
+            com_itens = {**com_itens, "_aviso": (
+                f"A última 03.02.37 (recebida em {self._quando(candidates[0])}) veio sem itens; "
+                f"pallets calculados com a de {self._quando(com_itens)}."
+            )}
+        return com_itens or (candidates[0] if candidates else None)
+
+    @staticmethod
+    def _quando(manifest: dict[str, Any]) -> str:
+        texto = str(manifest.get("stored_at") or "")
+        return f"{texto[8:10]}/{texto[5:7]} {texto[11:16]}" if len(texto) >= 16 else (texto or "data desconhecida")
+
+    @staticmethod
+    def _tem_itens(manifest: dict[str, Any]) -> bool:
+        for file in stored_files(manifest):
+            try:
+                with file["path"].open("r", encoding=text_encoding(file["path"]), errors="replace", newline="") as handle:
+                    head = next((line for line in handle if line.strip()), "")
+            except OSError:
+                continue
+            delimiter = ";" if head.count(";") >= head.count(",") else ","
+            if COLUNAS_ITENS <= {norm_header(column) for column in head.split(delimiter)}:
+                return True
+        return False
 
     @staticmethod
     def _campo(row: dict[str, str], nome: str) -> str:
