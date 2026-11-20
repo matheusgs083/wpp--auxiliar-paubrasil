@@ -746,6 +746,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "liga_entrega_route_team_service": runtime["liga_entrega_route_team_service"],
         "dclientes_query_service": runtime["services"].dclientes_query_service,
         "dsetores_import_service": runtime["services"].dsetores_import_service,
+        "dprodutos_import_service": runtime["services"].dprodutos_import_service,
         "after_critica_operacao_import": runtime["_after_critica_operacao_auto_import"],
         "require_webhook_token": runtime["_require_webhook_token"],
         "require_meta_cloud_signature": runtime["_require_meta_cloud_signature"],
