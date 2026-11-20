@@ -9,14 +9,26 @@ from typing import Any
 
 R030805 = "030805_LIGA"
 R03114902 = "03114902_BOT"
+# A planilha de jornada desconta 1h de almoço da jornada total.
+ALMOCO_MINUTOS = 60
+MINUTOS_DIA = 24 * 60
 
 
 class JornadaMapasIndicadoresService:
     """Cruza planejamento 03.11.49.02 com execução 03.08.05 por mapa."""
 
-    def __init__(self, *, raw_sql_import_service: Any | None, justificativas_service: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        raw_sql_import_service: Any | None,
+        justificativas_service: Any | None = None,
+        pallets_service: Any | None = None,
+        frota_service: Any | None = None,
+    ) -> None:
         self.raw_sql_import_service = raw_sql_import_service
         self.justificativas_service = justificativas_service
+        self.pallets_service = pallets_service
+        self.frota_service = frota_service
 
     def build_dashboard(self, *, competencia: str | None = None) -> dict[str, Any]:
         comp = str(competencia or "").strip()
@@ -92,22 +104,29 @@ class JornadaMapasIndicadoresService:
             target["tempo_previsto"] = target["tempo_previsto"] or self._pick(row, "TempoPrev", "Tempo Prev")
             target["saida"] = self._pick(row, "HrSai", "Hora Saida")
             target["entrada"] = self._pick(row, "HrEntr", "Hora Entrada")
+            target["tempo_interno"] = self._pick(row, "TmpoInterno")
             loaded = self._number(self._pick(row, "CxCarreg"))
             delivered = self._number(self._pick(row, "CxEntreg"))
             target["cx_carregadas"] = loaded
             target["cx_entregues"] = delivered
             target["devolucao_caixas"] = round(max(loaded - delivered, 0), 2) if loaded is not None and delivered is not None else None
 
+        for item in maps.values():
+            item.update(self._jornada(item))
+        ocupacao_avisos = self._aplicar_pallets(maps.values(), comp)
         rows = sorted(maps.values(), key=lambda item: (item["data"], item["filial"], self._map_sort(item["mapa"])), reverse=True)
         if self.justificativas_service is not None:
             self.justificativas_service.annotate(rows)
         for row in rows:
             justification = row.get("justificativa") or {}
             row["justificada"] = bool(str(justification.get("text") or "").strip())
+            occupation_justification = row.get("ocupacao_justificativa") or {}
+            row["ocupacao_justificada"] = bool(str(occupation_justification.get("text") or "").strip())
         returned = sum(float(row.get("devolucao_caixas") or 0) for row in rows)
         vehicles = [
             row for row in rows
-            if str(row.get("placa") or "").strip() and row.get("ocupacao_percentual") is not None
+            if str(row.get("placa") or "").strip()
+            and (row.get("pallets") is not None or row.get("ocupacao_percentual") is not None)
         ]
         return {
             "ok": True,
@@ -124,11 +143,80 @@ class JornadaMapasIndicadoresService:
                 "veiculos_com_ocupacao": len(vehicles),
             },
             "warnings": ([] if rows else ["Aguardando importação da 03.11.49.02 e/ou 03.08.05 para a competência selecionada."]),
+            "ocupacao_avisos": ocupacao_avisos,
             "sources": {
                 "03114902": "Rota/cidade, peso e entregas planejadas.",
                 "030805": "Execução, caixas carregadas e entregues. Devolução = CxCarreg − CxEntreg.",
             },
         }
+
+    def _aplicar_pallets(self, items: Any, competencia: str) -> list[str]:
+        """Ocupação por pallets: pallets do mapa ÷ capacidade do caminhão cadastrado."""
+        avisos: list[str] = []
+        pallets: dict[Any, dict[str, Any]] = {}
+        if self.pallets_service is not None and competencia:
+            resultado = self.pallets_service.pallets_por_mapa(competencia)
+            pallets = resultado.get("mapas") or {}
+            avisos.extend(resultado.get("warnings") or [])
+        frota = self.frota_service.lookup() if self.frota_service is not None else None
+        sem_cadastro: set[str] = set()
+        for item in items:
+            info = pallets.get((item["filial"], item["mapa"]))
+            item["pallets"] = info["pallets"] if info else None
+            item["caixas"] = info["caixas"] if info else None
+            caminhao = frota.caminhao(item["filial"], item.get("placa")) if frota else None
+            item["capacidade_pallets"] = caminhao["capacidade_pallets"] if caminhao else None
+            item["caminhao_descricao"] = caminhao["descricao"] if caminhao else ""
+            item["meta_ocupacao_pct"] = frota.meta_ocupacao(item["filial"]) if frota else None
+            item["ocupacao_pallets_pct"] = (
+                round(item["pallets"] / item["capacidade_pallets"] * 100, 2)
+                if item["pallets"] is not None and item["capacidade_pallets"]
+                else None
+            )
+            if info and item.get("placa") and not caminhao:
+                sem_cadastro.add(f"{item['filial']} {item['placa']}")
+        if sem_cadastro:
+            avisos.append(f"{len(sem_cadastro)} caminhão(ões) sem capacidade cadastrada na aba Caminhões.")
+        return avisos
+
+    @classmethod
+    def _jornada(cls, item: Mapping[str, Any]) -> dict[str, Any]:
+        """Colunas da planilha de jornada a partir da 03.08.05.
+
+        Início = HrSai; Final = HrEntr + TmpoInterno; Jornada = Final - Início - almoço;
+        Diferença = Jornada - Tempo previsto (positiva = passou do previsto).
+        """
+        inicio = cls._minutes(item.get("saida"))
+        entrada = cls._minutes(item.get("entrada"))
+        interno = cls._minutes(item.get("tempo_interno"))
+        prevista = cls._minutes(item.get("tempo_previsto"))
+        final = entrada + (interno or 0) if entrada is not None else None
+        jornada = None
+        if inicio is not None and final is not None:
+            jornada = max((final - inicio) % MINUTOS_DIA - ALMOCO_MINUTOS, 0)
+        return {
+            "inicio_jornada": cls._clock(inicio),
+            "hora_entrada": cls._clock(entrada),
+            "hora_final": cls._clock(final),
+            "tempo_interno_min": interno,
+            "jornada_min": jornada,
+            "prevista_min": prevista,
+            "dif_jornada_min": jornada - prevista if jornada is not None and prevista is not None else None,
+        }
+
+    @staticmethod
+    def _minutes(value: Any) -> int | None:
+        match = re.fullmatch(r"(\d{1,3}):(\d{2})(?::\d{2})?", str(value or "").strip())
+        if not match or int(match.group(2)) > 59:
+            return None
+        return int(match.group(1)) * 60 + int(match.group(2))
+
+    @staticmethod
+    def _clock(minutes: int | None) -> str:
+        if minutes is None:
+            return ""
+        minutes %= MINUTOS_DIA
+        return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
     def _rows(self, routine: str, competencia: str) -> list[dict[str, Any]]:
         if self.raw_sql_import_service is None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date
 import re
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ from bot_api.services.liga_entrega_operational_maps_pdf_service import build_lig
 from bot_api.services.devolucoes_operacionais_service import build_devolucoes_operacionais_dashboard, list_dsetores_catalog
 from bot_api.services.devolucoes_justificativas_service import devolucao_id, JustificativaConflict
 from bot_api.services.jornada_mapas_indicadores_service import JornadaMapasIndicadoresService
+from bot_api.services.entrega_pallets_service import EntregaPalletsService
 from bot_api.services.jornada_mapas_justificativas_service import jornada_mapa_id, JornadaMapaJustificativaConflict
 
 
@@ -88,6 +89,11 @@ class DevolucoesCadastrosRequest(BaseModel):
     gerentes: list[dict[str, Any]] = Field(default_factory=list, max_length=1000)
 
 
+class EntregaFrotaRequest(BaseModel):
+    caminhoes: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    metas: list[dict[str, Any]] = Field(default_factory=list, max_length=50)
+
+
 class DevolucaoJustificativaRequest(BaseModel):
     competencia: str = Field(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
     texto: str = Field(min_length=1, max_length=5000)
@@ -99,6 +105,7 @@ class JornadaMapaJustificativaRequest(BaseModel):
     competencia: str = Field(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
     texto: str = Field(min_length=1, max_length=5000)
     version: str = Field(default='', max_length=64)
+    tipo: Literal['jornada', 'ocupacao'] = 'jornada'
 
 
 def create_admin_liga_entrega_router(
@@ -111,6 +118,7 @@ def create_admin_liga_entrega_router(
     devolucoes_cadastros_service: Any | None = None,
     devolucoes_justificativas_service: Any | None = None,
     jornada_mapas_justificativas_service: Any | None = None,
+    entrega_frota_service: Any | None = None,
     dsetores_import_service: Any | None = None,
     drevendas_import_service: Any | None = None,
     dclientes_query_service: Any | None = None,
@@ -123,6 +131,11 @@ def create_admin_liga_entrega_router(
     record_admin_panel_action: Callable[..., None] | None = None,
 ) -> APIRouter:
     router = APIRouter()
+    # Uma instância por processo: guarda em cache os pallets da última 03.02.37.
+    entrega_pallets_service = EntregaPalletsService(
+        report_store=liga_entrega_report_store,
+        dprodutos_import_service=dprodutos_import_service,
+    )
 
     def require_liga_context(
         *,
@@ -195,6 +208,8 @@ def create_admin_liga_entrega_router(
         return JornadaMapasIndicadoresService(
             raw_sql_import_service=liga_entrega_raw_sql_import_service,
             justificativas_service=jornada_mapas_justificativas_service,
+            pallets_service=entrega_pallets_service,
+            frota_service=entrega_frota_service,
         ).build_dashboard(competencia=selected)
 
     @router.get("/api/admin/liga-entrega/indicadores/jornada-mapas")
@@ -227,11 +242,11 @@ def create_admin_liga_entrega_router(
             row = previous["mapa"]
         else:
             rows = jornada_mapas_source(payload.competencia).get("rows") or []
-            row = next((item for item in rows if isinstance(item, dict) and jornada_mapa_id(item) == key), None)
+            row = next((item for item in rows if isinstance(item, dict) and jornada_mapa_id(item, payload.tipo) == key), None)
         if row is None:
             raise HTTPException(status_code=404, detail="Mapa não encontrado na competência selecionada. Atualize os indicadores.")
         try:
-            item = jornada_mapas_justificativas_service.save(row, payload.texto, actor=actor_from_context(context), version=payload.version)
+            item = jornada_mapas_justificativas_service.save(row, payload.texto, actor=actor_from_context(context), version=payload.version, tipo=previous.get("tipo", "jornada") if previous else payload.tipo)
         except JornadaMapaJustificativaConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
@@ -331,6 +346,41 @@ def create_admin_liga_entrega_router(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         record_panel_action(request, context, action="salvar_cadastros_devolucoes", target_type="cadastro_devolucoes", target_id="setores-gerentes", metadata={"setores": len(result["setores"]), "gerentes": len(result["gerentes"])})
         return {"ok": True, **result}
+
+    def entrega_operacoes() -> list[str]:
+        catalog = list_dsetores_catalog(dsetores_import_service, drevendas_import_service).get("operacoes", [])
+        names = [str(item.get("nome") or "").strip().upper() for item in catalog if isinstance(item, dict)]
+        return [name for name in dict.fromkeys(names) if name] or ["PATOS", "SUME"]
+
+    @router.get("/api/admin/liga-entrega/frota")
+    def api_admin_entrega_frota(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if entrega_frota_service is None:
+            raise HTTPException(status_code=503, detail="Cadastro de caminhões indisponível.")
+        return {"ok": True, **entrega_frota_service.list(), "operacoes": entrega_operacoes()}
+
+    @router.put("/api/admin/liga-entrega/frota")
+    def api_admin_entrega_frota_update(
+        request: Request,
+        payload: EntregaFrotaRequest,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = require_liga_context(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
+        if entrega_frota_service is None:
+            raise HTTPException(status_code=503, detail="Cadastro de caminhões indisponível.")
+        try:
+            result = entrega_frota_service.replace(payload.model_dump(), actor=actor_from_context(context))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_panel_action(request, context, action="salvar_frota_entrega", target_type="cadastro_frota", target_id="caminhoes-metas", metadata={"caminhoes": len(result["caminhoes"]), "metas": len(result["metas"])})
+        return {"ok": True, **result, "operacoes": entrega_operacoes()}
 
     @router.get("/api/admin/liga-entrega/regras")
     def api_admin_liga_entrega_rules(

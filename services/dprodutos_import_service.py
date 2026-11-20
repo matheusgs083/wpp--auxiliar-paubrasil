@@ -611,6 +611,28 @@ class DProdutosImportService:
                 continue
         return result
 
+    def lookup_paletizacao(self, codigos: set[str] | list[str] | tuple[str, ...]) -> dict[str, tuple[float, float]]:
+        """(Fator, Caixas Pallet) da 01.11 por produto, lidos da linha original importada."""
+        normalized = sorted({normalize_numeric_code(code) for code in codigos if str(code or "").strip()})
+        if not normalized:
+            return {}
+        placeholders = ", ".join("%s" for _ in normalized)
+        query = (
+            f"SELECT codigo, payload ->> 'Fator', payload ->> 'Caixas Pallet' "
+            f"FROM {self.schema}.dprodutos_latest WHERE codigo IN ({placeholders})"
+        )
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, normalized)
+                    rows = cur.fetchall()
+        except Exception:
+            return {}
+        result: dict[str, tuple[float, float]] = {}
+        for codigo, fator, caixas_pallet in rows:
+            result[normalize_numeric_code(codigo)] = (_paletizacao_number(fator), _paletizacao_number(caixas_pallet))
+        return result
+
     def _connect(self) -> psycopg.Connection[Any]:
         return psycopg.connect(self.database_url, connect_timeout=self.connect_timeout_seconds)
 
@@ -746,3 +768,13 @@ def _sort_numeric(value: str) -> tuple[int, str]:
         except ValueError:
             return (1, cleaned)
     return (2, str(value or "").strip())
+
+
+def _paletizacao_number(value: Any) -> float:
+    text = str(value or "").strip()
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    try:
+        return float(text or 0)
+    except ValueError:
+        return 0.0

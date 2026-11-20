@@ -165,6 +165,34 @@
     .pill.warn { color: var(--warning); background: #fffbeb; border-color: rgba(180, 83, 9, 0.28); }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .table-scroll { max-height: 420px; overflow: auto; }
+    /* Jornada por mapa / Ocupação por veículo: tabela densa no modelo da planilha. */
+    .ops-table { font-size: .84rem; font-variant-numeric: tabular-nums; }
+    .ops-table thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-raised); color: var(--ink-500); font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; border-bottom: 2px solid var(--line-strong); }
+    .ops-table td { white-space: nowrap; vertical-align: middle; }
+    .ops-table td.ops-wrap { white-space: normal; min-width: 180px; max-width: 280px; }
+    .ops-table .grp-start { border-left: 1px solid var(--line); }
+    .ops-table tbody tr:nth-child(even) > td { background: var(--surface-soft); }
+    .ops-chip { display: inline-block; min-width: 3.5rem; padding: .16rem .45rem; border: 1px solid transparent; border-radius: .45rem; font-weight: 800; text-align: center; }
+    .ops-chip.ok { color: var(--success); background: rgba(4, 120, 87, .1); border-color: rgba(4, 120, 87, .25); }
+    .ops-chip.warn { color: var(--warning); background: rgba(180, 83, 9, .1); border-color: rgba(180, 83, 9, .25); }
+    .ops-chip.bad { color: var(--danger); background: rgba(185, 28, 28, .1); border-color: rgba(185, 28, 28, .25); }
+    .ops-chip.neutral { color: var(--ink-500); background: var(--soft-panel); border-color: var(--line); }
+    body[data-theme="dark"] .ops-chip.ok { background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .3); }
+    body[data-theme="dark"] .ops-chip.warn { background: rgba(251, 191, 36, .14); border-color: rgba(251, 191, 36, .3); }
+    body[data-theme="dark"] .ops-chip.bad { background: rgba(248, 113, 113, .14); border-color: rgba(248, 113, 113, .3); }
+    .ops-legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: center; color: var(--ink-500); font-size: .78rem; }
+    .ops-legend .ops-chip { min-width: 0; font-size: .72rem; }
+    .ops-occ { display: flex; align-items: center; gap: .5rem; min-width: 170px; }
+    .ops-occ-bar { position: relative; flex: 1; height: 8px; border-radius: 999px; background: var(--soft-panel); overflow: hidden; }
+    .ops-occ-meta { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink-900); opacity: .7; }
+    .ops-occ-bar > span { display: block; height: 100%; border-radius: inherit; }
+    .ops-occ-bar > span.ok { background: var(--success); }
+    .ops-occ-bar > span.warn { background: var(--warning); }
+    .ops-occ-bar > span.bad { background: var(--danger); }
+    .ops-occ-bar > span.neutral { background: var(--line-strong); }
+    .ops-just { min-width: 250px; }
+    .ops-just .form-control { min-width: 0; }
+    .ops-just small { display: block; margin-top: .2rem; font-size: .72rem; }
     /* Pedidos: jornada curta para vendedor, com consulta antes da digitação. */
     #pedidosPane { max-width: 1120px; margin: 0 auto; }
     .pedido-shell { display: grid; gap: 0.75rem; }
@@ -1871,6 +1899,8 @@
           <button class="btn btn-outline-primary entrega-module-tab" id="entregaFechamentoModuleTab" data-entrega-module="fechamento" type="button">Fechamento</button>
           <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesModuleTab" data-entrega-module="devolucoes" type="button">Devoluções</button>
           <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesCadastrosModuleTab" data-entrega-module="devolucoes-cadastros" type="button">Setores e gerentes</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaFrotaModuleTab" data-entrega-module="frota" type="button">Caminhões</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaMetasModuleTab" data-entrega-module="metas" type="button">Metas</button>
         </div>
         <div id="entregaLigaModule">
         <section class="panel-card p-3 mb-3" id="entregaLigaOverviewSection">
@@ -1966,12 +1996,14 @@
               <div><label class="form-label small mb-1" for="entregaJornadaMapasFilial">Operação</label><select class="form-select form-select-sm" id="entregaJornadaMapasFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
               <div><label class="form-label small mb-1" for="entregaJornadaMapasJustificativa">Justificativa</label><select class="form-select form-select-sm" id="entregaJornadaMapasJustificativa"><option value="">Todas</option><option value="pendente">Pendentes</option><option value="justificada">Justificadas</option></select></div>
               <div><label class="form-label small mb-1" for="entregaJornadaMapasDevolucao">Devolução</label><select class="form-select form-select-sm" id="entregaJornadaMapasDevolucao"><option value="">Todas</option><option value="com">Com devolução</option><option value="sem">Sem devolução</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasOrdem">Ordenar</label><select class="form-select form-select-sm" id="entregaJornadaMapasOrdem"><option value="data">Mais recentes</option><option value="jornada">Maior jornada</option><option value="dif">Mais acima do previsto</option><option value="devolucao">Maior devolução</option></select></div>
               <div class="flex-grow-1" style="min-width:180px"><label class="form-label small mb-1" for="entregaJornadaMapasBusca">Buscar</label><input class="form-control form-control-sm" id="entregaJornadaMapasBusca" placeholder="Mapa, placa, rota ou motorista"></div>
               <button class="btn btn-outline-secondary btn-sm" id="entregaJornadaMapasLimparFiltrosBtn" type="button">Limpar filtros</button>
             </div>
             <div class="recolha-dashboard-grid mb-3" id="entregaJornadaMapasCards"></div>
-            <div class="source-path mb-2">A coluna <strong>Devolução</strong> é calculada por <strong>CxCarreg − CxEntreg</strong> da 03.08.05; não representa número de notas devolvidas.</div>
-            <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Operação</th><th>Mapa</th><th>Placa</th><th>Rota</th><th class="text-end">Peso</th><th class="text-end">Entregas</th><th class="text-end">Devolução (CX)</th><th>Fontes</th><th style="min-width:260px">Justificativa manual</th></tr></thead><tbody id="entregaJornadaMapasBody"><tr><td colspan="10" class="text-center text-secondary py-4">Aguardando os relatórios da competência.</td></tr></tbody></table></div>
+            <div class="ops-legend mb-2"><span>Jornada:</span><span class="ops-chip ok">até 12h</span><span class="ops-chip warn">12h a 15h</span><span class="ops-chip bad">acima de 15h</span><span class="ms-2">Dif.: <b>+</b> passou do previsto, <b>−</b> ficou abaixo.</span></div>
+            <div class="source-path mb-2">03.08.05: Início = HrSai · Final = HrEntr + TmpoInterno · Jornada = Final − Início − 1h de almoço · Dif. = Jornada − Prevista · Devolução = CxCarreg − CxEntreg (caixas, não notas).</div>
+            <div class="table-scroll" style="max-height:min(70vh,720px)"><table class="table table-sm table-hover align-middle mb-0 ops-table"><thead><tr><th>Op</th><th>Dia</th><th>Mapa</th><th>Placa</th><th>Rota</th><th class="text-end">Peso</th><th class="text-end">Entregas</th><th class="text-center grp-start">Início</th><th class="text-center">Entrada</th><th class="text-center">Final</th><th class="text-center grp-start">Jornada</th><th class="text-center">Prevista</th><th class="text-center">Dif.</th><th class="text-center">T. interno</th><th class="text-end grp-start">Devolução</th><th class="grp-start">Justificativa</th></tr></thead><tbody id="entregaJornadaMapasBody"><tr><td colspan="16" class="text-center text-secondary py-4">Aguardando os relatórios da competência.</td></tr></tbody></table></div>
           </section>
           <section class="panel-card p-3 mb-3">
             <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Ocupação por veículo</h2><div class="form-text" id="entregaOcupacaoVeiculosStatus">Ocupação da 03.08.05 por mapa e placa.</div></div></div>
@@ -1979,12 +2011,14 @@
               <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosFilial">Operação</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
               <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosComparacao">Ocupação</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosComparacao"><option value="maior_igual">Maior ou igual a</option><option value="maior">Maior que</option><option value="menor_igual">Menor ou igual a</option><option value="menor">Menor que</option><option value="igual">Igual a</option></select></div>
               <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosValor">Percentual</label><div class="input-group input-group-sm"><input class="form-control" id="entregaOcupacaoVeiculosValor" type="number" min="0" max="200" step="0.01" value="0" aria-label="Percentual de ocupação"><span class="input-group-text">%</span></div></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosJustificativa">Justificativa</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosJustificativa"><option value="">Todas</option><option value="pendente">Pendentes</option><option value="justificada">Justificadas</option></select></div>
               <div class="flex-grow-1" style="min-width:180px"><label class="form-label small mb-1" for="entregaOcupacaoVeiculosBusca">Buscar</label><input class="form-control form-control-sm" id="entregaOcupacaoVeiculosBusca" placeholder="Placa, mapa ou rota"></div>
               <button class="btn btn-outline-secondary btn-sm" id="entregaOcupacaoVeiculosLimparFiltrosBtn" type="button">Limpar filtros</button>
             </div>
             <div class="recolha-dashboard-grid mb-3" id="entregaOcupacaoVeiculosCards"></div>
-            <div class="source-path mb-2">Ocupação informada na 03.08.05. Se ela estiver vazia, o painel calcula <strong>PesoCargaKG ÷ CapacidadeVeiculoKG</strong>.</div>
-            <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Data</th><th>Operação</th><th>Placa</th><th>Mapa</th><th>Rota</th><th class="text-end">Peso</th><th class="text-end">Capacidade</th><th class="text-end">Ocupação</th></tr></thead><tbody id="entregaOcupacaoVeiculosBody"><tr><td colspan="8" class="text-center text-secondary py-4">Aguardando a 03.08.05.</td></tr></tbody></table></div>
+            <div class="ops-legend mb-2" id="entregaOcupacaoVeiculosLegenda"></div>
+            <div class="source-path mb-2">Pallets = Qtde dos itens entregues (03.02.37, status A/E) ÷ Caixas Pallet (01.11); unidades avulsas ÷ Fator. Ocupação = pallets ÷ capacidade do caminhão (aba Caminhões). Mapa sem itens mostra o peso da 03.08.05.</div>
+            <div class="table-scroll" style="max-height:min(70vh,720px)"><table class="table table-sm table-hover align-middle mb-0 ops-table"><thead><tr><th>Op</th><th>Dia</th><th>Placa</th><th>Mapa</th><th>Rota</th><th class="text-end grp-start">Pallets</th><th class="text-end">Capacidade</th><th class="grp-start">Ocupação</th><th class="grp-start">Justificativa</th></tr></thead><tbody id="entregaOcupacaoVeiculosBody"><tr><td colspan="9" class="text-center text-secondary py-4">Aguardando a 03.08.05.</td></tr></tbody></table></div>
           </section>
           <section class="panel-card p-3 mb-3">
             <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-geo-alt me-2 text-primary"></i>Cidades por mapa · mensal</h2><div class="form-text" id="entregaMapasMensaisStatus">Card independente da 03.11.49.02 já usada pela Liga.</div></div><button class="btn btn-outline-primary btn-sm" id="entregaMapasMensaisRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
@@ -2038,6 +2072,24 @@
               <button class="btn btn-primary btn-sm" type="button" id="entregaDevolucoesCadastrosSaveBtn"><i class="bi bi-floppy me-1"></i>Salvar</button>
             </div>
             <div id="entregaDevolucoesCadastrosDetails" class="source-box"><div class="text-secondary small">Carregando cadastros…</div></div>
+          </section>
+        </div>
+        <div id="entregaFrotaModule" class="d-none">
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Caminhões</h2><div class="form-text">Capacidade em pallets de cada caminhão, por operação. Usada na Ocupação por veículo dos Indicadores BI.</div></div>
+              <button class="btn btn-primary btn-sm" type="button" id="entregaFrotaSaveBtn"><i class="bi bi-floppy me-1"></i>Salvar</button>
+            </div>
+            <div id="entregaFrotaDetails" class="source-box"><div class="text-secondary small">Carregando caminhões…</div></div>
+          </section>
+        </div>
+        <div id="entregaMetasModule" class="d-none">
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-bullseye me-2 text-primary"></i>Metas da entrega</h2><div class="form-text">Metas por operação usadas nos Indicadores BI. Vale para todas as competências.</div></div>
+              <button class="btn btn-primary btn-sm" type="button" id="entregaMetasSaveBtn"><i class="bi bi-floppy me-1"></i>Salvar</button>
+            </div>
+            <div id="entregaMetasDetails" class="source-box"><div class="text-secondary small">Carregando metas…</div></div>
           </section>
         </div>
       </div>
@@ -3719,6 +3771,7 @@
           mapasOperacionaisPdf: "/api/admin/liga-entrega/mapas-operacionais/pdf",
           devolucoes: "/api/admin/liga-entrega/devolucoes",
           devolucoesCadastros: "/api/admin/liga-entrega/devolucoes/cadastros",
+          frota: "/api/admin/liga-entrega/frota",
           dashboardPdf: "/api/admin/liga-entrega/dashboard/pdf"
         },
         usage: {
@@ -3974,6 +4027,7 @@
       ligaEntregaSyncPromise: null,
       ligaEntregaSyncNeedsRefresh: false,
       devolucoesOperacionais: null,
+      entregaFrota: { caminhoes: [], metas: [], operacoes: [] },
       devolucoesCadastros: { setores: [], gerentes: [] }
     };
 
@@ -4255,6 +4309,7 @@
       entregaJornadaMapasJustificativa: document.getElementById("entregaJornadaMapasJustificativa"),
       entregaJornadaMapasDevolucao: document.getElementById("entregaJornadaMapasDevolucao"),
       entregaJornadaMapasBusca: document.getElementById("entregaJornadaMapasBusca"),
+      entregaJornadaMapasOrdem: document.getElementById("entregaJornadaMapasOrdem"),
       entregaJornadaMapasLimparFiltrosBtn: document.getElementById("entregaJornadaMapasLimparFiltrosBtn"),
       entregaOcupacaoVeiculosStatus: document.getElementById("entregaOcupacaoVeiculosStatus"),
       entregaOcupacaoVeiculosCards: document.getElementById("entregaOcupacaoVeiculosCards"),
@@ -4263,6 +4318,7 @@
       entregaOcupacaoVeiculosComparacao: document.getElementById("entregaOcupacaoVeiculosComparacao"),
       entregaOcupacaoVeiculosValor: document.getElementById("entregaOcupacaoVeiculosValor"),
       entregaOcupacaoVeiculosBusca: document.getElementById("entregaOcupacaoVeiculosBusca"),
+      entregaOcupacaoVeiculosJustificativa: document.getElementById("entregaOcupacaoVeiculosJustificativa"),
       entregaOcupacaoVeiculosLimparFiltrosBtn: document.getElementById("entregaOcupacaoVeiculosLimparFiltrosBtn"),
       entregaMapasMensaisRefreshBtn: document.getElementById("entregaMapasMensaisRefreshBtn"),
       entregaMapasMensaisStatus: document.getElementById("entregaMapasMensaisStatus"),
@@ -4297,6 +4353,15 @@
       entregaLigaModuleTab: document.getElementById("entregaLigaModuleTab"),
       entregaDevolucoesModuleTab: document.getElementById("entregaDevolucoesModuleTab"),
       entregaDevolucoesCadastrosModuleTab: document.getElementById("entregaDevolucoesCadastrosModuleTab"),
+      entregaFrotaModuleTab: document.getElementById("entregaFrotaModuleTab"),
+      entregaFrotaModule: document.getElementById("entregaFrotaModule"),
+      entregaFrotaDetails: document.getElementById("entregaFrotaDetails"),
+      entregaFrotaSaveBtn: document.getElementById("entregaFrotaSaveBtn"),
+      entregaMetasModuleTab: document.getElementById("entregaMetasModuleTab"),
+      entregaMetasModule: document.getElementById("entregaMetasModule"),
+      entregaMetasDetails: document.getElementById("entregaMetasDetails"),
+      entregaMetasSaveBtn: document.getElementById("entregaMetasSaveBtn"),
+      entregaOcupacaoVeiculosLegenda: document.getElementById("entregaOcupacaoVeiculosLegenda"),
       promaxWorkerState: document.getElementById("promaxWorkerState"),
       promaxWorkerGrid: document.getElementById("promaxWorkerGrid"),
       promaxWorkerAssignmentsBody: document.getElementById("promaxWorkerAssignmentsBody"),
@@ -6065,17 +6130,25 @@
       const allBranches = Array.isArray(payload.branches) ? payload.branches : [];
       const fmtNumber = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
       const fmtPercent = value => `${Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
-      const targetOccupation = 72.81;
-      const targetBoxes = 285.69;
+      // Metas da aba Metas, por operação. Sem meta cadastrada o card não compara.
+      const targetsOf = item => {
+        const meta = entregaMetaDaOperacao(item.filial || item.puxada);
+        return { occupation: meta?.ocupacao_meta_pct ?? null, boxes: meta?.caixas_viagem_meta ?? null };
+      };
       const selectedBranch = String(E.entregaIndicadoresFilial?.value || "").toUpperCase();
       const selectedSituation = String(E.entregaIndicadoresSituacao?.value || "");
       const matchesBranch = item => !selectedBranch || String(item.filial || "").toUpperCase().includes(selectedBranch);
-      const withinGoal = item => Number(item.metrics?.ocupacao || 0) >= targetOccupation && Number(item.metrics?.caixas_por_viagem || 0) >= targetBoxes;
+      const withinGoal = item => {
+        const target = targetsOf(item);
+        return (target.occupation === null || Number(item.metrics?.ocupacao || 0) >= target.occupation)
+          && (target.boxes === null || Number(item.metrics?.caixas_por_viagem || 0) >= target.boxes);
+      };
       const branches = allBranches.filter(item => matchesBranch(item) && (!selectedSituation || (selectedSituation === "meta" ? withinGoal(item) : !withinGoal(item))));
       const filterNote = selectedBranch || selectedSituation ? ` · ${branches.length} no filtro` : "";
       if (E.entregaIndicadoresStatus) E.entregaIndicadoresStatus.textContent = allBranches.length ? `${payload.competencia || ""} · ${allBranches.length} operação(ões)${filterNote} · última importação ${payload.summary && payload.summary.stored_at || ""}` : ((payload.warnings || ["Nenhum lote importado."])[0]);
       const progress = (value, target, max = 100) => Math.max(0, Math.min(100, Number(value || 0) / Math.max(Number(target || 1), 1) * max));
       const goalBadge = (value, target, unit = "") => {
+        if (target === null || target === undefined) return '<span class="badge rounded-pill text-bg-secondary" title="Cadastre na subaba Metas">Sem meta</span>';
         const ok = Number(value || 0) >= Number(target || 0);
         const delta = Number(value || 0) - Number(target || 0);
         return `<span class="badge rounded-pill ${ok ? "text-bg-success" : "text-bg-warning"}">${ok ? "Dentro da meta" : "Fora da meta"}</span><small class="text-${ok ? "success" : "warning"}">${delta >= 0 ? "+" : ""}${fmtNumber(delta)}${unit}</small>`;
@@ -6083,9 +6156,57 @@
       if (E.entregaIndicadoresCards) E.entregaIndicadoresCards.innerHTML = branches.map(item => {
         const occupation = Number(item.metrics && item.metrics.ocupacao || 0);
         const boxes = Number(item.metrics && item.metrics.caixas_por_viagem || 0);
-        return `<article class="metric-card bi-efficiency-card" style="display:flex;flex-direction:column;align-items:stretch;gap:.75rem;padding:1rem"><div class="d-flex justify-content-between align-items-start gap-3"><strong>Eficiência do carregamento</strong><span class="text-secondary small text-end">${escapeHtml(item.filial || item.puxada)} · Acumulado do relatório</span></div><div class="bi-metric-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem"><div class="bi-metric"><div class="bi-metric-title d-flex justify-content-between align-items-start gap-2"><span>Ocupação da frota</span><span class="text-end">${goalBadge(occupation, targetOccupation, " p.p.")}</span></div><div class="fs-2 fw-bold bi-metric-value">${fmtNumber(occupation)}%</div><small>Meta ≥ ${fmtNumber(targetOccupation)}%</small><div class="progress mt-2" style="height:8px"><div class="progress-bar ${occupation >= targetOccupation ? "bg-success" : "bg-warning"}" style="width:${progress(occupation, 100)}%"></div></div><small class="text-secondary">Capacidade ocupada pela frota fixa</small></div><div class="bi-metric"><div class="bi-metric-title d-flex justify-content-between align-items-start gap-2"><span>Caixas por viagem FF</span><span class="text-end">${goalBadge(boxes, targetBoxes, " cx")}</span></div><div class="fs-2 fw-bold bi-metric-value">${fmtNumber(boxes)} <small class="fs-6">CX</small></div><small>Meta ≥ ${fmtNumber(targetBoxes)} CX</small><div class="progress mt-2" style="height:8px"><div class="progress-bar ${boxes >= targetBoxes ? "bg-success" : "bg-warning"}" style="width:${progress(boxes, targetBoxes)}%"></div></div><small class="text-secondary">Volume médio por viagem de frota fixa</small></div></div></article>`;
+        const { occupation: targetOccupation, boxes: targetBoxes } = targetsOf(item);
+        return `<article class="metric-card bi-efficiency-card" style="display:flex;flex-direction:column;align-items:stretch;gap:.75rem;padding:1rem"><div class="d-flex justify-content-between align-items-start gap-3"><strong>Eficiência do carregamento</strong><span class="text-secondary small text-end">${escapeHtml(item.filial || item.puxada)} · Acumulado do relatório</span></div><div class="bi-metric-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem"><div class="bi-metric"><div class="bi-metric-title d-flex justify-content-between align-items-start gap-2"><span>Ocupação da frota</span><span class="text-end">${goalBadge(occupation, targetOccupation, " p.p.")}</span></div><div class="fs-2 fw-bold bi-metric-value">${fmtNumber(occupation)}%</div><small>${targetOccupation === null ? "Sem meta cadastrada" : `Meta ≥ ${fmtNumber(targetOccupation)}%`}</small><div class="progress mt-2" style="height:8px"><div class="progress-bar ${targetOccupation === null ? "bg-secondary" : occupation >= targetOccupation ? "bg-success" : "bg-warning"}" style="width:${progress(occupation, 100)}%"></div></div><small class="text-secondary">Capacidade ocupada pela frota fixa</small></div><div class="bi-metric"><div class="bi-metric-title d-flex justify-content-between align-items-start gap-2"><span>Caixas por viagem FF</span><span class="text-end">${goalBadge(boxes, targetBoxes, " cx")}</span></div><div class="fs-2 fw-bold bi-metric-value">${fmtNumber(boxes)} <small class="fs-6">CX</small></div><small>${targetBoxes === null ? "Sem meta cadastrada" : `Meta ≥ ${fmtNumber(targetBoxes)} CX`}</small><div class="progress mt-2" style="height:8px"><div class="progress-bar ${targetBoxes === null ? "bg-secondary" : boxes >= targetBoxes ? "bg-success" : "bg-warning"}" style="width:${progress(boxes, targetBoxes ?? boxes)}%"></div></div><small class="text-secondary">Volume médio por viagem de frota fixa</small></div></div></article>`;
       }).join("") || '<article class="metric-card" style="display:flex;flex-direction:column;align-items:flex-start;gap:.25rem"><span>17.06 · Indicadores BI</span><b class="text-warning">Pendente</b><small>O lote SQL ainda não foi importado. Use Atualizar após a carga automática.</small></article><article class="metric-card" style="display:flex;flex-direction:column;align-items:flex-start;gap:.25rem"><span>Operações esperadas</span><b>Patos · Sumé</b><small>Aguardando caixas por viagem e ocupação.</small></article>';
       if (E.entregaIndicadoresBody) E.entregaIndicadoresBody.innerHTML = branches.map(item => `<tr><td>${escapeHtml(item.filial || "-")}</td><td>${escapeHtml(item.puxada || "-")}</td><td class="text-end">${fmtNumber(item.metrics && item.metrics.caixas_por_viagem)}</td><td class="text-end">${fmtPercent(item.metrics && item.metrics.ocupacao)}</td></tr>`).join("") || '<tr><td colspan="4" class="text-center text-secondary py-4">Nenhum lote 17.06 importado ainda.</td></tr>';
+    }
+
+    // Faixas das tabelas de jornada e ocupação (minutos e percentuais).
+    const OPS_JORNADA_ATENCAO_MIN = 12 * 60;
+    const OPS_JORNADA_CRITICA_MIN = 15 * 60;
+    const OPS_INTERNO_ATENCAO_MIN = 90;
+    const OPS_INTERNO_CRITICO_MIN = 120;
+    const OPS_DIF_CRITICA_MIN = 60;
+    const OPS_OCUPACAO_BOA = 70;
+    const OPS_OCUPACAO_BAIXA = 50;
+
+    function opsDuration(minutes, { signed = false } = {}) {
+      if (minutes === null || minutes === undefined || !Number.isFinite(Number(minutes))) return "—";
+      const value = Math.round(Number(minutes));
+      const abs = Math.abs(value);
+      const text = `${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+      if (!signed || value === 0) return text;
+      return `${value > 0 ? "+" : "−"}${text}`;
+    }
+
+    function opsChip(text, tone, label) {
+      return `<span class="ops-chip ${tone}" title="${escapeHtml(label)}" aria-label="${escapeHtml(`${text} · ${label}`)}">${escapeHtml(text)}</span>`;
+    }
+
+    function opsJustificationCell(row, tipo) {
+      const isOccupation = tipo === "ocupacao";
+      const key = String((isOccupation ? row.ocupacao_justificativa_id : row.justificativa_id) || "");
+      const current = (isOccupation ? row.ocupacao_justificativa : row.justificativa) || {};
+      const status = current.updated_by
+        ? `<small class="text-secondary">${escapeHtml(current.updated_by)} · ${escapeHtml(formatDateTime(current.updated_at) || current.updated_at || "")}</small>`
+        : '<small class="text-warning fw-semibold">Pendente</small>';
+      return `<td class="ops-just grp-start"><div class="input-group input-group-sm"><input type="text" class="form-control jornada-mapa-justificativa" maxlength="5000" data-version="${escapeHtml(current.version || "")}" value="${escapeHtml(current.text || "")}" placeholder="${isOccupation ? "Por que a ocupação ficou assim?" : "Justifique este mapa..."}" aria-label="Justificativa do mapa ${escapeHtml(row.mapa || "")}" title="${escapeHtml(current.text || "")}"><button type="button" class="btn btn-outline-primary jornada-mapa-salvar" data-key="${escapeHtml(key)}" data-tipo="${isOccupation ? "ocupacao" : "jornada"}" title="Salvar (Enter)"><i class="bi bi-check2"></i><span class="visually-hidden">Salvar</span></button></div>${status}</td>`;
+    }
+
+    function opsMetricCards(cards) {
+      return cards.map(([label, value, note]) => `<article class="metric-card" style="display:flex;flex-direction:column;align-items:flex-start;gap:.25rem"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b><small>${escapeHtml(note)}</small></article>`).join("");
+    }
+
+    function opsDay(value) {
+      const text = String(value || "");
+      const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return match ? `${match[3]}/${match[2]}` : (formatDate(text) || text || "-");
+    }
+
+    function opsBranch(value) {
+      const text = String(value || "").toUpperCase();
+      return text === "SUME" ? "Sumé" : text === "PATOS" ? "Patos" : (value || "-");
     }
 
     function renderJornadaMapas(payload = {}) {
@@ -6093,6 +6214,7 @@
       const branch = String(E.entregaJornadaMapasFilial?.value || "").toUpperCase();
       const justification = String(E.entregaJornadaMapasJustificativa?.value || "");
       const returns = String(E.entregaJornadaMapasDevolucao?.value || "");
+      const order = String(E.entregaJornadaMapasOrdem?.value || "data");
       const query = String(E.entregaJornadaMapasBusca?.value || "").trim().toLocaleLowerCase("pt-BR");
       const rows = allRows.filter(row => {
         const hasReturn = Number(row.devolucao_caixas || 0) > 0;
@@ -6102,29 +6224,63 @@
           && (!returns || (returns === "com" ? hasReturn : !hasReturn))
           && (!query || text.includes(query));
       });
+      const sortValue = { jornada: row => row.jornada_min, dif: row => row.dif_jornada_min, devolucao: row => row.devolucao_caixas }[order];
+      if (sortValue) rows.sort((a, b) => (Number(sortValue(b)) || -Infinity) - (Number(sortValue(a)) || -Infinity));
       const fmtNumber = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-      const summary = {
-        mapas: rows.length,
-        devolucao: rows.reduce((total, row) => total + Number(row.devolucao_caixas || 0), 0),
-        comDevolucao: rows.filter(row => Number(row.devolucao_caixas || 0) > 0).length,
-        pendentes: rows.filter(row => !row.justificada).length,
-      };
+      const withJourney = rows.filter(row => Number.isFinite(Number(row.jornada_min)) && row.jornada_min !== null);
+      const averageJourney = withJourney.length ? withJourney.reduce((total, row) => total + Number(row.jornada_min), 0) / withJourney.length : null;
+      const critical = withJourney.filter(row => Number(row.jornada_min) > OPS_JORNADA_CRITICA_MIN).length;
+      const returned = rows.reduce((total, row) => total + Number(row.devolucao_caixas || 0), 0);
+      const withReturn = rows.filter(row => Number(row.devolucao_caixas || 0) > 0).length;
+      const pending = rows.filter(row => !row.justificada).length;
       if (E.entregaJornadaMapasStatus) E.entregaJornadaMapasStatus.textContent = rows.length
         ? `${payload.competencia || ""} · ${rows.length} mapa(s) no filtro · 03.11.49.02 + 03.08.05`
         : ((payload.warnings || ["Nenhum mapa para os filtros selecionados."])[0]);
-      if (E.entregaJornadaMapasCards) E.entregaJornadaMapasCards.innerHTML = [
-        ["Mapas", fmtNumber(summary.mapas), "no filtro"],
-        ["Com devolução", fmtNumber(summary.comDevolucao), "mapa(s) com caixas retornadas"],
-        ["Devolução", `${fmtNumber(summary.devolucao)} CX`, "CxCarreg − CxEntreg"],
-        ["Justificativas pendentes", fmtNumber(summary.pendentes), "preenchimento manual"],
-      ].map(([label, value, note]) => `<article class="metric-card" style="display:flex;flex-direction:column;align-items:flex-start;gap:.25rem"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b><small>${escapeHtml(note)}</small></article>`).join("");
+      if (E.entregaJornadaMapasCards) E.entregaJornadaMapasCards.innerHTML = opsMetricCards([
+        ["Mapas", fmtNumber(rows.length), `${fmtNumber(withJourney.length)} com horário da 03.08.05`],
+        ["Jornada média", opsDuration(averageJourney), `${fmtNumber(critical)} mapa(s) acima de 15h`],
+        ["Devolução", `${fmtNumber(returned)} CX`, `${fmtNumber(withReturn)} mapa(s) com caixas retornadas`],
+        ["Justificativas pendentes", fmtNumber(pending), "preenchimento manual"],
+      ]);
       if (!E.entregaJornadaMapasBody) return;
       E.entregaJornadaMapasBody.innerHTML = rows.map(row => {
-        const current = row.justificativa || {};
-        const sourceBadges = `${row.tem_03114902 ? '<span class="badge text-bg-info me-1">03.11.49.02</span>' : ""}${row.tem_030805 ? '<span class="badge text-bg-success">03.08.05</span>' : '<span class="badge text-bg-warning">sem 03.08.05</span>'}`;
-        const value = row.devolucao_caixas === null || row.devolucao_caixas === undefined ? "—" : `${fmtNumber(row.devolucao_caixas)} CX`;
-        return `<tr><td>${escapeHtml(formatDate(row.data) || row.data || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td class="mono">${escapeHtml(row.mapa || "-")}</td><td>${escapeHtml(row.placa || "-")}</td><td style="min-width:190px">${escapeHtml(row.rota || "-")}</td><td class="text-end">${row.peso_kg === null || row.peso_kg === undefined ? "—" : `${fmtNumber(row.peso_kg)} kg`}</td><td class="text-end">${row.entregas === null || row.entregas === undefined ? "—" : escapeHtml(fmtNumber(row.entregas))}</td><td class="text-end ${Number(row.devolucao_caixas || 0) > 0 ? "text-warning fw-semibold" : ""}">${escapeHtml(value)}</td><td>${sourceBadges}</td><td><div class="d-flex gap-1 align-items-start"><textarea class="form-control form-control-sm jornada-mapa-justificativa" rows="2" data-key="${escapeHtml(row.justificativa_id || "")}" data-version="${escapeHtml(current.version || "")}" placeholder="Justifique este mapa...">${escapeHtml(current.text || "")}</textarea><button type="button" class="btn btn-outline-primary btn-sm jornada-mapa-salvar" data-key="${escapeHtml(row.justificativa_id || "")}" title="Salvar justificativa"><i class="bi bi-check2"></i><span class="visually-hidden">Salvar</span></button></div>${current.updated_by ? `<small class="text-secondary">${escapeHtml(current.updated_by)} · ${escapeHtml(formatDateTime(current.updated_at) || current.updated_at || "")}</small>` : '<small class="text-warning">Pendente</small>'}</td></tr>`;
-      }).join("") || '<tr><td colspan="10" class="text-center text-secondary py-4">Nenhum mapa para os filtros selecionados.</td></tr>';
+        const journey = row.jornada_min;
+        const hasJourney = journey !== null && journey !== undefined;
+        const journeyTone = !hasJourney ? "neutral" : journey > OPS_JORNADA_CRITICA_MIN ? "bad" : journey > OPS_JORNADA_ATENCAO_MIN ? "warn" : "ok";
+        const journeyLabel = { bad: "Jornada acima de 15h", warn: "Jornada entre 12h e 15h", ok: "Jornada até 12h", neutral: "Sem horário na 03.08.05" }[journeyTone];
+        const diff = row.dif_jornada_min;
+        const hasDiff = diff !== null && diff !== undefined;
+        const diffTone = !hasDiff ? "neutral" : diff > OPS_DIF_CRITICA_MIN ? "bad" : diff > 0 ? "warn" : "ok";
+        const diffLabel = !hasDiff ? "Sem tempo previsto" : diff > 0 ? "Acima do previsto" : "Dentro do previsto";
+        const internal = row.tempo_interno_min;
+        const hasInternal = internal !== null && internal !== undefined;
+        const internalTone = !hasInternal ? "neutral" : internal > OPS_INTERNO_CRITICO_MIN ? "bad" : internal > OPS_INTERNO_ATENCAO_MIN ? "warn" : "ok";
+        const internalLabel = { bad: "Tempo interno acima de 2h", warn: "Tempo interno entre 1h30 e 2h", ok: "Tempo interno até 1h30", neutral: "Sem tempo interno" }[internalTone];
+        const boxes = Number(row.devolucao_caixas || 0);
+        const returnCell = row.devolucao_caixas === null || row.devolucao_caixas === undefined
+          ? '<span class="text-secondary">—</span>'
+          : boxes > 0 ? opsChip(`${fmtNumber(boxes)} CX`, "warn", "Caixas retornadas") : '<span class="text-secondary">0</span>';
+        const missing030805 = row.tem_030805 ? "" : ' <i class="bi bi-exclamation-triangle text-warning" title="Mapa sem a 03.08.05: sem horários e sem devolução"></i><span class="visually-hidden">sem 03.08.05</span>';
+        const time = value => value ? escapeHtml(value) : '<span class="text-secondary">—</span>';
+        return `<tr>
+          <td class="fw-semibold">${escapeHtml(opsBranch(row.filial))}</td>
+          <td>${escapeHtml(opsDay(row.data))}</td>
+          <td class="mono">${escapeHtml(row.mapa || "-")}${missing030805}</td>
+          <td class="mono fw-semibold">${escapeHtml(row.placa || "-")}</td>
+          <td class="ops-wrap">${escapeHtml(row.rota || "-")}</td>
+          <td class="text-end">${row.peso_kg === null || row.peso_kg === undefined ? "—" : escapeHtml(fmtNumber(row.peso_kg))}</td>
+          <td class="text-end">${row.entregas === null || row.entregas === undefined ? "—" : escapeHtml(fmtNumber(row.entregas))}</td>
+          <td class="text-center grp-start">${time(row.inicio_jornada)}</td>
+          <td class="text-center">${time(row.hora_entrada)}</td>
+          <td class="text-center">${time(row.hora_final)}</td>
+          <td class="text-center grp-start">${hasJourney ? opsChip(opsDuration(journey), journeyTone, journeyLabel) : '<span class="text-secondary">—</span>'}</td>
+          <td class="text-center">${escapeHtml(opsDuration(row.prevista_min))}</td>
+          <td class="text-center">${hasDiff ? opsChip(opsDuration(diff, { signed: true }), diffTone, diffLabel) : '<span class="text-secondary">—</span>'}</td>
+          <td class="text-center">${hasInternal ? opsChip(opsDuration(internal), internalTone, internalLabel) : '<span class="text-secondary">—</span>'}</td>
+          <td class="text-end grp-start">${returnCell}</td>
+          ${opsJustificationCell(row, "jornada")}
+        </tr>`;
+      }).join("") || '<tr><td colspan="16" class="text-center text-secondary py-4">Nenhum mapa para os filtros selecionados.</td></tr>';
       renderOcupacaoVeiculos(payload);
     }
 
@@ -6132,19 +6288,223 @@
       const branch = String(E.entregaOcupacaoVeiculosFilial?.value || "").toUpperCase();
       const comparison = String(E.entregaOcupacaoVeiculosComparacao?.value || "maior_igual");
       const threshold = Number(E.entregaOcupacaoVeiculosValor?.value || 0);
+      const justification = String(E.entregaOcupacaoVeiculosJustificativa?.value || "");
       const query = String(E.entregaOcupacaoVeiculosBusca?.value || "").trim().toLocaleLowerCase("pt-BR");
       const matches = value => ({ maior: value > threshold, maior_igual: value >= threshold, menor: value < threshold, menor_igual: value <= threshold, igual: Math.abs(value - threshold) < .005 }[comparison] ?? true);
+      // Ocupação por pallets (03.02.37 com itens ÷ capacidade do caminhão); sem itens, o peso da 03.08.05.
+      const occupationOf = row => row.ocupacao_pallets_pct !== null && row.ocupacao_pallets_pct !== undefined ? Number(row.ocupacao_pallets_pct) : (row.ocupacao_percentual !== null && row.ocupacao_percentual !== undefined ? Number(row.ocupacao_percentual) : null);
       const rows = (Array.isArray(payload.vehicles) ? payload.vehicles : []).filter(row => {
-        const occupation = Number(row.ocupacao_percentual);
-        const text = [row.placa, row.mapa, row.rota, row.data, row.filial].join(" ").toLocaleLowerCase("pt-BR");
-        return (!branch || String(row.filial || "").toUpperCase() === branch) && Number.isFinite(occupation) && matches(occupation) && (!query || text.includes(query));
+        const occupation = occupationOf(row);
+        const text = [row.placa, row.mapa, row.rota, row.data, row.filial, row.caminhao_descricao].join(" ").toLocaleLowerCase("pt-BR");
+        return (!branch || String(row.filial || "").toUpperCase() === branch)
+          && (occupation === null || matches(occupation))
+          && (!justification || (justification === "justificada" ? Boolean(row.ocupacao_justificada) : !row.ocupacao_justificada))
+          && (!query || text.includes(query));
       });
       const fmt = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-      const average = rows.length ? rows.reduce((total, row) => total + Number(row.ocupacao_percentual || 0), 0) / rows.length : 0;
-      if (E.entregaOcupacaoVeiculosStatus) E.entregaOcupacaoVeiculosStatus.textContent = rows.length ? `${rows.length} mapa(s)/veículo(s) no filtro · dados da 03.08.05` : "Nenhum veículo atende aos filtros de ocupação.";
-      if (E.entregaOcupacaoVeiculosCards) E.entregaOcupacaoVeiculosCards.innerHTML = [["Veículos no filtro", fmt(rows.length), "mapas com placa e ocupação"], ["Ocupação média", `${fmt(average)}%`, "nos mapas exibidos"], ["Maior ocupação", rows.length ? `${fmt(Math.max(...rows.map(row => Number(row.ocupacao_percentual || 0))))}%` : "—", "no filtro"]].map(([label, value, note]) => `<article class="metric-card" style="display:flex;flex-direction:column;align-items:flex-start;gap:.25rem"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b><small>${escapeHtml(note)}</small></article>`).join("");
+      const toneOf = row => {
+        const occupation = row.ocupacao_pallets_pct;
+        const meta = row.meta_ocupacao_pct;
+        if (occupation === null || occupation === undefined || !meta) return "neutral";
+        return occupation >= meta ? "ok" : occupation >= meta - 10 ? "warn" : "bad";
+      };
+      const withPallets = rows.filter(row => row.pallets !== null && row.pallets !== undefined && Number(row.pallets) > 0);
+      const withOccupation = rows.filter(row => row.ocupacao_pallets_pct !== null && row.ocupacao_pallets_pct !== undefined);
+      const below = withOccupation.filter(row => row.meta_ocupacao_pct && Number(row.ocupacao_pallets_pct) < Number(row.meta_ocupacao_pct));
+      const averagePallets = withPallets.length ? withPallets.reduce((total, row) => total + Number(row.pallets), 0) / withPallets.length : null;
+      const averageOccupation = withOccupation.length ? withOccupation.reduce((total, row) => total + Number(row.ocupacao_pallets_pct), 0) / withOccupation.length : null;
+      const metas = [...new Map(rows.filter(row => row.meta_ocupacao_pct).map(row => [String(row.filial || "").toUpperCase(), row.meta_ocupacao_pct])).entries()];
+      const avisos = Array.isArray(payload.ocupacao_avisos) ? payload.ocupacao_avisos : [];
+      if (E.entregaOcupacaoVeiculosStatus) E.entregaOcupacaoVeiculosStatus.textContent = rows.length
+        ? `${rows.length} mapa(s)/veículo(s) no filtro · pallets da 03.02.37 + 01.11${avisos.length ? ` · ${avisos.join(" ")}` : ""}`
+        : (avisos[0] || "Nenhum veículo atende aos filtros de ocupação.");
+      if (E.entregaOcupacaoVeiculosCards) E.entregaOcupacaoVeiculosCards.innerHTML = opsMetricCards([
+        ["Pallets por carro", averagePallets === null ? "—" : fmt(averagePallets), `média de ${fmt(withPallets.length)} mapa(s) com itens`],
+        ["Ocupação média", averageOccupation === null ? "—" : `${fmt(averageOccupation)}%`, metas.length ? `meta ${metas.map(([filial, meta]) => `${opsBranch(filial)} ${fmt(meta)}%`).join(" · ")}` : "cadastre a meta na aba Caminhões"],
+        ["Abaixo da meta", fmt(below.length), `${fmt(withOccupation.length)} carro(s) com capacidade cadastrada`],
+        ["Justificativas pendentes", fmt(below.filter(row => !row.ocupacao_justificada).length), "entre os abaixo da meta"],
+      ]);
+      if (E.entregaOcupacaoVeiculosLegenda) E.entregaOcupacaoVeiculosLegenda.innerHTML = `<span>Ocupação:</span><span class="ops-chip ok">na meta ou acima</span><span class="ops-chip warn">até 10 p.p. abaixo</span><span class="ops-chip bad">mais de 10 p.p. abaixo</span><span class="ops-chip neutral">sem capacidade ou sem itens</span>`;
       if (!E.entregaOcupacaoVeiculosBody) return;
-      E.entregaOcupacaoVeiculosBody.innerHTML = rows.map(row => `<tr><td>${escapeHtml(formatDate(row.data) || row.data || "-")}</td><td>${escapeHtml(row.filial || "-")}</td><td class="mono fw-semibold">${escapeHtml(row.placa || "-")}</td><td class="mono">${escapeHtml(row.mapa || "-")}</td><td style="min-width:180px">${escapeHtml(row.rota || "-")}</td><td class="text-end">${row.peso_kg === null || row.peso_kg === undefined ? "—" : `${fmt(row.peso_kg)} kg`}</td><td class="text-end">${row.capacidade_kg === null || row.capacidade_kg === undefined ? "—" : `${fmt(row.capacidade_kg)} kg`}</td><td class="text-end fw-semibold ${Number(row.ocupacao_percentual) < 70 ? "text-warning" : "text-success"}">${fmt(row.ocupacao_percentual)}%</td></tr>`).join("") || '<tr><td colspan="8" class="text-center text-secondary py-4">Nenhum veículo atende aos filtros de ocupação.</td></tr>';
+      E.entregaOcupacaoVeiculosBody.innerHTML = rows.map(row => {
+        const hasPallets = row.pallets !== null && row.pallets !== undefined;
+        const hasCapacity = Boolean(row.capacidade_pallets);
+        const tone = toneOf(row);
+        const occupation = row.ocupacao_pallets_pct;
+        const meta = row.meta_ocupacao_pct;
+        const label = tone === "neutral"
+          ? (!hasPallets ? "Mapa sem itens na 03.02.37" : !hasCapacity ? "Caminhão sem capacidade cadastrada" : "Operação sem meta cadastrada")
+          : tone === "ok" ? `Na meta (${fmt(meta)}%)` : `Abaixo da meta (${fmt(meta)}%)`;
+        let occupationCell;
+        if (occupation !== null && occupation !== undefined) {
+          const bar = Math.max(0, Math.min(Number(occupation), 100));
+          const marker = meta ? `<span class="ops-occ-meta" style="left:${Math.min(Number(meta), 100)}%" title="Meta ${escapeHtml(fmt(meta))}%"></span>` : "";
+          occupationCell = `<div class="ops-occ"><div class="ops-occ-bar" aria-hidden="true"><span class="${tone}" style="width:${bar}%"></span>${marker}</div>${opsChip(`${fmt(occupation)}%`, tone, label)}</div>`;
+        } else if (hasPallets && !hasCapacity) {
+          occupationCell = `<span class="text-warning small" title="Cadastre a placa na aba Caminhões"><i class="bi bi-exclamation-triangle me-1"></i>Caminhão sem cadastro</span>`;
+        } else {
+          const weight = row.ocupacao_percentual;
+          occupationCell = weight === null || weight === undefined ? '<span class="text-secondary">—</span>' : `<span class="text-secondary small" title="Mapa sem itens na 03.02.37: ocupação por peso da 03.08.05">${escapeHtml(fmt(weight))}% <span class="ops-chip neutral">peso</span></span>`;
+        }
+        const truck = row.caminhao_descricao ? `<div class="text-secondary small">${escapeHtml(row.caminhao_descricao)}</div>` : "";
+        return `<tr>
+          <td class="fw-semibold">${escapeHtml(opsBranch(row.filial))}</td>
+          <td>${escapeHtml(opsDay(row.data))}</td>
+          <td class="mono fw-semibold">${escapeHtml(row.placa || "-")}${truck}</td>
+          <td class="mono">${escapeHtml(row.mapa || "-")}</td>
+          <td class="ops-wrap">${escapeHtml(row.rota || "-")}</td>
+          <td class="text-end grp-start fw-semibold">${hasPallets ? escapeHtml(fmt(row.pallets)) : '<span class="text-secondary">—</span>'}</td>
+          <td class="text-end">${hasCapacity ? escapeHtml(fmt(row.capacidade_pallets)) : '<span class="text-secondary">—</span>'}</td>
+          <td class="grp-start">${occupationCell}</td>
+          ${opsJustificationCell(row, "ocupacao")}
+        </tr>`;
+      }).join("") || '<tr><td colspan="9" class="text-center text-secondary py-4">Nenhum veículo atende aos filtros de ocupação.</td></tr>';
+    }
+
+    function entregaFrotaOperacoes() {
+      const names = (Array.isArray(state.entregaFrota?.operacoes) ? state.entregaFrota.operacoes : []).map(name => String(name || "").trim().toUpperCase()).filter(Boolean);
+      return names.length ? names : ["PATOS", "SUME"];
+    }
+
+    function entregaFrotaPlacasSemCadastro(operation) {
+      const registered = new Set((state.entregaFrota?.caminhoes || []).filter(item => String(item.filial || "").toUpperCase() === operation).map(item => String(item.placa || "").toUpperCase()));
+      const seen = new Map();
+      (Array.isArray(state.ligaJornadaMapas?.vehicles) ? state.ligaJornadaMapas.vehicles : []).forEach(row => {
+        const placa = String(row.placa || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (String(row.filial || "").toUpperCase() !== operation || !placa || registered.has(placa)) return;
+        seen.set(placa, (seen.get(placa) || 0) + 1);
+      });
+      return [...seen.entries()].sort((a, b) => b[1] - a[1]);
+    }
+
+    function renderEntregaFrota() {
+      if (!E.entregaFrotaDetails) return;
+      const operations = entregaFrotaOperacoes();
+      if (!state.entregaFrotaOperation || !operations.includes(state.entregaFrotaOperation)) state.entregaFrotaOperation = operations[0];
+      const operation = state.entregaFrotaOperation;
+      const trucks = (state.entregaFrota?.caminhoes || []).filter(item => String(item.filial || "").toUpperCase() === operation);
+      const missing = entregaFrotaPlacasSemCadastro(operation);
+      const rows = trucks.map(item => `<tr>
+          <td><input class="form-control form-control-sm mono frota-placa" value="${escapeHtml(item.placa || "")}" placeholder="ABC1D23" maxlength="8" aria-label="Placa"></td>
+          <td><input class="form-control form-control-sm frota-descricao" value="${escapeHtml(item.descricao || "")}" placeholder="Toco, truck, carreta..." maxlength="80" aria-label="Descrição"></td>
+          <td style="max-width:150px"><div class="input-group input-group-sm"><input class="form-control text-end frota-capacidade" type="number" min="0.5" max="100" step="0.5" value="${escapeHtml(item.capacidade_pallets ?? "")}" aria-label="Capacidade em pallets"><span class="input-group-text">pallets</span></div></td>
+          <td class="text-center"><input class="form-check-input frota-ativo" type="checkbox" ${item.ativo === false ? "" : "checked"} aria-label="Caminhão ativo"></td>
+          <td class="text-end"><button type="button" class="btn btn-outline-danger btn-sm frota-remover" title="Remover caminhão"><i class="bi bi-trash"></i><span class="visually-hidden">Remover</span></button></td>
+        </tr>`).join("");
+      const missingHtml = missing.length
+        ? `<div class="ops-legend mt-2"><span>Placas da competência sem cadastro:</span>${missing.slice(0, 24).map(([placa, mapas]) => `<button type="button" class="btn btn-outline-secondary btn-sm py-0 frota-adicionar-placa" data-placa="${escapeHtml(placa)}" title="${mapas} mapa(s) na competência"><i class="bi bi-plus"></i> ${escapeHtml(placa)}</button>`).join("")}</div>`
+        : "";
+      const updated = state.entregaFrota?.updated_by ? `Última alteração: ${escapeHtml(state.entregaFrota.updated_by)} · ${escapeHtml(formatDateTime(state.entregaFrota.updated_at) || state.entregaFrota.updated_at || "")}` : "";
+      E.entregaFrotaDetails.innerHTML = `
+        <div class="d-flex flex-wrap gap-3 align-items-end mb-3">
+          <div style="min-width:220px"><label class="form-label small mb-1" for="entregaFrotaOperation">Operação</label><select class="form-select form-select-sm" id="entregaFrotaOperation">${operations.map(name => `<option value="${escapeHtml(name)}" ${name === operation ? "selected" : ""}>${escapeHtml(opsBranch(name))}</option>`).join("")}</select></div>
+          <div class="form-text mb-1">Ocupação do carro = pallets do mapa ÷ capacidade em pallets do caminhão. A meta fica na aba Metas.</div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-2"><h3 class="h6 mb-0">Caminhões de ${escapeHtml(opsBranch(operation))} <span class="text-secondary fw-normal">(${trucks.length})</span></h3><button type="button" class="btn btn-outline-primary btn-sm frota-adicionar"><i class="bi bi-plus-lg me-1"></i>Adicionar caminhão</button></div>
+        <div class="table-scroll"><table class="table table-sm align-middle mb-0 ops-table"><thead><tr><th style="width:150px">Placa</th><th>Descrição</th><th style="width:170px">Capacidade</th><th class="text-center" style="width:70px">Ativo</th><th style="width:60px"></th></tr></thead><tbody id="entregaFrotaBody">${rows || '<tr><td colspan="5" class="text-secondary py-3">Nenhum caminhão cadastrado nesta operação.</td></tr>'}</tbody></table></div>
+        ${missingHtml}
+        <div class="form-text mt-2">${updated}</div>`;
+    }
+
+    function readEntregaFrotaOperacao() {
+      // Lê o que está na tela para a operação aberta e mantém as demais como estão no estado.
+      const operation = state.entregaFrotaOperation;
+      if (!operation || !E.entregaFrotaDetails?.querySelector("#entregaFrotaBody")) return;
+      const trucks = [...E.entregaFrotaDetails.querySelectorAll("#entregaFrotaBody tr")].filter(row => row.querySelector(".frota-placa")).map(row => ({
+        filial: operation,
+        placa: String(row.querySelector(".frota-placa")?.value || "").trim().toUpperCase(),
+        descricao: String(row.querySelector(".frota-descricao")?.value || "").trim(),
+        capacidade_pallets: String(row.querySelector(".frota-capacidade")?.value || "").trim(),
+        ativo: Boolean(row.querySelector(".frota-ativo")?.checked),
+      }));
+      const others = list => (Array.isArray(list) ? list : []).filter(item => String(item.filial || "").toUpperCase() !== operation);
+      state.entregaFrota = {
+        ...(state.entregaFrota || {}),
+        caminhoes: [...others(state.entregaFrota?.caminhoes), ...trucks],
+      };
+    }
+
+    async function syncEntregaFrota() {
+      state.entregaFrota = await req(CONFIG.endpoints.ligaEntrega.frota, { timeoutMs: 30000 }) || { caminhoes: [], metas: [], operacoes: [] };
+      renderEntregaFrota();
+    }
+
+    async function saveEntregaFrota() {
+      const button = E.entregaFrotaSaveBtn;
+      readEntregaFrotaOperacao();
+      if (button) button.disabled = true;
+      try {
+        const payload = {
+          caminhoes: (state.entregaFrota?.caminhoes || []).filter(item => String(item.placa || "").trim() || String(item.capacidade_pallets || "").trim()),
+          metas: state.entregaFrota?.metas || [],
+        };
+        state.entregaFrota = await req(CONFIG.endpoints.ligaEntrega.frota, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }) || state.entregaFrota;
+        renderEntregaFrota();
+        addLog("Caminhões da entrega salvos.", "ok");
+        syncJornadaMapas({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao salvar caminhões: ${err.message}`, "err");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
+    function entregaSemAcento(value) {
+      return String(value || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+    }
+
+    function entregaMetaDaOperacao(operacao) {
+      // Aceita "PATOS", "3 - PATOS" ou "Sumé": a meta é cadastrada pelo nome da operação.
+      const text = entregaSemAcento(operacao);
+      return (state.entregaFrota?.metas || []).find(item => {
+        const name = entregaSemAcento(item.filial);
+        return name && (text === name || text.includes(name));
+      }) || null;
+    }
+
+    function renderEntregaMetas() {
+      if (!E.entregaMetasDetails) return;
+      const metas = state.entregaFrota?.metas || [];
+      const fmt = value => value === null || value === undefined || value === "" ? "" : escapeHtml(value);
+      const rows = entregaFrotaOperacoes().map(operation => {
+        const meta = metas.find(item => String(item.filial || "").toUpperCase() === operation) || {};
+        return `<tr data-filial="${escapeHtml(operation)}">
+          <td class="fw-semibold">${escapeHtml(opsBranch(operation))}</td>
+          <td style="max-width:200px"><div class="input-group input-group-sm"><input class="form-control text-end meta-ocupacao" type="number" min="0.01" max="200" step="0.01" value="${fmt(meta.ocupacao_meta_pct)}" placeholder="Ex.: 65,76" aria-label="Meta de ocupação de ${escapeHtml(opsBranch(operation))}"><span class="input-group-text">%</span></div></td>
+          <td style="max-width:220px"><div class="input-group input-group-sm"><input class="form-control text-end meta-caixas" type="number" min="0.01" step="0.01" value="${fmt(meta.caixas_viagem_meta)}" placeholder="Ex.: 285,69" aria-label="Meta de caixas por viagem de ${escapeHtml(opsBranch(operation))}"><span class="input-group-text">CX</span></div></td>
+        </tr>`;
+      }).join("");
+      const updated = state.entregaFrota?.updated_by ? `Última alteração: ${escapeHtml(state.entregaFrota.updated_by)} · ${escapeHtml(formatDateTime(state.entregaFrota.updated_at) || state.entregaFrota.updated_at || "")}` : "";
+      E.entregaMetasDetails.innerHTML = `
+        <div class="table-scroll"><table class="table table-sm align-middle mb-0 ops-table"><thead><tr><th style="width:200px">Operação</th><th>Ocupação mínima</th><th>Caixas por viagem</th></tr></thead><tbody id="entregaMetasBody">${rows}</tbody></table></div>
+        <div class="form-text mt-2">Ocupação: usada na Ocupação por veículo (pallets ÷ capacidade do caminhão) e no card de eficiência da 17.06. Caixas por viagem: card de eficiência da 17.06. Deixe em branco a meta que a operação não acompanha.</div>
+        <div class="form-text">${updated}</div>`;
+    }
+
+    function readEntregaMetas() {
+      const rows = [...(E.entregaMetasDetails?.querySelectorAll("#entregaMetasBody tr") || [])];
+      return rows.map(row => ({
+        filial: row.dataset.filial || "",
+        ocupacao_meta_pct: String(row.querySelector(".meta-ocupacao")?.value || "").trim(),
+        caixas_viagem_meta: String(row.querySelector(".meta-caixas")?.value || "").trim(),
+      })).filter(item => item.ocupacao_meta_pct || item.caixas_viagem_meta);
+    }
+
+    async function saveEntregaMetas() {
+      const button = E.entregaMetasSaveBtn;
+      if (button) button.disabled = true;
+      try {
+        const payload = { caminhoes: state.entregaFrota?.caminhoes || [], metas: readEntregaMetas() };
+        state.entregaFrota = await req(CONFIG.endpoints.ligaEntrega.frota, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }) || state.entregaFrota;
+        renderEntregaMetas();
+        addLog("Metas da entrega salvas.", "ok");
+        renderIndicadores(state.ligaIndicadores || {});
+        syncJornadaMapas({ silent: true });
+      } catch (err) {
+        addLog(`Falha ao salvar metas: ${err.message}`, "err");
+      } finally {
+        if (button) button.disabled = false;
+      }
     }
 
     async function syncJornadaMapas({ silent = true } = {}) {
@@ -6166,14 +6526,15 @@
 
     async function saveJornadaMapaJustificativa(button) {
       const key = String(button?.dataset?.key || "");
-      const input = E.entregaJornadaMapasBody?.querySelector(`.jornada-mapa-justificativa[data-key="${CSS.escape(key)}"]`);
+      const tipo = button?.dataset?.tipo === "ocupacao" ? "ocupacao" : "jornada";
+      const input = button?.closest(".ops-just")?.querySelector(".jornada-mapa-justificativa");
       const texto = String(input?.value || "").trim();
-      if (!key || !texto) { addLog("Informe a justificativa antes de salvar.", "err"); return; }
+      if (!key || !input || !texto) { addLog("Informe a justificativa antes de salvar.", "err"); return; }
       button.disabled = true;
       try {
         const competencia = ensureLigaMesFilter();
-        await req(`${CONFIG.endpoints.ligaEntrega.jornadaMapas}/${encodeURIComponent(key)}/justificativa`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia, texto, version: input.dataset.version || "" }) });
-        addLog("Justificativa de jornada salva.", "ok");
+        await req(`${CONFIG.endpoints.ligaEntrega.jornadaMapas}/${encodeURIComponent(key)}/justificativa`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ competencia, texto, tipo, version: input.dataset.version || "" }) });
+        addLog(tipo === "ocupacao" ? "Justificativa de ocupação salva." : "Justificativa de jornada salva.", "ok");
         await syncJornadaMapas({ silent: true });
       } catch (err) { addLog(err.message || "Não foi possível salvar a justificativa.", "err"); }
       finally { button.disabled = false; }
@@ -6596,19 +6957,30 @@
       const fechamento = module === "fechamento";
       const devolucoes = module === "devolucoes";
       const devolucoesCadastros = module === "devolucoes-cadastros";
-      if (E.entregaLigaModule) E.entregaLigaModule.classList.toggle("d-none", indicadores || fechamento || devolucoes || devolucoesCadastros);
+      const frota = module === "frota";
+      const metas = module === "metas";
+      if (E.entregaLigaModule) E.entregaLigaModule.classList.toggle("d-none", indicadores || fechamento || devolucoes || devolucoesCadastros || frota || metas);
+      if (E.entregaFrotaModule) E.entregaFrotaModule.classList.toggle("d-none", !frota);
+      if (E.entregaFrotaModuleTab) E.entregaFrotaModuleTab.className = `btn ${frota ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
+      if (E.entregaMetasModule) E.entregaMetasModule.classList.toggle("d-none", !metas);
+      if (E.entregaMetasModuleTab) E.entregaMetasModuleTab.className = `btn ${metas ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaIndicadoresModule) E.entregaIndicadoresModule.classList.toggle("d-none", !indicadores);
       if (E.entregaFechamentoModule) E.entregaFechamentoModule.classList.toggle("d-none", !fechamento);
       if (E.entregaDevolucoesModule) E.entregaDevolucoesModule.classList.toggle("d-none", !devolucoes);
       if (E.entregaDevolucoesCadastrosModule) E.entregaDevolucoesCadastrosModule.classList.toggle("d-none", !devolucoesCadastros);
-      if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.className = `btn ${!indicadores && !fechamento && !devolucoes && !devolucoesCadastros ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
+      if (E.entregaLigaModuleTab) E.entregaLigaModuleTab.className = `btn ${!indicadores && !fechamento && !devolucoes && !devolucoesCadastros && !frota && !metas ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaIndicadoresModuleTab) E.entregaIndicadoresModuleTab.className = `btn ${indicadores ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaFechamentoModuleTab) E.entregaFechamentoModuleTab.className = `btn ${fechamento ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.className = `btn ${devolucoes ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
       if (E.entregaDevolucoesCadastrosModuleTab) E.entregaDevolucoesCadastrosModuleTab.className = `btn ${devolucoesCadastros ? "btn-primary" : "btn-outline-primary"} entrega-module-tab`;
-      if (indicadores) { syncIndicadores({ silent: true }); syncJornadaMapas({ silent: true }); syncMapasMensais({ silent: true }); }
+      if (indicadores) {
+        syncIndicadores({ silent: true }); syncJornadaMapas({ silent: true }); syncMapasMensais({ silent: true });
+        syncEntregaFrota().then(() => renderIndicadores(state.ligaIndicadores || {})).catch(() => {});
+      }
+      if (metas) syncEntregaFrota().then(() => renderEntregaMetas()).catch(err => { if (E.entregaMetasDetails) E.entregaMetasDetails.textContent = `Falha ao carregar metas: ${err.message}`; });
       if (fechamento) syncMapasOperacionais({ silent: true });
       if (devolucoes) syncDevolucoesOperacionais({ silent: true });
+      if (frota) Promise.all([syncEntregaFrota(), syncJornadaMapas({ silent: true })]).then(() => renderEntregaFrota()).catch(err => { if (E.entregaFrotaDetails) E.entregaFrotaDetails.textContent = `Falha ao carregar caminhões: ${err.message}`; });
       if (devolucoesCadastros) Promise.all([syncDevolucoesOperacionais({ silent: true }), syncDevolucoesCadastros()]).then(() => renderDevolucoesCadastros()).catch(err => { if (E.entregaDevolucoesCadastrosDetails) E.entregaDevolucoesCadastrosDetails.textContent = `Falha ao carregar cadastros: ${err.message}`; });
     }
 
@@ -11964,24 +12336,35 @@
         renderIndicadores(state.ligaIndicadores || {});
       });
       if (E.entregaJornadaMapasRefreshBtn) E.entregaJornadaMapasRefreshBtn.addEventListener("click", () => syncJornadaMapas({ silent: false }));
-      [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao].forEach(input => input?.addEventListener("change", () => renderJornadaMapas(state.ligaJornadaMapas || {})));
+      [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao, E.entregaJornadaMapasOrdem].forEach(input => input?.addEventListener("change", () => renderJornadaMapas(state.ligaJornadaMapas || {})));
       if (E.entregaJornadaMapasBusca) E.entregaJornadaMapasBusca.addEventListener("input", () => renderJornadaMapas(state.ligaJornadaMapas || {}));
       if (E.entregaJornadaMapasLimparFiltrosBtn) E.entregaJornadaMapasLimparFiltrosBtn.addEventListener("click", () => {
         [E.entregaJornadaMapasFilial, E.entregaJornadaMapasJustificativa, E.entregaJornadaMapasDevolucao, E.entregaJornadaMapasBusca].forEach(input => { if (input) input.value = ""; });
+        if (E.entregaJornadaMapasOrdem) E.entregaJornadaMapasOrdem.value = "data";
         renderJornadaMapas(state.ligaJornadaMapas || {});
       });
-      [E.entregaOcupacaoVeiculosFilial, E.entregaOcupacaoVeiculosComparacao, E.entregaOcupacaoVeiculosValor].forEach(input => input?.addEventListener("change", () => renderOcupacaoVeiculos(state.ligaJornadaMapas || {})));
+      [E.entregaOcupacaoVeiculosFilial, E.entregaOcupacaoVeiculosComparacao, E.entregaOcupacaoVeiculosValor, E.entregaOcupacaoVeiculosJustificativa].forEach(input => input?.addEventListener("change", () => renderOcupacaoVeiculos(state.ligaJornadaMapas || {})));
       if (E.entregaOcupacaoVeiculosBusca) E.entregaOcupacaoVeiculosBusca.addEventListener("input", () => renderOcupacaoVeiculos(state.ligaJornadaMapas || {}));
       if (E.entregaOcupacaoVeiculosLimparFiltrosBtn) E.entregaOcupacaoVeiculosLimparFiltrosBtn.addEventListener("click", () => {
         if (E.entregaOcupacaoVeiculosFilial) E.entregaOcupacaoVeiculosFilial.value = "";
         if (E.entregaOcupacaoVeiculosComparacao) E.entregaOcupacaoVeiculosComparacao.value = "maior_igual";
         if (E.entregaOcupacaoVeiculosValor) E.entregaOcupacaoVeiculosValor.value = "0";
         if (E.entregaOcupacaoVeiculosBusca) E.entregaOcupacaoVeiculosBusca.value = "";
+        if (E.entregaOcupacaoVeiculosJustificativa) E.entregaOcupacaoVeiculosJustificativa.value = "";
         renderOcupacaoVeiculos(state.ligaJornadaMapas || {});
       });
-      if (E.entregaJornadaMapasBody) E.entregaJornadaMapasBody.addEventListener("click", event => {
-        const button = event.target.closest(".jornada-mapa-salvar");
-        if (button) saveJornadaMapaJustificativa(button);
+      [E.entregaJornadaMapasBody, E.entregaOcupacaoVeiculosBody].forEach(body => {
+        if (!body) return;
+        body.addEventListener("click", event => {
+          const button = event.target.closest(".jornada-mapa-salvar");
+          if (button) saveJornadaMapaJustificativa(button);
+        });
+        body.addEventListener("keydown", event => {
+          if (event.key !== "Enter" || !event.target.classList.contains("jornada-mapa-justificativa")) return;
+          event.preventDefault();
+          const button = event.target.closest(".ops-just")?.querySelector(".jornada-mapa-salvar");
+          if (button) saveJornadaMapaJustificativa(button);
+        });
       });
       if (E.entregaMapasMensaisRefreshBtn) E.entregaMapasMensaisRefreshBtn.addEventListener("click", () => syncMapasMensais({ silent: false }));
       if (E.entregaMapasOperacionaisRefreshBtn) E.entregaMapasOperacionaisRefreshBtn.addEventListener("click", () => syncMapasOperacionais({ silent: false }));
@@ -12025,6 +12408,35 @@
       });
       if (E.entregaDevolucoesModuleTab) E.entregaDevolucoesModuleTab.addEventListener("click", () => setEntregaModule("devolucoes"));
       if (E.entregaDevolucoesCadastrosModuleTab) E.entregaDevolucoesCadastrosModuleTab.addEventListener("click", () => setEntregaModule("devolucoes-cadastros"));
+      if (E.entregaFrotaModuleTab) E.entregaFrotaModuleTab.addEventListener("click", () => setEntregaModule("frota"));
+      if (E.entregaFrotaSaveBtn) E.entregaFrotaSaveBtn.addEventListener("click", saveEntregaFrota);
+      if (E.entregaMetasModuleTab) E.entregaMetasModuleTab.addEventListener("click", () => setEntregaModule("metas"));
+      if (E.entregaMetasSaveBtn) E.entregaMetasSaveBtn.addEventListener("click", saveEntregaMetas);
+      if (E.entregaFrotaDetails) E.entregaFrotaDetails.addEventListener("click", event => {
+        const add = event.target.closest(".frota-adicionar, .frota-adicionar-placa");
+        const remove = event.target.closest(".frota-remover");
+        if (!add && !remove) return;
+        readEntregaFrotaOperacao();
+        const operation = state.entregaFrotaOperation;
+        const trucks = state.entregaFrota.caminhoes || [];
+        if (add) {
+          state.entregaFrota.caminhoes = [...trucks, { filial: operation, placa: add.dataset.placa || "", descricao: "", capacidade_pallets: "", ativo: true }];
+        } else {
+          const rows = [...E.entregaFrotaDetails.querySelectorAll("#entregaFrotaBody tr")];
+          const index = rows.indexOf(remove.closest("tr"));
+          const ofOperation = trucks.filter(item => String(item.filial || "").toUpperCase() === operation);
+          const target = ofOperation[index];
+          state.entregaFrota.caminhoes = trucks.filter(item => item !== target);
+        }
+        renderEntregaFrota();
+        if (add && !add.dataset.placa) E.entregaFrotaDetails.querySelector("#entregaFrotaBody tr:last-child .frota-placa")?.focus();
+      });
+      if (E.entregaFrotaDetails) E.entregaFrotaDetails.addEventListener("change", event => {
+        if (event.target.id !== "entregaFrotaOperation") return;
+        readEntregaFrotaOperacao();
+        state.entregaFrotaOperation = event.target.value || "";
+        renderEntregaFrota();
+      });
       if (E.entregaDevolucoesRefreshBtn) E.entregaDevolucoesRefreshBtn.addEventListener("click", async () => {
         E.entregaDevolucoesRefreshBtn.disabled = true;
         try {

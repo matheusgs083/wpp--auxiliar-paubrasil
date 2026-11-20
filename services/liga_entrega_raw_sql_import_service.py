@@ -13,6 +13,24 @@ import psycopg
 from psycopg import sql
 
 
+# A 03.02.37 com itens tem 117 colunas e uma linha por produto. O painel lê o
+# CSV da última remessa; no histórico SQL guardamos só o que identifica a
+# entrega e o item, para cada reenvio do acumulado não ocupar centenas de MB.
+COLUNAS_HISTORICO = {
+    "030237": (
+        "Empresa", "Filial", "Motorista", "ajudante-1", "ajudante-2", "Dt. Operacao", "Emissao",
+        "Nota", "Serie", "Status", "Cliente", "Produto", "Unidade", "Qtde", "Total", "Mapa",
+    ),
+}
+
+
+def _payload_historico(routine: str, row: dict[str, Any]) -> dict[str, Any]:
+    columns = COLUNAS_HISTORICO.get(str(routine))
+    if not columns:
+        return row
+    return {column: row[column] for column in columns if column in row}
+
+
 def _payload_competencia(payload: dict[str, Any]) -> str:
     """Extrai a competência operacional de uma linha persistida.
 
@@ -336,7 +354,7 @@ class LigaEntregaRawSqlImportService:
             )
             if cur.fetchone():
                 return False, 0
-        rows = list(self._read_rows(path))
+        rows = [_payload_historico(routine, row) for row in self._read_rows(path)]
         if not rows:
             return True, 0
         reference_date = str(manifest.get("reference_date") or "") or None
