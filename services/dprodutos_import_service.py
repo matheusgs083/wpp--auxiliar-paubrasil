@@ -561,7 +561,6 @@ class DProdutosImportService:
                 s.grupo,
                 s.grupo_remuneracao,
                 s.ean,
-                s.peso_bruto,
                 s.familia_embalagem_siv,
                 s.codigo_produto_sap,
                 s.ncm,
@@ -575,7 +574,10 @@ class DProdutosImportService:
                 b.source_file,
                 b.file_hash,
                 b.imported_at AS batch_imported_at,
-                s.fator_hecto
+                -- Colunas novas só no fim: CREATE OR REPLACE VIEW não muda a
+                -- posição das que já existem no banco.
+                s.fator_hecto,
+                s.peso_bruto
             FROM {}.dprodutos_snapshot s
             JOIN {}.import_batches b ON b.id = s.batch_id
             WHERE {}
