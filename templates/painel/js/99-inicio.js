@@ -1,0 +1,3 @@
+    setupPedidosPanel();
+    setupEstoquePanel();
+    init();

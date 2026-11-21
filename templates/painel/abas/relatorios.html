@@ -1,0 +1,101 @@
+      <div class="tab-pane fade" id="reportsPane" role="tabpanel" aria-labelledby="reportsTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Relatórios</h2>
+              <div class="form-text">Uploads separados por origem. Promax, Power BI e bases operacionais ficam na mesma aba para facilitar a rotina.</div>
+            </div>
+            <span class="pill">Promax | Power BI | Operacional</span>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Promax</h2>
+              <div class="form-text">Relatórios extraidos do Promax. Crítica fica em aba própria e boletos ficam separados para futura atualização.</div>
+            </div>
+            <span class="pill">Origem Promax</span>
+          </div>
+          <div class="dataset-groups" id="reportDatasetGrid"></div>
+        </section>
+
+        <section class="panel-card p-3 mb-3" id="estoqueImportCard">
+          <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start mb-2">
+            <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-box-arrow-in-down me-2 text-primary"></i>Atualizar grade de estoque</h2><div class="form-text">Envie o CSV <span class="mono">Stock_Product</span> exportado pelo Cora. A nova grade será usada na validação dos pedidos.</div></div>
+            <span class="pill warn">Administrador</span>
+          </div>
+          <div class="row g-2 align-items-end"><div class="col-md-3"><label class="form-label small mb-1" for="estoqueImportFilial">Filial</label><select class="form-select" id="estoqueImportFilial"><option value="">Selecione</option><option value="1">Sousa</option><option value="2">Itaporanga</option><option value="3">Patos</option><option value="4">Sumé</option><option value="5">Guarabira</option><option value="6">Brumado</option><option value="7">Barra</option><option value="8">Caculé</option></select></div><div class="col-md-6"><label class="form-label small mb-1" for="estoqueArquivo">CSV Stock_Product</label><input class="form-control" id="estoqueArquivo" type="file" accept=".csv,text/csv"></div><div class="col-md-3"><button class="btn btn-primary w-100" id="estoqueImportarBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Importar grade</button></div></div>
+          <div class="form-text mt-2" id="estoqueImportStatus">Selecione a filial correspondente ao arquivo exportado.</div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Power BI</h2>
+              <div class="form-text">Bases oriundas do Power BI: prazo e limite e giro de vasilhame.</div>
+            </div>
+            <span class="pill">Origem Power BI</span>
+          </div>
+          <div class="dataset-groups" id="powerBiDatasetGrid"></div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-table me-2 text-primary"></i>Operacional</h2>
+              <div class="form-text">Bases auxiliares internas: setores, preços, operações, condições, produtos, materiais e cesta.</div>
+            </div>
+            <span class="pill">Uploads administrativos</span>
+          </div>
+          <div class="dataset-groups" id="operationalDatasetGrid"></div>
+        </section>
+
+        <section class="row g-3">
+          <div class="col-xl-7">
+            <article class="panel-card h-100">
+              <header class="px-3 pt-3 pb-2 border-bottom">
+                <h2 class="h6 mb-0 fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>Histórico de importações</h2>
+              </header>
+              <div class="table-scroll">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead>
+                    <tr class="text-uppercase small text-secondary">
+                      <th class="ps-3" scope="col">Dataset</th>
+                      <th scope="col">Lote</th>
+                      <th scope="col">Linhas</th>
+                      <th scope="col">Ref. Data</th>
+                      <th scope="col">Criado em</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyBody">
+                    <tr><td colspan="5" class="text-center py-4 text-secondary">Carregando histórico...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+          <div class="col-xl-5">
+            <article class="panel-card h-100">
+              <header class="px-3 pt-3 pb-2 border-bottom">
+                <h2 class="h6 mb-0 fw-bold"><i class="bi bi-list-task me-2 text-primary"></i>Jobs administrativos</h2>
+              </header>
+              <div class="table-scroll">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead>
+                    <tr class="text-uppercase small text-secondary">
+                      <th class="ps-3" scope="col">Job</th>
+                      <th scope="col">Dataset</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Atualizado</th>
+                    </tr>
+                  </thead>
+                  <tbody id="jobsBody">
+                    <tr><td colspan="4" class="text-center py-4 text-secondary">Carregando jobs...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>

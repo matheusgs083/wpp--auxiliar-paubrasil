@@ -2,6 +2,8 @@ from pathlib import Path
 import re
 import unittest
 
+from bot_api.services.admin_templates import montar_template
+
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "admin_import_panel.html"
 
@@ -9,7 +11,7 @@ TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "admin_impor
 class AdminPromaxSchedulePanelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.html = TEMPLATE_PATH.read_text(encoding="utf-8")
+        cls.html = montar_template(TEMPLATE_PATH)
 
     def test_schedule_supports_resellers_groups_and_completion_triggers(self) -> None:
         field_ids = (
@@ -43,15 +45,15 @@ class AdminPromaxSchedulePanelTests(unittest.TestCase):
     def test_payip_has_dedicated_panel_navigation(self) -> None:
         self.assertEqual(self.html.count('id="payipTab"'), 1)
         self.assertEqual(self.html.count('id="payipPane"'), 1)
-        self.assertIn('href="/admin/payip"', self.html)
-        self.assertIn('data-flow-target="payipTab"', self.html)
-        self.assertIn('"/admin/payip": "payipTab"', self.html)
-        self.assertIn('payipTab: "/admin/payip"', self.html)
+        self.assertIn('href="/payip"', self.html)
+        self.assertIn('data-bs-target="#payipPane"', self.html)
+        self.assertIn('"/payip": "payipTab"', self.html)
+        self.assertIn('payipTab: "/payip"', self.html)
         self.assertIn("function setupPayipPane()", self.html)
         self.assertIn('activeTabId === "payipTab"', self.html)
 
     def test_schedule_supports_daily_days_and_specific_intervals(self) -> None:
-        self.assertIn('<option value="daily_specific">Diaria especifica</option>', self.html)
+        self.assertIn('<option value="daily_specific">Diária específica</option>', self.html)
         self.assertIn("function promaxSelectedScheduleDays()", self.html)
         self.assertIn("function promaxSpecificScheduleTimes()", self.html)
         self.assertIn("function promaxScheduleTimingPayloads(name)", self.html)

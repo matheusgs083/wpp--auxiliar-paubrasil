@@ -1,0 +1,65 @@
+      <div class="tab-pane fade" id="conferenciaPane" role="tabpanel" aria-labelledby="conferenciaTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-clipboard-check me-2 text-primary"></i>Conferência de carga</h2>
+              <div class="form-text">Contagem por mapa alimentada pelo fechamento Promax 030302. O conferente lança apenas o que voltou de fato.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="conferenciaStatus">Aguardando dados</span>
+              <button class="btn btn-outline-primary btn-sm" id="conferenciaRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+              <button class="btn btn-primary btn-sm" id="conferenciaSaveBtn" type="button" disabled><i class="bi bi-check2-circle me-1"></i>Salvar contagem</button>
+            </div>
+          </div>
+          <div class="conference-toolbar mb-3">
+            <label class="form-label small fw-semibold mb-0" for="conferenciaData">Data
+              <input class="form-control form-control-sm mt-1" id="conferenciaData" type="date">
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="conferenciaFilial">Revenda
+              <select class="form-select form-select-sm mt-1" id="conferenciaFilial">
+                <option value="">Todas liberadas</option>
+              </select>
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="conferenciaSearch">Buscar mapa, placa ou motorista
+              <input class="form-control form-control-sm mt-1" id="conferenciaSearch" type="search" placeholder="Ex: 93709, placa, motorista">
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="conferenciaGrupo">Grupo
+              <select class="form-select form-select-sm mt-1" id="conferenciaGrupo">
+                <option value="">Todos</option>
+                <option value="300">300</option>
+                <option value="600">600</option>
+                <option value="1L">1L</option>
+                <option value="51">51</option>
+                <option value="FREEZER">Freezer</option>
+                <option value="CADEIRA">Cadeira</option>
+                <option value="MESA">Mesa</option>
+                <option value="BARRIL">Barril</option>
+                <option value="BARRACA">Barraca</option>
+                <option value="OUTRAS GARRAFEIRAS">Outras garrafeiras</option>
+                <option value="OUTROS MATERIAIS">Outros materiais</option>
+              </select>
+            </label>
+          </div>
+          <div class="finance-subtabs" id="conferenciaViews" hidden>
+            <button class="finance-subtab is-active" type="button" data-conferencia-view="mapas">Contagem por mapa</button>
+            <button class="finance-subtab" type="button" data-conferencia-view="garrafeiras">Consolidado garrafeiras</button>
+          </div>
+          <div class="conference-grid" id="conferenciaMapasView">
+            <aside class="conference-side">
+              <div class="d-flex align-items-center justify-content-between">
+                <h3 class="h6 fw-bold mb-0">Mapas do dia</h3>
+                <span class="badge text-bg-secondary" id="conferenciaMapCount">0</span>
+              </div>
+              <div class="conference-map-list" id="conferenciaMapList">
+                <div class="empty-state py-3">Nenhum mapa carregado.</div>
+              </div>
+            </aside>
+            <article class="panel-card shadow-none overflow-hidden" id="conferenciaEditor">
+              <div class="p-3 empty-state">Selecione um mapa para iniciar a conferência.</div>
+            </article>
+          </div>
+          <article class="panel-card shadow-none overflow-hidden" id="conferenciaGarrafeirasView" hidden>
+            <div class="p-3 empty-state">Consolidado disponível para usuários do financeiro.</div>
+          </article>
+        </section>
+      </div>

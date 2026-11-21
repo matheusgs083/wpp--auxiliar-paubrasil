@@ -1,0 +1,206 @@
+      <div class="tab-pane fade" id="entregaPane" role="tabpanel" aria-labelledby="entregaTab" tabindex="0">
+        <div class="btn-group btn-group-sm mb-3" role="tablist" aria-label="Módulos de Entrega">
+          <button class="btn btn-primary entrega-module-tab" id="entregaLigaModuleTab" data-entrega-module="liga" type="button">Liga Entrega</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaIndicadoresModuleTab" data-entrega-module="indicadores" type="button">Indicadores BI</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaFechamentoModuleTab" data-entrega-module="fechamento" type="button">Fechamento</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesModuleTab" data-entrega-module="devolucoes" type="button">Devoluções</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaDevolucoesCadastrosModuleTab" data-entrega-module="devolucoes-cadastros" type="button">Setores e gerentes</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaFrotaModuleTab" data-entrega-module="frota" type="button">Caminhões</button>
+          <button class="btn btn-outline-primary entrega-module-tab" id="entregaMetasModuleTab" data-entrega-module="metas" type="button">Metas</button>
+        </div>
+        <div id="entregaLigaModule">
+        <section class="panel-card p-3 mb-3" id="entregaLigaOverviewSection">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3" id="entregaLigaHeader">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-trophy me-2 text-primary"></i>Entrega · A Liga</h2>
+              <div class="form-text">Central da Liga da Entrega dentro do painel do bot. Use somente as rotinas homologadas e mantenha os expurgos que ajustam o ranking sem mexer nas demais medições.</div>
+            </div>
+            <div class="d-flex align-items-center gap-2"><span class="pill">Liga Entrega</span><button class="btn btn-outline-primary btn-sm entrega-liga-collapse-btn" id="entregaLigaCollapseBtn" type="button" aria-expanded="true"><i class="bi bi-chevron-up me-1"></i>Minimizar</button></div>
+          </div>
+          <div class="row g-3 entrega-liga-overview-body">
+            <div class="col-xl-7">
+              <div class="border rounded-3 p-3 h-100 bg-light-subtle">
+                <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+                  <div>
+                    <h3 class="h6 fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Relatórios carregados</h3>
+                    <div class="form-text" id="entregaLigaReportsSummary">Aguardando leitura dos lotes salvos.</div>
+                  </div>
+                  <button class="btn btn-outline-primary btn-sm" type="button" id="entregaLigaReportsRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+                </div>
+                <div class="row g-2 small" id="entregaLigaReportsGrid">
+                  <div class="col-12 text-secondary">Carregando relatórios da Liga...</div>
+                </div>
+                <div class="form-text mt-3">Resumo, Mapa e Setor da 03.02.24, o BI 17.06 e o card mensal de cidades não entram no escopo da Liga; cada um possui seu próprio módulo/card.</div>
+              </div>
+            </div>
+            <div class="col-xl-5">
+              <div class="border rounded-3 p-3 h-100">
+                <h3 class="h6 fw-bold mb-2"><i class="bi bi-scissors me-2"></i>Expurgos mantidos</h3>
+                <ul class="small mb-3 ps-3">
+                  <li><b>Individual:</b> remove a devolução pelo cliente ou o indicador pela rota/mapa.</li>
+                  <li><b>Equipe inteira:</b> remove o indicador de toda a filial na data informada.</li>
+                </ul>
+                <div class="source-box mb-3">
+                  <div class="small text-secondary">Persistência</div>
+                  <div class="source-path">Expurgos ficam salvos no backend e continuam valendo quando novos relatórios substituírem os lotes ativos.</div>
+                </div>
+                <form id="entregaLigaExpurgoForm" class="border rounded-3 p-2 mb-3" autocomplete="off">
+                  <div class="small fw-bold mb-2">Novo expurgo</div>
+                  <div class="row g-2">
+                    <div class="col-4"><label class="form-label small mb-1" for="entregaLigaExpurgoTipo">Indicador</label><select class="form-select form-select-sm" id="entregaLigaExpurgoTipo"><option value="devolucao">Devolução</option><option value="tml">Saída / TML</option><option value="km">KM cadastrado</option><option value="dispersao">Dispersão</option></select></div>
+                    <div class="col-4"><label class="form-label small mb-1" for="entregaLigaExpurgoEscopo">Aplicação</label><select class="form-select form-select-sm" id="entregaLigaExpurgoEscopo"><option value="individual">Individual</option><option value="equipe">Equipe inteira</option></select></div>
+                    <div class="col-4"><label class="form-label small mb-1" for="entregaLigaExpurgoFilial">Filial</label><select class="form-select form-select-sm" id="entregaLigaExpurgoFilial"><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+                    <div class="col-6"><label class="form-label small mb-1" for="entregaLigaExpurgoData">Data</label><input class="form-control form-control-sm" id="entregaLigaExpurgoData" type="date" required></div>
+                    <div class="col-6"><label class="form-label small mb-1" id="entregaLigaExpurgoAlvoLabel" for="entregaLigaExpurgoAlvo">Cliente</label><input class="form-control form-control-sm" id="entregaLigaExpurgoAlvo" placeholder="Código do cliente" required></div>
+                    <div class="col-12"><label class="form-label small mb-1" for="entregaLigaExpurgoMotivo">Motivo</label><input class="form-control form-control-sm" id="entregaLigaExpurgoMotivo" maxlength="300" placeholder="Ex.: devolução não atribuída à entrega" required></div>
+                    <div class="col-12 d-flex justify-content-between align-items-center gap-2"><span class="small text-secondary" id="entregaLigaExpurgoHint">Remove apenas devolução por cliente e data.</span><button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-scissors me-1"></i>Aplicar</button></div>
+                  </div>
+                </form>
+                <div id="entregaLigaDevolucoesExpurgoList" class="small mb-3 text-secondary">Carregando devoluções da Liga...</div>
+                <div id="entregaLigaExpurgosList" class="small mb-3 text-secondary">Carregando expurgos...</div>
+                <button class="btn btn-primary btn-sm" type="button" id="entregaOpenLigaPromaxBtn"><i class="bi bi-pc-display-horizontal me-1"></i>Abrir Liga no Promax</button>
+                <div class="form-text mt-2">O atalho seleciona o grupo Liga Entrega e mantém apenas as rotinas homologadas pelo catálogo.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3" id="entregaLigaDashboardSection">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Dashboard da Liga</h2>
+              <div class="form-text" id="entregaLigaDashboardStatus">Aguardando relatórios carregados para montar o dashboard.</div>
+            </div>
+            <div class="d-flex gap-2 align-items-center"><select class="form-select form-select-sm d-none" id="entregaLigaPeriodo" aria-label="Período da Liga"><option value="atual" selected>Mensal</option></select><select class="form-select form-select-sm" id="entregaLigaMes" aria-label="Mês da Liga" style="width:auto"></select><span class="pill" id="entregaLigaDashboardBadge">Pendente</span></div>
+          </div>
+          <div class="recolha-dashboard-grid mb-3" id="entregaLigaDashboardCards"></div>
+          <div class="source-box" id="entregaLigaDashboardDetails">
+            <div class="small text-secondary">Fonte</div>
+            <div class="source-path">O dashboard usa os lotes salvos no backend da Liga e mantém os expurgos separados dos relatórios.</div>
+          </div>
+        </section>
+        </div>
+
+        <div id="entregaIndicadoresModule" class="d-none">
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-speedometer2 me-2 text-primary"></i>Indicadores operacionais</h2><div class="form-text" id="entregaIndicadoresStatus">Caixas por viagem e ocupação, consolidadas a partir do BI 17.06.</div></div>
+              <button class="btn btn-outline-primary btn-sm" id="entregaIndicadoresRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-3" aria-label="Filtros dos indicadores">
+              <div><label class="form-label small mb-1" for="entregaIndicadoresFilial">Operação</label><select class="form-select form-select-sm" id="entregaIndicadoresFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaIndicadoresSituacao">Situação</label><select class="form-select form-select-sm" id="entregaIndicadoresSituacao"><option value="">Todas</option><option value="meta">Dentro das metas</option><option value="fora">Fora de alguma meta</option></select></div>
+              <button class="btn btn-outline-secondary btn-sm" id="entregaIndicadoresLimparFiltrosBtn" type="button">Limpar filtros</button>
+              <span class="form-text mb-1">A competência é definida pelo seletor mensal da Liga.</span>
+            </div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaIndicadoresCards"></div>
+            <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Operação</th><th>Puxada</th><th class="text-end">Caixas / viagem</th><th class="text-end">Ocupação</th></tr></thead><tbody id="entregaIndicadoresBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando importação do BI 17.06.</td></tr></tbody></table></div>
+          </section>
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-signpost-split me-2 text-primary"></i>Jornada por mapa</h2><div class="form-text" id="entregaJornadaMapasStatus">Planejamento da 03.11.49.02 cruzado com execução da 03.08.05. Devolução em caixas retornadas.</div></div><button class="btn btn-outline-primary btn-sm" id="entregaJornadaMapasRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-3" aria-label="Filtros da jornada por mapa">
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasFilial">Operação</label><select class="form-select form-select-sm" id="entregaJornadaMapasFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasJustificativa">Justificativa</label><select class="form-select form-select-sm" id="entregaJornadaMapasJustificativa"><option value="">Todas</option><option value="pendente">Pendentes</option><option value="justificada">Justificadas</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasDevolucao">Devolução</label><select class="form-select form-select-sm" id="entregaJornadaMapasDevolucao"><option value="">Todas</option><option value="com">Com devolução</option><option value="sem">Sem devolução</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasDe">De</label><input class="form-control form-control-sm" id="entregaJornadaMapasDe" type="date"></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasAte">Até</label><input class="form-control form-control-sm" id="entregaJornadaMapasAte" type="date"></div>
+              <div><label class="form-label small mb-1" for="entregaJornadaMapasOrdem">Ordenar</label><select class="form-select form-select-sm" id="entregaJornadaMapasOrdem"><option value="data">Mais recentes</option><option value="jornada">Pior jornada → melhor</option><option value="dif">Mais acima do previsto → menos</option><option value="devolucao">Maior devolução → menor</option></select></div>
+              <div class="flex-grow-1" style="min-width:180px"><label class="form-label small mb-1" for="entregaJornadaMapasBusca">Buscar</label><input class="form-control form-control-sm" id="entregaJornadaMapasBusca" placeholder="Mapa, placa, rota ou motorista"></div>
+              <button class="btn btn-outline-secondary btn-sm" id="entregaJornadaMapasLimparFiltrosBtn" type="button">Limpar filtros</button>
+            </div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaJornadaMapasCards"></div>
+            <div class="ops-legend mb-2"><span>Jornada:</span><span class="ops-chip ok">até 12h</span><span class="ops-chip warn">12h a 15h</span><span class="ops-chip bad">acima de 15h</span><span class="ms-2">Dif.: <b>+</b> passou do previsto, <b>−</b> ficou abaixo.</span></div>
+            <div class="source-path mb-2">03.08.05: Início = HrSai · Final = HrEntr + TmpoInterno · Jornada = Final − Início − 1h de almoço · Dif. = Jornada − Prevista · Devolução = CxCarreg − CxEntreg (caixas, não notas).</div>
+            <div class="table-scroll" style="max-height:min(70vh,720px)"><table class="table table-sm table-hover align-middle mb-0 ops-table"><thead><tr><th>Op</th><th>Dia</th><th>Mapa</th><th>Placa</th><th>Rota</th><th class="text-end">Peso</th><th class="text-end">Entregas</th><th class="text-center grp-start">Início</th><th class="text-center">Entrada</th><th class="text-center">Final</th><th class="text-center grp-start">Jornada</th><th class="text-center">Prevista</th><th class="text-center">Dif.</th><th class="text-center">T. interno</th><th class="text-end grp-start">Devolução</th><th class="grp-start">Justificativa</th></tr></thead><tbody id="entregaJornadaMapasBody"><tr><td colspan="16" class="text-center text-secondary py-4">Aguardando os relatórios da competência.</td></tr></tbody></table></div>
+          </section>
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Ocupação por veículo</h2><div class="form-text" id="entregaOcupacaoVeiculosStatus">Ocupação da 03.08.05 por mapa e placa.</div></div></div>
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-3" aria-label="Filtros de ocupação por veículo">
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosFilial">Operação</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosFilial"><option value="">Todas</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosDe">De</label><input class="form-control form-control-sm" id="entregaOcupacaoVeiculosDe" type="date"></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosAte">Até</label><input class="form-control form-control-sm" id="entregaOcupacaoVeiculosAte" type="date"></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosOrdem">Ordenar</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosOrdem"><option value="data">Mais recentes</option><option value="ocupacao">Pior ocupação → melhor</option><option value="pallets">Menos pallets → mais</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosComparacao">Ocupação</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosComparacao"><option value="maior_igual">Maior ou igual a</option><option value="maior">Maior que</option><option value="menor_igual">Menor ou igual a</option><option value="menor">Menor que</option><option value="igual">Igual a</option></select></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosValor">Percentual</label><div class="input-group input-group-sm"><input class="form-control" id="entregaOcupacaoVeiculosValor" type="number" min="0" max="200" step="0.01" value="0" aria-label="Percentual de ocupação"><span class="input-group-text">%</span></div></div>
+              <div><label class="form-label small mb-1" for="entregaOcupacaoVeiculosJustificativa">Justificativa</label><select class="form-select form-select-sm" id="entregaOcupacaoVeiculosJustificativa"><option value="">Todas</option><option value="pendente">Pendentes</option><option value="justificada">Justificadas</option></select></div>
+              <div class="flex-grow-1" style="min-width:180px"><label class="form-label small mb-1" for="entregaOcupacaoVeiculosBusca">Buscar</label><input class="form-control form-control-sm" id="entregaOcupacaoVeiculosBusca" placeholder="Placa, mapa ou rota"></div>
+              <button class="btn btn-outline-secondary btn-sm" id="entregaOcupacaoVeiculosLimparFiltrosBtn" type="button">Limpar filtros</button>
+            </div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaOcupacaoVeiculosCards"></div>
+            <div class="ops-legend mb-2" id="entregaOcupacaoVeiculosLegenda"></div>
+            <div class="source-path mb-2">Pallets = Qtde dos itens entregues (03.02.37, status A/E) ÷ Caixas Pallet (01.11); unidades avulsas ÷ Fator. Ocupação = pallets ÷ capacidade do caminhão (aba Caminhões). Mapa sem itens mostra o peso da 03.08.05.</div>
+            <div class="table-scroll" style="max-height:min(70vh,720px)"><table class="table table-sm table-hover align-middle mb-0 ops-table"><thead><tr><th>Op</th><th>Dia</th><th>Placa</th><th>Mapa</th><th>Rota</th><th class="text-end grp-start">Pallets</th><th class="text-end">Capacidade</th><th class="grp-start">Ocupação</th><th class="grp-start">Justificativa</th></tr></thead><tbody id="entregaOcupacaoVeiculosBody"><tr><td colspan="9" class="text-center text-secondary py-4">Aguardando a 03.08.05.</td></tr></tbody></table></div>
+          </section>
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3"><div><h2 class="h6 fw-bold mb-1"><i class="bi bi-geo-alt me-2 text-primary"></i>Cidades por mapa · mensal</h2><div class="form-text" id="entregaMapasMensaisStatus">Card independente da 03.11.49.02 já usada pela Liga.</div></div><button class="btn btn-outline-primary btn-sm" id="entregaMapasMensaisRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
+            <div class="recolha-dashboard-grid mb-3" id="entregaMapasMensaisCards"></div>
+            <div class="table-scroll"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Filial</th><th>Mapa</th><th>Cidade</th><th>Data</th></tr></thead><tbody id="entregaMapasMensaisBody"><tr><td colspan="4" class="text-center text-secondary py-4">Aguardando o lote mensal.</td></tr></tbody></table></div>
+          </section>
+        </div>
+
+        <div id="entregaFechamentoModule" class="d-none">
+          <section class="panel-card fechamento-workspace mb-3">
+            <header class="fechamento-header">
+              <div class="fechamento-title-wrap"><span class="fechamento-title-icon"><i class="bi bi-clipboard2-check"></i></span><div><div class="d-flex align-items-center gap-2 flex-wrap"><h2 class="h5 fw-bold mb-0">Fechamento de mapas</h2><span class="fechamento-source-tag">03.11.20</span></div><div class="form-text mt-1" id="entregaMapasOperacionaisStatus">Entrada, saída, fechamentos e tempo interno por dia operacional.</div></div></div>
+              <div class="d-flex gap-2"><button class="btn btn-outline-primary btn-sm" id="entregaMapasOperacionaisPdfBtn" type="button"><i class="bi bi-file-earmark-pdf me-1"></i>PDF da seleção</button><button class="btn btn-primary btn-sm fechamento-refresh" id="entregaMapasOperacionaisRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button></div>
+            </header>
+            <section class="fechamento-filter-panel" aria-label="Filtros do fechamento">
+              <div class="fechamento-filter-heading"><i class="bi bi-funnel"></i><span>Filtros do acompanhamento</span></div>
+              <div class="fechamento-filter-grid">
+                <div><label class="form-label" for="entregaMapasOperacionaisDataInicio">Data inicial</label><input class="form-control form-control-sm" id="entregaMapasOperacionaisDataInicio" type="date"></div>
+                <div><label class="form-label" for="entregaMapasOperacionaisDataFim">Data final</label><input class="form-control form-control-sm" id="entregaMapasOperacionaisDataFim" type="date"></div>
+                <div><label class="form-label" for="entregaMapasOperacionaisFilial">Operação</label><select class="form-select form-select-sm" id="entregaMapasOperacionaisFilial"><option value="">Todas as operações</option><option value="PATOS">Patos</option><option value="SUME">Sumé</option></select></div>
+                <div><label class="form-label" for="entregaMapasOperacionaisSituacao">Situação</label><select class="form-select form-select-sm" id="entregaMapasOperacionaisSituacao"><option value="">Todas as situações</option><option value="aberto">Mapas abertos</option><option value="pendente">Pendentes</option><option value="fechado">Fechados</option><option value="retornou">Retornaram</option></select></div>
+                <div><label class="form-label" for="entregaMapasOperacionaisAlertas">Alertas</label><select class="form-select form-select-sm" id="entregaMapasOperacionaisAlertas"><option value="">Todos os mapas</option><option value="com_alerta">Somente com alerta</option><option value="ti_total">TI total acima de 30 min</option><option value="rota_48h">Rota acima de 48 h</option><option value="pulou_mpd">Pulou MPD</option><option value="sem_alerta">Sem alerta</option></select></div>
+                <div class="fechamento-search"><label class="form-label" for="entregaMapasOperacionaisBusca">Mapa ou placa</label><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control" id="entregaMapasOperacionaisBusca" placeholder="Ex.: 95772 ou RLR8F59"></div></div>
+              </div>
+              <div class="fechamento-day-picker"><div class="fechamento-day-picker-head"><span>Dias exibidos</span><div><button class="btn btn-link btn-sm" id="entregaMapasOperacionaisSelecionarTodosBtn" type="button">Selecionar todos</button><button class="btn btn-link btn-sm" id="entregaMapasOperacionaisLimparDiasBtn" type="button">Limpar dias</button></div></div><div class="fechamento-day-options" id="entregaMapasOperacionaisDias"><span class="text-secondary small">Os dias disponíveis aparecem após o carregamento.</span></div></div>
+              <div class="fechamento-filter-actions"><button class="btn btn-outline-secondary btn-sm" id="entregaMapasOperacionaisTodasDatasBtn" type="button"><i class="bi bi-calendar-range me-1"></i>Todo o mês</button><button class="btn btn-link btn-sm" id="entregaMapasOperacionaisLimparFiltrosBtn" type="button">Limpar filtros</button><span class="fechamento-threshold-note"><i class="bi bi-info-circle"></i> Alertas: TI total &gt; 30 min · Rota &gt; 48 h · Pulou MPD</span></div>
+            </section>
+            <div class="fechamento-kpi-heading"><span>Visão do período</span><small>Os indicadores acompanham os filtros aplicados.</small></div>
+            <div class="fechamento-kpi-grid" id="entregaMapasOperacionaisCards"></div>
+            <div id="entregaMapasOperacionaisDetails" class="fechamento-days"><div class="text-center text-secondary py-4">Aguardando importação da 03.11.20.</div></div>
+          </section>
+        </div>
+
+        <div id="entregaDevolucoesModule" class="d-none">
+          <section class="panel-card p-3 mb-3" id="entregaDevolucoesSection">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3" id="entregaDevolucoesHeader">
+              <div>
+                <h2 class="h6 fw-bold mb-1"><i class="bi bi-arrow-return-left me-2 text-primary"></i>Devoluções · Operacional</h2>
+                <div class="form-text" id="entregaDevolucoesStatus">Use o relatório 03.02.24 Motorista para consultar clientes, setor/GV, motivos e volume devolvido.</div>
+              </div>
+              <button class="btn btn-outline-primary btn-sm" type="button" id="entregaDevolucoesRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+            <div class="recolha-dashboard-grid devolucao-kpi-grid mb-3" id="entregaDevolucoesCards"></div>
+            <div class="source-box" id="entregaDevolucoesDetails"><div class="small text-secondary">Fonte</div><div class="source-path">Aguardando a leitura do relatório de devoluções.</div></div>
+          </section>
+        </div>
+        <div id="entregaDevolucoesCadastrosModule" class="d-none">
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-person-vcard me-2 text-primary"></i>Setores e gerentes</h2><div class="form-text">Defina o nome exibido para cada código de setor e GV. Este cadastro é operacional e vale para todas as competências.</div></div>
+              <button class="btn btn-primary btn-sm" type="button" id="entregaDevolucoesCadastrosSaveBtn"><i class="bi bi-floppy me-1"></i>Salvar</button>
+            </div>
+            <div id="entregaDevolucoesCadastrosDetails" class="source-box"><div class="text-secondary small">Carregando cadastros…</div></div>
+          </section>
+        </div>
+        <div id="entregaFrotaModule" class="d-none">
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Caminhões</h2><div class="form-text">Capacidade em pallets de cada caminhão, por operação. Usada na Ocupação por veículo dos Indicadores BI.</div></div>
+              <button class="btn btn-primary btn-sm" type="button" id="entregaFrotaSaveBtn"><i class="bi bi-floppy me-1"></i>Salvar</button>
+            </div>
+            <div id="entregaFrotaDetails" class="source-box"><div class="text-secondary small">Carregando caminhões…</div></div>
+          </section>
+        </div>
+        <div id="entregaMetasModule" class="d-none">
+          <section class="panel-card p-3 mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+              <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-bullseye me-2 text-primary"></i>Metas da entrega</h2><div class="form-text">Metas por operação usadas nos Indicadores BI. Vale para todas as competências.</div></div>
+              <button class="btn btn-primary btn-sm" type="button" id="entregaMetasSaveBtn"><i class="bi bi-floppy me-1"></i>Salvar</button>
+            </div>
+            <div id="entregaMetasDetails" class="source-box"><div class="text-secondary small">Carregando metas…</div></div>
+          </section>
+        </div>
+      </div>

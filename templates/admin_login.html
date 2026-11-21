@@ -49,6 +49,7 @@
       background: linear-gradient(135deg, #0f2c63, #2563eb);
       border: 1px solid rgba(255,255,255,0.14);
     }
+    .brand .brand-symbol { width: 44px; height: 52px; flex: 0 0 auto; color: #fff; }
     .brand strong { display: block; letter-spacing: .08em; font-size: 14px; }
     .brand span { color: var(--muted); font-size: 13px; }
     h1 { font-size: 28px; line-height: 1.1; margin: 0 0 10px; }
@@ -91,17 +92,18 @@
       margin-bottom: 12px;
     }
   </style>
+<!--#include painel/favicon.html -->
 </head>
 <body>
   <main class="card">
     <div class="brand">
-      <div class="mark">P</div>
-      <div><strong>PAU BRASIL</strong><span>Central administrativa</span></div>
+<!--#include painel/simbolo.html -->
+      <div><strong>Central Pau Brasil</strong></div>
     </div>
     <h1>Entrar no painel</h1>
-    <p>Use seu usuario e senha para acessar os blocos liberados.</p>
+    <p>Use seu usuário e senha para acessar os blocos liberados.</p>
     <form id="loginForm">
-      <label for="username">Usuario</label>
+      <label for="username">Usuário</label>
       <input id="username" name="username" type="text" autocomplete="username" autofocus>
       <label for="password">Senha</label>
       <input id="password" name="password" type="password" autocomplete="current-password">
@@ -113,7 +115,7 @@
       <button id="submitBtn" type="submit">Entrar</button>
       <div id="error" class="error" role="alert"></div>
     </form>
-    <div class="note">A sessao expira automaticamente. Nao compartilhe esse acesso fora da rede autorizada.</div>
+    <div class="note">A sessão expira automaticamente. Não compartilhe esse acesso fora da rede autorizada.</div>
   </main>
   <script>
     const form = document.getElementById("loginForm");
@@ -137,7 +139,7 @@
         } else if (tokenValue) {
           body = { token: tokenValue };
         } else {
-          throw new Error("Informe usuario e senha.");
+          throw new Error("Informe usuário e senha.");
         }
         const response = await fetch("/api/admin/panel/login", {
           method: "POST",
@@ -145,12 +147,12 @@
           body: JSON.stringify(body)
         });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.detail || "Login invalido.");
+        if (!response.ok) throw new Error(payload.detail || "Login inválido.");
         if (payload.requires_password_change) {
-          window.location.assign("/admin/change-password");
+          window.location.assign("/trocar-senha");
           return;
         }
-        window.location.assign("/admin/imports");
+        window.location.assign("/");
       } catch (error) {
         errorBox.textContent = error.message || "Falha no login.";
       } finally {

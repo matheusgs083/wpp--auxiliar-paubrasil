@@ -1,0 +1,230 @@
+  <div class="modal fade" id="ligaRouteTeamModal" tabindex="-1" aria-labelledby="ligaRouteTeamModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="ligaRouteTeamModalTitle">Equipe da rota</h5>
+            <div class="small text-secondary" id="ligaRouteTeamModalSubtitle"></div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="ligaRouteTeamDriver">Motorista</label>
+            <select class="form-select" id="ligaRouteTeamDriver"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="ligaRouteTeamHelper1">Ajudante 1</label>
+            <select class="form-select" id="ligaRouteTeamHelper1"></select>
+          </div>
+          <div>
+            <label class="form-label small fw-semibold" for="ligaRouteTeamHelper2">Ajudante 2</label>
+            <select class="form-select" id="ligaRouteTeamHelper2"></select>
+          </div>
+          <div class="form-text mt-2">Selecione os integrantes da equipe desta rota. Os ajudantes são opcionais.</div>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="ligaRouteTeamSave">Salvar equipe</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <h5 class="modal-title fw-bold" id="confirmModalTitle">Confirmar ação</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <p class="mb-0" id="confirmModalText">Deseja continuar?</p>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="confirmModalCancel">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="confirmModalOk">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="panelCredentialsModal" tabindex="-1" aria-labelledby="panelCredentialsModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="panelCredentialsModalTitle">Senha temporaria gerada</h5>
+            <div class="form-text">Copie agora. Essa senha aleatoria não pode ser recuperada depois.</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="d-grid gap-2">
+            <div class="panel-credential-box">
+              <span class="label">Usuário para login</span>
+              <span class="value mono user-select-all" id="panelCredentialsUsername"></span>
+            </div>
+            <div class="panel-credential-box">
+              <span class="label">Senha temporaria</span>
+              <span class="value mono user-select-all" id="panelCredentialsPassword"></span>
+            </div>
+          </div>
+          <div class="alert alert-warning py-2 px-3 mt-3 mb-0">
+            O usuário deve entrar com essa senha e trocar no primeiro acesso.
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-warning" id="panelCredentialsCopyBtn"><i class="bi bi-clipboard me-1"></i>Copiar acesso</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="financeiroPrestacaoModal" tabindex="-1" aria-labelledby="financeiroPrestacaoModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="financeiroPrestacaoModalTitle">Prestação de contas do mapa</h5>
+            <div class="form-text" id="financeiroPrestacaoModalSubtitle">Dados capturados pela rotina 030322.</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="finance-summary-strip mb-3" id="financeiroPrestacaoSummary"></div>
+          <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+            <label class="form-label small fw-semibold mb-0" for="financeiroPrestacaoFiltroCliente">Cliente
+              <input type="search" class="form-control form-control-sm" id="financeiroPrestacaoFiltroCliente" placeholder="NB, fantasia ou razao">
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="financeiroPrestacaoFiltroCondicao">Condição
+              <input type="search" class="form-control form-control-sm" id="financeiroPrestacaoFiltroCondicao" placeholder="Ex: boleto">
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="financeiroPrestacaoFiltroValorMin">Valor min.
+              <input type="number" class="form-control form-control-sm" id="financeiroPrestacaoFiltroValorMin" min="0" step="0.01" inputmode="decimal">
+            </label>
+            <label class="form-label small fw-semibold mb-0" for="financeiroPrestacaoFiltroValorMax">Valor max.
+              <input type="number" class="form-control form-control-sm" id="financeiroPrestacaoFiltroValorMax" min="0" step="0.01" inputmode="decimal">
+            </label>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="financeiroPrestacaoFiltroClear"><i class="bi bi-x-lg me-1"></i>Limpar</button>
+            <span class="pill ms-auto" id="financeiroPrestacaoNotasCount">0 nota(s)</span>
+          </div>
+          <h6 class="fw-bold mb-2">Notas</h6>
+          <div class="table-scroll border rounded mb-3" style="max-height: 360px;">
+            <table class="table table-sm table-hover align-middle mb-0 promax-unit-modal-table">
+              <thead>
+                <tr>
+                  <th>NB</th>
+                  <th>Cliente</th>
+                  <th>NF</th>
+                  <th>Série</th>
+                  <th>Sit.</th>
+                  <th>Op</th>
+                  <th>Condição</th>
+                  <th class="text-end">Valor</th>
+                  <th class="text-end">Devolucao</th>
+                  <th class="text-end">Liquido</th>
+                </tr>
+              </thead>
+              <tbody id="financeiroPrestacaoNotasBody">
+                <tr><td colspan="10" class="text-center py-3 text-secondary">Abra um mapa para validar.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h6 class="fw-bold mb-2">Vasilhame e materiais</h6>
+          <div class="table-scroll border rounded mb-3" style="max-height: 300px;">
+            <table class="table table-sm table-hover align-middle mb-0 promax-unit-modal-table">
+              <thead>
+                <tr>
+                  <th>Cod.</th>
+                  <th>Un.</th>
+                  <th>Descrição</th>
+                  <th class="text-end">Preço</th>
+                  <th class="text-end">Saída</th>
+                  <th class="text-end">Retorno</th>
+                  <th class="text-end">Diferenca</th>
+                </tr>
+              </thead>
+              <tbody id="financeiroPrestacaoVasilhamesBody">
+                <tr><td colspan="7" class="text-center py-3 text-secondary">Sem dados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h6 class="fw-bold mb-2">Resumo financeiro</h6>
+          <pre class="panel-log mb-0" id="financeiroPrestacaoResumoRaw">Sem resumo carregado.</pre>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="promaxUnitsModal" tabindex="-1" aria-labelledby="promaxUnitsModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="promaxUnitsModalTitle">Resumo da execução</h5>
+            <div class="form-text" id="promaxUnitsModalSubtitle">Unidade e status</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="table-scroll" style="max-height: 420px;">
+            <table class="table table-sm table-hover align-middle mb-0 promax-unit-modal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Unidade</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="promaxUnitsModalBody">
+                <tr><td colspan="2" class="text-center py-3 text-secondary">Selecione uma execução.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="promaxScheduleGroupModal" tabindex="-1" aria-labelledby="promaxScheduleGroupModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+      <div class="modal-content panel-card">
+        <div class="modal-header border-0 pb-1">
+          <div>
+            <h5 class="modal-title fw-bold" id="promaxScheduleGroupModalTitle">Repeticoes da agenda</h5>
+            <div class="form-text" id="promaxScheduleGroupModalSubtitle">Dias e horários configurados</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-1">
+          <div class="promax-schedule-modal-days mb-3" id="promaxScheduleGroupModalDays"></div>
+          <div class="table-scroll" style="max-height: 420px;">
+            <table class="table table-sm table-hover align-middle mb-0 promax-unit-modal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Repeticao</th>
+                  <th scope="col">Próxima execução</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="text-end">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="promaxScheduleGroupModalBody">
+                <tr><td colspan="4" class="text-center py-3 text-secondary">Selecione uma agenda.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-2">
+          <button type="button" class="btn btn-outline-success" id="promaxScheduleGroupRunBtn"><i class="bi bi-play-fill me-1"></i>Executar agora</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>

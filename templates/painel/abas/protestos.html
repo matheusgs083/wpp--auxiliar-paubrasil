@@ -1,0 +1,83 @@
+      <div class="tab-pane fade" id="protestosPane" role="tabpanel" aria-labelledby="protestosTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-shield-exclamation me-2 text-primary"></i>Protestos</h2>
+              <div class="form-text">Acompanhamento de títulos da 120601 com boleto assinado, comprovante de protesto e alerta para retirada do SPC.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="protestosStatus">Aguardando dados</span>
+              <button class="btn btn-outline-primary btn-sm" id="protestosRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-lg-2 col-md-4">
+              <label class="form-label small fw-semibold mb-1" for="protestosFilial">Revenda</label>
+              <select class="form-select form-select-sm" id="protestosFilial">
+                <option value="">Todas liberadas</option>
+              </select>
+            </div>
+            <div class="col-lg-2 col-md-4">
+              <label class="form-label small fw-semibold mb-1" for="protestosStatusFilter">Status</label>
+              <select class="form-select form-select-sm" id="protestosStatusFilter">
+                <option value="">Todos</option>
+                <option value="em_aberto">Aberto na 120601</option>
+                <option value="em_acompanhamento">Em acompanhamento</option>
+                <option value="protestado">Protestado</option>
+                <option value="pago_retirar_spc">Pago / retirar SPC</option>
+                <option value="baixado">Baixado</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div class="col-lg-6 col-md-8">
+              <label class="form-label small fw-semibold mb-1" for="protestosSearch">Buscar</label>
+              <input class="form-control form-control-sm" id="protestosSearch" type="search" placeholder="Título, NB, cliente ou nota fiscal">
+            </div>
+            <div class="col-lg-2 col-md-4">
+              <button class="btn btn-primary btn-sm w-100" id="protestosApplyBtn" type="button"><i class="bi bi-search me-1"></i>Filtrar</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label small fw-semibold mb-1" for="protestosTitleDateFrom">Vencimento do título - de</label>
+              <input class="form-control form-control-sm" id="protestosTitleDateFrom" type="date">
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label small fw-semibold mb-1" for="protestosTitleDateTo">Vencimento do título - até</label>
+              <input class="form-control form-control-sm" id="protestosTitleDateTo" type="date">
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label small fw-semibold mb-1" for="protestosActionDateFrom">Data do protesto/acomp. - de</label>
+              <input class="form-control form-control-sm" id="protestosActionDateFrom" type="date">
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label small fw-semibold mb-1" for="protestosActionDateTo">Data do protesto/acomp. - até</label>
+              <input class="form-control form-control-sm" id="protestosActionDateTo" type="date">
+            </div>
+          </div>
+          <div class="row g-2 mb-3" id="protestosSummary">
+            <div class="col-md-3"><div class="metric-card"><span>Títulos abertos</span><strong>0</strong></div></div>
+            <div class="col-md-3"><div class="metric-card"><span>Acompanhados</span><strong>0</strong></div></div>
+            <div class="col-md-3"><div class="metric-card"><span>Protestados</span><strong>0</strong></div></div>
+            <div class="col-md-3"><div class="metric-card"><span>Retirar SPC</span><strong class="text-danger">0</strong></div></div>
+          </div>
+          <div class="alert alert-danger py-2 small d-none" id="protestosPaidAlert"></div>
+          <div class="table-scroll">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th scope="col">Título</th>
+                  <th scope="col">Cliente</th>
+                  <th scope="col">Datas / valor</th>
+                  <th scope="col">Situação</th>
+                  <th scope="col">Documentos</th>
+                  <th scope="col">Acompanhamento</th>
+                </tr>
+              </thead>
+              <tbody id="protestosBody">
+                <tr><td colspan="6" class="text-center py-4 text-secondary">Abra a aba para carregar os títulos.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>

@@ -1,0 +1,191 @@
+      <div class="tab-pane fade" id="giroRecolhaPane" role="tabpanel" aria-labelledby="giroRecolhaTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-arrow-repeat me-2 text-primary"></i>Giro abaixo do esperado</h2>
+              <div class="form-text">Clientes com vasilhame sem giro suficiente, priorizados por falta de caixas e faturamento médio para apoiar decisoes de recolha.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="giroRecolhaCount">Aguardando dados</span>
+              <button class="btn btn-outline-success btn-sm" id="giroRecolhaRoutesBtn"><i class="bi bi-signpost-split me-1"></i>Gerar rotas</button>
+              <button class="btn btn-outline-primary btn-sm" id="giroRecolhaRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar giro</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaOperation">Operação</label>
+              <div class="power-slicer" id="giroRecolhaOperationSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaOperationButton" aria-expanded="false">Todas</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaOperationPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaOperationSearch" placeholder="Pesquisar operação">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaOperationSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaOperationClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaOperationList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaOperation" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaCity">Cidade(s)</label>
+              <div class="power-slicer" id="giroRecolhaCitySlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaCityButton" aria-expanded="false">Todas</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaCityPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaCitySearch" placeholder="Pesquisar cidade">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaCitySelectAllBtn">Selecionar visíveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaCityClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaCityList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaCity" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaDistrict">Bairro</label>
+              <div class="power-slicer" id="giroRecolhaDistrictSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaDistrictButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaDistrictPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaDistrictSearch" placeholder="Pesquisar bairro">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaDistrictSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaDistrictClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaDistrictList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaDistrict" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaSeller">Vendedor</label>
+              <div class="power-slicer" id="giroRecolhaSellerSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaSellerButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaSellerPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaSellerSearch" placeholder="Pesquisar vendedor">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaSellerSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaSellerClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaSellerList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaSeller" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaManager">GV</label>
+              <div class="power-slicer" id="giroRecolhaManagerSlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaManagerButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaManagerPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaManagerSearch" placeholder="Pesquisar GV">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaManagerSelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaManagerClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaManagerList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaManager" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaVisitDay">Dia visita</label>
+              <div class="power-slicer" id="giroRecolhaVisitDaySlicer">
+                <button type="button" class="form-select form-select-sm power-slicer-toggle" id="giroRecolhaVisitDayButton" aria-expanded="false">Todos</button>
+                <div class="power-slicer-panel d-none" id="giroRecolhaVisitDayPanel">
+                  <input type="text" class="form-control form-control-sm" id="giroRecolhaVisitDaySearch" placeholder="Pesquisar dia">
+                  <div class="power-slicer-actions">
+                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="giroRecolhaVisitDaySelectAllBtn">Selecionar visiveis</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="giroRecolhaVisitDayClearBtn">Limpar</button>
+                  </div>
+                  <div class="power-slicer-list" id="giroRecolhaVisitDayList"></div>
+                </div>
+                <select class="d-none" id="giroRecolhaVisitDay" multiple></select>
+              </div>
+            </div>
+            <div class="col-md-1">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaMinGap">Faltam min.</label>
+              <input type="number" min="0" step="1" class="form-control form-control-sm" id="giroRecolhaMinGap" value="1">
+            </div>
+            <div class="col-md-1">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaLimit">Limite</label>
+              <input type="number" min="1" max="1000" step="1" class="form-control form-control-sm" id="giroRecolhaLimit" value="200">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaMaxRouteSize">PDVs/rota</label>
+              <input type="number" min="1" max="50" step="1" class="form-control form-control-sm" id="giroRecolhaMaxRouteSize" value="12">
+            </div>
+            <div class="col-md-2">
+              <div class="form-check form-switch mt-md-4">
+                <input class="form-check-input" type="checkbox" role="switch" id="giroRecolhaZeroOnly">
+                <label class="form-check-label small fw-semibold" for="giroRecolhaZeroOnly">Somente giro zero</label>
+              </div>
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-secondary btn-sm" id="giroRecolhaClearBtn"><i class="bi bi-x-circle me-1"></i>Limpar filtros</button>
+            </div>
+          </div>
+          <div class="recolha-dashboard-grid mb-3" id="giroRecolhaCards"></div>
+          <div class="recolha-dashboard-grid mb-3" id="giroRecolhaRouteCards"></div>
+          <div class="row g-2 align-items-end mb-3 d-none" id="giroRecolhaRouteTools">
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaRouteSearch">Pesquisar nas rotas</label>
+              <input type="text" class="form-control form-control-sm" id="giroRecolhaRouteSearch" placeholder="PDV, NB, bairro, cidade, vendedor">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaRouteDistrict">Bairro da rota</label>
+              <select class="form-select form-select-sm" id="giroRecolhaRouteDistrict">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="giroRecolhaRouteMinGap">Faltam min. rota</label>
+              <input type="number" min="0" step="1" class="form-control form-control-sm" id="giroRecolhaRouteMinGap">
+            </div>
+            <div class="col-md-3 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-secondary btn-sm" id="giroRecolhaRouteClearBtn"><i class="bi bi-x-circle me-1"></i>Limpar rotas</button>
+              <button class="btn btn-outline-success btn-sm" id="giroRecolhaRouteExportBtn"><i class="bi bi-download me-1"></i>Exportar CSV</button>
+            </div>
+          </div>
+          <div class="panel-card p-3 mb-3 d-none" id="giroRecolhaBuilder">
+            <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+              <div>
+                <h3 class="h6 fw-bold mb-1"><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>Montagem interativa</h3>
+                <div class="form-text">Escolha a rota destino e mova blocos de PDV para montar ou reorganizar as rotas.</div>
+              </div>
+              <button class="btn btn-outline-primary btn-sm" id="giroRecolhaNewRouteBtn"><i class="bi bi-plus-square me-1"></i>Nova rota</button>
+            </div>
+            <div class="row g-2 align-items-end mb-3">
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold mb-1" for="giroRecolhaActiveRoute">Rota destino</label>
+                <select class="form-select form-select-sm" id="giroRecolhaActiveRoute"></select>
+              </div>
+              <div class="col-md-5">
+                <label class="form-label small fw-semibold mb-1" for="giroRecolhaBlockSearch">Buscar bloco</label>
+                <input type="text" class="form-control form-control-sm" id="giroRecolhaBlockSearch" placeholder="NB, PDV, cidade, bairro, vendedor">
+              </div>
+              <div class="col-md-3">
+                <div class="form-text" id="giroRecolhaBuilderHint">Gere rotas para iniciar a montagem.</div>
+              </div>
+            </div>
+            <div class="route-builder-grid" id="giroRecolhaBlockPool"></div>
+          </div>
+          <div id="giroRecolhaRoutesContainer" class="mb-3"></div>
+          <div class="table-scroll" style="max-height: 560px;">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th class="ps-3">Cliente</th>
+                  <th>Giro</th>
+                  <th>Faltam</th>
+                  <th>Fat. M-1</th>
+                  <th>Crédito</th>
+                  <th class="text-end pe-3">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="giroRecolhaBody">
+                <tr><td colspan="6" class="text-center py-3 text-secondary">Informe o token e clique em Atualizar.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>

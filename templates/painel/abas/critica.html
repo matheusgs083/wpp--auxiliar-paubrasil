@@ -1,0 +1,64 @@
+      <div class="tab-pane fade" id="criticaPane" role="tabpanel" aria-labelledby="criticaTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard da crítica</h2>
+              <div class="form-text">Resumo geral da crítica importada. Abaixo ficam apenas os totais e os uploads por operação.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="criticaDashboardCount">Aguardando dados</span>
+              <button class="btn btn-outline-primary btn-sm" id="criticaDashboardRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar totais</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-12 col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="criticaOperationSingle">Revenda</label>
+              <select class="form-select form-select-sm" id="criticaOperationSingle">
+                <option value="">Todas as revendas</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="criticaDate">Data da crítica</label>
+              <input type="date" class="form-control form-control-sm" id="criticaDate">
+            </div>
+            <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+              <button class="btn btn-primary btn-sm" id="criticaOperationPdfBtn" type="button">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF da revenda
+              </button>
+              <button class="btn btn-outline-primary btn-sm" id="criticaOperationSummaryPdfBtn" type="button">
+                <i class="bi bi-file-earmark-text me-1"></i>Resumo da revenda
+              </button>
+            </div>
+          </div>
+          <div class="recolha-dashboard-grid mb-3" id="criticaDashboardCards" data-vazio-msg="Escolha a revenda e a data da crítica para ver os números."></div>
+        </section>
+        <section class="panel-card p-3 mb-3 border-primary">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Importação geral da Crítica</h2>
+              <div class="form-text">Envie um único CSV com todas as operações. O sistema separa automaticamente as linhas por filial e atualiza todos os cards.</div>
+            </div>
+            <span class="pill">CSV completo</span>
+          </div>
+          <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-8">
+              <label class="form-label small fw-semibold mb-1" for="criticaGeralFile">CSV completo da Crítica</label>
+              <input class="form-control form-control-sm" id="criticaGeralFile" type="file" accept=".csv">
+            </div>
+            <div class="col-12 col-md-auto">
+              <button class="btn btn-primary btn-sm" id="criticaGeralImportBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Importar todas as operações</button>
+            </div>
+          </div>
+          <div class="form-text mt-2" id="criticaGeralStatus">Nenhum arquivo selecionado.</div>
+        </section>
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-clipboard-data me-2 text-primary"></i>Crítica por operação</h2>
+              <div class="form-text">Upload separado por filial. Cada card aceita apenas o arquivo da operação correspondente e publica a base consolidada usada pelo bot.</div>
+            </div>
+            <span class="pill">Rotina nova</span>
+          </div>
+          <div class="dataset-groups" id="criticaDatasetGrid"></div>
+        </section>
+      </div>

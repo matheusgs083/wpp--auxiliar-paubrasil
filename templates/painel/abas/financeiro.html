@@ -1,0 +1,202 @@
+      <div class="tab-pane fade" id="financeiroPane" role="tabpanel" aria-labelledby="financeiroTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cash-coin me-2 text-primary"></i>Fechamento financeiro</h2>
+              <div class="form-text">Um caixa por dia, com um mapa por aba e consolidado automático dos valores lançados.</div>
+            </div>
+          </div>
+          <div class="finance-subtabs" role="tablist" aria-label="Financeiro">
+            <button class="finance-subtab is-active" type="button" data-financeiro-subtab="fechamento" role="tab" aria-selected="true">Fechamento</button>
+            <button class="finance-subtab" type="button" data-financeiro-subtab="mapas" role="tab" aria-selected="false">Mapas</button>
+          </div>
+          <section class="finance-subpanel" data-financeiro-subpanel="fechamento">
+            <div class="finance-workspace">
+              <div class="finance-topbar">
+                <label class="form-label small fw-semibold mb-0" for="financeiroData">Data do caixa
+                  <input type="date" class="form-control form-control-sm mt-1" id="financeiroData">
+                </label>
+                <label class="form-label small fw-semibold mb-0" for="financeiroFilial">Revenda
+                  <select class="form-select form-select-sm mt-1" id="financeiroFilial">
+                    <option value="">Escolha a revenda</option>
+                  </select>
+                </label>
+                <div class="finance-topbar-actions">
+                  <span class="pill" id="financeiroStatus">Aguardando caixa</span>
+                  <button class="btn btn-outline-primary btn-sm" id="financeiroRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+                  <button class="btn btn-outline-success btn-sm" id="financeiroExportPdfBtn" type="button"><i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF</button>
+                </div>
+              </div>
+              <div class="finance-step-grid">
+                <div class="finance-step-card primary" aria-labelledby="financeiroFechamentoResumoTitle">
+                  <div class="finance-step-head">
+                    <div>
+                      <h3 class="finance-step-title" id="financeiroFechamentoResumoTitle"><i class="bi bi-clipboard-data me-1 text-primary"></i>Caixa noturno</h3>
+                      <div class="form-text">Resumo do dia, malote, comprovantes, vales, despesas e validação das rotas.</div>
+                    </div>
+                  </div>
+                  <div class="finance-summary-strip" id="financeiroSummaryCards"></div>
+                </div>
+                <div class="finance-compact-panel compact">
+                  <div class="finance-compact-panel-head">
+                    <div>
+                      <h4><i class="bi bi-map me-1 text-primary"></i>Rotas do dia - 031120</h4>
+                      <div class="form-text" id="financeiro031120Hint">Escolha uma revenda para solicitar o download ou importar o CSV da operação correta.</div>
+                    </div>
+                    <span class="pill" id="financeiro031120Status">Aguardando revenda</span>
+                  </div>
+                  <div class="finance-step-form">
+                    <div>
+                      <div class="small fw-semibold text-secondary">Operação selecionada</div>
+                      <div class="mono fw-bold" id="financeiro031120Target">-</div>
+                    </div>
+                    <label class="form-label small fw-semibold mb-0" for="financeiro031120File">Upload manual do CSV 031120
+                      <input class="form-control form-control-sm mt-1" id="financeiro031120File" type="file" accept=".csv">
+                    </label>
+                    <button class="btn btn-outline-primary btn-sm" id="financeiro031120DownloadBtn" type="button"><i class="bi bi-cloud-arrow-down me-1"></i>Solicitar</button>
+                    <button class="btn btn-primary btn-sm" id="financeiro031120UploadBtn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Importar</button>
+                  </div>
+                </div>
+              </div>
+              <div class="finance-sheet" id="financeiroFechamentoSheet"></div>
+            </div>
+          </section>
+          <section class="finance-subpanel" data-financeiro-subpanel="mapas" hidden>
+          <div class="finance-map-toolbar">
+            <div>
+              <h3 class="h6 fw-bold mb-1">Mapas</h3>
+              <div class="form-text">Troque a revenda sem sair da tela de mapas e lançamentos.</div>
+            </div>
+            <label class="form-label small fw-semibold mb-0" for="financeiroFilialMapas">Revenda
+              <select class="form-select form-select-sm mt-1" id="financeiroFilialMapas">
+                <option value="">Escolha a revenda</option>
+              </select>
+            </label>
+          </div>
+          <div class="finance-step-card primary mb-3">
+            <div class="finance-step-head">
+              <div>
+                <h4 class="finance-step-title"><i class="bi bi-play-circle me-1 text-primary"></i>Fechamento Promax</h4>
+                <div class="form-text">Solicite o fechamento fisico, financeiro ou completo. Ao concluir, o mapa e preenchido no caixa automaticamente.</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2 justify-content-end">
+                <span class="pill" id="financeiroFechamentoWorkerStatus">Worker não verificado</span>
+                <span class="pill" id="financeiroFechamentoStatus">Aguardando solicitação</span>
+              </div>
+            </div>
+            <div class="finance-step-form">
+              <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoMapa">Mapa
+                <input type="text" class="form-control form-control-sm" id="financeiroFechamentoMapa" placeholder="Ex: 93741">
+              </label>
+              <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoModo">Execução
+                <select class="form-select form-select-sm" id="financeiroFechamentoModo">
+                  <option value="completo">Fechamento completo</option>
+                  <option value="fisico">Somente fisico 030302</option>
+                  <option value="financeiro">Somente financeiro 03030702</option>
+                  <option value="030303">Somente dados 030303</option>
+                  <option value="prestacao">Somente prestação 030322</option>
+                </select>
+              </label>
+              <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoKm">KM atual
+                <input type="number" class="form-control form-control-sm" id="financeiroFechamentoKm" min="0" step="1" inputmode="numeric" placeholder="Opcional">
+              </label>
+              <label class="form-label small fw-semibold mb-0" for="financeiroFechamentoData">Data rotina
+                <input type="date" class="form-control form-control-sm" id="financeiroFechamentoData">
+              </label>
+              <div class="finance-step-actions">
+                <button class="btn btn-primary btn-sm finance-primary-action" id="financeiroFechamentoBtn" type="button"><i class="bi bi-play-fill me-1"></i>Solicitar fechamento</button>
+                <button class="btn btn-outline-primary btn-sm" id="financeiroFechamentoRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar caixa</button>
+              </div>
+            </div>
+            <div class="finance-closing-log" id="financeiroFechamentoLogBox">
+              <div class="finance-closing-log-title">
+                <span>Log do fechamento</span>
+                <div class="finance-closing-log-title-actions">
+                  <span id="financeiroFechamentoLogJob">Sem job ativo</span>
+                  <button class="btn btn-outline-secondary btn-sm finance-closing-log-toggle" id="financeiroFechamentoLogToggleBtn" type="button" aria-expanded="true" aria-controls="financeiroFechamentoLogList">
+                    <i class="bi bi-eye-slash me-1"></i>Esconder log
+                  </button>
+                </div>
+              </div>
+              <ul class="finance-closing-log-list" id="financeiroFechamentoLogList">
+                <li><span class="time">--:--</span><span>Aguardando solicitação.</span></li>
+              </ul>
+            </div>
+            <div class="finance-closing-log">
+              <div class="finance-closing-log-title">
+                <span>Execuções de fechamento</span>
+                <div class="promax-job-filters" aria-label="Filtros das execuções de fechamento">
+                  <label class="promax-job-filter-field status" for="financeiroFechamentoJobStatusFilter">
+                    <span class="promax-job-filter-label">Status</span>
+                    <select class="form-select form-select-sm" id="financeiroFechamentoJobStatusFilter">
+                      <option value="">Todos os status</option>
+                      <option value="pending">Pendente</option>
+                      <option value="running">Executando</option>
+                      <option value="cancel_requested">Cancelamento solicitado</option>
+                      <option value="success">Concluído</option>
+                      <option value="partial_success">Parcial</option>
+                      <option value="failed">Falhou</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  </label>
+                  <label class="promax-job-filter-field" for="financeiroFechamentoJobFromDate">
+                    <span class="promax-job-filter-label">De</span>
+                    <input class="form-control form-control-sm" id="financeiroFechamentoJobFromDate" type="date">
+                  </label>
+                  <label class="promax-job-filter-field" for="financeiroFechamentoJobToDate">
+                    <span class="promax-job-filter-label">Até</span>
+                    <input class="form-control form-control-sm" id="financeiroFechamentoJobToDate" type="date">
+                  </label>
+                  <button class="btn btn-outline-secondary btn-sm" id="financeiroFechamentoJobShowHiddenBtn" type="button" hidden><i class="bi bi-eye me-1"></i>Mostrar ocultos</button>
+                  <button class="btn btn-outline-secondary btn-sm" id="financeiroFechamentoJobClearFiltersBtn" type="button" title="Limpar filtros das execuções de fechamento" aria-label="Limpar filtros das execuções de fechamento"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="table table-hover table-sm align-middle">
+                  <thead><tr><th>Criado</th><th>Mapa</th><th>Execução</th><th>Status</th><th>Worker</th><th class="text-end">Ações</th></tr></thead>
+                  <tbody id="financeiroFechamentoJobsBody"><tr><td colspan="6" class="text-center py-3 text-secondary">Nenhuma execução carregada.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="finance-entry-block mb-3">
+              <div class="finance-entry-head">
+                <div>
+                  <h4 class="mb-0"><i class="bi bi-plus-square me-1 text-primary"></i>Lançamentos</h4>
+                  <div class="form-text">Crie mapas e lançamentos avulsos vinculados ao caixa do dia.</div>
+                </div>
+              </div>
+              <div class="finance-entry-list">
+                <div class="finance-action-grid">
+                  <button class="finance-action-card" id="financeiroNewMapBtn" type="button">
+                    <i class="bi bi-plus-square"></i>
+                    <span><strong>Novo mapa</strong><span>Adicionar um mapa normal para fechamento.</span></span>
+                  </button>
+                  <button class="finance-action-card" id="financeiroCompraBtn" type="button">
+                    <i class="bi bi-bag-check"></i>
+                    <span><strong>Bloco Compra</strong><span>Registrar compras ligadas ao caixa do dia.</span></span>
+                  </button>
+                  <button class="finance-action-card" id="financeiroDespesaBtn" type="button">
+                    <i class="bi bi-receipt"></i>
+                    <span><strong>Conferir despesas</strong><span>Revisar despesas lançadas nos mapas do dia.</span></span>
+                  </button>
+                  <button class="finance-action-card" id="financeiroValeBtn" type="button">
+                    <i class="bi bi-journal-check"></i>
+                    <span><strong>Conferir vales</strong><span>Marcar vales assinados ou pendentes.</span></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          <div class="finance-grid">
+            <aside class="finance-side">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <h3 class="h6 fw-bold mb-0">Mapas do dia</h3>
+                <span class="badge text-bg-secondary" id="financeiroMapCount">0</span>
+              </div>
+              <div class="finance-map-list" id="financeiroMapList"></div>
+            </aside>
+            <article class="panel-card p-3 shadow-none" id="financeiroEditor"></article>
+          </div>
+          </section>
+        </section>
+      </div>

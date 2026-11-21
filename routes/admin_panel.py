@@ -8,6 +8,55 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 
+# Endereços do painel. O painel abre direto na raiz do domínio e cada aba tem
+# um endereço curto em português. Os endereços antigos (/admin/...) continuam
+# funcionando: redirecionam para os novos, para não quebrar links salvos.
+PAINEL_LOGIN = "/login"
+PAINEL_TROCAR_SENHA = "/trocar-senha"
+PAINEL_INICIO = "/"
+PAINEL_PAGINAS = (
+    "/",
+    "/acessos",
+    "/payip",
+    "/relatorios",
+    "/promax",
+    "/pedidos",
+    "/estoque",
+    "/armazem",
+    "/entrega",
+    "/critica",
+    "/recolhas",
+    "/protestos",
+    "/financeiro",
+    "/conferencia",
+    "/giro",
+    "/uso",
+)
+ENDERECOS_ANTIGOS = {
+    "/admin": "/",
+    "/admin/imports": "/",
+    "/admin/operations": "/acessos",
+    "/admin/payip": "/payip",
+    "/admin/reports": "/relatorios",
+    "/admin/power-bi": "/relatorios",
+    "/admin/tables": "/relatorios",
+    "/admin/promax": "/promax",
+    "/admin/pedidos": "/pedidos",
+    "/admin/estoque": "/estoque",
+    "/admin/armazem": "/armazem",
+    "/admin/entrega": "/entrega",
+    "/admin/critica": "/critica",
+    "/admin/recolhas": "/recolhas",
+    "/admin/financeiro": "/financeiro",
+    "/admin/conferencia": "/conferencia",
+    "/admin/protestos": "/protestos",
+    "/admin/giro-recolha": "/giro",
+    "/admin/usage": "/uso",
+    "/admin/login": PAINEL_LOGIN,
+    "/admin/change-password": PAINEL_TROCAR_SENHA,
+}
+
+
 class AdminPanelLoginRequest(BaseModel):
     token: str | None = None
     username: str | None = None
@@ -159,23 +208,32 @@ def create_admin_panel_router(
         )
         return {"ok": True}
 
-    @router.get("/admin/login", response_class=HTMLResponse)
+    @router.get(PAINEL_LOGIN, response_class=HTMLResponse)
     def admin_login(request: Request) -> Response:
         context = admin_panel_context_from_session_cookie(request)
         if context and bool(context.get("must_change_password")):
-            return no_store_redirect("/admin/change-password")
+            return no_store_redirect(PAINEL_TROCAR_SENHA)
         if context:
-            return no_store_redirect("/admin/imports")
+            return no_store_redirect(PAINEL_INICIO)
         return no_store_html(load_admin_login_html())
 
-    @router.get("/admin/change-password", response_class=HTMLResponse)
+    @router.get(PAINEL_TROCAR_SENHA, response_class=HTMLResponse)
     def admin_change_password(request: Request) -> Response:
         context = admin_panel_context_from_session_cookie(request)
         if not context:
-            return no_store_redirect("/admin/login")
+            return no_store_redirect(PAINEL_LOGIN)
         if str(context.get("auth_type") or "") != "user":
-            return no_store_redirect("/admin/imports")
+            return no_store_redirect(PAINEL_INICIO)
         return no_store_html(load_admin_change_password_html())
+
+    def admin_old_address(request: Request) -> Response:
+        destino = ENDERECOS_ANTIGOS.get(request.url.path.rstrip("/") or "/admin", PAINEL_INICIO)
+        if request.url.query:
+            destino = f"{destino}?{request.url.query}"
+        return no_store_redirect(destino)
+
+    for endereco_antigo in ENDERECOS_ANTIGOS:
+        router.add_api_route(endereco_antigo, admin_old_address, methods=["GET"], response_class=HTMLResponse)
 
     @router.post("/api/admin/panel/login")
     def api_admin_panel_login(
@@ -269,32 +327,16 @@ def create_admin_panel_router(
         record_panel_action(request, context, module="auth", action="logout", status="success" if context else "ignored")
         return {"ok": True}
 
-    @router.get("/admin", response_class=HTMLResponse)
-    @router.get("/admin/operations", response_class=HTMLResponse)
-    @router.get("/admin/imports", response_class=HTMLResponse)
-    @router.get("/admin/reports", response_class=HTMLResponse)
-    @router.get("/admin/payip", response_class=HTMLResponse)
-    @router.get("/admin/promax", response_class=HTMLResponse)
-    @router.get("/admin/armazem", response_class=HTMLResponse)
-    @router.get("/admin/entrega", response_class=HTMLResponse)
-    @router.get("/admin/power-bi", response_class=HTMLResponse)
-    @router.get("/admin/tables", response_class=HTMLResponse)
-    @router.get("/admin/critica", response_class=HTMLResponse)
-    @router.get("/admin/recolhas", response_class=HTMLResponse)
-    @router.get("/admin/financeiro", response_class=HTMLResponse)
-    @router.get("/admin/conferencia", response_class=HTMLResponse)
-    @router.get("/admin/protestos", response_class=HTMLResponse)
-    @router.get("/admin/giro-recolha", response_class=HTMLResponse)
-    @router.get("/admin/usage", response_class=HTMLResponse)
-    @router.get("/admin/pedidos", response_class=HTMLResponse)
-    @router.get("/admin/estoque", response_class=HTMLResponse)
     def admin_import_panel(request: Request) -> Response:
         context = admin_panel_context_from_session_cookie(request)
         if not context:
-            return no_store_redirect("/admin/login")
+            return no_store_redirect(PAINEL_LOGIN)
         if bool(context.get("must_change_password")):
-            return no_store_redirect("/admin/change-password")
+            return no_store_redirect(PAINEL_TROCAR_SENHA)
         return no_store_html(load_admin_import_panel_html())
+
+    for pagina in PAINEL_PAGINAS:
+        router.add_api_route(pagina, admin_import_panel, methods=["GET"], response_class=HTMLResponse)
 
     @router.get("/api/admin/panel/session")
     def api_admin_panel_session(

@@ -1,0 +1,429 @@
+      <div class="tab-pane fade" id="promaxPane" role="tabpanel" aria-labelledby="promaxTab" tabindex="0">
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-pc-display-horizontal me-2 text-primary"></i>Promax Admin</h2>
+              <div class="form-text">Execução controlada no worker Windows. O container gerencia fila, agenda, histórico e logs.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="promaxWorkerState">Worker não verificado</span>
+              <span class="pill" id="promaxQueueState">Fila não verificada</span>
+              <button class="btn btn-outline-primary btn-sm" id="promaxRefreshBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-warning btn-sm" id="promaxPauseBtn" type="button"><i class="bi bi-pause-circle me-1"></i>Pausar fila</button>
+            <button class="btn btn-outline-success btn-sm" id="promaxResumeBtn" type="button"><i class="bi bi-play-circle me-1"></i>Retomar fila</button>
+            <button class="btn btn-outline-danger btn-sm" id="promaxClearBtn" type="button"><i class="bi bi-trash3 me-1"></i>Limpar pendentes</button>
+            <button class="btn btn-outline-primary btn-sm" id="promaxReprocessPublicationsBtn" type="button" disabled title="Tentar novamente o envio dos arquivos preservados no worker"><i class="bi bi-arrow-clockwise me-1"></i>Reprocessar publicacoes</button>
+          </div>
+          <div class="promax-worker-grid" id="promaxWorkerGrid">
+            <div class="empty-state py-2">Nenhum worker verificado.</div>
+          </div>
+          <div class="form-text mt-2">A fila aceita vários jobs e executa um por vez, na ordem de prioridade e inclusão.</div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <h2 class="h6 fw-bold mb-3"><i class="bi bi-play-fill me-2 text-primary"></i>Executar agora</h2>
+          <div class="promax-schedule-form">
+            <div>
+              <h3 class="promax-schedule-section-title"><i class="bi bi-calendar-range"></i>Período</h3>
+              <div class="row g-2 align-items-end">
+                <div class="col-xl-4 col-lg-6">
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label small mb-1" for="promaxStartDate">Data inicial</label>
+                      <input class="form-control form-control-sm" id="promaxStartDate" type="date">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label small mb-1" for="promaxEndDate">Data final</label>
+                      <input class="form-control form-control-sm" id="promaxEndDate" type="date">
+                    </div>
+                  </div>
+                </div>
+                <div class="col-xl-5 col-lg-6">
+                  <div class="d-flex flex-wrap gap-3 pb-1">
+                    <label class="form-check mb-0"><input class="form-check-input" id="promaxSendDates" type="checkbox"> <span class="form-check-label fw-semibold">Enviar data</span></label>
+                    <label class="form-check mb-0"><input class="form-check-input" id="promaxPublish" type="checkbox" checked> <span class="form-check-label fw-semibold">Publicar arquivos</span></label>
+                  </div>
+                </div>
+                <div class="col-xl-3 col-lg-6">
+                  <label class="form-label small mb-1" for="promaxRunTargetWorker">Bot que executará</label>
+                  <select class="form-select form-select-sm" id="promaxRunTargetWorker">
+                    <option value="">Automático</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="promax-schedule-scope">
+              <h3 class="promax-schedule-section-title"><i class="bi bi-funnel"></i>Escopo</h3>
+              <div class="row g-2">
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxRunResellerButton">Revendas</label>
+                  <div class="power-slicer promax-slicer" id="promaxRunResellerSlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxRunResellerButton" aria-expanded="false" aria-controls="promaxRunResellerPanel">Todas as revendas</button>
+                    <div class="power-slicer-panel d-none" id="promaxRunResellerPanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxRunResellerSearch" placeholder="Pesquisar revenda" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxRunResellerSelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxRunResellerClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxRunResellers" role="group" aria-label="Revendas da execução Promax"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxRunCategoryButton">Grupos</label>
+                  <div class="power-slicer promax-slicer" id="promaxRunCategorySlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxRunCategoryButton" aria-expanded="false" aria-controls="promaxRunCategoryPanel">Selecione os grupos</button>
+                    <div class="power-slicer-panel d-none" id="promaxRunCategoryPanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxRunCategorySearch" placeholder="Pesquisar grupo" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxRunCategorySelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxRunCategoryClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxRunCategories" role="group" aria-label="Grupos da execução Promax">
+                        <span class="small text-secondary">Catálogo indisponível.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxRunRoutineButton">Rotinas</label>
+                  <div class="power-slicer promax-slicer promax-routine-slicer" id="promaxRunRoutineSlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxRunRoutineButton" aria-expanded="false" aria-controls="promaxRunRoutinePanel">Selecione as rotinas</button>
+                    <div class="power-slicer-panel d-none" id="promaxRunRoutinePanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxRunRoutineSearch" placeholder="Pesquisar rotina" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxRunRoutineSelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxRunRoutineClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxRunRoutines" role="group" aria-label="Rotinas da execução Promax">
+                        <span class="small text-secondary">Selecione um grupo.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="promax-schedule-actions">
+              <button class="btn btn-primary btn-sm" id="promaxRunBtn" type="button" disabled><i class="bi bi-play-fill me-1"></i>Adicionar a fila</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-card mb-3">
+          <header class="px-3 pt-3 pb-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
+            <h2 class="h6 mb-0 fw-bold"><i class="bi bi-list-task me-2 text-primary"></i>Execuções</h2>
+            <div class="promax-job-filters" aria-label="Filtros das execuções">
+              <label class="promax-job-filter-field status" for="promaxJobStatusFilter">
+                <span class="promax-job-filter-label">Status</span>
+                <select class="form-select form-select-sm" id="promaxJobStatusFilter">
+                  <option value="">Todos os status</option>
+                  <option value="pending">Pendente</option>
+                  <option value="running">Executando</option>
+                  <option value="cancel_requested">Cancelamento solicitado</option>
+                  <option value="success">Concluído</option>
+                  <option value="partial_success">Parcial</option>
+                  <option value="failed">Falhou</option>
+                  <option value="cancelled">Cancelado</option>
+                </select>
+              </label>
+              <label class="promax-job-filter-field" for="promaxJobFromDate">
+                <span class="promax-job-filter-label">De</span>
+                <input class="form-control form-control-sm" id="promaxJobFromDate" type="date">
+              </label>
+              <label class="promax-job-filter-field" for="promaxJobToDate">
+                <span class="promax-job-filter-label">Até</span>
+                <input class="form-control form-control-sm" id="promaxJobToDate" type="date">
+              </label>
+              <button class="btn btn-outline-secondary btn-sm" id="promaxJobClearFiltersBtn" type="button" title="Limpar filtros das execuções" aria-label="Limpar filtros das execuções"><i class="bi bi-x-lg"></i></button>
+            </div>
+          </header>
+          <div class="table-scroll">
+            <table class="table table-hover table-sm align-middle">
+              <thead><tr><th class="ps-3">Criado</th><th>Período</th><th>Rotinas</th><th>Resumo</th><th>Status</th><th>Worker</th><th class="text-end pe-3">Ações</th></tr></thead>
+              <tbody id="promaxJobsBody"><tr><td colspan="7" class="text-center py-4 text-secondary">Abra a aba para carregar a fila.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <h2 class="h6 fw-bold mb-3"><i class="bi bi-calendar-event me-2 text-primary"></i>Agendar execução</h2>
+          <div class="promax-schedule-form">
+            <div>
+              <h3 class="promax-schedule-section-title"><i class="bi bi-clock-history"></i>Execução</h3>
+              <div class="row g-2 align-items-end">
+                <div class="col-xl-4 col-lg-5">
+                  <label class="form-label small mb-1" for="promaxScheduleName">Nome</label>
+                  <input class="form-control form-control-sm" id="promaxScheduleName" type="text" placeholder="Fluxo de caixa diário">
+                </div>
+                <div class="col-xl-2 col-lg-3">
+                  <label class="form-label small mb-1" for="promaxScheduleTriggerType">Gatilho inicial</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleTriggerType">
+                    <option value="time">Por horário</option>
+                    <option value="after">Após outra agenda</option>
+                  </select>
+                </div>
+                <div class="col-xl-2 col-lg-2" id="promaxScheduleTypeWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleType">Frequência</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleType"><option value="daily">Diária</option><option value="daily_hourly">Diária recorrente</option><option value="daily_specific">Diária específica</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
+                </div>
+                <div class="col-xl-2 col-lg-2" id="promaxScheduleTimeWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleTime">Horário</label>
+                  <input class="form-control form-control-sm" id="promaxScheduleTime" type="time" value="06:00">
+                </div>
+                <div class="col-xl-4 col-lg-4 d-none" id="promaxScheduleTriggerScheduleWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleTriggerSchedule">Executar após</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleTriggerSchedule">
+                    <option value="">Selecione uma agenda</option>
+                  </select>
+                </div>
+                <div class="col-xl-2 col-lg-2 d-none" id="promaxScheduleWeekdayWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleWeekday">Dia da semana</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleWeekday"><option value="0">Segunda</option><option value="1">Terca</option><option value="2">Quarta</option><option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sabado</option><option value="6">Domingo</option></select>
+                </div>
+                <div class="col-xl-2 col-lg-2 d-none" id="promaxScheduleMonthDayWrap">
+                  <label class="form-label small mb-1" for="promaxScheduleMonthDay">Dia do mês</label>
+                  <input class="form-control form-control-sm" id="promaxScheduleMonthDay" type="number" min="1" max="31" value="1">
+                </div>
+                <div class="col-xl-4 col-lg-6 d-none" id="promaxScheduleDailyDaysWrap">
+                  <label class="form-label small mb-1">Dias da execução diária</label>
+                  <div class="d-flex flex-wrap gap-2 small" id="promaxScheduleDailyDays">
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="0" checked> Seg</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="1" checked> Ter</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="2" checked> Qua</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="3" checked> Qui</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="4" checked> Sex</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="5"> Sab</label>
+                    <label class="form-check mb-0"><input class="form-check-input promax-schedule-day" type="checkbox" value="6"> Dom</label>
+                  </div>
+                </div>
+                <div class="col-12 d-none" id="promaxScheduleSpecificWrap">
+                  <div class="row g-2 align-items-end">
+                    <div class="col-xl-4 col-lg-5">
+                      <label class="form-label small mb-1" for="promaxScheduleSpecificHours">Horas cheias</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleSpecificHours" type="text" placeholder="12, 13, 14, 15, 16, 17">
+                    </div>
+                    <div class="col-xl-2 col-lg-2">
+                      <label class="form-label small mb-1" for="promaxScheduleSpecificStart">De</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleSpecificStart" type="time" value="17:05">
+                    </div>
+                    <div class="col-xl-2 col-lg-2">
+                      <label class="form-label small mb-1" for="promaxScheduleSpecificEnd">Até</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleSpecificEnd" type="time" value="18:00">
+                    </div>
+                    <div class="col-xl-2 col-lg-2">
+                      <label class="form-label small mb-1" for="promaxScheduleSpecificStep">Intervalo min.</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleSpecificStep" type="number" min="1" max="120" value="5">
+                    </div>
+                    <div class="col-xl-2 col-lg-3">
+                      <div class="form-text" id="promaxScheduleSpecificPreview">Informe os horários.</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12 d-none" id="promaxScheduleHourlyWrap">
+                  <div class="row g-2 align-items-end">
+                    <div class="col-xl-2 col-lg-3">
+                      <label class="form-label small mb-1" for="promaxScheduleHourlyStart">De</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleHourlyStart" type="time" value="06:00">
+                    </div>
+                    <div class="col-xl-2 col-lg-3">
+                      <label class="form-label small mb-1" for="promaxScheduleHourlyEnd">Até</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleHourlyEnd" type="time" value="18:00">
+                    </div>
+                    <div class="col-xl-2 col-lg-3">
+                      <label class="form-label small mb-1" for="promaxScheduleHourlyStep">Intervalo</label>
+                      <select class="form-select form-select-sm" id="promaxScheduleHourlyStep">
+                        <option value="60">1 em 1 hora</option>
+                        <option value="30">30 em 30 min.</option>
+                        <option value="5">5 em 5 min.</option>
+                      </select>
+                    </div>
+                    <div class="col-xl-4 col-lg-6">
+                      <div class="form-text" id="promaxScheduleHourlyPreview">06:00, 07:00, 08:00...</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-xl-4 col-lg-6">
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label small mb-1" for="promaxScheduleStartDate">Data inicial</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleStartDate" type="date">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label small mb-1" for="promaxScheduleEndDate">Data final</label>
+                      <input class="form-control form-control-sm" id="promaxScheduleEndDate" type="date">
+                    </div>
+                  </div>
+                </div>
+                <div class="col-xl-5 col-lg-6">
+                  <div class="d-flex flex-wrap gap-3 pb-1">
+                    <label class="form-check mb-0"><input class="form-check-input" id="promaxScheduleSendDates" type="checkbox"> <span class="form-check-label fw-semibold">Enviar data</span></label>
+                    <label class="form-check mb-0"><input class="form-check-input" id="promaxSchedulePublish" type="checkbox" checked> <span class="form-check-label fw-semibold">Publicar arquivos</span></label>
+                  </div>
+                </div>
+                <div class="col-xl-3 col-lg-6">
+                  <label class="form-label small mb-1" for="promaxScheduleTargetWorker">Bot que executará</label>
+                  <select class="form-select form-select-sm" id="promaxScheduleTargetWorker">
+                    <option value="">Automático</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="promax-schedule-scope">
+              <h3 class="promax-schedule-section-title"><i class="bi bi-funnel"></i>Escopo</h3>
+              <div class="row g-2">
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxScheduleResellerButton">Revendas</label>
+                  <div class="power-slicer promax-slicer" id="promaxScheduleResellerSlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxScheduleResellerButton" aria-expanded="false" aria-controls="promaxScheduleResellerPanel">Todas as revendas</button>
+                    <div class="power-slicer-panel d-none" id="promaxScheduleResellerPanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxScheduleResellerSearch" placeholder="Pesquisar revenda" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxScheduleResellerSelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxScheduleResellerClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxScheduleResellers" role="group" aria-label="Revendas da agenda Promax"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxScheduleCategoryButton">Grupos</label>
+                  <div class="power-slicer promax-slicer" id="promaxScheduleCategorySlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxScheduleCategoryButton" aria-expanded="false" aria-controls="promaxScheduleCategoryPanel">Selecione os grupos</button>
+                    <div class="power-slicer-panel d-none" id="promaxScheduleCategoryPanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxScheduleCategorySearch" placeholder="Pesquisar grupo" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxScheduleCategorySelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxScheduleCategoryClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxScheduleCategories" role="group" aria-label="Grupos da agenda Promax">
+                        <span class="small text-secondary">Catálogo indisponível.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <label class="form-label small mb-1" for="promaxScheduleRoutineButton">Rotinas</label>
+                  <div class="power-slicer promax-slicer promax-routine-slicer" id="promaxScheduleRoutineSlicer">
+                    <button type="button" class="form-select form-select-sm power-slicer-toggle" id="promaxScheduleRoutineButton" aria-expanded="false" aria-controls="promaxScheduleRoutinePanel">Selecione as rotinas</button>
+                    <div class="power-slicer-panel d-none" id="promaxScheduleRoutinePanel">
+                      <input type="search" class="form-control form-control-sm" id="promaxScheduleRoutineSearch" placeholder="Pesquisar rotina" autocomplete="off">
+                      <div class="power-slicer-actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="promaxScheduleRoutineSelectAllBtn">Selecionar visiveis</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="promaxScheduleRoutineClearBtn">Limpar</button>
+                      </div>
+                      <div class="power-slicer-list" id="promaxScheduleRoutines" role="group" aria-label="Rotinas da agenda Promax">
+                        <span class="small text-secondary">Selecione um grupo.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="promax-schedule-actions">
+              <button class="btn btn-outline-secondary btn-sm d-none" id="promaxScheduleCancelBtn" type="button">Cancelar edição</button>
+              <button class="btn btn-primary btn-sm" id="promaxScheduleCreateBtn" type="button" disabled><i class="bi bi-calendar-plus me-1"></i>Criar agenda</button>
+            </div>
+          </div>
+          <div class="table-scroll mt-3" style="max-height: 280px;">
+            <table class="table table-hover table-sm align-middle">
+              <thead><tr><th>Nome</th><th>Grupo</th><th>Revendas</th><th>Gatilho</th><th>Próxima execução</th><th>Status</th><th class="text-end">Ações</th></tr></thead>
+              <tbody id="promaxSchedulesBody"><tr><td colspan="7" class="text-center py-3 text-secondary">Nenhuma agenda carregada.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h6 fw-bold mb-0"><i class="bi bi-terminal me-2 text-primary"></i>Log da execução</h2>
+            <span class="pill mono" id="promaxLogJob">Selecione um job</span>
+          </div>
+          <pre class="promax-log" id="promaxLogOutput">Selecione "Logs" em uma execução para acompanhar a saída.</pre>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="mb-2">
+            <h2 class="h6 fw-bold mb-1"><i class="bi bi-key me-2 text-primary"></i>Acesso ao Promax</h2>
+            <div class="form-text">A senha fica criptografada no servidor e e enviada apenas ao worker escolhido, no momento da execução.</div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th>Worker</th><th>Status</th><th>Usuário</th><th>Senha</th><th></th></tr></thead>
+              <tbody id="promaxCredentialsBody"><tr><td colspan="5" class="text-secondary">Carregando workers.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="small text-secondary mt-2" id="promaxCredentialsStatus">Use a linha de cada worker para salvar ou trocar seu acesso.</div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-sliders me-2 text-primary"></i>Configuração dos workers</h2>
+              <div class="form-text">Defina qual worker deve executar cada grupo. Deixe automático para manter a fila livre.</div>
+            </div>
+            <button class="btn btn-outline-primary btn-sm" id="promaxSaveWorkerAssignmentsBtn" type="button">
+              <i class="bi bi-check2-circle me-1"></i>Salvar configuração
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Grupo</th>
+                  <th>Rotinas</th>
+                  <th>Worker</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="promaxWorkerAssignmentsBody">
+                <tr><td colspan="4" class="text-secondary">Carregando configuração.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Impacto operacional</h2>
+              <div class="form-text">Estimativa baseada nas execuções carregadas: 12 min por rotina x revenda, menos o tempo real do worker.</div>
+            </div>
+            <span class="pill" id="promaxImpactPeriod">Sem histórico</span>
+          </div>
+          <div class="promax-impact-grid mb-3">
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Tempo economizado</span>
+              <strong id="promaxImpactSaved">--</strong>
+              <small id="promaxImpactManual">Manual estimado: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Execuções concluídas</span>
+              <strong id="promaxImpactDone">--</strong>
+              <small id="promaxImpactSuccessRate">Taxa de sucesso: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Tempo médio do worker</span>
+              <strong id="promaxImpactAvgRuntime">--</strong>
+              <small id="promaxImpactRuns">Automacoes analisadas: --</small>
+            </div>
+            <div class="promax-impact-kpi">
+              <span class="promax-impact-label">Rotinas x revendas</span>
+              <strong id="promaxImpactWorkUnits">--</strong>
+              <small>Base do cálculo do ganho</small>
+            </div>
+          </div>
+          <div class="promax-impact-chart-wrap">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="small fw-bold text-secondary">Ganho estimado por dia</span>
+              <span class="small text-secondary">Últimos dias carregados</span>
+            </div>
+            <div id="promaxImpactChart" class="promax-impact-chart" aria-label="Gráfico de ganho de tempo do Promax"></div>
+          </div>
+        </section>
+      </div>

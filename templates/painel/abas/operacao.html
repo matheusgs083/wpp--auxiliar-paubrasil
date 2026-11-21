@@ -1,0 +1,489 @@
+      <div class="tab-pane fade show active" id="operationsPane" role="tabpanel" aria-labelledby="operationsTab" tabindex="0">
+        <section class="row g-3 mb-3">
+          <div class="col-xl-6">
+            <article class="panel-card h-100" id="accessEditorCard">
+              <header class="px-3 pt-3 pb-2 border-bottom d-flex justify-content-between align-items-center">
+                <h2 class="h6 mb-0 fw-bold"><i class="bi bi-person-gear me-2 text-primary"></i>Acessos RBAC</h2>
+                <span class="badge text-bg-primary rounded-pill" id="accessUserCount">Carregando...</span>
+              </header>
+              <div class="p-3">
+                <div class="row g-2">
+                  <div class="col-sm-6">
+                    <label class="form-label small fw-semibold mb-1">Número</label>
+                    <input id="accessPhone" type="text" class="form-control" placeholder="5583999999999">
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label small fw-semibold mb-1">Nome</label>
+                    <input id="accessName" type="text" class="form-control" placeholder="Nome do usuário">
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label small fw-semibold mb-1">Perfil</label>
+                    <select id="accessRole" class="form-select"></select>
+                  </div>
+                  <div class="col-sm-6 d-flex align-items-end">
+                    <div class="form-check form-switch ms-1 mb-2">
+                      <input class="form-check-input" type="checkbox" id="accessActive" checked>
+                      <label class="form-check-label ms-2" for="accessActive">Ativo</label>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small fw-semibold mb-1">Escopo Comercial</label>
+                    <input id="accessScope" type="text" class="form-control" placeholder="Ex.: 3-400, 3-401">
+                    <div class="form-text" id="accessScopeHint">Escolha o perfil para ver o formato.</div>
+                  </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <button class="btn btn-success" id="saveAccessBtn"><i class="bi bi-check2-circle me-1"></i>Salvar</button>
+                  <button class="btn btn-outline-secondary" id="resetAccessBtn">Limpar</button>
+                </div>
+                <div class="form-text fw-semibold text-primary mt-2" id="accessModeHint">Modo: novo cadastro.</div>
+                <div class="mt-3 p-2 border rounded bg-light-subtle">
+                  <label class="form-label small fw-semibold mb-1">Cadastro em lote</label>
+                  <div class="form-text small mb-2">Formato: <code>numero;nome;perfil;escopo;status</code></div>
+                  <textarea id="accessBulk" class="form-control mono" rows="4" placeholder="5583999999999;Jose Silva;VENDEDOR;3-400;ativo"></textarea>
+                  <div class="form-text small mt-1">Perfis: VENDEDOR, GERENTE_VENDAS, DIRETOR_COMERCIAL, FINANCEIRO, ADMIN</div>
+                  <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-primary btn-sm" id="saveAccessBulkBtn">Importar Lote</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="resetAccessBulkBtn">Limpar Lote</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="col-xl-6">
+            <article class="panel-card h-100 allowed-users-card" id="allowedUsersCard">
+              <header class="px-3 pt-3 pb-3 border-bottom">
+                <h2 class="h6 mb-0 fw-bold"><i class="bi bi-people-fill me-2 text-primary"></i>Usuários liberados</h2>
+              </header>
+              <div class="table-scroll allowed-users-container" id="allowedUsersContainer">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead>
+                    <tr class="text-uppercase small text-secondary">
+                      <th class="ps-3" scope="col">Número</th>
+                      <th scope="col">Nome</th>
+                      <th scope="col">Perfil</th>
+                      <th scope="col">Escopo</th>
+                      <th scope="col">Status</th>
+                      <th class="text-end pe-3" scope="col">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="accessUsersBody">
+                    <tr><td colspan="6" class="text-center py-4 text-secondary">Carregando usuários...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel-card panel-users-card mb-3" id="panelUsersPanel">
+          <div class="panel-users-head">
+            <div class="panel-users-title">
+              <span class="panel-users-icon"><i class="bi bi-shield-lock"></i></span>
+              <div>
+                <h2 class="h6 fw-bold mb-1">Usuários do painel</h2>
+                <div class="form-text">Crie acessos com senha temporaria, filiais e blocos liberados.</div>
+              </div>
+            </div>
+            <span class="badge text-bg-primary rounded-pill" id="panelUsersCount">0 usuário(s)</span>
+          </div>
+          <div class="panel-users-stats" aria-label="Resumo dos usuários do painel">
+            <div class="panel-user-stat">
+              <span class="label">Ativos</span>
+              <span class="value" id="panelUsersActiveCount">0</span>
+            </div>
+            <div class="panel-user-stat">
+              <span class="label">Administradores</span>
+              <span class="value" id="panelUsersAdminCount">0</span>
+            </div>
+            <div class="panel-user-stat">
+              <span class="label">Trocar senha</span>
+              <span class="value text-warning" id="panelUsersPendingCount">0</span>
+            </div>
+            <div class="panel-user-stat">
+              <span class="label">Bloqueados</span>
+              <span class="value text-danger" id="panelUsersBlockedCount">0</span>
+            </div>
+          </div>
+          <div class="panel-user-layout">
+            <article class="panel-user-box">
+              <div class="panel-user-box-head">
+                <div>
+                  <h3 class="h6 fw-bold mb-1">Cadastro</h3>
+                  <div class="form-text">Preencha o usuário e selecione o acesso necessário.</div>
+                </div>
+                <span class="panel-user-mode" id="panelUserMode">Novo usuário</span>
+              </div>
+              <div class="panel-user-box-body">
+                <input type="hidden" id="panelUserId">
+                <div class="row g-2">
+                  <div class="col-md-6 col-xl-12">
+                    <label class="form-label small fw-semibold mb-1" for="panelUsername">Usuário</label>
+                    <input id="panelUsername" class="form-control" autocomplete="off" placeholder="ex.: apr.patos">
+                  </div>
+                  <div class="col-md-6 col-xl-12">
+                    <label class="form-label small fw-semibold mb-1" for="panelDisplayName">Nome</label>
+                    <input id="panelDisplayName" class="form-control" autocomplete="off" placeholder="Nome do usuário">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small fw-semibold mb-1" for="panelUserFiliais">Filiais</label>
+                    <input id="panelUserFiliais" class="form-control mono" autocomplete="off" placeholder="3, 4 ou *">
+                    <div class="form-text">Use <span class="mono">*</span> para todas as filiais quando fizer sentido.</div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small fw-semibold mb-1" for="panelUserSellerScopes">Carteira de vendedor (Pedidos)</label>
+                    <input id="panelUserSellerScopes" class="form-control mono" autocomplete="off" placeholder="ex.: 3-107, 3-108">
+                    <div class="form-text">Para Pedidos, informe filial-setor. O usuário só verá clientes dessas carteiras.</div>
+                  </div>
+                </div>
+                <div class="panel-user-switch-grid mt-3">
+                  <label class="panel-user-switch" for="panelUserActive">
+                    <span>
+                      <span class="d-block small fw-bold text-uppercase text-secondary">Status</span>
+                      <span class="d-block fw-bold">Usuário ativo</span>
+                    </span>
+                    <input class="form-check-input" type="checkbox" id="panelUserActive" checked>
+                  </label>
+                  <label class="panel-user-switch" for="panelUserAdmin">
+                    <span>
+                      <span class="d-block small fw-bold text-uppercase text-secondary">Perfil</span>
+                      <span class="d-block fw-bold">Administrador</span>
+                    </span>
+                    <input class="form-check-input" type="checkbox" id="panelUserAdmin">
+                  </label>
+                </div>
+                <div class="form-text mt-2" id="panelUserAdminHint">Administrador acessa todos os blocos.</div>
+                <div class="mt-3">
+                  <div class="panel-user-feature-toolbar">
+                    <div class="small fw-bold text-uppercase text-secondary">Blocos liberados</div>
+                    <span class="pill" id="panelUserFeatureCount">0 selecionados</span>
+                  </div>
+                  <div class="panel-user-feature-grid" id="panelUserFeatures"></div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <button class="btn btn-success btn-sm" id="panelUserSaveBtn"><i class="bi bi-check2-circle me-1"></i>Salvar usuário</button>
+                  <button class="btn btn-outline-secondary btn-sm" id="panelUserResetFormBtn"><i class="bi bi-plus-circle me-1"></i>Novo</button>
+                </div>
+                <div class="alert panel-user-password-card py-2 px-3 mt-3 d-none" id="panelUserPasswordBox">
+                  <div class="d-flex align-items-start justify-content-between gap-2">
+                    <div class="panel-user-password-grid flex-grow-1">
+                      <div>
+                        <div class="small fw-bold text-uppercase mb-1">Usuário para login</div>
+                        <div class="mono user-select-all panel-user-password-value" id="panelUserPasswordUsername"></div>
+                      </div>
+                      <div>
+                        <div class="small fw-bold text-uppercase mb-1">Senha temporaria</div>
+                        <div class="mono user-select-all panel-user-password-value" id="panelUserPasswordValue"></div>
+                      </div>
+                    </div>
+                    <button class="btn btn-outline-warning btn-sm" type="button" id="panelUserCopyPasswordBtn"><i class="bi bi-clipboard me-1"></i>Copiar acesso</button>
+                  </div>
+                  <div class="small mt-2">Envie o usuário e a senha por canal seguro. O sistema exigira troca no primeiro acesso.</div>
+                </div>
+              </div>
+            </article>
+            <article class="panel-user-box">
+              <div class="panel-user-box-head">
+                <div>
+                  <h3 class="h6 fw-bold mb-1">Usuários cadastrados</h3>
+                  <div class="form-text">Edite blocos, bloqueie acessos ou gere nova senha temporaria.</div>
+                </div>
+              </div>
+              <div class="panel-user-box-body">
+                <div class="panel-users-toolbar">
+                  <div>
+                    <label class="form-label small fw-semibold mb-1" for="panelUserSearch">Pesquisar</label>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text"><i class="bi bi-search"></i></span>
+                      <input id="panelUserSearch" class="form-control" autocomplete="off" placeholder="Usuário, nome, bloco ou filial">
+                    </div>
+                  </div>
+                  <div class="text-end small text-secondary fw-semibold" id="panelUsersFilterInfo">Mostrando todos</div>
+                </div>
+                <div class="table-scroll panel-users-scroll">
+                  <table class="table table-sm table-hover align-middle mb-0 panel-users-table">
+                    <thead>
+                      <tr class="text-uppercase small text-secondary">
+                        <th class="ps-3" scope="col">Usuário</th>
+                        <th scope="col">Blocos</th>
+                        <th scope="col">Filiais</th>
+                        <th scope="col">Status</th>
+                        <th class="text-end pe-3" scope="col">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="panelUsersBody">
+                      <tr><td colspan="5" class="text-center py-3 text-secondary">Carregando usuários do painel...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3" id="broadcastPanel">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <h2 class="h6 fw-bold mb-0"><i class="bi bi-send-check me-2 text-primary"></i>Disparo por operação</h2>
+            <span class="pill" id="broadcastStatus">Aguardando dados</span>
+          </div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="broadcastFilial">Operação</label>
+              <select id="broadcastFilial" class="form-select">
+                <option value="">Carregando...</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="broadcastAudience">Perfil</label>
+              <select id="broadcastAudience" class="form-select">
+                <option value="vendedor">Vendedores (RN)</option>
+                <option value="gerente_vendas">GVs</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="broadcastAction">Mensagem</label>
+              <select id="broadcastAction" class="form-select">
+                <option value="">Carregando...</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="broadcastDay">Dia</label>
+              <select id="broadcastDay" class="form-select">
+                <option value="hoje">Hoje</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="broadcastTargetMode">Destino</label>
+              <select id="broadcastTargetMode" class="form-select">
+                <option value="filial">Todos da filial</option>
+                <option value="specific">Número específico</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-none" id="broadcastTargetNumberWrap">
+              <label class="form-label small fw-semibold mb-1" for="broadcastTargetNumber">Número para teste</label>
+              <input id="broadcastTargetNumber" class="form-control" placeholder="+55 83 99999-9999">
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-primary" id="broadcastPreviewBtn"><i class="bi bi-people me-1"></i>Prévia</button>
+              <button class="btn btn-success" id="broadcastRunBtn" disabled><i class="bi bi-send me-1"></i>Disparar</button>
+              <button class="btn btn-outline-secondary" id="broadcastRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Status</button>
+            </div>
+          </div>
+          <div class="form-text mt-2" id="broadcastSummary">Escolha uma filial e uma mensagem para ver os destinatários.</div>
+          <div class="table-scroll mt-3 broadcast-preview-scroll">
+            <table class="table table-sm table-hover align-middle mb-0 broadcast-preview-table">
+              <colgroup>
+                <col class="broadcast-select-col">
+                <col class="broadcast-name-col">
+                <col class="broadcast-role-col">
+                <col class="broadcast-phone-col">
+              </colgroup>
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th class="ps-3 broadcast-select-cell" scope="col">
+                    <label class="broadcast-select-label mb-0">
+                      <input class="form-check-input" type="checkbox" id="broadcastSelectAll" disabled>
+                      Todos
+                    </label>
+                  </th>
+                  <th scope="col">Nome</th>
+                  <th scope="col">Perfil</th>
+                  <th scope="col">Número</th>
+                </tr>
+              </thead>
+              <tbody id="broadcastRecipientsBody">
+                <tr><td colspan="4" class="text-center py-3 text-secondary">Sem prévia carregada</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3" id="payipImportPanel">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cloud-arrow-up me-2 text-primary"></i>Importação automatizada PayIP</h2>
+              <div class="form-text">Valida e confirma cobranças vindas do ProMax por período de entrega.</div>
+            </div>
+            <span class="pill" id="payipImportStatus">Aguardando validação</span>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="payipImportFilial">Revenda</label>
+              <input id="payipImportFilial" class="form-control form-control-sm mono" inputmode="numeric" placeholder="3">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="payipImportStartDate">De</label>
+              <input id="payipImportStartDate" class="form-control form-control-sm" type="date">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1" for="payipImportEndDate">Até</label>
+              <input id="payipImportEndDate" class="form-control form-control-sm" type="date">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="payipImportMfaCode">Token MFA</label>
+              <input id="payipImportMfaCode" class="form-control form-control-sm mono" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Use se a PayIP pedir MFA">
+            </div>
+            <div class="col-md-3 d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="payipImportValidateBtn" onclick="validatePayipImport()"><i class="bi bi-search me-1"></i>Validar</button>
+              <button type="button" class="btn btn-success btn-sm" id="payipImportRunBtn" onclick="runPayipImport()" disabled><i class="bi bi-check2-circle me-1"></i>Importar</button>
+            </div>
+          </div>
+          <div class="table-scroll" style="max-height: 300px;">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase small text-secondary">
+                  <th scope="col">NB</th>
+                  <th scope="col">NF</th>
+                  <th scope="col">Valor</th>
+                  <th scope="col">Vencimento</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="payipImportBody">
+                <tr><td colspan="5" class="text-center py-3 text-secondary">Valide a importação automatizada para começar.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3" id="payipBatchPanel">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cash-coin me-2 text-primary"></i>Cobranças PayIP em lote</h2>
+              <div class="form-text">Entrada por revenda + NB. O NB localiza o cliente, mas a cobrança sai sem NB e sem NF por padrão.</div>
+            </div>
+            <span class="pill" id="payipBatchStatus">Aguardando lote</span>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchDefaultRate" checked>
+                <label class="form-check-label" for="payipBatchDefaultRate">Taxa padrão R$ 3,92</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchDefaultInterest" checked>
+                <label class="form-check-label" for="payipBatchDefaultInterest">Juros padrão 10%</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchIncludeNb">
+                <label class="form-check-label" for="payipBatchIncludeNb">Enviar NB no PayIP</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchIncludeNf">
+                <label class="form-check-label" for="payipBatchIncludeNf">Enviar NF se informada</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="payipBatchAutoCreate">
+                <label class="form-check-label" for="payipBatchAutoCreate">Criar clientes faltantes</label>
+              </div>
+            </div>
+          </div>
+          <div class="row g-2">
+            <div class="col-xl-5">
+              <label class="form-label small fw-semibold mb-1" for="payipBatchText">Lote CSV</label>
+              <textarea id="payipBatchText" class="form-control mono" rows="8" placeholder="filial;nb;valor;vencimento;nf;taxa;juros;descricao&#10;3;16883;150,00;2026-06-30;;;;Cobrança avulsa"></textarea>
+              <div class="form-text">Obrigatório: <code>filial;nb;valor;vencimento</code>. O sistema busca CPF/CNPJ na PayIP pelo NB.</div>
+              <div class="mt-2">
+                <label class="form-label small fw-semibold mb-1" for="payipBatchMfaCode">Token MFA PayIP</label>
+                <input id="payipBatchMfaCode" class="form-control mono" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Opcional. Informe se a PayIP pedir MFA.">
+                <div class="form-text">Usado apenas para iniciar a sessão PayIP neste lote. O painel não salva esse token.</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <button class="btn btn-outline-primary btn-sm" id="payipBatchPreviewBtn"><i class="bi bi-search me-1"></i>Validar lote</button>
+                <button class="btn btn-success btn-sm" id="payipBatchRunBtn" disabled><i class="bi bi-play-fill me-1"></i>Gerar cobranças</button>
+                <button class="btn btn-outline-secondary btn-sm" id="payipBatchStatusBtn"><i class="bi bi-arrow-repeat me-1"></i>Status</button>
+                <button class="btn btn-outline-success btn-sm" id="payipBatchExportBtn"><i class="bi bi-download me-1"></i>Exportar CSV</button>
+              </div>
+            </div>
+            <div class="col-xl-7">
+              <div class="table-scroll" style="max-height: 320px;">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead>
+                    <tr class="text-uppercase small text-secondary">
+                      <th scope="col">Linha</th>
+                      <th scope="col">Revenda/NB</th>
+                      <th scope="col">Valor</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">PIX</th>
+                      <th scope="col">PDF</th>
+                    </tr>
+                  </thead>
+                  <tbody id="payipBatchBody">
+                    <tr><td colspan="6" class="text-center py-3 text-secondary">Valide um lote para começar.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-card p-3 mb-3" id="recolhasPanel">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Recolhas por operação</h2>
+              <div class="form-text">Atualização financeira separada por revenda/filial. O vendedor acompanha o status atual pelo comando <span class="mono">RECOLHAS</span>.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="pill" id="recolhasCount">Aguardando dados</span>
+              <button class="btn btn-outline-success btn-sm" id="recolhasExportBtn"><i class="bi bi-download me-1"></i>Exportar relatório</button>
+              <button class="btn btn-outline-primary btn-sm" id="recolhasRefreshBtn"><i class="bi bi-arrow-repeat me-1"></i>Atualizar recolhas/baixas</button>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="recolhasStartDate">Período inicial</label>
+              <input type="date" class="form-control form-control-sm" id="recolhasStartDate">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="recolhasEndDate">Período final</label>
+              <input type="date" class="form-control form-control-sm" id="recolhasEndDate">
+            </div>
+            <div class="col-md-6 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-secondary btn-sm" id="recolhasPeriodClearBtn"><i class="bi bi-x-circle me-1"></i>Limpar período</button>
+              <span class="form-text align-self-center" id="recolhasPeriodLabel">Dashboard considerando todas as solicitações visíveis.</span>
+            </div>
+          </div>
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-6 col-lg-5">
+              <label class="form-label small fw-semibold mb-1" for="recolhasImportFile">Importar CSV de recolhas</label>
+              <input type="file" class="form-control form-control-sm" id="recolhasImportFile" accept=".csv,text/csv">
+              <div class="form-text">Admin substitui tudo. Token financeiro substitui apenas as filiais liberadas.</div>
+            </div>
+            <div class="col-md-6 col-lg-4 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-primary btn-sm" id="recolhasImportBtn"><i class="bi bi-upload me-1"></i>Importar CSV</button>
+            </div>
+          </div>
+          <div class="recolha-dashboard-grid" id="recolhasDashboardCards"></div>
+          <div class="recolha-insights">
+            <div class="recolha-insight-box">
+              <div class="small fw-bold text-uppercase text-secondary mb-2">Principais motivos de não recolha</div>
+              <div id="recolhasReasonList" class="small"></div>
+            </div>
+            <div class="recolha-insight-box">
+              <div class="small fw-bold text-uppercase text-secondary mb-2">Resumo por operação</div>
+              <div id="recolhasOperationSummary" class="small"></div>
+            </div>
+          </div>
+          <div id="recolhasContainer">
+            <div class="text-center py-3 text-secondary">Informe o token admin ou financeiro e clique em Atualizar.</div>
+          </div>
+        </section>
+
+        <section class="row g-3">
+          <div class="col-12">
+            <article class="panel-card p-3 h-100">
+              <h2 class="h6 mb-2 fw-bold"><i class="bi bi-terminal me-2 text-primary"></i>Log Operacional</h2>
+              <pre id="logPanel" class="mono" role="log" aria-live="polite">Painel pronto. Clique em Atualizar.</pre>
+            </article>
+          </div>
+        </section>
+      </div>

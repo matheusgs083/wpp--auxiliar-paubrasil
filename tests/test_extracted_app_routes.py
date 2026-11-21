@@ -100,41 +100,42 @@ class ExtractedAppRoutesTest(unittest.TestCase):
         self.assertEqual(scope_calls[0]["request"].url.path, "/api/access/check")
         self.assertEqual(events[0]["event_type"], "access_check")
 
-    def test_admin_panel_pages_share_panel_without_losing_legacy_routes(self) -> None:
+    def test_admin_panel_pages_share_panel_on_short_addresses(self) -> None:
         client = TestClient(self._admin_panel_test_app({"is_admin": True}))
 
-        for path in (
-            "/admin",
-            "/admin/imports",
-            "/admin/operations",
-            "/admin/payip",
-            "/admin/tables",
-            "/admin/critica",
-            "/admin/recolhas",
-            "/admin/giro-recolha",
-            "/admin/usage",
-        ):
+        for path in ("/", "/acessos", "/payip", "/relatorios", "/critica", "/recolhas", "/giro", "/uso", "/entrega"):
             with self.subTest(path=path):
                 response = client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.text, "<html>panel</html>")
 
+    def test_old_admin_addresses_redirect_to_new_ones(self) -> None:
+        client = TestClient(self._admin_panel_test_app({"is_admin": True}), follow_redirects=False)
+
+        for old, new in (
+            ("/admin", "/"),
+            ("/admin/imports", "/"),
+            ("/admin/operations", "/acessos"),
+            ("/admin/tables", "/relatorios"),
+            ("/admin/giro-recolha", "/giro"),
+            ("/admin/usage", "/uso"),
+            ("/admin/login", "/login"),
+            ("/admin/change-password", "/trocar-senha"),
+            ("/admin/critica?data=2026-11-20", "/critica?data=2026-11-20"),
+        ):
+            with self.subTest(path=old):
+                response = client.get(old)
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(response.headers["location"], new)
+
     def test_admin_panel_pages_redirect_to_login_without_session(self) -> None:
         client = TestClient(self._admin_panel_test_app(None), follow_redirects=False)
 
-        for path in (
-            "/admin/operations",
-            "/admin/payip",
-            "/admin/tables",
-            "/admin/critica",
-            "/admin/recolhas",
-            "/admin/giro-recolha",
-            "/admin/usage",
-        ):
+        for path in ("/", "/acessos", "/payip", "/relatorios", "/critica", "/recolhas", "/giro", "/uso"):
             with self.subTest(path=path):
                 response = client.get(path)
                 self.assertEqual(response.status_code, 303)
-                self.assertEqual(response.headers["location"], "/admin/login")
+                self.assertEqual(response.headers["location"], "/login")
 
     def test_admin_panel_session_keeps_capability_flags(self) -> None:
         response = TestClient(self._admin_panel_test_app({"is_admin": True})).get("/api/admin/panel/session")

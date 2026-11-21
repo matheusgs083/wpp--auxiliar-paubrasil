@@ -516,7 +516,9 @@ def create_admin_pedidos_router(
             raise HTTPException(status_code=422, detail="Cliente sem vendedor/setor na dClientes. O pedido não foi enviado.")
         if payload.cond_pagto:
             catalogo_condicoes = _load_promax_conditions_catalog(unidade, promax_jobs_service)
-            if not catalogo_condicoes["condicoes"]:
+            # Dinheiro é uma exceção operacional: pode ser usado mesmo antes
+            # da consulta do catálogo Promax terminar.
+            if not catalogo_condicoes["condicoes"] and payload.cond_pagto != "2":
                 raise HTTPException(
                     status_code=409,
                     detail="A lista de condições desta filial ainda não foi retornada pelo Promax. Mantenha a condição padrão do cliente.",
@@ -815,18 +817,28 @@ def _allowed_payment_conditions(
     client_condition: str,
 ) -> list[dict[str, str]]:
     allowed_range = _payment_condition_range(client_condition)
-    if allowed_range is None:
-        return []
-    start, end = allowed_range
+    start, end = allowed_range or (0, -1)
     conditions = {
         str(item.get("codigo") or "").strip(): str(item.get("descricao") or "").strip()
         for item in catalog
         if str(item.get("codigo") or "").strip().isdigit()
         and start <= int(str(item.get("codigo") or "").strip()) <= end
     }
+    # Condição 2 = Dinheiro. É liberada para todos os clientes, fora da
+    # família de prazo do cliente, e permanece disponível sem catálogo.
+    conditions["2"] = next(
+        (
+            str(item.get("descricao") or "").strip() or "Dinheiro"
+            for item in catalog
+            if str(item.get("codigo") or "").strip() == "2"
+        ),
+        "Dinheiro",
+    )
     # A condição cadastrada é segura por definição e precisa ficar visível
     # mesmo se o catálogo do Promax estiver desatualizado ou incompleto.
-    conditions.setdefault(str(client_condition).strip(), "Condição atual do cliente")
+    current = str(client_condition).strip()
+    if current:
+        conditions.setdefault(current, "Condição atual do cliente")
     return [
         {"codigo": code, "descricao": description}
         for code, description in sorted(conditions.items(), key=lambda item: int(item[0]))
@@ -848,9 +860,9 @@ def _payment_condition_message(
     if allowed_range is None:
         return (
             f"A condição atual do cliente ({client_condition or 'não informada'}) não possui alternativas inferiores "
-            "na mesma família. Mantenha a condição padrão."
+            "na mesma família. A condição 2 (Dinheiro) continua liberada."
         )
     start, end = allowed_range
     if not catalog_available:
-        return f"A condição padrão é {client_condition}. A lista do Promax ainda não está disponível para liberar {start} a {end}."
-    return f"Condição padrão {client_condition}. São permitidas somente as alternativas de {start} a {end}."
+        return f"A condição padrão é {client_condition}. A lista do Promax ainda não está disponível para liberar {start} a {end}; Dinheiro (2) está liberado."
+    return f"Condição padrão {client_condition}. São permitidas as alternativas de {start} a {end} e Dinheiro (2)."
