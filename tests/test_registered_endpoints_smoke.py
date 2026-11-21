@@ -477,6 +477,8 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/conferencia", expected_status=303),
             EndpointCase("GET", "/giro", expected_status=303),
             EndpointCase("GET", "/uso", expected_status=303),
+            EndpointCase("GET", "/painel/app.css", expected_status=401),
+            EndpointCase("GET", "/painel/app.js", expected_status=401),
             EndpointCase("GET", "/admin", expected_status=303),
             EndpointCase("GET", "/admin/imports", expected_status=303),
             EndpointCase("GET", "/admin/operations", expected_status=303),

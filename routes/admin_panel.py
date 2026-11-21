@@ -7,6 +7,8 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
+from bot_api.services.admin_templates import PAINEL_CSS, PAINEL_JS
+
 
 # Endereços do painel. O painel abre direto na raiz do domínio e cada aba tem
 # um endereço curto em português. Os endereços antigos (/admin/...) continuam
@@ -32,6 +34,7 @@ PAINEL_PAGINAS = (
     "/giro",
     "/uso",
 )
+PAINEL_RECURSOS = (PAINEL_CSS, PAINEL_JS)
 ENDERECOS_ANTIGOS = {
     "/admin": "/",
     "/admin/imports": "/",
@@ -101,6 +104,7 @@ def create_admin_panel_router(
     load_admin_login_html: Callable[[], str],
     load_admin_change_password_html: Callable[[], str],
     load_admin_import_panel_html: Callable[[], str],
+    load_admin_panel_asset: Callable[[str], tuple[str, str] | None] | None = None,
     check_admin_panel_login_rate_limit: Callable[[Request], None],
     admin_panel_context_from_token: Callable[[str | None], dict[str, Any] | None],
     admin_panel_context_from_credentials: Callable[[str | None, str | None], dict[str, Any] | None],
@@ -337,6 +341,24 @@ def create_admin_panel_router(
 
     for pagina in PAINEL_PAGINAS:
         router.add_api_route(pagina, admin_import_panel, methods=["GET"], response_class=HTMLResponse)
+
+    def admin_panel_asset(request: Request) -> Response:
+        # CSS e JS do painel: só para quem está logado. O endereço leva "?v=<versão>",
+        # então o navegador pode guardar o arquivo sem prazo de validade.
+        if not admin_panel_context_from_session_cookie(request):
+            raise HTTPException(status_code=401, detail="Sessao invalida.")
+        recurso = load_admin_panel_asset(request.url.path) if load_admin_panel_asset else None
+        if recurso is None:
+            raise HTTPException(status_code=404, detail="Arquivo nao encontrado.")
+        tipo, conteudo = recurso
+        return Response(
+            content=conteudo,
+            media_type=tipo,
+            headers={"Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"},
+        )
+
+    for recurso_painel in PAINEL_RECURSOS:
+        router.add_api_route(recurso_painel, admin_panel_asset, methods=["GET"])
 
     @router.get("/api/admin/panel/session")
     def api_admin_panel_session(

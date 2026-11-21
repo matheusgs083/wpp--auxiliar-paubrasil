@@ -39,6 +39,7 @@ from bot_api.services.liga_entrega_dashboard_service import LigaEntregaDashboard
 from bot_api.services.liga_entrega_report_store import LigaEntregaReportStore
 from bot_api.services.liga_entrega_dashboard_snapshot_store import LigaEntregaDashboardSnapshotStore
 from bot_api.services.liga_entrega_route_team_service import LigaEntregaRouteTeamService
+from bot_api.services.liga_entrega_batch_catalog import LigaEntregaBatchCatalog
 from bot_api.services.liga_entrega_raw_sql_import_service import LigaEntregaRawSqlImportService
 from bot_api.services.liga_entrega_status_service import LigaEntregaStatusService
 from bot_api.services.liga_entrega_rules_service import LigaEntregaRulesService
@@ -123,7 +124,12 @@ def configure_app_runtime(
     LIGA_ENTREGA_STATUS_PATH = PROJECT_ROOT / "exports" / "liga_entrega_status.json"
     LIGA_ENTREGA_RULES_PATH = PROJECT_ROOT / "exports" / "liga_entrega_rules.json"
     DEVOLUCOES_CADASTROS_PATH = PROJECT_ROOT / "exports" / "devolucoes_operacionais_cadastros.json"
-    liga_entrega_report_store = LigaEntregaReportStore(LIGA_ENTREGA_REPORTS_ROOT)
+    liga_entrega_batch_catalog = LigaEntregaBatchCatalog(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    liga_entrega_report_store = LigaEntregaReportStore(LIGA_ENTREGA_REPORTS_ROOT, catalog=liga_entrega_batch_catalog)
     liga_entrega_snapshot_store = LigaEntregaDashboardSnapshotStore(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
@@ -549,6 +555,7 @@ def configure_app_runtime(
         api_auth_enabled=settings.api_auth_enabled,
     )
     _load_admin_import_panel_html = admin_template_loader.load_import_panel_html
+    _load_admin_panel_asset = admin_template_loader.load_panel_asset
     _load_admin_login_html = admin_template_loader.load_login_html
     _load_admin_change_password_html = admin_template_loader.load_change_password_html
 
@@ -659,6 +666,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "load_admin_login_html": runtime["_load_admin_login_html"],
         "load_admin_change_password_html": runtime["_load_admin_change_password_html"],
         "load_admin_import_panel_html": runtime["_load_admin_import_panel_html"],
+        "load_admin_panel_asset": runtime["_load_admin_panel_asset"],
         "list_admin_import_status": runtime["_list_admin_import_status"],
         "filter_admin_import_status_for_context": runtime["_filter_admin_import_status_for_context"],
         "list_admin_import_history": runtime["_list_admin_import_history"],

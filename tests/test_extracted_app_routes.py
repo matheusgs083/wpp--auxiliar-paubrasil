@@ -48,7 +48,11 @@ class FakeAdminPanelUserService:
 
 
 class ExtractedAppRoutesTest(unittest.TestCase):
-    def _admin_panel_test_app(self, session_context: dict[str, Any] | None) -> FastAPI:
+    def _admin_panel_test_app(
+        self,
+        session_context: dict[str, Any] | None,
+        load_admin_panel_asset: Any = None,
+    ) -> FastAPI:
         app = FastAPI()
         app.include_router(
             create_admin_panel_router(
@@ -56,6 +60,7 @@ class ExtractedAppRoutesTest(unittest.TestCase):
                 load_admin_login_html=lambda: "<html>login</html>",
                 load_admin_change_password_html=lambda: "<html>change</html>",
                 load_admin_import_panel_html=lambda: "<html>panel</html>",
+                load_admin_panel_asset=load_admin_panel_asset,
                 check_admin_panel_login_rate_limit=lambda _request: None,
                 admin_panel_context_from_token=lambda _token: {"mode": "admin", "is_admin": True, "filiais": []},
                 admin_panel_context_from_credentials=lambda _username, _password: {"mode": "admin", "is_admin": True, "filiais": []},
@@ -136,6 +141,18 @@ class ExtractedAppRoutesTest(unittest.TestCase):
                 response = client.get(path)
                 self.assertEqual(response.status_code, 303)
                 self.assertEqual(response.headers["location"], "/login")
+
+    def test_panel_assets_are_cached_and_need_session(self) -> None:
+        assets = {"/painel/app.js": ("text/javascript; charset=utf-8", "init();")}
+        logged = TestClient(self._admin_panel_test_app({"is_admin": True}, assets.get))
+        response = logged.get("/painel/app.js?v=abc123")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text, "init();")
+        self.assertIn("immutable", response.headers["cache-control"])
+        self.assertEqual(logged.get("/painel/app.css").status_code, 404)
+
+        anonymous = TestClient(self._admin_panel_test_app(None, assets.get))
+        self.assertEqual(anonymous.get("/painel/app.js").status_code, 401)
 
     def test_admin_panel_session_keeps_capability_flags(self) -> None:
         response = TestClient(self._admin_panel_test_app({"is_admin": True})).get("/api/admin/panel/session")

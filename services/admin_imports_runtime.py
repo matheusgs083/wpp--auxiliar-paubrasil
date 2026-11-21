@@ -1139,6 +1139,9 @@ def _run_admin_critica_geral_import(
         "imports": _serialize_admin_import_value(imports),
     }
 def _list_admin_import_status() -> dict[str, Any]:
+    # Mede cada etapa: a tela inicial do painel espera por esta consulta.
+    etapas: dict[str, float] = {}
+    inicio = time.perf_counter()
     dataset_rows: dict[str, dict[str, Any]] = {}
     database_error = ""
     query = """
@@ -1174,8 +1177,10 @@ def _list_admin_import_status() -> dict[str, Any]:
     except Exception as exc:
         database_error = str(exc)
         logger.warning("Falha ao consultar status das importacoes no banco: %s", exc)
+    etapas["banco"] = time.perf_counter() - inicio
 
     items: list[dict[str, Any]] = []
+    marca = time.perf_counter()
     for dataset_name, config in ADMIN_IMPORT_DATASETS.items():
         runtime_path = _dataset_runtime_upload_path(dataset_name)
         source_status = _admin_import_source_status(dataset_name)
@@ -1199,8 +1204,11 @@ def _list_admin_import_status() -> dict[str, Any]:
             }
         )
 
+    etapas["arquivos"] = time.perf_counter() - marca
+
     state_snapshot = _snapshot_admin_import_state()
     state_snapshot["items"] = items
+    marca = time.perf_counter()
     state_snapshot["database_error"] = database_error
     state_snapshot["critica_pdf_prebuild"] = _snapshot_critica_pdf_prebuild_state()
     try:
@@ -1210,6 +1218,12 @@ def _list_admin_import_status() -> dict[str, Any]:
         logger.warning("Falha ao consultar jobs administrativos recentes: %s", exc)
         state_snapshot["jobs"] = []
         state_snapshot["jobs_error"] = str(exc)
+    etapas["jobs"] = time.perf_counter() - marca
+    total = time.perf_counter() - inicio
+    (logger.warning if total >= 1.0 else logger.info)(
+        "imports/status em %.2fs (banco %.2fs, arquivos %.2fs, jobs %.2fs)",
+        total, etapas["banco"], etapas["arquivos"], etapas["jobs"],
+    )
     return state_snapshot
 
 

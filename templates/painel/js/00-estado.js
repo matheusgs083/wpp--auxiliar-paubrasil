@@ -347,8 +347,6 @@
 
     const E = {
       main: document.getElementById("mainContent"),
-      flowNav: document.getElementById("flowNav"),
-      activeFlowLabel: document.getElementById("activeFlowLabel"),
       log: document.getElementById("logPanel"),
       apiToken: document.getElementById("apiToken"),
       apiTokenField: document.getElementById("apiTokenField"),

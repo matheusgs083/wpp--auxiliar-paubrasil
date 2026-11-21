@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import threading
 import time
 import uuid
 from collections.abc import Mapping
@@ -13,12 +15,19 @@ _SAFE_ROUTINE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _SAFE_FILENAME_PATTERN = re.compile(r"^[^\\/:*?\"<>|\r\n]{1,255}$")
 _ALLOWED_SUFFIXES = {".csv", ".txt", ".xlsx", ".xlsm", ".xls"}
 
+logger = logging.getLogger(__name__)
+
 
 class LigaEntregaReportStore:
     """Armazena arquivos usados na atualizacao automatica do painel Liga Entrega."""
 
-    def __init__(self, root_dir: str | Path) -> None:
+    def __init__(self, root_dir: str | Path, catalog: Any | None = None) -> None:
         self.root_dir = Path(root_dir)
+        # Catálogo no PostgreSQL (LigaEntregaBatchCatalog): responde qual é a última
+        # remessa sem varrer as pastas. Sem ele, ou com o banco fora, lê as pastas.
+        self.catalog = catalog
+        self._catalog_ready: set[str] = set()
+        self._catalog_lock = threading.Lock()
         self._latest_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
         self._latest_cache_ttl = 5.0
 
@@ -70,8 +79,35 @@ class LigaEntregaReportStore:
             json.dumps(manifest, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        if self.catalog is not None:
+            try:
+                self.catalog.record([manifest])
+            except Exception as exc:
+                # O arquivo já está gravado; o catálogo se completa na próxima leitura.
+                logger.warning("Liga Entrega: remessa %s/%s nao registrada no banco: %s", clean_routine, batch_id, exc)
+                with self._catalog_lock:
+                    self._catalog_ready.discard(clean_routine)
         self._latest_cache.pop(clean_routine, None)
         return manifest
+
+    def _catalog_for(self, clean_routine: str) -> Any | None:
+        """Devolve o catálogo pronto para a rotina, ou None para ler as pastas.
+
+        Na primeira consulta de cada rotina, se o banco ainda não tem nenhuma
+        remessa dela, registra as que já estão nas pastas (uma vez só).
+        """
+        if self.catalog is None:
+            return None
+        try:
+            with self._catalog_lock:
+                if clean_routine not in self._catalog_ready:
+                    if self.catalog.count(clean_routine) == 0:
+                        self.catalog.record(self._scan_manifests(clean_routine))
+                    self._catalog_ready.add(clean_routine)
+            return self.catalog
+        except Exception as exc:
+            logger.warning("Liga Entrega: catalogo de remessas indisponivel, lendo as pastas: %s", exc)
+            return None
 
 
     def list_manifests(
@@ -87,36 +123,19 @@ class LigaEntregaReportStore:
         if clean_competencia and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", clean_competencia):
             raise ValueError("Competencia invalida. Use AAAA-MM.")
 
-        routine_dir = self.root_dir / clean_routine
-        if not routine_dir.exists() or not routine_dir.is_dir():
-            return []
-
-        manifests: list[dict[str, Any]] = []
-        try:
-            date_dirs = [path for path in routine_dir.iterdir() if path.is_dir()]
-        except OSError:
-            return []
-        for date_dir in date_dirs:
-            date_matches = not clean_competencia or date_dir.name.startswith(f"{clean_competencia}-")
+        items: list[tuple[str, dict[str, Any]]] | None = None
+        catalog = self._catalog_for(clean_routine)
+        if catalog is not None:
             try:
-                batch_dirs = [path for path in date_dir.iterdir() if path.is_dir()]
-            except OSError:
-                continue
-            for batch_dir in batch_dirs:
-                manifest_path = batch_dir / "manifest.json"
-                if not manifest_path.is_file():
-                    continue
-                try:
-                    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    continue
-                if isinstance(payload, dict):
-                    if clean_competencia and not date_matches:
-                        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
-                        manifest_comp = str(metadata.get("competencia") or metadata.get("operational_competencia") or "").strip()
-                        if manifest_comp != clean_competencia:
-                            continue
-                    manifests.append(payload)
+                items = [(str(payload.get("reference_date") or ""), payload) for payload in catalog.list(clean_routine)]
+            except Exception as exc:
+                logger.warning("Liga Entrega: falha ao listar remessas no banco, lendo as pastas: %s", exc)
+        if items is None:
+            items = self._scan_manifest_items(clean_routine)
+        manifests = [
+            payload for date_name, payload in items
+            if self._matches_competencia(payload, date_name, clean_competencia)
+        ]
 
         def sort_key(payload: dict[str, Any]) -> tuple[str, str]:
             return (str(payload.get("reference_date") or ""), str(payload.get("stored_at") or ""))
@@ -132,36 +151,19 @@ class LigaEntregaReportStore:
         cached = self._latest_cache.get(clean_routine)
         if cached is not None and now - cached[0] < self._latest_cache_ttl:
             return dict(cached[1]) if isinstance(cached[1], dict) else None
-        routine_dir = self.root_dir / clean_routine
-        if not routine_dir.exists() or not routine_dir.is_dir():
-            self._latest_cache[clean_routine] = (now, None)
-            return None
-
-        candidates: list[Path] = []
-        try:
-            date_dirs = [path for path in routine_dir.iterdir() if path.is_dir()]
-        except OSError:
-            self._latest_cache[clean_routine] = (now, None)
-            return None
-        for date_dir in date_dirs:
+        catalog = self._catalog_for(clean_routine)
+        if catalog is not None:
             try:
-                batch_dirs = [path for path in date_dir.iterdir() if path.is_dir()]
-            except OSError:
-                continue
-            for batch_dir in batch_dirs:
-                manifest_path = batch_dir / "manifest.json"
-                if manifest_path.is_file():
-                    candidates.append(manifest_path)
+                latest_payload = catalog.latest(clean_routine)
+            except Exception as exc:
+                logger.warning("Liga Entrega: falha ao consultar a ultima remessa no banco, lendo as pastas: %s", exc)
+            else:
+                self._latest_cache[clean_routine] = (now, latest_payload)
+                return dict(latest_payload) if isinstance(latest_payload, dict) else None
 
         latest_payload: dict[str, Any] | None = None
         latest_sort_key: tuple[str, float] | None = None
-        for manifest_path in candidates:
-            try:
-                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if not isinstance(payload, dict):
-                continue
+        for manifest_path, payload in self._scan_manifest_files(clean_routine):
             stored_at = str(payload.get("stored_at") or "")
             try:
                 mtime = manifest_path.stat().st_mtime
@@ -173,6 +175,47 @@ class LigaEntregaReportStore:
                 latest_payload = payload
         self._latest_cache[clean_routine] = (now, latest_payload)
         return dict(latest_payload) if isinstance(latest_payload, dict) else None
+
+    def _scan_manifest_files(self, clean_routine: str) -> list[tuple[Path, dict[str, Any]]]:
+        """Lê todos os manifest.json da rotina nas pastas (caminho lento)."""
+        routine_dir = self.root_dir / clean_routine
+        if not routine_dir.exists() or not routine_dir.is_dir():
+            return []
+        found: list[tuple[Path, dict[str, Any]]] = []
+        try:
+            date_dirs = [path for path in routine_dir.iterdir() if path.is_dir()]
+        except OSError:
+            return []
+        for date_dir in date_dirs:
+            try:
+                batch_dirs = [path for path in date_dir.iterdir() if path.is_dir()]
+            except OSError:
+                continue
+            for batch_dir in batch_dirs:
+                manifest_path = batch_dir / "manifest.json"
+                if not manifest_path.is_file():
+                    continue
+                try:
+                    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if isinstance(payload, dict):
+                    found.append((manifest_path, payload))
+        return found
+
+    def _scan_manifest_items(self, clean_routine: str) -> list[tuple[str, dict[str, Any]]]:
+        return [(manifest_path.parent.parent.name, payload) for manifest_path, payload in self._scan_manifest_files(clean_routine)]
+
+    def _scan_manifests(self, clean_routine: str) -> list[dict[str, Any]]:
+        return [payload for _path, payload in self._scan_manifest_files(clean_routine)]
+
+    @staticmethod
+    def _matches_competencia(payload: dict[str, Any], date_name: str, clean_competencia: str) -> bool:
+        if not clean_competencia or date_name.startswith(f"{clean_competencia}-"):
+            return True
+        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        manifest_comp = str(metadata.get("competencia") or metadata.get("operational_competencia") or "").strip()
+        return manifest_comp == clean_competencia
 
     @staticmethod
     def _clean_routine(value: str) -> str:

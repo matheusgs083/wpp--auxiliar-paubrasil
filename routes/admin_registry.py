@@ -112,6 +112,7 @@ def _register_admin_panel_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
             load_admin_login_html=deps["load_admin_login_html"],
             load_admin_change_password_html=deps["load_admin_change_password_html"],
             load_admin_import_panel_html=deps["load_admin_import_panel_html"],
+            load_admin_panel_asset=deps.get("load_admin_panel_asset"),
             check_admin_panel_login_rate_limit=deps["check_admin_panel_login_rate_limit"],
             admin_panel_context_from_token=deps["admin_panel_context_from_token"],
             admin_panel_context_from_credentials=deps["admin_panel_context_from_credentials"],

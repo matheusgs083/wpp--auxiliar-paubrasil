@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bot_api.services.admin_templates import AdminTemplateLoader, montar_template
+from bot_api.services.admin_templates import AdminTemplateLoader, montar_template, separar_recursos
 
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
@@ -56,3 +56,29 @@ def test_login_e_troca_de_senha_usam_o_simbolo_e_o_icone() -> None:
         assert "<!--#include" not in html
         assert 'class="brand-symbol"' in html
         assert 'rel="icon"' in html
+
+
+def test_painel_servido_com_css_e_js_separados_e_versionados(tmp_path: Path) -> None:
+    loader = AdminTemplateLoader(
+        import_panel_template=TEMPLATES / "admin_import_panel.html",
+        login_template=tmp_path / "login.html",
+        api_auth_enabled=True,
+    )
+    html = loader.load_import_panel_html()
+    assert "<style>" not in html.split("</head>")[0]
+    assert 'href="/painel/app.css?v=' in html
+    assert '<script src="/painel/app.js?v=' in html
+    tipo, js = loader.load_panel_asset("/painel/app.js")
+    assert tipo.startswith("text/javascript")
+    assert "function init()" in js
+    assert loader.load_panel_asset("/painel/outro.js") is None
+    # sem mudança nos arquivos, o painel montado é reaproveitado
+    assert loader.load_import_panel_html() is html
+
+
+def test_separar_recursos_muda_a_versao_quando_o_js_muda() -> None:
+    base = "<html><head><style>a{}</style></head><body><script>x()</script></body></html>"
+    v1 = separar_recursos(base).html
+    v2 = separar_recursos(base.replace("x()", "y()")).html
+    assert v1 != v2
+    assert separar_recursos(base).recursos["/painel/app.js"][1] == "x()"

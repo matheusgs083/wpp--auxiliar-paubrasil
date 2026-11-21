@@ -655,8 +655,7 @@
         addLog("Sem permissão para acessar a Liga no Promax.", "warn");
         return;
       }
-      showPanelTab("promaxTab");
-      updateFlowNavigation("promaxTab");
+      navigatePanelPage("promaxTab");
       if (!state.promax.catalog) {
         await syncPromax({ silent: true });
       }

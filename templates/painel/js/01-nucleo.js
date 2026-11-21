@@ -11,20 +11,23 @@
       return PANEL_PATH_BY_TAB[tabId] || "/";
     }
 
-    function navigatePanelPage(tabId) {
+    // Troca de aba sem recarregar a página: só muda o endereço e mostra a aba.
+    // Os dados de cada aba ficam guardados (state.lazyTabs), então voltar a uma
+    // aba já aberta é instantâneo.
+    function navigatePanelPage(tabId, { replace = false } = {}) {
       const targetPath = panelPathForTab(tabId);
       if (currentPanelPath() !== targetPath) {
-        window.location.assign(targetPath);
-        return;
+        window.history[replace ? "replaceState" : "pushState"]({ tabId }, "", targetPath);
       }
       showPanelTab(tabId);
-      updateFlowNavigation(tabId);
     }
 
     function selectInitialPanelPage() {
-      const tabId = panelTabFromLocation();
-      showPanelTab(tabId);
-      updateFlowNavigation(tabId);
+      showPanelTab(panelTabFromLocation());
+    }
+
+    function isPlainLeftClick(event) {
+      return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
     }
 
     // Grupos de abas (Operação, Financeiro, Dados, Admin). Cada <li> de #adminTabs
@@ -94,72 +97,26 @@
       atualizarGruposAbas();
     }
 
-    function flowPathButtons() {
-      return E.flowNav ? Array.from(E.flowNav.querySelectorAll("[data-flow-target]")) : [];
-    }
-
-    function updateFlowNavigation(activeTabId) {
-      const buttons = flowPathButtons();
-      buttons.forEach(button => {
-        const targetId = String(button.dataset.flowTarget || "");
-        const targetTab = document.getElementById(targetId);
-        const isHidden = Boolean(targetTab && targetTab.parentElement && targetTab.parentElement.style.display === "none");
-        const isActive = targetId === activeTabId && !isHidden;
-        button.hidden = isHidden;
-        button.classList.toggle("is-active", isActive);
-        button.setAttribute("aria-pressed", isActive ? "true" : "false");
-        if (isActive && E.activeFlowLabel) {
-          E.activeFlowLabel.textContent = button.dataset.flowLabel || button.textContent.trim();
-        }
-      });
-    }
-
-    function setupFlowNavigation() {
-      // Os atalhos foram retirados (repetiam as abas); se voltarem, continuam funcionando.
-      // As abas abaixo precisam ser ligadas sempre, com ou sem atalhos.
-      const buttons = flowPathButtons();
-
-      buttons.forEach(button => {
-        button.addEventListener("click", event => {
-          const targetId = String(button.dataset.flowTarget || "");
-          const targetTab = document.getElementById(targetId);
-          if (!targetTab || targetTab.parentElement.style.display === "none") {
-            event.preventDefault();
-            return;
-          }
-          if (currentPanelPath() === panelPathForTab(targetId)) {
-            event.preventDefault();
-            navigatePanelPage(targetId);
-            const paneSelector = targetTab.getAttribute("data-bs-target");
-            const pane = paneSelector ? document.querySelector(paneSelector) : null;
-            window.setTimeout(() => {
-              if (pane) pane.focus({ preventScroll: true });
-            }, 120);
-          }
-        });
-      });
-
+    function setupTabNavigation() {
       document.querySelectorAll("#adminTabs .nav-link[data-admin-page-link='true']").forEach(tab => {
         tab.addEventListener("click", event => {
           if (tab.parentElement && tab.parentElement.style.display === "none") {
             event.preventDefault();
             return;
           }
-          if (currentPanelPath() === panelPathForTab(tab.id)) {
-            event.preventDefault();
-            navigatePanelPage(tab.id);
-          }
+          // Ctrl/meio-clique continuam abrindo a aba numa nova guia do navegador.
+          if (!isPlainLeftClick(event)) return;
+          event.preventDefault();
+          navigatePanelPage(tab.id);
         });
         tab.addEventListener("shown.bs.tab", event => {
           event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
-          updateFlowNavigation(event.target.id);
+          document.title = `${event.target.textContent.trim()} · Central Pau Brasil`;
           atualizarGruposAbas();
           syncVisibleTabData({ silent: true });
         });
       });
-
-      const activeTab = document.querySelector("#adminTabs .nav-link.active");
-      updateFlowNavigation(activeTab ? activeTab.id : "operationsTab");
+      window.addEventListener("popstate", () => showPanelTab(panelTabFromLocation()));
     }
 
     function ensureDevolucoesJustificativasTabs() {
@@ -442,7 +399,7 @@
       setupRecolhasPane();
       setupPayipPane();
       selectInitialPanelPage();
-      setupFlowNavigation();
+      setupTabNavigation();
       setupGruposAbas();
 
       localStorage.removeItem("bot_api_token");
@@ -1045,6 +1002,8 @@
 
       syncAll();
       window.setInterval(() => {
+        // Com a guia do navegador escondida, não há ninguém olhando: não consulta o servidor.
+        if (document.hidden) return;
         if (isPaneActive("promaxPane") && state.panel && state.panel.canManagePromax) {
           syncPromax({ silent: true });
           if (state.promax.selectedJobId) promaxLoadLogs(state.promax.selectedJobId);
@@ -1420,17 +1379,16 @@
       setPanelTabVisible("protestosTab", Boolean(state.panel && state.panel.canProtestos) && !isCritica);
       setPanelTabVisible("giroRecolhaTab", Boolean(state.panel && state.panel.canViewGiro));
       applySimplePanelMode();
-      updateFlowNavigation(document.querySelector("#adminTabs .nav-link.active")?.id || "operationsTab");
       const activeTab = document.querySelector("#adminTabs .nav-link.active");
+      // Na raiz (/) o endereço fica limpo; em outro endereço, ele passa a apontar para a aba aberta.
+      const replaceAddress = currentPanelPath() !== "/";
       if (isCritica && activeTab && activeTab.id !== "criticaTab") {
-        showPanelTab("criticaTab");
-        updateFlowNavigation("criticaTab");
+        if (replaceAddress) navigatePanelPage("criticaTab", { replace: true }); else showPanelTab("criticaTab");
       } else if (activeTab && activeTab.parentElement && activeTab.parentElement.style.display === "none") {
         const firstVisible = Array.from(document.querySelectorAll("#adminTabs .nav-link"))
           .find(tab => tab.parentElement && tab.parentElement.style.display !== "none");
         if (firstVisible) {
-          showPanelTab(firstVisible.id);
-          updateFlowNavigation(firstVisible.id);
+          if (replaceAddress) navigatePanelPage(firstVisible.id, { replace: true }); else showPanelTab(firstVisible.id);
         }
       }
       if (isCritica) {
@@ -1618,6 +1576,8 @@
         }
         const isAdmin = state.panel && state.panel.isAdmin;
         const canLoadReports = Boolean(state.panel && (state.panel.canReports || state.panel.canViewCritica));
+        // A aba aberta carrega junto com os dados gerais, sem esperar por eles.
+        const visibleTabLoad = syncVisibleTabData({ silent: true, force: true }).catch(() => false);
         const [
           statusResult,
           historyResult,
@@ -1655,7 +1615,7 @@
         renderPanelUsers();
         updateGeneralState();
         updateMetrics();
-        await syncVisibleTabData({ silent: true, force: true });
+        await visibleTabLoad;
         addLog("Atualização concluída.", "ok");
       } catch (err) {
         addLog(`Falha ao atualizar: ${err.message}`, "err");
