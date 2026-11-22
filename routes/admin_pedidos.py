@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from bot_api.commercial_scope import normalize_stored_scope_value, split_scope_pair
+from bot_api.services.pedido_horario_bloqueio import normalizar_horario_bloqueio, situacao_bloqueio
 
 
 _UNIT_BY_FILIAL = {
@@ -96,6 +97,12 @@ class PedidoGerencialConfigRequest(_StrictPayload):
     motivos: list[str] = Field(min_length=1, max_length=20)
     max_caixas_por_produto: int = Field(ge=1, le=99_999)
     limites_por_produto: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    horario_bloqueio: str = Field(default="", max_length=5)
+
+    @field_validator("horario_bloqueio")
+    @classmethod
+    def horario_valido(cls, value: str) -> str:
+        return normalizar_horario_bloqueio(value)
 
     @field_validator("motivos")
     @classmethod
@@ -288,8 +295,9 @@ def create_admin_pedidos_router(
         x_api_token: str | None = Header(default=None),
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
-        context_for_pedidos(request, authorization, x_api_token, x_admin_token)
-        return {"ok": True, **promax_jobs_service.get_pedido_digitacao_config()}
+        context = context_for_pedidos(request, authorization, x_api_token, x_admin_token)
+        config = promax_jobs_service.get_pedido_digitacao_config()
+        return {"ok": True, **config, **_bloqueio_payload(config, context)}
 
     @router.get("/api/admin/pedidos/gerencial/config")
     def obter_configuracao_gerencial_pedidos(
@@ -301,7 +309,7 @@ def create_admin_pedidos_router(
         context = admin_context(request, authorization, x_api_token, x_admin_token)
         config = promax_jobs_service.get_pedido_digitacao_config()
         record_security_event(request, channel="api", event_type="admin_pedidos_gerencial_config", decision="allowed", reason=f"user={_pedido_created_by(context)}")
-        return {"ok": True, **config}
+        return {"ok": True, **config, **_bloqueio_payload(config, context)}
 
     @router.get("/api/admin/pedidos/gerencial/produtos")
     def pesquisar_produtos_gerencial_pedidos(
@@ -333,11 +341,12 @@ def create_admin_pedidos_router(
             motivos=payload.motivos,
             max_caixas_por_produto=payload.max_caixas_por_produto,
             limites_por_produto=payload.limites_por_produto,
+            horario_bloqueio=payload.horario_bloqueio,
             updated_by=_pedido_created_by(context),
         )
-        record_security_event(request, channel="api", event_type="admin_pedidos_gerencial_config_update", decision="allowed", reason=f"motivos={len(config['motivos'])};limite={config['max_caixas_por_produto']};produtos={len(config['limites_por_produto'])}")
-        record_action(request, context, "configurar_digitacao_pedidos", motivos=config["motivos"], max_caixas_por_produto=config["max_caixas_por_produto"], limites_por_produto=config["limites_por_produto"])
-        return {"ok": True, **config}
+        record_security_event(request, channel="api", event_type="admin_pedidos_gerencial_config_update", decision="allowed", reason=f"motivos={len(config['motivos'])};limite={config['max_caixas_por_produto']};produtos={len(config['limites_por_produto'])};bloqueio={config['horario_bloqueio'] or 'sem'}")
+        record_action(request, context, "configurar_digitacao_pedidos", motivos=config["motivos"], max_caixas_por_produto=config["max_caixas_por_produto"], limites_por_produto=config["limites_por_produto"], horario_bloqueio=config["horario_bloqueio"])
+        return {"ok": True, **config, **_bloqueio_payload(config, context)}
 
     @router.get("/api/admin/pedidos/gerencial/auditoria")
     def auditoria_gerencial_pedidos(
@@ -483,6 +492,10 @@ def create_admin_pedidos_router(
         if not unidade:
             raise HTTPException(status_code=422, detail="Filial sem unidade Promax mapeada.")
         config = promax_jobs_service.get_pedido_digitacao_config()
+        bloqueio = _bloqueio_payload(config, context)
+        if bloqueio["bloqueado"] and not bloqueio["pode_ignorar_bloqueio"]:
+            record_security_event(request, channel="api", event_type="admin_pedidos_create", decision="denied", reason=f"horario_bloqueio={bloqueio['horario_bloqueio']};filial={filial};cliente={payload.cliente}")
+            raise HTTPException(status_code=409, detail=bloqueio["mensagem"])
         if payload.motivo_digitacao not in set(config["motivos"]):
             raise HTTPException(status_code=422, detail="O motivo escolhido não está liberado no gerencial de pedidos.")
         limits_by_product = {str(item.get("produto")): int(item.get("limite") or 0) for item in config.get("limites_por_produto") or []}
@@ -585,6 +598,18 @@ def create_admin_pedidos_router(
         return {"ok": True, "job": job, "cliente": _client_payload(cliente), "unidade": unidade}
 
     return router
+
+
+def _bloqueio_payload(config: Mapping[str, Any], context: Mapping[str, Any]) -> dict[str, Any]:
+    """Situação do horário de bloqueio para quem está logado.
+
+    Administradores não são bloqueados: o escritório ainda pode lançar um
+    pedido urgente depois do horário.
+    """
+    return {
+        **situacao_bloqueio(str(config.get("horario_bloqueio") or "")),
+        "pode_ignorar_bloqueio": bool(context.get("is_admin")),
+    }
 
 
 def _seller_scopes(context: Mapping[str, Any]) -> tuple[str, ...]:

@@ -23,6 +23,8 @@ class HealthRoutesTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"ok": True, "service": "bot_api"})
+        self.assertEqual(response.headers["access-control-allow-origin"], "https://paubrasilsistemas.com.br")
+        self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_admin_health_uses_auth_and_detailed_payload(self) -> None:
         calls: list[dict[str, Any]] = []

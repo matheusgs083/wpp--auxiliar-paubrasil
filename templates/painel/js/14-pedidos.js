@@ -64,11 +64,34 @@
       if (motivos.includes(selected)) select.value = selected;
     }
 
+    function renderPedidoBloqueio(config) {
+      const aviso = document.getElementById("pedidoBloqueioAviso");
+      const texto = document.getElementById("pedidoBloqueioTexto");
+      const horario = String(config?.horario_bloqueio || "");
+      const encerrada = Boolean(config?.bloqueado);
+      const podeIgnorar = Boolean(config?.pode_ignorar_bloqueio);
+      pedidosUi.bloqueadoPorHorario = encerrada && !podeIgnorar;
+      clearTimeout(pedidosUi.bloqueioTimer);
+      const segundos = Number(config?.segundos_ate_bloqueio);
+      // Ao chegar o horário, pergunta de novo ao servidor (o relógio dele é o que vale).
+      if (horario && !encerrada && Number.isFinite(segundos) && segundos > 0) pedidosUi.bloqueioTimer = setTimeout(syncPedidoConfig, (segundos + 2) * 1000);
+      if (aviso && texto) {
+        aviso.hidden = !horario;
+        aviso.classList.toggle("alert-warning", pedidosUi.bloqueadoPorHorario);
+        aviso.classList.toggle("alert-info", !pedidosUi.bloqueadoPorHorario);
+        texto.textContent = encerrada && podeIgnorar
+          ? `A digitação foi encerrada às ${horario} para os vendedores. Como administrador, você ainda pode enviar pedidos.`
+          : String(config?.mensagem || "");
+      }
+      syncPedidoControls();
+    }
+
     async function syncPedidoConfig() {
       try {
         const response = await req("/api/admin/pedidos/config");
         pedidosUi.config = response;
         renderPedidoMotivos(response);
+        renderPedidoBloqueio(response);
         return true;
       } catch (error) {
         pedidosSetStatus(error.message || "Não foi possível carregar as regras de digitação.", "err");
@@ -138,6 +161,8 @@
       const motivoFilter = document.getElementById("pedidoGerencialMotivo");
       if (motivos) motivos.value = (config.motivos || []).join("\n");
       if (maxCaixas) maxCaixas.value = config.max_caixas_por_produto || "";
+      const horarioBloqueio = document.getElementById("pedidoGerencialHorarioBloqueio");
+      if (horarioBloqueio) horarioBloqueio.value = config.horario_bloqueio || "";
       if (meta) meta.textContent = config.updated_at ? `Atualizado por ${config.updated_by || "admin"} em ${formatDateTime(config.updated_at)}` : "Regra padrão";
       if (motivoFilter) {
         const current = motivoFilter.value;
@@ -184,6 +209,7 @@
       const response = await req("/api/admin/pedidos/gerencial/config");
       pedidosUi.config = response;
       renderPedidoMotivos(response);
+      renderPedidoBloqueio(response);
       renderPedidoManagerConfig(response);
       return response;
     }
@@ -223,12 +249,14 @@
       const status = document.getElementById("pedidoGerencialConfigStatus");
       const motivos = (document.getElementById("pedidoGerencialMotivosTexto")?.value || "").split(/\r?\n/).map(value => value.trim()).filter(Boolean);
       const max_caixas_por_produto = Number(document.getElementById("pedidoGerencialMaxCaixas")?.value || 0);
+      const horario_bloqueio = (document.getElementById("pedidoGerencialHorarioBloqueio")?.value || "").slice(0, 5);
+      if (horario_bloqueio === "00:00") { if (status) status.textContent = "Use um horário depois de 00:00, ou deixe vazio para não bloquear."; return; }
       if (!motivos.length || !Number.isInteger(max_caixas_por_produto) || max_caixas_por_produto < 1) { if (status) status.textContent = "Informe ao menos um motivo e um limite válido."; return; }
       if (!await askConfirmation("Salvar as regras da digitação? Elas passarão a valer para os próximos pedidos.")) return;
       if (status) status.textContent = "Salvando regras...";
       try {
-        const response = await req("/api/admin/pedidos/gerencial/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivos, max_caixas_por_produto, limites_por_produto: pedidosUi.productLimits }) });
-        pedidosUi.config = response; renderPedidoMotivos(response); renderPedidoManagerConfig(response);
+        const response = await req("/api/admin/pedidos/gerencial/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivos, max_caixas_por_produto, limites_por_produto: pedidosUi.productLimits, horario_bloqueio }) });
+        pedidosUi.config = response; renderPedidoMotivos(response); renderPedidoBloqueio(response); renderPedidoManagerConfig(response);
         if (status) status.textContent = "Regras salvas e aplicadas aos próximos pedidos.";
       } catch (error) { if (status) status.textContent = error.message || "Não foi possível salvar as regras."; }
     }
@@ -242,7 +270,7 @@
     }
 
     function pedidoPodeDigitar() {
-      return Boolean(pedidosUi.client && pedidosUi.client.pedido_liberado && !pedidosUi.loadingClient);
+      return Boolean(pedidosUi.client && pedidosUi.client.pedido_liberado && !pedidosUi.loadingClient && !pedidosUi.bloqueadoPorHorario);
     }
 
     function syncPedidoControls() {
@@ -462,6 +490,7 @@
       const condPagto = document.getElementById("pedidoCondicao")?.value.trim() || "";
       const motivo = document.getElementById("pedidoMotivo")?.value.trim() || "";
       const itens = pedidosUi.items.filter(item => item.produto && Number(item.quantidade) > 0).map(item => ({ produto: item.produto, quantidade: Number(item.quantidade), preco: String(item.preco || "").trim() }));
+      if (pedidosUi.bloqueadoPorHorario) { pedidosSetStatus(pedidosUi.config?.mensagem || "A digitação de novos pedidos está encerrada.", "err"); return; }
       if (!pedidosUi.client || !filial) { pedidosSetStatus("Selecione a filial e um cliente autorizado.", "err"); return; }
       if (!pedidosUi.client.pedido_liberado) { pedidosSetStatus("Cliente bloqueado pela 12.06.01. Não é possível digitar pedido.", "err"); return; }
       if (String(pedidosUi.client.filial) !== String(filial)) { pedidosSetStatus("A filial escolhida é diferente da filial do cliente.", "err"); return; }
@@ -483,7 +512,11 @@
         pedidosSetStatus(`Pedido do NB ${cliente} enviado para a fila.`, "ok");
         addLog(`Pedido enviado: cliente ${cliente}.`, "ok");
         await syncPedidoQueue({ silent: true });
-      } catch (error) { pedidosSetStatus(error.message, "err"); }
+      } catch (error) {
+        pedidosSetStatus(error.message, "err");
+        // Se o horário de bloqueio chegou com a tela aberta, o aviso aparece já.
+        syncPedidoConfig();
+      }
     }
 
     function clearTimeoutsPedidoStock() {

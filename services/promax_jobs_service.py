@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from bot_api.db import get_connection_pool
+from bot_api.services.pedido_horario_bloqueio import normalizar_horario_bloqueio
 from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -1274,7 +1275,7 @@ class PromaxJobsService:
             self._ensure_pedido_digitacao_config(conn)
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
-                    sql.SQL("SELECT motivos, max_caixas_por_produto, limites_por_produto, updated_by, updated_at FROM {schema}.{table} WHERE id = TRUE").format(
+                    sql.SQL("SELECT motivos, max_caixas_por_produto, limites_por_produto, horario_bloqueio, updated_by, updated_at FROM {schema}.{table} WHERE id = TRUE").format(
                         schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)
                     )
                 )
@@ -1285,6 +1286,7 @@ class PromaxJobsService:
             "motivos": [str(item).strip() for item in motivos if str(item).strip()],
             "max_caixas_por_produto": int(row.get("max_caixas_por_produto") or 99_999) if row else 99_999,
             "limites_por_produto": _pedido_product_limits(limites),
+            "horario_bloqueio": str(row.get("horario_bloqueio") or "") if row else "",
             "updated_by": str(row.get("updated_by") or "") if row else "",
             "updated_at": _iso(row.get("updated_at")) if row else None,
         }
@@ -1295,6 +1297,7 @@ class PromaxJobsService:
         motivos: Sequence[str],
         max_caixas_por_produto: int,
         limites_por_produto: Sequence[Mapping[str, Any]] = (),
+        horario_bloqueio: str = "",
         updated_by: str,
     ) -> dict[str, Any]:
         cleaned_motivos = list(dict.fromkeys(str(item).strip() for item in motivos if str(item).strip()))
@@ -1306,6 +1309,7 @@ class PromaxJobsService:
         if limit < 1 or limit > 99_999:
             raise ValueError("O limite por produto deve estar entre 1 e 99.999 caixas.")
         cleaned_limits = _pedido_product_limits_to_mapping(limites_por_produto)
+        cleaned_horario = normalizar_horario_bloqueio(horario_bloqueio)
         with self._connect() as conn:
             self._ensure_schema(conn)
             self._ensure_pedido_digitacao_config(conn)
@@ -1313,18 +1317,19 @@ class PromaxJobsService:
                 cur.execute(
                     sql.SQL(
                         """
-                        INSERT INTO {schema}.{table} (id, motivos, max_caixas_por_produto, limites_por_produto, updated_by, updated_at)
-                        VALUES (TRUE, %s, %s, %s, %s, NOW())
+                        INSERT INTO {schema}.{table} (id, motivos, max_caixas_por_produto, limites_por_produto, horario_bloqueio, updated_by, updated_at)
+                        VALUES (TRUE, %s, %s, %s, %s, %s, NOW())
                         ON CONFLICT (id) DO UPDATE SET
                             motivos = EXCLUDED.motivos,
                             max_caixas_por_produto = EXCLUDED.max_caixas_por_produto,
                             limites_por_produto = EXCLUDED.limites_por_produto,
+                            horario_bloqueio = EXCLUDED.horario_bloqueio,
                             updated_by = EXCLUDED.updated_by,
                             updated_at = NOW()
-                        RETURNING motivos, max_caixas_por_produto, limites_por_produto, updated_by, updated_at
+                        RETURNING motivos, max_caixas_por_produto, limites_por_produto, horario_bloqueio, updated_by, updated_at
                         """
                     ).format(schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)),
-                    (Jsonb(cleaned_motivos), limit, Jsonb(cleaned_limits), str(updated_by or "").strip()),
+                    (Jsonb(cleaned_motivos), limit, Jsonb(cleaned_limits), cleaned_horario, str(updated_by or "").strip()),
                 )
                 row = cur.fetchone()
             conn.commit()
@@ -1332,6 +1337,7 @@ class PromaxJobsService:
             "motivos": [str(item).strip() for item in (row.get("motivos") or []) if str(item).strip()],
             "max_caixas_por_produto": int(row["max_caixas_por_produto"]),
             "limites_por_produto": _pedido_product_limits(row.get("limites_por_produto") if isinstance(row.get("limites_por_produto"), Mapping) else {}),
+            "horario_bloqueio": str(row.get("horario_bloqueio") or ""),
             "updated_by": str(row.get("updated_by") or ""),
             "updated_at": _iso(row.get("updated_at")),
         }
@@ -1354,6 +1360,12 @@ class PromaxJobsService:
             )
             cur.execute(
                 sql.SQL("ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS limites_por_produto JSONB NOT NULL DEFAULT '{{}}'::jsonb").format(
+                    schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)
+                )
+            )
+            # Vazio = sem bloqueio; senão "HH:MM" no fuso de Patos.
+            cur.execute(
+                sql.SQL("ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS horario_bloqueio TEXT NOT NULL DEFAULT ''").format(
                     schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)
                 )
             )

@@ -4,6 +4,10 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Header, Request
+from fastapi.responses import JSONResponse
+
+# A home page (paubrasilsistemas.com.br) consulta /health para mostrar se a central está no ar.
+ORIGEM_HOME = "https://paubrasilsistemas.com.br"
 
 
 def create_health_router(
@@ -14,11 +18,14 @@ def create_health_router(
     router = APIRouter()
 
     @router.get("/health")
-    def health() -> dict[str, Any]:
-        return {
-            "ok": True,
-            "service": "bot_api",
-        }
+    def health() -> JSONResponse:
+        return JSONResponse(
+            {"ok": True, "service": "bot_api"},
+            headers={
+                "Access-Control-Allow-Origin": ORIGEM_HOME,
+                "Cache-Control": "no-store",
+            },
+        )
 
     @router.get("/api/admin/health")
     def api_admin_health(
