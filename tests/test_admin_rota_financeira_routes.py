@@ -24,6 +24,13 @@ CARTEIRA = [
 ]
 
 
+def _permitido(filial: str, setor: str, gv: str, setores: Any, gvs: Any) -> bool:
+    """Mesma regra do banco: setor, operação (filial:N) ou GV, combinados com OU."""
+    if setores is None and gvs is None:
+        return True
+    return setor in (setores or []) or f"filial:{filial}" in (setores or []) or gv in (gvs or [])
+
+
 def _faixa(dias: int | None, titulos: int) -> int:
     if not titulos:
         return 6
@@ -38,10 +45,9 @@ class FakeRota:
 
     def listar(self, **kwargs: Any) -> RotaFinanceiraPagina:
         self.chamadas.append(kwargs)
-        permitidos = set(kwargs["allowed_sectors"] or [])
         linhas = []
         for filial, nb, setor, gv, dias, titulos, boletos in CARTEIRA:
-            if permitidos and setor not in permitidos:
+            if not _permitido(filial, setor, gv, kwargs["allowed_sectors"], kwargs["allowed_gv_vdes"]):
                 continue
             if kwargs["setor"] and setor != kwargs["setor"]:
                 continue
@@ -66,9 +72,12 @@ class FakeDClientes:
         return ["SEG/QUI", "TER/SEX"]
 
     def list_seller_base_summaries(self, allowed_sectors: Any = None, allowed_gv_vdes: Any = None, limit: int = 100) -> list[Any]:
-        todos = {(setor, gv) for _f, _nb, setor, gv, *_ in CARTEIRA}
-        permitidos = set(allowed_sectors or [])
-        return [SimpleNamespace(seller_code=s, manager_code=g, visit_count=1) for s, g in sorted(todos) if not permitidos or s in permitidos]
+        todos = {(f, setor, gv) for f, _nb, setor, gv, *_ in CARTEIRA}
+        return [
+            SimpleNamespace(seller_code=s, manager_code=g, visit_count=1)
+            for f, s, g in sorted(todos)
+            if _permitido(f, s, g, allowed_sectors, allowed_gv_vdes)
+        ]
 
 
 class Pronto:
@@ -120,6 +129,24 @@ class RotaEscopoTest(unittest.TestCase):
         self.assertEqual(sorted(item["setor"] for item in opcoes["setores"]), ["3_107", "3_108"])
         lista = _app(GV_4).get("/api/admin/rota-financeira", params={"dia": "SEG"})
         self.assertNotIn("300", _nbs(lista))
+
+    def test_usuario_gv_ve_a_rota_inteira_do_gv(self) -> None:
+        gerente = {**SEM_CARTEIRA, "gv_scopes": ("3-5",)}
+        rota = FakeRota()
+        response = _app(gerente, rota=rota).get("/api/admin/rota-financeira", params={"dia": "SEG"})
+        self.assertEqual(_nbs(response), ["300"])
+        self.assertEqual(rota.chamadas[0]["allowed_gv_vdes"], ["3_5"])
+        opcoes = _app(gerente).get("/api/admin/rota-financeira/opcoes").json()
+        self.assertEqual(opcoes["gvs"], ["3_5"])
+
+    def test_usuario_com_operacao_ve_a_filial(self) -> None:
+        patos = {**SEM_CARTEIRA, "filiais": ("3",)}
+        rota = FakeRota()
+        response = _app(patos, rota=rota).get("/api/admin/rota-financeira", params={"dia": "SEG"})
+        self.assertEqual(sorted(_nbs(response)), ["100", "101", "200", "300"])
+        self.assertEqual(rota.chamadas[0]["allowed_sectors"], ["filial:3"])
+        fora = _app(patos, rota=FakeRota()).get("/api/admin/rota-financeira", params={"dia": "SEG", "filial": "4"})
+        self.assertEqual(fora.json()["clientes"], [])
 
     def test_usuario_sem_escopo_nao_recebe_opcoes(self) -> None:
         response = _app(SEM_CARTEIRA).get("/api/admin/rota-financeira/opcoes")

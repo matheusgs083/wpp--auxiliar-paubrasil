@@ -29,6 +29,7 @@ PAINEL_PAGINAS = (
     "/armazem",
     "/entrega",
     "/critica",
+    "/gerar-critica",
     "/recolhas",
     "/protestos",
     "/financeiro",
@@ -80,6 +81,7 @@ class AdminPanelUserCreateRequest(BaseModel):
     is_active: bool = True
     filiais: list[str] = Field(default_factory=list)
     seller_scopes: list[str] = Field(default_factory=list)
+    gv_scopes: list[str] = Field(default_factory=list)
     features: list[str] = Field(default_factory=list)
 
 
@@ -89,6 +91,7 @@ class AdminPanelUserUpdateRequest(BaseModel):
     is_active: bool = True
     filiais: list[str] = Field(default_factory=list)
     seller_scopes: list[str] = Field(default_factory=list)
+    gv_scopes: list[str] = Field(default_factory=list)
     features: list[str] = Field(default_factory=list)
 
 
@@ -394,6 +397,7 @@ def create_admin_panel_router(
             "must_change_password": bool(context.get("must_change_password")),
             "filiais": list(context.get("filiais", ())),
             "seller_scopes": list(context.get("seller_scopes", ())),
+            "gv_scopes": list(context.get("gv_scopes", ())),
             "can_manage_access": is_admin,
             "can_operations": can_operations,
             "can_reports": can_reports,
@@ -415,6 +419,7 @@ def create_admin_panel_router(
             "can_clientes": is_admin or panel_context_can_access_feature(context, "cliente"),
             "can_rota_financeira": is_admin or panel_context_can_access_feature(context, "rota_financeira"),
             "can_estoque": is_admin or panel_context_can_access_feature(context, "estoque"),
+            "can_gerar_critica": is_admin or panel_context_can_access_feature(context, "gerar_critica"),
         }
 
     def require_panel_admin(
@@ -473,6 +478,7 @@ def create_admin_panel_router(
                 features=payload.features,
                 filiais=payload.filiais,
                 seller_scopes=payload.seller_scopes,
+                gv_scopes=payload.gv_scopes,
                 is_active=payload.is_active,
             )
         except ValueError as exc:
@@ -491,7 +497,7 @@ def create_admin_panel_router(
             action="criar",
             target_type="usuario",
             target_id=str(result["user"].get("username") or result["user"].get("id") or ""),
-            metadata={"is_admin": result["user"].get("is_admin"), "features": result["user"].get("features"), "filiais": result["user"].get("filiais"), "seller_scopes": result["user"].get("seller_scopes")},
+            metadata={"is_admin": result["user"].get("is_admin"), "features": result["user"].get("features"), "filiais": result["user"].get("filiais"), "seller_scopes": result["user"].get("seller_scopes"), "gv_scopes": result["user"].get("gv_scopes")},
         )
         return {"ok": True, **result}
 
@@ -520,6 +526,7 @@ def create_admin_panel_router(
                 features=payload.features,
                 filiais=payload.filiais,
                 seller_scopes=payload.seller_scopes,
+                gv_scopes=payload.gv_scopes,
                 is_active=payload.is_active,
             )
         except ValueError as exc:
@@ -538,7 +545,7 @@ def create_admin_panel_router(
             action="editar",
             target_type="usuario",
             target_id=str(user.get("username") or user_id),
-            metadata={"is_admin": user.get("is_admin"), "is_active": user.get("is_active"), "features": user.get("features"), "filiais": user.get("filiais"), "seller_scopes": user.get("seller_scopes")},
+            metadata={"is_admin": user.get("is_admin"), "is_active": user.get("is_active"), "features": user.get("features"), "filiais": user.get("filiais"), "seller_scopes": user.get("seller_scopes"), "gv_scopes": user.get("gv_scopes")},
         )
         return {"ok": True, "user": user}
 

@@ -65,7 +65,7 @@ def create_admin_clientes_router(
         if not escopo.permite_filial(filial):
             negar(request, evento, filial, cliente)
         try:
-            rows = dclientes_query_service.search_by_registration(str(filial), str(cliente), allowed_sectors=escopo.allowed_sectors)
+            rows = dclientes_query_service.search_by_registration(str(filial), str(cliente), allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
@@ -96,13 +96,13 @@ def create_admin_clientes_router(
         try:
             # CPF/CNPJ (11 ou 14 dígitos, com ou sem pontuação). NB nunca chega a esse tamanho.
             if len(digitos) in (11, 14) and not re.search(r"[A-Za-zÀ-ÿ]", texto):
-                rows = dclientes_query_service.search_by_document(digitos, allowed_sectors=escopo.allowed_sectors, limit=LIMITE_RESULTADOS)
+                rows = dclientes_query_service.search_by_document(digitos, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=LIMITE_RESULTADOS)
             elif texto.isdigit():
                 if not filial_code:
                     raise HTTPException(status_code=422, detail="Para buscar pelo NB, escolha a filial.")
-                rows = dclientes_query_service.search_by_registration(filial_code, texto, allowed_sectors=escopo.allowed_sectors)
+                rows = dclientes_query_service.search_by_registration(filial_code, texto, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes)
             else:
-                rows = dclientes_query_service.search_by_fantasia(texto, allowed_sectors=escopo.allowed_sectors, limit=LIMITE_RESULTADOS)
+                rows = dclientes_query_service.search_by_fantasia(texto, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=LIMITE_RESULTADOS)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
@@ -171,7 +171,7 @@ def create_admin_clientes_router(
             records = boletos_query_service.search_by_registration(
                 filial=filial_code,
                 cod_pdv=cliente_code,
-                allowed_sectors=escopo.allowed_sectors,
+                allowed_sectors=None,
                 limit=20,
                 include_pdf=True,
             )
@@ -200,7 +200,7 @@ def _fonte(disponivel: bool, mensagem: str = "") -> dict[str, Any]:
 
 def _carregar_titulos(service: Any, filial: str, cliente: str, escopo: EscopoClientes) -> dict[str, Any]:
     try:
-        rows = service.search_by_registration(filial, cliente, allowed_sectors=escopo.allowed_sectors, limit=100)
+        rows = service.search_by_registration(filial, cliente, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=100)
     except Exception:
         return {"fonte": _fonte(False, "12.06.01 não importada ou indisponível."), "titulos": []}
     titulos = []
@@ -222,6 +222,9 @@ def _carregar_titulos(service: Any, filial: str, cliente: str, escopo: EscopoCli
 
 
 def _carregar_boletos(service: Any | None, filial: str, cliente: str, escopo: EscopoClientes) -> dict[str, Any]:
+    # Só é chamada depois de o cliente passar pelo escopo no dClientes. A busca de boletos
+    # é por filial + NB desse cliente e vai sem filtro de carteira, porque a base 03.02.06
+    # não entende escopo por GV junto com setor, nem escopo por operação.
     if service is None:
         return {"fonte": _fonte(False, "Consulta de boletos não configurada."), "itens": []}
     try:
@@ -231,7 +234,7 @@ def _carregar_boletos(service: Any | None, filial: str, cliente: str, escopo: Es
         records = service.search_by_registration(
             filial=filial,
             cod_pdv=cliente,
-            allowed_sectors=escopo.allowed_sectors,
+            allowed_sectors=None,
             limit=20,
             include_pdf=False,
         )
@@ -257,7 +260,7 @@ def _carregar_comodatos(service: Any | None, filial: str, cliente: str, escopo: 
     if service is None:
         return {"fonte": _fonte(False, "Consulta de comodatos não configurada."), "itens": [], "saldo_total": "0"}
     try:
-        rows = service.search_by_registration(filial, cliente, allowed_sectors=escopo.allowed_sectors, limit=200)
+        rows = service.search_by_registration(filial, cliente, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=200)
     except Exception:
         return {"fonte": _fonte(False, "02.02.20 não importada ou indisponível."), "itens": [], "saldo_total": "0"}
     itens = [
@@ -336,13 +339,13 @@ def _kpis(financeiro: Mapping[str, Any], boletos: Mapping[str, Any], comodatos: 
 def _resumo_rapido(filial: str, cliente: str, escopo: EscopoClientes, inadimplencia: Any, boletos: Any | None) -> dict[str, Any]:
     resumo: dict[str, Any] = {"vencidos": None, "boletos": None}
     try:
-        rows = inadimplencia.search_by_registration(filial, cliente, allowed_sectors=escopo.allowed_sectors, limit=100)
+        rows = inadimplencia.search_by_registration(filial, cliente, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=100)
         resumo["vencidos"] = sum(1 for row in rows if situacao_vencimento(_inteiro(row.dias)) == "vencido")
     except Exception:
         pass
     if boletos is not None:
         try:
-            resumo["boletos"] = len(boletos.search_by_registration(filial=filial, cod_pdv=cliente, allowed_sectors=escopo.allowed_sectors, limit=20, include_pdf=False))
+            resumo["boletos"] = len(boletos.search_by_registration(filial=filial, cod_pdv=cliente, allowed_sectors=None, limit=20, include_pdf=False))
         except Exception:
             pass
     return resumo

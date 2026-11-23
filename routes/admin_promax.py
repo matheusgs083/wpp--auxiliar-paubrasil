@@ -2168,6 +2168,13 @@ def create_admin_promax_router(
                     tmp.write(pdf_bytes)
                     temp_path = tmp.name
                 result = import_service.import_source(FilePath(temp_path), reference_date=payload.reference_date)
+            except ValueError as exc:
+                # Arquivo recusado pela validacao: 422 com o motivo, para o worker nao tratar
+                # como "API indisponivel" (500) e a falha aparecer clara no log do job.
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"PDF 030206 da filial {payload.filial} recusado: {exc}",
+                ) from exc
             finally:
                 if temp_path:
                     try:

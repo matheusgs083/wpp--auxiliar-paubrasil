@@ -69,7 +69,7 @@ class RotaFinanceiraQueryService:
         *,
         dia: str,
         allowed_sectors: list[str] | None,
-        filiais_permitidas: list[str] | None = None,
+        allowed_gv_vdes: list[str] | None = None,
         filial: str = "",
         gv: str = "",
         setor: str = "",
@@ -85,7 +85,7 @@ class RotaFinanceiraQueryService:
             raise RuntimeError("REPORTS_DATABASE_URL nao configurada.")
 
         where, params = self._filtros_da_rota(
-            dia=dia, allowed_sectors=allowed_sectors, filiais_permitidas=filiais_permitidas,
+            dia=dia, allowed_sectors=allowed_sectors, allowed_gv_vdes=allowed_gv_vdes,
             filial=filial, gv=gv, setor=setor, busca=busca,
         )
         base = self._ctes(where, incluir_boletos)
@@ -142,7 +142,7 @@ class RotaFinanceiraQueryService:
         *,
         dia: str,
         allowed_sectors: list[str] | None,
-        filiais_permitidas: list[str] | None,
+        allowed_gv_vdes: list[str] | None,
         filial: str,
         gv: str,
         setor: str,
@@ -152,18 +152,17 @@ class RotaFinanceiraQueryService:
         params: list[Any] = []
         _append_visit_day_filter(filters=filters, params=params, visit_day=dia)
 
-        # Escopo comercial: mesma regra do dClientes. Lista com valores que não
-        # viram escopo válido fecha o acesso (FALSE), nunca o abre.
+        # Escopo comercial: mesma regra do dClientes (setores, GVs e operações "filial:N",
+        # combinados com OU). Lista com valores que não viram escopo válido fecha o
+        # acesso (FALSE), nunca o abre.
         setores = _normalize_scope_values(allowed_sectors)
-        if setores:
-            scope_filters, scope_params = _build_commercial_scope_filters(allowed_sectors=setores, allowed_gv_vdes=[])
+        gvs = _normalize_scope_values(allowed_gv_vdes)
+        if setores or gvs:
+            scope_filters, scope_params = _build_commercial_scope_filters(allowed_sectors=setores, allowed_gv_vdes=gvs)
             filters.append(sql.SQL("({})").format(sql.SQL(" OR ").join(scope_filters)) if scope_filters else sql.SQL("FALSE"))
             params.extend(scope_params)
-        elif _has_scope_values(allowed_sectors):
+        elif _has_scope_values(allowed_sectors) or _has_scope_values(allowed_gv_vdes):
             filters.append(sql.SQL("FALSE"))
-        if filiais_permitidas:
-            filters.append(sql.SQL("filial = ANY(%s)"))
-            params.append([_normalize_filial(item) for item in filiais_permitidas])
 
         # Filtros da tela: só estreitam o que o escopo já liberou.
         if filial:

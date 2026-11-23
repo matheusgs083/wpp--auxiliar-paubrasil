@@ -1218,12 +1218,16 @@ class PromaxJobsService:
         self,
         *,
         statuses: Sequence[JobStatus] | None = None,
+        job_types: Sequence[str] | None = None,
         created_from: datetime | None = None,
         created_before: datetime | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[JobRecord]:
         normalized_statuses = [_job_status(status) for status in statuses] if statuses else []
+        normalized_job_types = [
+            _required_text(job_type, field_name="job_type", max_length=120) for job_type in job_types or ()
+        ]
         normalized_created_from = (
             _aware_utc(created_from, field_name="created_from")
             if created_from is not None
@@ -1254,6 +1258,9 @@ class PromaxJobsService:
                 if normalized_statuses:
                     conditions.append(sql.SQL("status = ANY(%s)"))
                     params.append(normalized_statuses)
+                if normalized_job_types:
+                    conditions.append(sql.SQL("job_type = ANY(%s)"))
+                    params.append(normalized_job_types)
                 if normalized_created_from is not None:
                     conditions.append(sql.SQL("created_at >= %s"))
                     params.append(normalized_created_from)

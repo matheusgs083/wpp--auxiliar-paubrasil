@@ -156,7 +156,7 @@ class BoletosPdfImportService:
                 else:
                     for page_number in range(1, min(pages, OCR_SAMPLE_PAGES) + 1):
                         checked += 1
-                        text = _ocr_pdf_page(path, page_number)
+                        text = _sample_page_text(path, page_number)
                         if _extract_nb(text):
                             with_nb += 1
                         if _extract_document(text):
@@ -589,6 +589,18 @@ def _extract_text_page(path: Path, page_index: int) -> str:
         elif operator == b"TJ" and operands:
             chunks.append("".join(str(item) for item in operands[0] if isinstance(item, str)))
     return "\n".join(chunks)
+
+
+def _sample_page_text(path: Path, page_number: int) -> str:
+    """Mesma ordem da importacao: texto do proprio PDF primeiro, OCR so quando ele nao basta.
+
+    O OCR das faixas fixas erra CPF e NB em alguns PDFs (ex.: Sousa, nov/2026), e a
+    validacao barrava um arquivo que a importacao leria sem problema pelo texto.
+    """
+    text = _extract_text_page(path, page_number - 1)
+    if _text_extraction_is_enough(text):
+        return text
+    return _ocr_pdf_page(path, page_number)
 
 
 def _ocr_worker_count() -> int:

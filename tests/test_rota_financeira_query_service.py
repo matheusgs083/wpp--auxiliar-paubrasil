@@ -65,6 +65,14 @@ class RotaFinanceiraSqlTest(unittest.TestCase):
         self.assertIn(["3_107"], params)
         self.assertIn("300", params)
 
+    def test_escopo_de_gv_e_de_operacao(self) -> None:
+        texto, params = self.consulta(allowed_sectors=None, allowed_gv_vdes=["3_4"])
+        self.assertIn("filial_gv_key", texto)
+        self.assertIn(["3_4"], params)
+        texto, params = self.consulta(allowed_sectors=["filial:3"])
+        self.assertIn(["3"], params)
+        self.assertIn('("filial" = ANY(%s))', texto)
+
     def test_escopo_invalido_fecha_em_vez_de_abrir(self) -> None:
         texto, _params = self.consulta(allowed_sectors=["lixo"])
         self.assertIn("FALSE", texto)

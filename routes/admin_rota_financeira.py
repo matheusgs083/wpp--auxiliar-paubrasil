@@ -51,8 +51,8 @@ def create_admin_rota_financeira_router(
     ) -> dict[str, Any]:
         _context, escopo = autenticar(request, authorization, x_api_token, x_admin_token)
         try:
-            dias = dclientes_query_service.list_visit_days(allowed_sectors=escopo.allowed_sectors, limit=20)
-            combinacoes = dclientes_query_service.list_seller_base_summaries(allowed_sectors=escopo.allowed_sectors, limit=200)
+            dias = dclientes_query_service.list_visit_days(allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=20)
+            combinacoes = dclientes_query_service.list_seller_base_summaries(allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=200)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail="Cadastro de clientes (dClientes) indisponível no momento.") from exc
         setores: list[dict[str, str]] = []
@@ -110,7 +110,7 @@ def create_admin_rota_financeira_router(
             resultado = rota_financeira_query_service.listar(
                 dia=dia,
                 allowed_sectors=escopo.allowed_sectors,
-                filiais_permitidas=list(escopo.filiais) or None,
+                allowed_gv_vdes=escopo.allowed_gv_vdes,
                 filial=filial or "",
                 gv=gv or "",
                 setor=setor or "",

@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from bot_api.commercial_scope import normalize_stored_scope_value, split_scope_pair
+from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto
 from bot_api.services.pedido_horario_bloqueio import normalizar_horario_bloqueio, situacao_bloqueio
 
 
@@ -137,8 +137,8 @@ def create_admin_pedidos_router(
     def context_for_pedidos(request: Request, authorization: str | None, x_api_token: str | None, x_admin_token: str | None) -> dict[str, Any]:
         context = require_admin_panel_auth(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
         require_admin_panel_feature(context, "pedidos")
-        if not bool(context.get("is_admin")) and not _seller_scopes(context):
-            raise HTTPException(status_code=403, detail="Seu usuário não possui uma carteira de vendedor configurada para Pedidos.")
+        # Setores, GVs ou operações: a mesma carteira das abas Clientes e Rota Financeira.
+        escopo_do_contexto(context)
         return context
 
     def record_action(request: Request, context: Mapping[str, Any], action: str, **metadata: Any) -> None:
@@ -161,17 +161,17 @@ def create_admin_pedidos_router(
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
         context = context_for_pedidos(request, authorization, x_api_token, x_admin_token)
-        scopes = None if bool(context.get("is_admin")) else list(_seller_scopes(context))
+        escopo = escopo_do_contexto(context)
         try:
             if str(busca).strip().isdigit() and filial:
-                rows = dclientes_query_service.search_by_registration(str(filial), str(busca), allowed_sectors=scopes)
+                rows = dclientes_query_service.search_by_registration(str(filial), str(busca), allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes)
             else:
-                rows = dclientes_query_service.search_by_fantasia(str(busca), allowed_sectors=scopes, limit=10)
+                rows = dclientes_query_service.search_by_fantasia(str(busca), allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=10)
         except (ValueError, RuntimeError) as exc:
             raise HTTPException(status_code=422 if isinstance(exc, ValueError) else 503, detail=str(exc)) from exc
         result = [_client_payload(item) for item in rows]
         record_security_event(request, channel="api", event_type="admin_pedidos_clientes", decision="allowed", reason=f"total={len(result)}")
-        return {"ok": True, "clientes": result, "total": len(result), "seller_scopes": list(scopes or ())}
+        return {"ok": True, "clientes": result, "total": len(result), "seller_scopes": list(escopo.setores), "gv_scopes": list(escopo.gvs), "filiais": list(escopo.filiais)}
 
     @router.get("/api/admin/pedidos/clientes/{filial}/{cliente}")
     def detalhar_cliente(
@@ -183,18 +183,18 @@ def create_admin_pedidos_router(
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
         context = context_for_pedidos(request, authorization, x_api_token, x_admin_token)
-        scopes = None if bool(context.get("is_admin")) else list(_seller_scopes(context))
+        escopo = escopo_do_contexto(context)
         cliente_registro = _load_authorized_client(
             dclientes_query_service,
             filial=filial,
             cliente=cliente,
-            scopes=scopes,
+            escopo=escopo,
         )
         inadimplencia = _load_inadimplencia(
             inadimplencia_query_service,
             filial=filial,
             cliente=cliente,
-            scopes=scopes,
+            escopo=escopo,
         )
         payload = _client_payload(cliente_registro)
         payload["inadimplencia"] = inadimplencia
@@ -221,8 +221,8 @@ def create_admin_pedidos_router(
         filial = str(filial).strip().lstrip("0") or "0"
         if not filial.isdigit():
             raise HTTPException(status_code=422, detail="Filial inválida.")
-        if not bool(context.get("is_admin")):
-            allowed_filiais = {scope.split("-", 1)[0] for scope in _seller_scopes(context)}
+        allowed_filiais = escopo_do_contexto(context).filiais_alcancadas()
+        if allowed_filiais is not None:
             if filial not in allowed_filiais:
                 raise HTTPException(status_code=403, detail="Sua carteira não permite consultar a grade desta filial.")
         try:
@@ -252,16 +252,16 @@ def create_admin_pedidos_router(
         unidade = _UNIT_BY_FILIAL.get(filial)
         if not unidade:
             raise HTTPException(status_code=422, detail="Filial sem unidade Promax mapeada.")
-        if not bool(context.get("is_admin")):
-            allowed_filiais = {scope.split("-", 1)[0] for scope in _seller_scopes(context)}
+        allowed_filiais = escopo_do_contexto(context).filiais_alcancadas()
+        if allowed_filiais is not None:
             if filial not in allowed_filiais:
                 raise HTTPException(status_code=403, detail="Sua carteira não permite consultar as condições desta filial.")
-        scopes = None if bool(context.get("is_admin")) else list(_seller_scopes(context))
+        escopo = escopo_do_contexto(context)
         cliente_registro = _load_authorized_client(
             dclientes_query_service,
             filial=filial,
             cliente=str(cliente).strip().lstrip("0") or "0",
-            scopes=scopes,
+            escopo=escopo,
         )
         catalogo = _load_promax_conditions_catalog(unidade, promax_jobs_service)
         condicao_atual = str(cliente_registro.cond_pag_atual or "").strip()
@@ -503,18 +503,18 @@ def create_admin_pedidos_router(
             limit = limits_by_product.get(item.produto, int(config["max_caixas_por_produto"]))
             if item.quantidade > limit:
                 raise HTTPException(status_code=422, detail=f"Produto {item.produto}: máximo de {limit:,} caixa(s) por pedido.")
-        scopes = None if bool(context.get("is_admin")) else list(_seller_scopes(context))
+        escopo = escopo_do_contexto(context)
         cliente = _load_authorized_client(
             dclientes_query_service,
             filial=filial,
             cliente=payload.cliente,
-            scopes=scopes,
+            escopo=escopo,
         )
         inadimplencia = _load_inadimplencia(
             inadimplencia_query_service,
             filial=filial,
             cliente=payload.cliente,
-            scopes=scopes,
+            escopo=escopo,
         )
         if inadimplencia["bloqueado"]:
             raise HTTPException(
@@ -612,20 +612,6 @@ def _bloqueio_payload(config: Mapping[str, Any], context: Mapping[str, Any]) -> 
     }
 
 
-def _seller_scopes(context: Mapping[str, Any]) -> tuple[str, ...]:
-    values = context.get("seller_scopes") or ()
-    scopes: list[str] = []
-    for item in values:
-        normalized = normalize_stored_scope_value(str(item))
-        pair = split_scope_pair(normalized)
-        if not pair:
-            continue
-        scope = f"{pair[0]}-{pair[1]}"
-        if scope not in scopes:
-            scopes.append(scope)
-    return tuple(scopes)
-
-
 def _pedido_created_by(context: Mapping[str, Any]) -> str:
     return str(context.get("username") or context.get("user_id") or "painel")
 
@@ -688,10 +674,12 @@ def _load_authorized_client(
     *,
     filial: str,
     cliente: str,
-    scopes: list[str] | None,
+    escopo: EscopoClientes,
 ) -> Any:
     try:
-        rows = service.search_by_registration(str(filial), str(cliente), allowed_sectors=scopes)
+        rows = service.search_by_registration(
+            str(filial), str(cliente), allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes
+        )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422 if isinstance(exc, ValueError) else 503, detail=str(exc)) from exc
     if not rows:
@@ -704,10 +692,12 @@ def _load_inadimplencia(
     *,
     filial: str,
     cliente: str,
-    scopes: list[str] | None,
+    escopo: EscopoClientes,
 ) -> dict[str, Any]:
     try:
-        rows = service.search_by_registration(str(filial), str(cliente), allowed_sectors=scopes, limit=50)
+        rows = service.search_by_registration(
+            str(filial), str(cliente), allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=50
+        )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(
             status_code=503 if isinstance(exc, RuntimeError) else 422,

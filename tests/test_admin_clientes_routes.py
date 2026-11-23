@@ -17,9 +17,9 @@ ADMIN = {"is_admin": True, "mode": "admin", "username": "admin", "features": ()}
 SEM_FEATURE = {"is_admin": False, "mode": "usuario", "username": "x", "features": ("pedidos",), "seller_scopes": ("3-107",)}
 
 
-def _cliente(nb: str, nome: str, setor: str, gv: str = "4") -> SimpleNamespace:
+def _cliente(nb: str, nome: str, setor: str, gv: str = "4", filial: str = "3") -> SimpleNamespace:
     return SimpleNamespace(
-        filial="3", cod_pdv=nb, razao_social=f"{nome} LTDA", nome_fantasia=nome, telefone="(83) 99812-3344",
+        filial=filial, cod_pdv=nb, razao_social=f"{nome} LTDA", nome_fantasia=nome, telefone="(83) 99812-3344",
         dia_visita="Terça", vendedor=setor, status="Ativo", cidade="Patos", cond_pag_atual="505",
         limite_credito="80000,00", total_pendente="1870,00", total_comodatos_pendentes=1,
         ultima_atualizacao_tabela="22/11/2026", gv=gv,
@@ -30,11 +30,20 @@ CLIENTES = {
     "100": _cliente("100", "MERCADO DO SETOR 107", "107"),
     "200": _cliente("200", "MERCADO DO SETOR 108", "108"),
     "300": _cliente("300", "MERCADO DO GV 5", "109", gv="5"),
+    "400": _cliente("400", "MERCADO DE SUME", "201", gv="1", filial="4"),
 }
 
 
-def _no_escopo(cliente: SimpleNamespace, allowed_sectors: list[str] | None) -> bool:
-    return allowed_sectors is None or f"{cliente.filial}_{cliente.vendedor}" in allowed_sectors
+def _no_escopo(cliente: SimpleNamespace, allowed_sectors: list[str] | None, allowed_gv_vdes: list[str] | None = None) -> bool:
+    """Mesma regra do dClientes: setor, operação (filial:N) ou GV, combinados com OU."""
+    if allowed_sectors is None and allowed_gv_vdes is None:
+        return True
+    setores = allowed_sectors or []
+    return (
+        f"{cliente.filial}_{cliente.vendedor}" in setores
+        or f"filial:{cliente.filial}" in setores
+        or f"{cliente.filial}_{cliente.gv}" in (allowed_gv_vdes or [])
+    )
 
 
 class FakeDClientes:
@@ -44,11 +53,11 @@ class FakeDClientes:
     def search_by_registration(self, filial: str, cod_pdv: str, allowed_sectors: list[str] | None = None, allowed_gv_vdes: list[str] | None = None) -> list[Any]:
         self.chamadas.append(("registro", allowed_sectors))
         item = CLIENTES.get(str(cod_pdv))
-        return [item] if item and item.filial == str(filial) and _no_escopo(item, allowed_sectors) else []
+        return [item] if item and item.filial == str(filial) and _no_escopo(item, allowed_sectors, allowed_gv_vdes) else []
 
     def search_by_fantasia(self, query_text: str, allowed_sectors: list[str] | None = None, allowed_gv_vdes: list[str] | None = None, limit: int = 5) -> list[Any]:
         self.chamadas.append(("nome", allowed_sectors))
-        return [c for c in CLIENTES.values() if query_text.upper() in c.nome_fantasia and _no_escopo(c, allowed_sectors)][:limit]
+        return [c for c in CLIENTES.values() if query_text.upper() in c.nome_fantasia and _no_escopo(c, allowed_sectors, allowed_gv_vdes)][:limit]
 
     def search_by_document(self, document: str, allowed_sectors: list[str] | None = None, allowed_gv_vdes: list[str] | None = None, limit: int = 20) -> list[Any]:
         return []
@@ -64,7 +73,7 @@ class FakeInadimplencia:
     def search_by_registration(self, filial: str, cod_pdv: str, allowed_sectors: list[str] | None = None, allowed_gv_vdes: list[str] | None = None, limit: int = 50) -> list[Any]:
         if not self.disponivel:
             raise RuntimeError("Views reports.inadimplencia_latest nao encontradas.")
-        if not _no_escopo(CLIENTES[str(cod_pdv)], allowed_sectors):
+        if not _no_escopo(CLIENTES[str(cod_pdv)], allowed_sectors, allowed_gv_vdes):
             return []
         comum = {"filial": "3", "cod_pdv": cod_pdv, "nome": "", "data_emissao": "20/10/2026", "valor_original": "1200,00", "valor_corrigido": "1236,40", "planilha_atualizada_em": "22/11/2026"}
         return [
@@ -87,7 +96,7 @@ class FakeBoletos:
 
     def search_by_registration(self, *, filial: str, cod_pdv: str, allowed_sectors: Any = None, allowed_gv_vdes: Any = None, limit: int = 5, include_pdf: bool = True) -> list[Any]:
         self.include_pdf.append(include_pdf)
-        if not _no_escopo(CLIENTES[str(cod_pdv)], allowed_sectors):
+        if not _no_escopo(CLIENTES[str(cod_pdv)], allowed_sectors, allowed_gv_vdes):
             return []
         return [SimpleNamespace(
             nosso_numero="09123456", nota_fiscal="183201", num_documento="183201/1",
@@ -129,6 +138,31 @@ class ClientesEscopoTest(unittest.TestCase):
     def test_gv_so_encontra_clientes_dos_setores_do_gv(self) -> None:
         response = _app(GV_4).get("/api/admin/clientes", params={"busca": "mercado"})
         self.assertEqual(sorted(c["cliente"] for c in response.json()["clientes"]), ["100", "200"])
+
+    def test_usuario_gv_ve_todos_os_clientes_do_gv(self) -> None:
+        gerente = {**VENDEDOR_107, "seller_scopes": (), "gv_scopes": ("3-5",)}
+        response = _app(gerente).get("/api/admin/clientes", params={"busca": "mercado"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([c["cliente"] for c in response.json()["clientes"]], ["300"])
+        self.assertEqual(_app(gerente).get("/api/admin/clientes/3/100").status_code, 403)
+        ficha = _app(gerente).get("/api/admin/clientes/3/300")
+        self.assertEqual(ficha.status_code, 200)
+
+    def test_usuario_de_operacoes_especificas(self) -> None:
+        so_sume = {**VENDEDOR_107, "seller_scopes": (), "filiais": ("4",)}
+        response = _app(so_sume).get("/api/admin/clientes", params={"busca": "mercado"})
+        self.assertEqual([c["cliente"] for c in response.json()["clientes"]], ["400"])
+        self.assertEqual(_app(so_sume).get("/api/admin/clientes/3/100").status_code, 403)
+
+    def test_usuario_com_todas_as_operacoes(self) -> None:
+        todas = {**VENDEDOR_107, "seller_scopes": (), "filiais": ("*",)}
+        response = _app(todas).get("/api/admin/clientes", params={"busca": "mercado"})
+        self.assertEqual(sorted(c["cliente"] for c in response.json()["clientes"]), ["100", "200", "300", "400"])
+
+    def test_vendedor_com_operacao_continua_preso_ao_setor(self) -> None:
+        vendedor = {**VENDEDOR_107, "filiais": ("3",)}
+        response = _app(vendedor).get("/api/admin/clientes", params={"busca": "mercado"})
+        self.assertEqual([c["cliente"] for c in response.json()["clientes"]], ["100"])
 
     def test_carteira_vazia_nao_vira_acesso_total(self) -> None:
         sem_carteira = {**VENDEDOR_107, "seller_scopes": ()}

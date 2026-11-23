@@ -186,6 +186,60 @@
       }
     }
 
+    // Operações (filiais) do usuário: "Todas as 8" grava "*"; senão, as marcadas.
+    function panelUserOperacoes() {
+      return PROMAX_RESELLERS.map(item => ({ filial: String(Number(item.id.slice(-1))), nome: item.name }));
+    }
+
+    function panelUserOperacaoChecks() {
+      return E.panelUserFiliais ? Array.from(E.panelUserFiliais.querySelectorAll("input[data-operacao]")) : [];
+    }
+
+    function renderPanelUserOperacoes() {
+      const grid = document.getElementById("panelUserOperacoesGrid");
+      if (!grid || !E.panelUserFiliais) return;
+      if (!grid.childElementCount) {
+        grid.innerHTML = panelUserOperacoes().map(op => `<label class="panel-user-operacao"><input class="form-check-input" type="checkbox" data-operacao="${escapeHtml(op.filial)}"> <span><span class="mono">${escapeHtml(op.filial)}</span> ${escapeHtml(op.nome)}</span></label>`).join("");
+      }
+      if (E.panelUserFiliais.dataset.ligado) return;
+      E.panelUserFiliais.dataset.ligado = "1";
+      E.panelUserFiliais.addEventListener("change", event => {
+        const alvo = event.target;
+        if (!alvo || !alvo.dataset || !alvo.dataset.operacao) return;
+        const checks = panelUserOperacaoChecks();
+        const todas = checks.find(item => item.dataset.operacao === "*");
+        const individuais = checks.filter(item => item !== todas);
+        if (alvo === todas) individuais.forEach(item => { item.checked = todas.checked; });
+        else if (todas) todas.checked = individuais.every(item => item.checked);
+      });
+    }
+
+    function selectedPanelUserFiliais() {
+      const checks = panelUserOperacaoChecks();
+      const todas = checks.find(item => item.dataset.operacao === "*");
+      if (todas && todas.checked) return ["*"];
+      return checks.filter(item => item !== todas && item.checked).map(item => item.dataset.operacao);
+    }
+
+    function setPanelUserFiliais(filiais) {
+      renderPanelUserOperacoes();
+      const valores = new Set((filiais || []).map(item => String(item).trim().replace(/^0+(?=\d)/, "")));
+      const todasMarcadas = valores.has("*");
+      panelUserOperacaoChecks().forEach(item => {
+        item.checked = todasMarcadas || valores.has(item.dataset.operacao);
+      });
+    }
+
+    function panelUserEscopoResumo(user) {
+      const filiais = Array.isArray(user.filiais) ? user.filiais : [];
+      const partes = [];
+      if (filiais.includes("*")) partes.push("Todas");
+      else if (filiais.length) partes.push(filiais.join(", "));
+      if (Array.isArray(user.seller_scopes) && user.seller_scopes.length) partes.push("Setor " + user.seller_scopes.join(", "));
+      if (Array.isArray(user.gv_scopes) && user.gv_scopes.length) partes.push("GV " + user.gv_scopes.join(", "));
+      return partes.join(" · ") || "-";
+    }
+
     function panelUserPayload() {
       const isAdmin = Boolean(E.panelUserAdmin && E.panelUserAdmin.checked);
       return {
@@ -193,8 +247,9 @@
         display_name: E.panelDisplayName ? E.panelDisplayName.value.trim() : "",
         is_admin: isAdmin,
         is_active: E.panelUserActive ? Boolean(E.panelUserActive.checked) : true,
-        filiais: E.panelUserFiliais ? parsePanelFiliais(E.panelUserFiliais.value) : [],
+        filiais: selectedPanelUserFiliais(),
         seller_scopes: E.panelUserSellerScopes ? parsePanelFiliais(E.panelUserSellerScopes.value) : [],
+        gv_scopes: E.panelUserGvScopes ? parsePanelFiliais(E.panelUserGvScopes.value) : [],
         features: isAdmin ? PANEL_FEATURES.map(feature => feature.id) : selectedPanelUserFeatures()
       };
     }
@@ -229,7 +284,8 @@
         E.panelUsername.disabled = false;
       }
       if (E.panelDisplayName) E.panelDisplayName.value = "";
-      if (E.panelUserFiliais) E.panelUserFiliais.value = "";
+      setPanelUserFiliais([]);
+      if (E.panelUserGvScopes) E.panelUserGvScopes.value = "";
       if (E.panelUserSellerScopes) E.panelUserSellerScopes.value = "";
       if (E.panelUserActive) E.panelUserActive.checked = true;
       if (E.panelUserAdmin) E.panelUserAdmin.checked = false;
@@ -248,7 +304,8 @@
         E.panelUsername.disabled = true;
       }
       if (E.panelDisplayName) E.panelDisplayName.value = user.display_name || "";
-      if (E.panelUserFiliais) E.panelUserFiliais.value = Array.isArray(user.filiais) ? user.filiais.join(", ") : "";
+      setPanelUserFiliais(Array.isArray(user.filiais) ? user.filiais : []);
+      if (E.panelUserGvScopes) E.panelUserGvScopes.value = Array.isArray(user.gv_scopes) ? user.gv_scopes.join(", ") : "";
       if (E.panelUserSellerScopes) E.panelUserSellerScopes.value = Array.isArray(user.seller_scopes) ? user.seller_scopes.join(", ") : "";
       if (E.panelUserActive) E.panelUserActive.checked = user.is_active !== false;
       if (E.panelUserAdmin) E.panelUserAdmin.checked = Boolean(user.is_admin);
@@ -409,7 +466,9 @@
         user.is_admin ? "admin administrador" : "",
         status,
         ...featureLabels,
-        ...filiais
+        ...filiais,
+        ...(user.seller_scopes || []),
+        ...(user.gv_scopes || [])
       ].join(" ").toLowerCase();
     }
 
@@ -443,7 +502,7 @@
         return;
       }
       E.panelUsersBody.innerHTML = visibleUsers.map(user => {
-        const filiais = Array.isArray(user.filiais) && user.filiais.length ? user.filiais.join(", ") : "-";
+        const filiais = panelUserEscopoResumo(user);
         const status = user.is_active === false
           ? '<span class="badge text-bg-danger">Bloqueado</span>'
           : user.must_change_password
@@ -453,7 +512,7 @@
         const deleteButton = state.panel && String(state.panel.userId || "") === String(user.id)
           ? ""
           : `<button class="btn btn-outline-danger btn-sm" title="Apagar usuário" onclick="deletePanelUser('${escapeHtml(String(user.id))}')"><i class="bi bi-trash me-1"></i>Apagar</button>`;
-        return `<tr><td class="ps-3" data-label="Usuário"><span class="panel-user-name"><strong>${escapeHtml(user.username || "-")}</strong><span class="small text-secondary">${escapeHtml(user.display_name || "")}</span>${role}</span></td><td data-label="Blocos"><div class="panel-user-feature-pills">${renderPanelUserFeaturePills(user)}</div></td><td data-label="Filiais"><span class="mono small fw-bold">${escapeHtml(filiais)}</span></td><td data-label="Status">${status}</td><td class="text-end pe-3" data-label="Ações"><div class="panel-user-actions"><button class="btn btn-outline-primary btn-sm" title="Editar usuário" onclick="fillPanelUserForm('${escapeHtml(String(user.id))}')"><i class="bi bi-pencil-square me-1"></i>Editar</button><button class="btn btn-outline-warning btn-sm" title="Gerar nova senha temporaria" onclick="resetPanelUserPassword('${escapeHtml(String(user.id))}')"><i class="bi bi-key me-1"></i>Resetar</button>${deleteButton}</div></td></tr>`;
+        return `<tr><td class="ps-3" data-label="Usuário"><span class="panel-user-name"><strong>${escapeHtml(user.username || "-")}</strong><span class="small text-secondary">${escapeHtml(user.display_name || "")}</span>${role}</span></td><td data-label="Blocos"><div class="panel-user-feature-pills">${renderPanelUserFeaturePills(user)}</div></td><td data-label="Carteira"><span class="mono small fw-bold">${escapeHtml(filiais)}</span></td><td data-label="Status">${status}</td><td class="text-end pe-3" data-label="Ações"><div class="panel-user-actions"><button class="btn btn-outline-primary btn-sm" title="Editar usuário" onclick="fillPanelUserForm('${escapeHtml(String(user.id))}')"><i class="bi bi-pencil-square me-1"></i>Editar</button><button class="btn btn-outline-warning btn-sm" title="Gerar nova senha temporaria" onclick="resetPanelUserPassword('${escapeHtml(String(user.id))}')"><i class="bi bi-key me-1"></i>Resetar</button>${deleteButton}</div></td></tr>`;
       }).join("");
     }
 

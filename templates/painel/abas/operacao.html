@@ -127,14 +127,21 @@
                     <input id="panelDisplayName" class="form-control" autocomplete="off" placeholder="Nome do usuário">
                   </div>
                   <div class="col-12">
-                    <label class="form-label small fw-semibold mb-1" for="panelUserFiliais">Filiais</label>
-                    <input id="panelUserFiliais" class="form-control mono" autocomplete="off" placeholder="3, 4 ou *">
-                    <div class="form-text">Use <span class="mono">*</span> para todas as filiais quando fizer sentido.</div>
+                    <fieldset class="panel-user-operacoes" id="panelUserFiliais" aria-describedby="panelUserFiliaisHint">
+                      <legend class="form-label small fw-semibold mb-1">Operações</legend>
+                      <label class="panel-user-operacao panel-user-operacao-todas"><input class="form-check-input" type="checkbox" data-operacao="*"> <span>Todas as 8 operações</span></label>
+                      <div class="panel-user-operacoes-grid" id="panelUserOperacoesGrid"></div>
+                      <div class="form-text" id="panelUserFiliaisHint">Libera as operações marcadas (Crítica, Financeiro e afins).</div>
+                    </fieldset>
                   </div>
                   <div class="col-12">
-                    <label class="form-label small fw-semibold mb-1" for="panelUserSellerScopes">Carteira de vendedor (Pedidos)</label>
+                    <label class="form-label small fw-semibold mb-1" for="panelUserSellerScopes">Setores (vendedor)</label>
                     <input id="panelUserSellerScopes" class="form-control mono" autocomplete="off" placeholder="ex.: 3-107, 3-108">
-                    <div class="form-text">Para Pedidos, informe filial-setor. O usuário só verá clientes dessas carteiras.</div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small fw-semibold mb-1" for="panelUserGvScopes">GVs (gerente de vendas)</label>
+                    <input id="panelUserGvScopes" class="form-control mono" autocomplete="off" placeholder="ex.: 3-4, 5-2">
+                    <div class="form-text">Formato filial-código. Na aba Vendedor, quem tem setor ou GV vê só essa carteira; sem nenhum dos dois, vê os clientes das operações marcadas.</div>
                   </div>
                 </div>
                 <div class="panel-user-switch-grid mt-3">
@@ -207,7 +214,7 @@
                       <tr class="text-uppercase small text-secondary">
                         <th class="ps-3" scope="col">Usuário</th>
                         <th scope="col">Blocos</th>
-                        <th scope="col">Filiais</th>
+                        <th scope="col">Carteira</th>
                         <th scope="col">Status</th>
                         <th class="text-end pe-3" scope="col">Ações</th>
                       </tr>

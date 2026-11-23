@@ -187,6 +187,13 @@
     .panel-user-switch-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
     .panel-user-switch { display: flex; align-items: center; justify-content: space-between; gap: 0.55rem; min-height: 52px; padding: 0.55rem 0.65rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
     .panel-user-switch .form-check-input { flex: 0 0 auto; cursor: pointer; }
+    .panel-user-operacoes { margin: 0; padding: 0.55rem; border: 1px solid var(--line); border-radius: var(--radius-md); }
+    .panel-user-operacoes legend { float: none; width: auto; margin: 0 0 0.4rem; padding: 0; }
+    .panel-user-operacoes-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.3rem 0.6rem; margin-top: 0.35rem; }
+    .panel-user-operacao { display: flex; align-items: center; gap: 0.45rem; min-height: 32px; cursor: pointer; font-size: 0.9rem; }
+    .panel-user-operacao .form-check-input { margin: 0; flex: 0 0 auto; cursor: pointer; }
+    .panel-user-operacao-todas { font-weight: 700; padding-bottom: 0.35rem; border-bottom: 1px dashed var(--line); }
+    .panel-user-operacao .mono { color: var(--ink-700); }
     .panel-user-feature-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; margin-bottom: 0.5rem; }
     .panel-user-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
     #panelUserFeatures { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
@@ -335,6 +342,8 @@
     .promax-status--running { color: var(--promax-action); border-color: rgba(64, 86, 109, 0.36); }
     .promax-status--success { color: var(--success); border-color: rgba(4, 120, 87, 0.28); }
     .promax-status--warning { color: var(--warning); border-color: rgba(180, 83, 9, 0.3); }
+    .gerar-critica-cartao { padding: 0.65rem 0.75rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
+    .gerar-critica-tabela td { vertical-align: middle; }
     .promax-status--danger { color: var(--danger); border-color: rgba(185, 28, 28, 0.34); background: rgba(185, 28, 28, 0.06); }
     .armazem-grade-audit { border-color: var(--promax-neutral-border); background: linear-gradient(145deg, var(--surface), var(--soft-panel)); }
     .armazem-grade-audit-toolbar { padding: 0.7rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface-soft) 84%, transparent); }

@@ -32,6 +32,7 @@ PANEL_FEATURES: tuple[str, ...] = (
     "estoque",
     "cliente",
     "rota_financeira",
+    "gerar_critica",
 )
 
 PASSWORD_ALGORITHM = "pbkdf2_sha256"
@@ -78,6 +79,7 @@ class AdminPanelUserService:
                             is_admin BOOLEAN NOT NULL DEFAULT FALSE,
                             filiais TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
                             seller_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+                            gv_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
                             feature_permissions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
                             failed_login_count INTEGER NOT NULL DEFAULT 0,
                             locked_until TIMESTAMPTZ,
@@ -90,6 +92,11 @@ class AdminPanelUserService:
                 )
                 cur.execute(
                     sql.SQL("ALTER TABLE {}.panel_users ADD COLUMN IF NOT EXISTS seller_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]")
+                    .format(sql.Identifier(self.schema))
+                )
+                # GVs do usuário (filial-GV, ex.: 3-4): escopo comercial de gerente de vendas.
+                cur.execute(
+                    sql.SQL("ALTER TABLE {}.panel_users ADD COLUMN IF NOT EXISTS gv_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]")
                     .format(sql.Identifier(self.schema))
                 )
                 cur.execute(
@@ -137,7 +144,7 @@ class AdminPanelUserService:
                 cur.execute(
                     sql.SQL(
                         """
-                        SELECT id, username, display_name, is_active, is_admin, filiais, seller_scopes, feature_permissions,
+                        SELECT id, username, display_name, is_active, is_admin, filiais, seller_scopes, gv_scopes, feature_permissions,
                                must_change_password, failed_login_count, locked_until, last_login_at,
                                created_at, updated_at
                         FROM {}.panel_users
@@ -156,6 +163,7 @@ class AdminPanelUserService:
         features: list[str] | tuple[str, ...],
         filiais: list[str] | tuple[str, ...],
         seller_scopes: list[str] | tuple[str, ...] = (),
+        gv_scopes: list[str] | tuple[str, ...] = (),
         is_active: bool = True,
     ) -> dict[str, Any]:
         normalized_username = self._normalize_username(username)
@@ -163,6 +171,7 @@ class AdminPanelUserService:
         clean_features = list(PANEL_FEATURES) if bool(is_admin) else self._normalize_features(features)
         clean_filiais = self._normalize_filiais(filiais)
         clean_seller_scopes = self._normalize_seller_scopes(seller_scopes)
+        clean_gv_scopes = self._normalize_seller_scopes(gv_scopes, rotulo="GV", exemplo="3-4")
         temp_password = self.generate_temporary_password()
         password_hash = self.hash_password(temp_password)
         try:
@@ -173,10 +182,10 @@ class AdminPanelUserService:
                             """
                             INSERT INTO {}.panel_users (
                                 username, display_name, password_hash, must_change_password,
-                                is_active, is_admin, filiais, seller_scopes, feature_permissions
+                                is_active, is_admin, filiais, seller_scopes, gv_scopes, feature_permissions
                             )
-                            VALUES (%s, %s, %s, TRUE, %s, %s, %s, %s, %s)
-                            RETURNING id, username, display_name, is_active, is_admin, filiais, seller_scopes,
+                            VALUES (%s, %s, %s, TRUE, %s, %s, %s, %s, %s, %s)
+                            RETURNING id, username, display_name, is_active, is_admin, filiais, seller_scopes, gv_scopes,
                                       feature_permissions, must_change_password, failed_login_count,
                                       locked_until, last_login_at, created_at, updated_at
                             """
@@ -189,6 +198,7 @@ class AdminPanelUserService:
                             bool(is_admin),
                             clean_filiais,
                             clean_seller_scopes,
+                            clean_gv_scopes,
                             clean_features,
                         ),
                     )
@@ -209,12 +219,14 @@ class AdminPanelUserService:
         features: list[str] | tuple[str, ...],
         filiais: list[str] | tuple[str, ...],
         seller_scopes: list[str] | tuple[str, ...] = (),
+        gv_scopes: list[str] | tuple[str, ...] = (),
         is_active: bool,
     ) -> dict[str, Any]:
         clean_display_name = self._clean_display_name(display_name)
         clean_features = list(PANEL_FEATURES) if bool(is_admin) else self._normalize_features(features)
         clean_filiais = self._normalize_filiais(filiais)
         clean_seller_scopes = self._normalize_seller_scopes(seller_scopes)
+        clean_gv_scopes = self._normalize_seller_scopes(gv_scopes, rotulo="GV", exemplo="3-4")
         with self._connect(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -226,15 +238,16 @@ class AdminPanelUserService:
                             feature_permissions = %s,
                             filiais = %s,
                             seller_scopes = %s,
+                            gv_scopes = %s,
                             is_active = %s,
                             updated_at = NOW()
                         WHERE id = %s
-                        RETURNING id, username, display_name, is_active, is_admin, filiais, seller_scopes,
+                        RETURNING id, username, display_name, is_active, is_admin, filiais, seller_scopes, gv_scopes,
                                   feature_permissions, must_change_password, failed_login_count,
                                   locked_until, last_login_at, created_at, updated_at
                         """
                     ).format(sql.Identifier(self.schema)),
-                    (clean_display_name, bool(is_admin), clean_features, clean_filiais, clean_seller_scopes, bool(is_active), int(user_id)),
+                    (clean_display_name, bool(is_admin), clean_features, clean_filiais, clean_seller_scopes, clean_gv_scopes, bool(is_active), int(user_id)),
                 )
                 row = cur.fetchone()
             conn.commit()
@@ -258,7 +271,7 @@ class AdminPanelUserService:
                             locked_until = NULL,
                             updated_at = NOW()
                         WHERE id = %s
-                        RETURNING id, username, display_name, is_active, is_admin, filiais, seller_scopes,
+                        RETURNING id, username, display_name, is_active, is_admin, filiais, seller_scopes, gv_scopes,
                                   feature_permissions, must_change_password, failed_login_count,
                                   locked_until, last_login_at, created_at, updated_at
                         """
@@ -279,7 +292,7 @@ class AdminPanelUserService:
                         """
                         DELETE FROM {}.panel_users
                         WHERE id = %s
-                        RETURNING id, username, display_name, is_active, is_admin, filiais, seller_scopes,
+                        RETURNING id, username, display_name, is_active, is_admin, filiais, seller_scopes, gv_scopes,
                                   feature_permissions, must_change_password, failed_login_count,
                                   locked_until, last_login_at, created_at, updated_at
                         """
@@ -303,7 +316,7 @@ class AdminPanelUserService:
                     sql.SQL(
                         """
                         SELECT id, username, display_name, password_hash, password_version, must_change_password,
-                               is_active, is_admin, filiais, seller_scopes, feature_permissions, failed_login_count, locked_until
+                               is_active, is_admin, filiais, seller_scopes, gv_scopes, feature_permissions, failed_login_count, locked_until
                         FROM {}.panel_users
                         WHERE LOWER(username) = LOWER(%s)
                         """
@@ -356,7 +369,7 @@ class AdminPanelUserService:
                     sql.SQL(
                         """
                         SELECT id, username, display_name, password_hash, password_version, must_change_password,
-                               is_active, is_admin, filiais, seller_scopes, feature_permissions
+                               is_active, is_admin, filiais, seller_scopes, gv_scopes, feature_permissions
                         FROM {}.panel_users
                         WHERE id = %s
                         """
@@ -381,7 +394,7 @@ class AdminPanelUserService:
                             updated_at = NOW()
                         WHERE id = %s
                         RETURNING id, username, display_name, password_version, must_change_password,
-                                  is_active, is_admin, filiais, seller_scopes, feature_permissions
+                                  is_active, is_admin, filiais, seller_scopes, gv_scopes, feature_permissions
                         """
                     ).format(sql.Identifier(self.schema)),
                     (new_hash, int(user_id)),
@@ -397,7 +410,7 @@ class AdminPanelUserService:
                     sql.SQL(
                         """
                         SELECT id, username, display_name, password_version, must_change_password,
-                               is_active, is_admin, filiais, seller_scopes, feature_permissions
+                               is_active, is_admin, filiais, seller_scopes, gv_scopes, feature_permissions
                         FROM {}.panel_users
                         WHERE id = %s
                         """
@@ -457,6 +470,7 @@ class AdminPanelUserService:
         features = tuple(PANEL_FEATURES if is_admin else self._normalize_features(row.get("feature_permissions") or ()))
         filiais = tuple(str(item).strip() for item in (row.get("filiais") or []) if str(item).strip())
         seller_scopes = tuple(str(item).strip() for item in (row.get("seller_scopes") or []) if str(item).strip())
+        gv_scopes = tuple(str(item).strip() for item in (row.get("gv_scopes") or []) if str(item).strip())
         return {
             "auth_type": "user",
             "user_id": int(row["id"]),
@@ -468,6 +482,7 @@ class AdminPanelUserService:
             "is_admin": is_admin,
             "filiais": filiais,
             "seller_scopes": seller_scopes,
+            "gv_scopes": gv_scopes,
             "features": features,
         }
 
@@ -482,6 +497,7 @@ class AdminPanelUserService:
             "is_admin": bool(row.get("is_admin")),
             "filiais": [str(item) for item in (row.get("filiais") or [])],
             "seller_scopes": [str(item) for item in (row.get("seller_scopes") or [])],
+            "gv_scopes": [str(item) for item in (row.get("gv_scopes") or [])],
             "features": [str(item) for item in (row.get("feature_permissions") or [])],
             "must_change_password": bool(row.get("must_change_password")),
             "failed_login_count": int(row.get("failed_login_count") or 0),
@@ -539,14 +555,16 @@ class AdminPanelUserService:
         return normalized
 
     @staticmethod
-    def _normalize_seller_scopes(values: list[str] | tuple[str, ...] | Any) -> list[str]:
+    def _normalize_seller_scopes(values: list[str] | tuple[str, ...] | Any, *, rotulo: str = "Carteira", exemplo: str = "3-107") -> list[str]:
         normalized: list[str] = []
         seen: set[str] = set()
         for raw in values or ():
             text = str(raw or "").strip()
             match = re.fullmatch(r"0*(\d+)[-_/]0*(\d+)", text)
             if not match:
-                raise ValueError("Carteira deve usar filial-setor, por exemplo: 3-107.")
+                if rotulo == "GV":
+                    raise ValueError(f"GV deve usar filial-GV, por exemplo: {exemplo}.")
+                raise ValueError(f"{rotulo} deve usar filial-setor, por exemplo: {exemplo}.")
             value = f"{int(match.group(1))}-{int(match.group(2))}"
             if value not in seen:
                 seen.add(value)

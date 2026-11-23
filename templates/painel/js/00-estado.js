@@ -5,6 +5,7 @@
           busca: "/api/admin/clientes",
           ficha: "/api/admin/clientes"
         },
+        gerarCritica: "/api/admin/critica/geracao",
         rotaFinanceira: {
           opcoes: "/api/admin/rota-financeira/opcoes",
           lista: "/api/admin/rota-financeira"
@@ -170,6 +171,7 @@
       { id: "protestos", grupo: "financeiro", label: "Protestos", icon: "bi-shield-exclamation", description: "Títulos da inadimplência, provas em PDF e retirada de SPC." },
       { id: "reports", grupo: "dados", label: "Relatórios", icon: "bi-folder2-open", description: "Uploads e histórico de relatórios." },
       { id: "critica", grupo: "dados", label: "Crítica", icon: "bi-clipboard-data", description: "Importação, dashboard e PDFs." },
+      { id: "gerar_critica", grupo: "dados", label: "Gerar crítica", icon: "bi-cloud-download", description: "Baixa a crítica no Cora e importa agora." },
       { id: "promax", grupo: "dados", label: "Promax", icon: "bi-cloud-arrow-down", description: "Execuções, agendas e workers." },
       { id: "operations", grupo: "admin", label: "Acessos e disparos", icon: "bi-sliders", description: "Acessos, disparos e rotinas operacionais." },
       { id: "usage", grupo: "admin", label: "Uso Evolution", icon: "bi-activity", description: "Número x função e auditoria." }
@@ -665,6 +667,7 @@
       panelDisplayName: document.getElementById("panelDisplayName"),
       panelUserFiliais: document.getElementById("panelUserFiliais"),
       panelUserSellerScopes: document.getElementById("panelUserSellerScopes"),
+      panelUserGvScopes: document.getElementById("panelUserGvScopes"),
       panelUserActive: document.getElementById("panelUserActive"),
       panelUserAdmin: document.getElementById("panelUserAdmin"),
       panelUserAdminHint: document.getElementById("panelUserAdminHint"),
@@ -992,6 +995,7 @@
       "/armazem": "armazemTab",
       "/entrega": "entregaTab",
       "/critica": "criticaTab",
+      "/gerar-critica": "gerarCriticaTab",
       "/recolhas": "recolhasTab",
       "/protestos": "protestosTab",
       "/financeiro": "financeiroTab",
@@ -1012,6 +1016,7 @@
       armazemTab: "/armazem",
       entregaTab: "/entrega",
       criticaTab: "/critica",
+      gerarCriticaTab: "/gerar-critica",
       recolhasTab: "/recolhas",
       protestosTab: "/protestos",
       financeiroTab: "/financeiro",

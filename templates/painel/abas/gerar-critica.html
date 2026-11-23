@@ -1,0 +1,35 @@
+      <div class="tab-pane fade" id="gerarCriticaPane" role="tabpanel" aria-labelledby="gerarCriticaTab" tabindex="0">
+        <section class="panel-card p-3 mb-3 border-primary">
+          <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="h6 fw-bold mb-1"><i class="bi bi-cloud-download me-2 text-primary"></i>Gerar crítica agora</h2>
+              <div class="form-text">Baixa a crítica no Cora e importa todas as operações sozinho. Costuma levar alguns minutos.</div>
+            </div>
+            <button class="btn btn-outline-primary btn-sm" id="gerarCriticaAtualizarBtn" type="button"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>
+          </div>
+          <div class="alert alert-warning py-2 small mb-3" id="gerarCriticaFilaPausada" role="status" hidden></div>
+          <div class="row g-2 align-items-end">
+            <div class="col-12 col-sm-6 col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="gerarCriticaData">Data da crítica</label>
+              <input type="date" class="form-control" id="gerarCriticaData">
+            </div>
+            <div class="col-12 col-sm-auto">
+              <button class="btn btn-primary w-100" id="gerarCriticaBtn" type="button"><i class="bi bi-play-fill me-1"></i>Gerar crítica</button>
+            </div>
+          </div>
+          <div class="gerar-critica-atual mt-3" id="gerarCriticaAtual" aria-live="polite"></div>
+        </section>
+        <section class="panel-card p-3 mb-3">
+          <h2 class="h6 fw-bold mb-2"><i class="bi bi-clock-history me-2 text-primary"></i>Últimas gerações</h2>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 gerar-critica-tabela">
+              <thead>
+                <tr><th scope="col">Pedido em</th><th scope="col">Data</th><th scope="col">Situação</th><th scope="col">Resultado</th><th scope="col">Quem pediu</th></tr>
+              </thead>
+              <tbody id="gerarCriticaHistorico">
+                <tr><td colspan="5" class="text-secondary small py-3 text-center">Carregando…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>

@@ -1059,6 +1059,7 @@
       const activeTabId = currentActiveTabId();
       if (!force && state.lazyTabs && state.lazyTabs[activeTabId]) {
         if (activeTabId === "payipTab") startPayipGeneratedPolling();
+        if (activeTabId === "gerarCriticaTab") syncGerarCritica({ silent: true });
         return true;
       }
 
@@ -1084,6 +1085,8 @@
         if (state.panel && state.panel.canViewGiro) tasks.push(syncGiroRecolha({ silent }));
       } else if (activeTabId === "criticaTab") {
         if (state.panel && state.panel.canViewCritica) tasks.push(syncCriticaDashboard({ silent }));
+      } else if (activeTabId === "gerarCriticaTab") {
+        tasks.push(syncGerarCritica({ silent }));
       } else if (activeTabId === "entregaTab") {
         if (state.panel && state.panel.canManagePromax && !state.promax.catalog) tasks.push(syncPromax({ silent }));
         tasks.push(syncLigaEntregaReports({ silent, force }));
@@ -1318,6 +1321,9 @@
           : Boolean(payload && payload.is_admin),
         canEstoque: payload && Object.prototype.hasOwnProperty.call(payload, "can_estoque")
           ? Boolean(payload.can_estoque)
+          : Boolean(payload && payload.is_admin),
+        canGerarCritica: payload && Object.prototype.hasOwnProperty.call(payload, "can_gerar_critica")
+          ? Boolean(payload.can_gerar_critica)
           : Boolean(payload && payload.is_admin)
       };
       applyPanelPermissions();
@@ -1388,6 +1394,7 @@
       setPanelTabVisible("armazemTab", Boolean(state.panel && state.panel.canArmazem));
       setPanelTabVisible("entregaTab", Boolean(state.panel && state.panel.canEntrega));
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
+      setPanelTabVisible("gerarCriticaTab", Boolean(state.panel && state.panel.canGerarCritica));
       setPanelTabVisible("recolhasTab", Boolean(state.panel && state.panel.canManageRecolhas));
       setPanelTabVisible("financeiroTab", Boolean(state.panel && state.panel.canFinanceiro) && !isCritica);
       setPanelTabVisible("conferenciaTab", Boolean(state.panel && state.panel.canConferencia) && !isCritica);
