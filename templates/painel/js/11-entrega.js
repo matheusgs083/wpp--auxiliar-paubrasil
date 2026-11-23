@@ -516,8 +516,46 @@
       return `${value > 0 ? "+" : "−"}${text}`;
     }
 
-    function opsChip(text, tone, label) {
-      return `<span class="ops-chip ${tone}" title="${escapeHtml(label)}" aria-label="${escapeHtml(`${text} · ${label}`)}">${escapeHtml(text)}</span>`;
+    // Valor da tabela: cor só no texto (modelo planilha).
+    function opsValor(text, tone, label) {
+      return `<span class="ops-val ${tone}" title="${escapeHtml(label)}">${escapeHtml(text)}</span>`;
+    }
+
+    const OPS_JUST_LARGURA_PADRAO = 260;
+
+    // Textarea cresce com o texto. Navegador com field-sizing já faz isso sozinho.
+    function opsAjustarAltura(textarea) {
+      if (!textarea || (window.CSS && CSS.supports("field-sizing", "content"))) return;
+      textarea.style.height = "auto";
+      if (textarea.scrollHeight) textarea.style.height = `${textarea.scrollHeight + 2}px`;
+    }
+
+    function opsAjustarAlturas(container) {
+      container?.querySelectorAll("textarea.jornada-mapa-justificativa").forEach(opsAjustarAltura);
+    }
+
+    // Controle "Largura da justificativa": muda a coluna da tabela e fica salvo neste navegador.
+    function setupOpsJustificativaLargura() {
+      document.querySelectorAll(".ops-just-largura input[data-tabela]").forEach(input => {
+        const tabela = document.getElementById(input.dataset.tabela);
+        const saida = input.parentElement.querySelector("output");
+        const chave = `opsJustLargura:${input.dataset.tabela}`;
+        const aplicar = valor => {
+          const largura = Math.min(Number(input.max), Math.max(Number(input.min), Number(valor) || OPS_JUST_LARGURA_PADRAO));
+          input.value = String(largura);
+          if (saida) saida.textContent = `${largura} px`;
+          tabela?.style.setProperty("--ops-just-w", `${largura}px`);
+          opsAjustarAlturas(tabela);
+          return largura;
+        };
+        let salvo = null;
+        try { salvo = localStorage.getItem(chave); } catch (_) {}
+        aplicar(salvo || input.value);
+        input.addEventListener("input", () => {
+          const largura = aplicar(input.value);
+          try { localStorage.setItem(chave, String(largura)); } catch (_) {}
+        });
+      });
     }
 
     function opsJustificationCell(row, tipo) {
@@ -527,7 +565,7 @@
       const status = current.updated_by
         ? `<small class="text-secondary">${escapeHtml(current.updated_by)} · ${escapeHtml(formatDateTime(current.updated_at) || current.updated_at || "")}</small>`
         : '<small class="text-warning fw-semibold">Pendente</small>';
-      return `<td class="ops-just grp-start"><div class="input-group input-group-sm"><input type="text" class="form-control jornada-mapa-justificativa" maxlength="5000" data-version="${escapeHtml(current.version || "")}" value="${escapeHtml(current.text || "")}" placeholder="${isOccupation ? "Por que a ocupação ficou assim?" : "Justifique este mapa..."}" aria-label="Justificativa do mapa ${escapeHtml(row.mapa || "")}" title="${escapeHtml(current.text || "")}"><button type="button" class="btn btn-outline-primary jornada-mapa-salvar" data-key="${escapeHtml(key)}" data-tipo="${isOccupation ? "ocupacao" : "jornada"}" title="Salvar (Enter)"><i class="bi bi-check2"></i><span class="visually-hidden">Salvar</span></button></div>${status}</td>`;
+      return `<td class="ops-just grp-start"><div class="input-group input-group-sm"><textarea rows="1" class="form-control jornada-mapa-justificativa" maxlength="5000" data-version="${escapeHtml(current.version || "")}" placeholder="${isOccupation ? "Por que a ocupação ficou assim?" : "Justifique este mapa..."}" aria-label="Justificativa do mapa ${escapeHtml(row.mapa || "")}">${escapeHtml(current.text || "")}</textarea><button type="button" class="btn btn-outline-primary jornada-mapa-salvar" data-key="${escapeHtml(key)}" data-tipo="${isOccupation ? "ocupacao" : "jornada"}" title="Salvar (Enter)"><i class="bi bi-check2"></i><span class="visually-hidden">Salvar</span></button></div>${status}</td>`;
     }
 
     function opsMetricCards(cards) {
@@ -604,28 +642,29 @@
         const boxes = Number(row.devolucao_caixas || 0);
         const returnCell = row.devolucao_caixas === null || row.devolucao_caixas === undefined
           ? '<span class="text-secondary">—</span>'
-          : boxes > 0 ? opsChip(`${fmtNumber(boxes)} CX`, "warn", "Caixas retornadas") : '<span class="text-secondary">0</span>';
+          : boxes > 0 ? opsValor(fmtNumber(boxes), "warn", "Caixas retornadas") : '<span class="text-secondary">0</span>';
         const missing030805 = row.tem_030805 ? "" : ' <i class="bi bi-exclamation-triangle text-warning" title="Mapa sem a 03.08.05: sem horários e sem devolução"></i><span class="visually-hidden">sem 03.08.05</span>';
         const time = value => value ? escapeHtml(value) : '<span class="text-secondary">—</span>';
         return `<tr>
-          <td class="fw-semibold">${escapeHtml(opsBranch(row.filial))}</td>
+          <td>${escapeHtml(opsBranch(row.filial))}</td>
           <td>${escapeHtml(opsDay(row.data))}</td>
           <td class="mono">${escapeHtml(row.mapa || "-")}${missing030805}</td>
-          <td class="mono fw-semibold">${escapeHtml(row.placa || "-")}</td>
+          <td class="mono">${escapeHtml(row.placa || "-")}</td>
           <td class="ops-wrap">${escapeHtml(row.rota || "-")}</td>
           <td class="text-end">${row.peso_kg === null || row.peso_kg === undefined ? "—" : escapeHtml(fmtNumber(row.peso_kg))}</td>
           <td class="text-end">${row.entregas === null || row.entregas === undefined ? "—" : escapeHtml(fmtNumber(row.entregas))}</td>
-          <td class="text-center grp-start">${time(row.inicio_jornada)}</td>
+          <td class="text-center">${time(row.inicio_jornada)}</td>
           <td class="text-center">${time(row.hora_entrada)}</td>
           <td class="text-center">${time(row.hora_final)}</td>
-          <td class="text-center grp-start">${hasJourney ? opsChip(opsDuration(journey), journeyTone, journeyLabel) : '<span class="text-secondary">—</span>'}</td>
+          <td class="text-center">${hasJourney ? opsValor(opsDuration(journey), journeyTone, journeyLabel) : '<span class="text-secondary">—</span>'}</td>
           <td class="text-center">${escapeHtml(opsDuration(row.prevista_min))}</td>
-          <td class="text-center">${hasDiff ? opsChip(opsDuration(diff, { signed: true }), diffTone, diffLabel) : '<span class="text-secondary">—</span>'}</td>
-          <td class="text-center">${hasInternal ? opsChip(opsDuration(internal), internalTone, internalLabel) : '<span class="text-secondary">—</span>'}</td>
-          <td class="text-end grp-start">${returnCell}</td>
+          <td class="text-center">${hasDiff ? opsValor(opsDuration(diff, { signed: true }), diffTone, diffLabel) : '<span class="text-secondary">—</span>'}</td>
+          <td class="text-center">${hasInternal ? opsValor(opsDuration(internal), internalTone, internalLabel) : '<span class="text-secondary">—</span>'}</td>
+          <td class="text-end">${returnCell}</td>
           ${opsJustificationCell(row, "jornada")}
         </tr>`;
       }).join("") || '<tr><td colspan="16" class="text-center text-secondary py-4">Nenhum mapa para os filtros selecionados.</td></tr>';
+      opsAjustarAlturas(E.entregaJornadaMapasBody);
       renderOcupacaoVeiculos(payload);
     }
 
@@ -676,7 +715,7 @@
         ["Abaixo da meta", fmt(below.length), withOccupation.length ? `de ${fmt(withOccupation.length)} carro(s) com ocupação em pallets` : "aguardando a 03.02.37 com itens"],
         ["Justificativas pendentes", fmt(below.filter(row => !row.ocupacao_justificada).length), "entre os abaixo da meta"],
       ]);
-      if (E.entregaOcupacaoVeiculosLegenda) E.entregaOcupacaoVeiculosLegenda.innerHTML = `<span>Ocupação:</span><span class="ops-chip ok">na meta ou acima</span><span class="ops-chip warn">até 10 p.p. abaixo</span><span class="ops-chip bad">mais de 10 p.p. abaixo</span><span class="ops-chip neutral">sem capacidade ou sem itens</span>`;
+      if (E.entregaOcupacaoVeiculosLegenda) (E.entregaOcupacaoVeiculosLegenda.querySelector(".ops-legenda-itens") || E.entregaOcupacaoVeiculosLegenda).innerHTML = `<span>Ocupação:</span><span class="ops-val ok">na meta ou acima</span><span class="ops-val warn">até 10 p.p. abaixo</span><span class="ops-val bad">mais de 10 p.p. abaixo</span><span class="ops-val neutral">sem capacidade ou sem itens</span>`;
       if (!E.entregaOcupacaoVeiculosBody) return;
       E.entregaOcupacaoVeiculosBody.innerHTML = rows.map(row => {
         const hasPallets = row.pallets !== null && row.pallets !== undefined;
@@ -690,27 +729,28 @@
         let occupationCell;
         if (occupation !== null && occupation !== undefined) {
           const bar = Math.max(0, Math.min(Number(occupation), 100));
-          const marker = meta ? `<span class="ops-occ-meta" style="left:${Math.min(Number(meta), 100)}%" title="Meta ${escapeHtml(fmt(meta))}%"></span>` : "";
-          occupationCell = `<div class="ops-occ"><div class="ops-occ-bar" aria-hidden="true"><span class="${tone}" style="width:${bar}%"></span>${marker}</div>${opsChip(`${fmt(occupation)}%`, tone, label)}</div>`;
+          occupationCell = `<span class="ops-faixa" aria-hidden="true"><i style="width:${bar}%"></i></span>${opsValor(`${fmt(occupation)}%`, tone, label)}`;
         } else if (hasPallets && !hasCapacity) {
           occupationCell = `<span class="text-warning small" title="Cadastre a placa na aba Caminhões"><i class="bi bi-exclamation-triangle me-1"></i>Caminhão sem cadastro</span>`;
         } else {
           const weight = row.ocupacao_percentual;
-          occupationCell = weight === null || weight === undefined ? '<span class="text-secondary">—</span>' : `<span class="text-secondary small" title="Mapa sem itens na 03.02.37: ocupação por peso da 03.08.05">${escapeHtml(fmt(weight))}% <span class="ops-chip neutral">peso</span></span>`;
+          occupationCell = weight === null || weight === undefined ? '<span class="text-secondary">—</span>' : `<span class="text-secondary" title="Mapa sem itens na 03.02.37: ocupação por peso da 03.08.05">${escapeHtml(fmt(weight))}% (peso)</span>`;
         }
         const truck = row.caminhao_descricao ? `<div class="text-secondary small">${escapeHtml(row.caminhao_descricao)}</div>` : "";
         return `<tr>
-          <td class="fw-semibold">${escapeHtml(opsBranch(row.filial))}</td>
+          <td>${escapeHtml(opsBranch(row.filial))}</td>
           <td>${escapeHtml(opsDay(row.data))}</td>
-          <td class="mono fw-semibold">${escapeHtml(row.placa || "-")}${truck}</td>
+          <td class="mono">${escapeHtml(row.placa || "-")}${truck}</td>
           <td class="mono">${escapeHtml(row.mapa || "-")}</td>
           <td class="ops-wrap">${escapeHtml(row.rota || "-")}</td>
-          <td class="text-end grp-start fw-semibold">${hasPallets ? escapeHtml(fmt(row.pallets)) : '<span class="text-secondary">—</span>'}</td>
+          <td class="text-end">${hasPallets ? escapeHtml(fmt(row.pallets)) : '<span class="text-secondary">—</span>'}</td>
           <td class="text-end">${hasCapacity ? escapeHtml(fmt(row.capacidade_pallets)) : '<span class="text-secondary">—</span>'}</td>
-          <td class="grp-start">${occupationCell}</td>
+          <td class="text-end">${occupationCell}</td>
+          <td class="text-end">${meta ? `${escapeHtml(fmt(meta))}%` : '<span class="text-secondary">—</span>'}</td>
           ${opsJustificationCell(row, "ocupacao")}
         </tr>`;
-      }).join("") || '<tr><td colspan="9" class="text-center text-secondary py-4">Nenhum veículo atende aos filtros de ocupação.</td></tr>';
+      }).join("") || '<tr><td colspan="10" class="text-center text-secondary py-4">Nenhum veículo atende aos filtros de ocupação.</td></tr>';
+      opsAjustarAlturas(E.entregaOcupacaoVeiculosBody);
     }
 
     function entregaFrotaOperacoes() {

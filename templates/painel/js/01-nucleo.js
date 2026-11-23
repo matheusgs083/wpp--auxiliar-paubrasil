@@ -533,14 +533,17 @@
         if (E.entregaOcupacaoVeiculosOrdem) E.entregaOcupacaoVeiculosOrdem.value = "data";
         renderOcupacaoVeiculos(state.ligaJornadaMapas || {});
       });
+      setupOpsJustificativaLargura();
       [E.entregaJornadaMapasBody, E.entregaOcupacaoVeiculosBody].forEach(body => {
         if (!body) return;
+        body.addEventListener("input", event => { if (event.target.classList.contains("jornada-mapa-justificativa")) opsAjustarAltura(event.target); });
         body.addEventListener("click", event => {
           const button = event.target.closest(".jornada-mapa-salvar");
           if (button) saveJornadaMapaJustificativa(button);
         });
         body.addEventListener("keydown", event => {
-          if (event.key !== "Enter" || !event.target.classList.contains("jornada-mapa-justificativa")) return;
+          // Enter salva; Shift+Enter quebra a linha na justificativa.
+          if (event.key !== "Enter" || event.shiftKey || !event.target.classList.contains("jornada-mapa-justificativa")) return;
           event.preventDefault();
           const button = event.target.closest(".ops-just")?.querySelector(".jornada-mapa-salvar");
           if (button) saveJornadaMapaJustificativa(button);

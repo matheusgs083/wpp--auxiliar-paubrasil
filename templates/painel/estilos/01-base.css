@@ -222,26 +222,32 @@
     .ops-table td.ops-wrap { white-space: normal; min-width: 180px; max-width: 280px; }
     .ops-table .grp-start { border-left: 1px solid var(--line); }
     .ops-table tbody tr:nth-child(even) > td { background: var(--surface-soft); }
-    .ops-chip { display: inline-block; min-width: 3.5rem; padding: .16rem .45rem; border: 1px solid transparent; border-radius: var(--radius-sm); font-weight: 800; text-align: center; }
-    .ops-chip.ok { color: var(--success); background: rgba(4, 120, 87, .1); border-color: rgba(4, 120, 87, .25); }
-    .ops-chip.warn { color: var(--warning); background: rgba(180, 83, 9, .1); border-color: rgba(180, 83, 9, .25); }
-    .ops-chip.bad { color: var(--danger); background: rgba(185, 28, 28, .1); border-color: rgba(185, 28, 28, .25); }
-    .ops-chip.neutral { color: var(--ink-500); background: var(--soft-panel); border-color: var(--line); }
-    body[data-theme="dark"] .ops-chip.ok { background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .3); }
-    body[data-theme="dark"] .ops-chip.warn { background: rgba(251, 191, 36, .14); border-color: rgba(251, 191, 36, .3); }
-    body[data-theme="dark"] .ops-chip.bad { background: rgba(248, 113, 113, .14); border-color: rgba(248, 113, 113, .3); }
     .ops-legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: center; color: var(--ink-500); font-size: var(--fs-sm); }
-    .ops-legend .ops-chip { min-width: 0; font-size: var(--fs-xs); }
-    .ops-occ { display: flex; align-items: center; gap: .5rem; min-width: 170px; }
-    .ops-occ-bar { position: relative; flex: 1; height: 8px; border-radius: var(--radius-pill); background: var(--soft-panel); overflow: hidden; }
-    .ops-occ-meta { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink-900); opacity: .7; }
-    .ops-occ-bar > span { display: block; height: 100%; border-radius: inherit; }
-    .ops-occ-bar > span.ok { background: var(--success); }
-    .ops-occ-bar > span.warn { background: var(--warning); }
-    .ops-occ-bar > span.bad { background: var(--danger); }
-    .ops-occ-bar > span.neutral { background: var(--line-strong); }
-    .ops-just { min-width: 250px; }
+    .ops-just { width: var(--ops-just-w, 260px); min-width: var(--ops-just-w, 260px); max-width: var(--ops-just-w, 260px); white-space: normal; }
     .ops-just .form-control { min-width: 0; }
+    /* Justificativa quebra linha e cresce para baixo, para caber inteira no print. */
+    .ops-just textarea.form-control { resize: none; overflow: hidden; field-sizing: content; min-height: calc(1.5em + .5rem + 2px); line-height: 1.35; }
+    .ops-just-cab { width: var(--ops-just-w, 260px); }
+    .ops-legenda-itens { display: contents; }
+    .ops-just-largura { display: inline-flex; align-items: center; gap: .5rem; margin-left: auto; font-size: var(--fs-xs); color: var(--ink-500); }
+    .ops-just-largura input { width: 140px; }
+    .ops-just-largura output { min-width: 3.6rem; font-variant-numeric: tabular-nums; }
+    /* Modelo planilha: grade completa, cabeçalho em dois níveis, cor só no texto do que fugiu da regra. */
+    .ops-planilha { border-collapse: separate; border-spacing: 0; }
+    .ops-planilha > :not(caption) > * > * { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .ops-planilha > :not(caption) > * > *:first-child { border-left: 1px solid var(--line); }
+    .ops-planilha thead tr:first-child > th { border-top: 1px solid var(--line); }
+    .ops-planilha thead th { box-shadow: none; background: var(--surface-soft); color: var(--ink-500); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0; text-transform: none; text-align: center; }
+    .ops-planilha thead tr.ops-grupo > th { top: 0; height: 28px; color: var(--ink-900); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+    .ops-planilha thead tr:not(.ops-grupo) > th { top: 28px; }
+    .ops-planilha thead th.text-end { text-align: right; }
+    .ops-planilha tbody tr:nth-child(even) > td { background: transparent; }
+    .ops-val.ok { color: var(--success); }
+    .ops-val.warn { color: var(--warning); font-weight: 600; }
+    .ops-val.bad { color: var(--danger); font-weight: 700; }
+    .ops-val.neutral { color: var(--ink-500); }
+    .ops-faixa { position: relative; display: inline-block; width: 60px; height: 6px; margin-right: .4rem; vertical-align: middle; background: var(--soft-panel); }
+    .ops-faixa > i { position: absolute; inset: 0 auto 0 0; background: var(--ink-500); }
     .ops-just small { display: block; margin-top: .2rem; font-size: var(--fs-xs); }
     /* Pedidos: jornada curta para vendedor, com consulta antes da digitação. */
     #pedidosPane { max-width: 1120px; margin: 0 auto; }
