@@ -30,6 +30,8 @@ PANEL_FEATURES: tuple[str, ...] = (
     "usage",
     "pedidos",
     "estoque",
+    "cliente",
+    "rota_financeira",
 )
 
 PASSWORD_ALGORITHM = "pbkdf2_sha256"

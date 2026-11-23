@@ -1,6 +1,14 @@
     const CONFIG = {
       api: "",
       endpoints: {
+        clientes: {
+          busca: "/api/admin/clientes",
+          ficha: "/api/admin/clientes"
+        },
+        rotaFinanceira: {
+          opcoes: "/api/admin/rota-financeira/opcoes",
+          lista: "/api/admin/rota-financeira"
+        },
         panel: {
           session: "/api/admin/panel/session",
           logout: "/api/admin/panel/logout",
@@ -137,22 +145,34 @@
       datasets: []
     };
 
+    // Abas do painel (grupos) e as sub-abas que cada permissão libera.
+    // Na criação de usuário dá para marcar a aba inteira ou só algumas sub-abas.
+    const PANEL_FEATURE_GROUPS = [
+      { id: "vendedor", label: "Vendedor", icon: "bi-person-badge" },
+      { id: "operacao", label: "Operação", icon: "bi-truck" },
+      { id: "financeiro", label: "Financeiro", icon: "bi-cash-stack" },
+      { id: "dados", label: "Dados", icon: "bi-database" },
+      { id: "admin", label: "Gestão", icon: "bi-gear" }
+    ];
+
     const PANEL_FEATURES = [
-      { id: "operations", label: "Operação", icon: "bi-sliders", description: "Acessos, disparos e rotinas operacionais." },
-      { id: "reports", label: "Relatórios", icon: "bi-folder2-open", description: "Uploads e histórico de relatórios." },
-      { id: "payip", label: "PayIP", icon: "bi-credit-card-2-front", description: "Cobranças, validações e clientes." },
-      { id: "promax", label: "Promax", icon: "bi-cloud-arrow-down", description: "Execuções, agendas e workers." },
-      { id: "pedidos", label: "Pedidos", icon: "bi-cart-plus", description: "Digitação de pedidos para a carteira do vendedor." },
-      { id: "estoque", label: "Estoque", icon: "bi-boxes", description: "Grade Stock_Product do Cora e saldo disponível." },
-      { id: "entrega", label: "Entrega", icon: "bi-truck", description: "Liga Entrega, rotas e indicadores." },
-      { id: "critica", label: "Crítica", icon: "bi-clipboard-data", description: "Importação, dashboard e PDFs." },
-      { id: "recolhas", label: "Recolhas", icon: "bi-box-arrow-in-down", description: "Solicitações e acompanhamento." },
-      { id: "financeiro", label: "Financeiro", icon: "bi-cash-coin", description: "Fechamento de caixa por dia e mapa." },
-      { id: "protestos", label: "Protestos", icon: "bi-shield-exclamation", description: "Títulos da inadimplência, provas em PDF e retirada de SPC." },
-      { id: "conferencia", label: "Conferência", icon: "bi-clipboard-check", description: "Contagem cega de materiais e produtos por mapa." },
-      { id: "armazem", label: "Armazem", icon: "bi-box-seam", description: "Consultas basicas de cliente e estoque." },
-      { id: "giro", label: "Giro", icon: "bi-arrow-repeat", description: "Giro e oportunidades da carteira." },
-      { id: "usage", label: "Uso Evolution", icon: "bi-activity", description: "Número x função e auditoria." }
+      { id: "pedidos", grupo: "vendedor", label: "Pedidos", icon: "bi-cart-plus", description: "Digitação de pedidos para a carteira do vendedor." },
+      { id: "cliente", grupo: "vendedor", label: "Clientes", icon: "bi-person-vcard", description: "Ficha do cliente: pendências, boletos e comodatos da carteira." },
+      { id: "rota_financeira", grupo: "vendedor", label: "Rota Financeira", icon: "bi-signpost-2", description: "Fila do dia por atraso, vencimento e boleto." },
+      { id: "estoque", grupo: "operacao", label: "Estoque", icon: "bi-boxes", description: "Grade Stock_Product do Cora e saldo disponível." },
+      { id: "armazem", grupo: "operacao", label: "Armazem", icon: "bi-box-seam", description: "Consultas basicas de cliente e estoque." },
+      { id: "entrega", grupo: "operacao", label: "Entrega", icon: "bi-truck", description: "Liga Entrega, rotas e indicadores." },
+      { id: "recolhas", grupo: "operacao", label: "Recolhas", icon: "bi-box-arrow-in-down", description: "Solicitações e acompanhamento." },
+      { id: "giro", grupo: "operacao", label: "Giro", icon: "bi-arrow-repeat", description: "Giro e oportunidades da carteira." },
+      { id: "conferencia", grupo: "operacao", label: "Conferência", icon: "bi-clipboard-check", description: "Contagem cega de materiais e produtos por mapa." },
+      { id: "financeiro", grupo: "financeiro", label: "Financeiro", icon: "bi-cash-coin", description: "Fechamento de caixa por dia e mapa." },
+      { id: "payip", grupo: "financeiro", label: "PayIP", icon: "bi-credit-card-2-front", description: "Cobranças, validações e clientes." },
+      { id: "protestos", grupo: "financeiro", label: "Protestos", icon: "bi-shield-exclamation", description: "Títulos da inadimplência, provas em PDF e retirada de SPC." },
+      { id: "reports", grupo: "dados", label: "Relatórios", icon: "bi-folder2-open", description: "Uploads e histórico de relatórios." },
+      { id: "critica", grupo: "dados", label: "Crítica", icon: "bi-clipboard-data", description: "Importação, dashboard e PDFs." },
+      { id: "promax", grupo: "dados", label: "Promax", icon: "bi-cloud-arrow-down", description: "Execuções, agendas e workers." },
+      { id: "operations", grupo: "admin", label: "Acessos e disparos", icon: "bi-sliders", description: "Acessos, disparos e rotinas operacionais." },
+      { id: "usage", grupo: "admin", label: "Uso Evolution", icon: "bi-activity", description: "Número x função e auditoria." }
     ];
 
     const PROMAX_RESELLERS = [
@@ -966,6 +986,8 @@
       "/relatorios": "reportsTab",
       "/promax": "promaxTab",
       "/pedidos": "pedidosTab",
+      "/clientes": "clientesTab",
+      "/rota-financeira": "rotaFinanceiraTab",
       "/estoque": "estoqueTab",
       "/armazem": "armazemTab",
       "/entrega": "entregaTab",
@@ -984,6 +1006,8 @@
       reportsTab: "/relatorios",
       promaxTab: "/promax",
       pedidosTab: "/pedidos",
+      clientesTab: "/clientes",
+      rotaFinanceiraTab: "/rota-financeira",
       estoqueTab: "/estoque",
       armazemTab: "/armazem",
       entregaTab: "/entrega",
@@ -1053,4 +1077,6 @@
       "Outro"
     ];
 
+    const rotaUi = { opcoes: null, dados: null, clientes: [], situacao: "todos", pagina: 1, seq: 0, detalheSeq: 0 };
+    const clientesUi = { rows: [], filtros: new Set(), seq: 0, fichaSeq: 0, atual: null, ficha: null, aba: "financeiro" };
     const pedidosUi = { client: null, items: [], loadingClient: false, stockTimers: {}, conditions: [], queue: [], config: null, audit: [], productLimits: [], selectedLimitProduct: null, managerProductTimer: null };

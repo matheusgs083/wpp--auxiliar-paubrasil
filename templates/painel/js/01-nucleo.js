@@ -1098,6 +1098,10 @@
         configurePedidoFiliais();
         tasks.push(syncPedidoConfig());
         tasks.push(syncPedidoQueue({ silent }));
+      } else if (activeTabId === "clientesTab") {
+        atualizarEscopoClientes();
+      } else if (activeTabId === "rotaFinanceiraTab") {
+        if (state.panel && state.panel.canRotaFinanceira) tasks.push(syncRotaFinanceira({ pagina: rotaUi.pagina || 1 }));
       } else if (activeTabId === "estoqueTab") {
         configureEstoqueFiliais();
         tasks.push(syncEstoque({ silent }));
@@ -1306,6 +1310,12 @@
         canPedidos: payload && Object.prototype.hasOwnProperty.call(payload, "can_pedidos")
           ? Boolean(payload.can_pedidos)
           : Boolean(payload && payload.is_admin),
+        canClientes: payload && Object.prototype.hasOwnProperty.call(payload, "can_clientes")
+          ? Boolean(payload.can_clientes)
+          : Boolean(payload && payload.is_admin),
+        canRotaFinanceira: payload && Object.prototype.hasOwnProperty.call(payload, "can_rota_financeira")
+          ? Boolean(payload.can_rota_financeira)
+          : Boolean(payload && payload.is_admin),
         canEstoque: payload && Object.prototype.hasOwnProperty.call(payload, "can_estoque")
           ? Boolean(payload.can_estoque)
           : Boolean(payload && payload.is_admin)
@@ -1370,6 +1380,8 @@
       setPanelTabVisible("reportsTab", reportsVisible);
       setPanelTabVisible("promaxTab", Boolean(state.panel && state.panel.canManagePromax));
       setPanelTabVisible("pedidosTab", Boolean(state.panel && state.panel.canPedidos));
+      setPanelTabVisible("clientesTab", Boolean(state.panel && state.panel.canClientes));
+      setPanelTabVisible("rotaFinanceiraTab", Boolean(state.panel && state.panel.canRotaFinanceira));
       setPanelTabVisible("estoqueTab", Boolean(state.panel && state.panel.canEstoque));
       const estoqueImportCard = document.getElementById("estoqueImportCard");
       if (estoqueImportCard) estoqueImportCard.style.display = state.panel && state.panel.isAdmin ? "" : "none";

@@ -467,6 +467,8 @@ class RegisteredEndpointsSmokeTest(unittest.TestCase):
             EndpointCase("GET", "/relatorios", expected_status=303),
             EndpointCase("GET", "/promax", expected_status=303),
             EndpointCase("GET", "/pedidos", expected_status=303),
+            EndpointCase("GET", "/clientes", expected_status=303),
+            EndpointCase("GET", "/rota-financeira", expected_status=303),
             EndpointCase("GET", "/estoque", expected_status=303),
             EndpointCase("GET", "/armazem", expected_status=303),
             EndpointCase("GET", "/entrega", expected_status=303),

@@ -23,6 +23,8 @@ PAINEL_PAGINAS = (
     "/relatorios",
     "/promax",
     "/pedidos",
+    "/clientes",
+    "/rota-financeira",
     "/estoque",
     "/armazem",
     "/entrega",
@@ -410,6 +412,8 @@ def create_admin_panel_router(
             "can_manage_promax": is_admin or panel_context_can_access_feature(context, "promax"),
             "can_entrega": is_admin or panel_context_can_access_feature(context, "entrega"),
             "can_pedidos": is_admin or panel_context_can_access_feature(context, "pedidos"),
+            "can_clientes": is_admin or panel_context_can_access_feature(context, "cliente"),
+            "can_rota_financeira": is_admin or panel_context_can_access_feature(context, "rota_financeira"),
             "can_estoque": is_admin or panel_context_can_access_feature(context, "estoque"),
         }
 

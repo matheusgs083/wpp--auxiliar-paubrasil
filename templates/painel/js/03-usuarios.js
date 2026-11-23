@@ -126,17 +126,42 @@
       if (!E.panelUserFeatures) return;
       const adminMode = Boolean(E.panelUserAdmin && E.panelUserAdmin.checked);
       const selectedSet = new Set((selected || []).map(item => String(item || "").toLowerCase()));
-      E.panelUserFeatures.innerHTML = PANEL_FEATURES.map(feature => {
+      const disabled = adminMode ? "disabled" : "";
+      const disabledClass = adminMode ? " is-disabled" : "";
+      const cartao = feature => {
         const checked = (adminMode || selectedSet.has(feature.id)) ? "checked" : "";
-        const disabled = adminMode ? "disabled" : "";
-        const disabledClass = adminMode ? " is-disabled" : "";
         const icon = feature.icon || "bi-check2-square";
-        return `<label class="panel-user-feature-card${disabledClass}"><input class="form-check-input panel-user-feature" type="checkbox" value="${escapeHtml(feature.id)}" aria-label="${escapeHtml(feature.label)}" ${checked} ${disabled}><span class="panel-user-feature-icon"><i class="bi ${escapeHtml(icon)}"></i></span><span class="panel-user-feature-main"><span class="panel-user-feature-title">${escapeHtml(feature.label)}</span><span class="panel-user-feature-description">${escapeHtml(feature.description || "")}</span></span></label>`;
+        return `<label class="panel-user-feature-card${disabledClass}"><input class="form-check-input panel-user-feature" type="checkbox" value="${escapeHtml(feature.id)}" data-grupo="${escapeHtml(feature.grupo || "")}" aria-label="${escapeHtml(feature.label)}" ${checked} ${disabled}><span class="panel-user-feature-icon"><i class="bi ${escapeHtml(icon)}"></i></span><span class="panel-user-feature-main"><span class="panel-user-feature-title">${escapeHtml(feature.label)}</span><span class="panel-user-feature-description">${escapeHtml(feature.description || "")}</span></span></label>`;
+      };
+      // Cada aba (grupo) tem uma caixa que marca ou desmarca todas as sub-abas dela.
+      E.panelUserFeatures.innerHTML = PANEL_FEATURE_GROUPS.map(grupo => {
+        const itens = PANEL_FEATURES.filter(feature => feature.grupo === grupo.id);
+        if (!itens.length) return "";
+        return `<fieldset class="panel-user-feature-grupo"><legend><label class="panel-user-feature-grupo-titulo${disabledClass}"><input class="form-check-input panel-user-feature-grupo-check" type="checkbox" data-grupo="${escapeHtml(grupo.id)}" ${disabled}><i class="bi ${escapeHtml(grupo.icon)}" aria-hidden="true"></i><span>Aba ${escapeHtml(grupo.label)}</span><small class="panel-user-feature-grupo-conta" data-grupo-conta="${escapeHtml(grupo.id)}"></small></label></legend><div class="panel-user-feature-grid">${itens.map(cartao).join("")}</div></fieldset>`;
       }).join("");
       E.panelUserFeatures.querySelectorAll(".panel-user-feature").forEach(input => {
         input.addEventListener("change", updatePanelUserFeatureCount);
       });
+      E.panelUserFeatures.querySelectorAll(".panel-user-feature-grupo-check").forEach(input => {
+        input.addEventListener("change", () => {
+          E.panelUserFeatures.querySelectorAll(`.panel-user-feature[data-grupo="${CSS.escape(input.dataset.grupo)}"]`).forEach(item => { item.checked = input.checked; });
+          updatePanelUserFeatureCount();
+        });
+      });
       updatePanelUserFeatureCount();
+    }
+
+    // Caixa da aba: marcada quando todas as sub-abas estão marcadas, "meio marcada" quando só algumas.
+    function atualizarGruposDePermissao() {
+      if (!E.panelUserFeatures) return;
+      E.panelUserFeatures.querySelectorAll(".panel-user-feature-grupo-check").forEach(caixa => {
+        const itens = Array.from(E.panelUserFeatures.querySelectorAll(`.panel-user-feature[data-grupo="${CSS.escape(caixa.dataset.grupo)}"]`));
+        const marcados = itens.filter(item => item.checked).length;
+        caixa.checked = itens.length > 0 && marcados === itens.length;
+        caixa.indeterminate = marcados > 0 && marcados < itens.length;
+        const conta = E.panelUserFeatures.querySelector(`[data-grupo-conta="${CSS.escape(caixa.dataset.grupo)}"]`);
+        if (conta) conta.textContent = `${marcados} de ${itens.length}`;
+      });
     }
 
     function selectedPanelUserFeatures() {
@@ -153,6 +178,7 @@
       if (E.panelUserFeatureCount) {
         E.panelUserFeatureCount.textContent = adminMode ? `Todos (${total})` : `${selectedCount} de ${total}`;
       }
+      atualizarGruposDePermissao();
       if (E.panelUserAdminHint) {
         E.panelUserAdminHint.textContent = adminMode
           ? "Administrador acessa todos os blocos. As permissões ficam travadas neste perfil."

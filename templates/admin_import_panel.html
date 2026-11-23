@@ -63,15 +63,26 @@
 
     <section class="panel-card mb-3 admin-tabs-card">
       <nav class="panel-groups" id="panelGroups" aria-label="Áreas do painel">
+        <button type="button" class="panel-group-btn" data-grupo="vendedor" aria-pressed="false"><i class="bi bi-person-badge me-1" aria-hidden="true"></i>Vendedor</button>
         <button type="button" class="panel-group-btn" data-grupo="operacao" aria-pressed="false"><i class="bi bi-truck me-1" aria-hidden="true"></i>Operação</button>
         <button type="button" class="panel-group-btn" data-grupo="financeiro" aria-pressed="false"><i class="bi bi-cash-stack me-1" aria-hidden="true"></i>Financeiro</button>
         <button type="button" class="panel-group-btn" data-grupo="dados" aria-pressed="false"><i class="bi bi-database me-1" aria-hidden="true"></i>Dados</button>
         <button type="button" class="panel-group-btn" data-grupo="admin" aria-pressed="false"><i class="bi bi-gear me-1" aria-hidden="true"></i>Gestão</button>
       </nav>
       <ul class="nav nav-pills" id="adminTabs" role="tablist">
-        <li class="nav-item" role="presentation" data-grupo="operacao">
+        <li class="nav-item" role="presentation" data-grupo="vendedor">
           <a class="nav-link" id="pedidosTab" href="/pedidos" data-admin-page-link="true" data-bs-target="#pedidosPane" role="tab" aria-controls="pedidosPane" aria-selected="false">
             <i class="bi bi-cart-plus me-1"></i>Pedidos
+          </a>
+        </li>
+        <li class="nav-item" role="presentation" data-grupo="vendedor">
+          <a class="nav-link" id="clientesTab" href="/clientes" data-admin-page-link="true" data-bs-target="#clientesPane" role="tab" aria-controls="clientesPane" aria-selected="false">
+            <i class="bi bi-person-vcard me-1"></i>Clientes
+          </a>
+        </li>
+        <li class="nav-item" role="presentation" data-grupo="vendedor">
+          <a class="nav-link" id="rotaFinanceiraTab" href="/rota-financeira" data-admin-page-link="true" data-bs-target="#rotaFinanceiraPane" role="tab" aria-controls="rotaFinanceiraPane" aria-selected="false">
+            <i class="bi bi-signpost-2 me-1"></i>Rota Financeira
           </a>
         </li>
         <li class="nav-item" role="presentation" data-grupo="operacao">
@@ -160,6 +171,10 @@
 
       <!--#include painel/abas/pedidos.html -->
 
+      <!--#include painel/abas/clientes.html -->
+
+      <!--#include painel/abas/rota-financeira.html -->
+
       <!--#include painel/abas/estoque.html -->
 
       <!--#include painel/abas/armazem.html -->
@@ -199,6 +214,8 @@
 <!--#include painel/js/18-payip.js -->
 <!--#include painel/js/19-protestos.js -->
 <!--#include painel/js/20-uso-evolution.js -->
+<!--#include painel/js/21-clientes.js -->
+<!--#include painel/js/22-rota-financeira.js -->
 <!--#include painel/js/99-inicio.js -->
   </script>
 </body>

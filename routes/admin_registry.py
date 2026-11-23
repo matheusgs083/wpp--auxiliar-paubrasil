@@ -15,7 +15,9 @@ from bot_api.routes.admin_imports import create_admin_imports_router
 from bot_api.routes.admin_liga_entrega import create_admin_liga_entrega_router
 from bot_api.routes.admin_panel import create_admin_panel_router
 from bot_api.routes.admin_payip import create_admin_payip_router
+from bot_api.routes.admin_clientes import create_admin_clientes_router
 from bot_api.routes.admin_pedidos import create_admin_pedidos_router
+from bot_api.routes.admin_rota_financeira import create_admin_rota_financeira_router
 from bot_api.routes.admin_estoque import create_admin_estoque_router
 from bot_api.routes.admin_promax import create_admin_promax_router
 from bot_api.routes.admin_protestos import create_admin_protestos_router
@@ -38,6 +40,8 @@ def build_admin_route_registrars(deps: dict[str, Any]) -> tuple[RouteRegistrar, 
         lambda app: _register_admin_protestos_routes(app, deps=deps),
         lambda app: _register_admin_payip_routes(app, deps=deps),
         lambda app: _register_admin_pedidos_routes(app, deps=deps),
+        lambda app: _register_admin_clientes_routes(app, deps=deps),
+        lambda app: _register_admin_rota_financeira_routes(app, deps=deps),
         lambda app: _register_admin_estoque_routes(app, deps=deps),
         lambda app: _register_admin_usage_routes(app, deps=deps),
         lambda app: _register_admin_broadcast_routes(app, deps=deps),
@@ -241,6 +245,36 @@ def _register_admin_pedidos_routes(app: FastAPI, *, deps: dict[str, Any]) -> Non
             promax_jobs_service=deps["promax_jobs_service"],
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps["record_admin_panel_action"],
+        )
+    )
+
+
+def _register_admin_clientes_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    app.include_router(
+        create_admin_clientes_router(
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
+            dclientes_query_service=deps["dclientes_query_service"],
+            inadimplencia_query_service=deps["inadimplencia_query_service"],
+            comodatos_query_service=deps.get("comodatos_query_service"),
+            boletos_query_service=deps.get("boletos_query_service"),
+            record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps.get("record_admin_panel_action"),
+        )
+    )
+
+
+def _register_admin_rota_financeira_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    app.include_router(
+        create_admin_rota_financeira_router(
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
+            dclientes_query_service=deps["dclientes_query_service"],
+            inadimplencia_query_service=deps["inadimplencia_query_service"],
+            boletos_query_service=deps.get("boletos_query_service"),
+            rota_financeira_query_service=deps.get("rota_financeira_query_service"),
+            record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps.get("record_admin_panel_action"),
         )
     )
 

@@ -189,6 +189,13 @@
     .panel-user-switch .form-check-input { flex: 0 0 auto; cursor: pointer; }
     .panel-user-feature-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; margin-bottom: 0.5rem; }
     .panel-user-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+    #panelUserFeatures { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+    .panel-user-feature-grupo { margin: 0; padding: 0.55rem; border: 1px solid var(--line); border-radius: var(--radius-md); }
+    .panel-user-feature-grupo legend { float: none; width: auto; margin: 0 0 0.45rem; padding: 0; font-size: inherit; }
+    .panel-user-feature-grupo-titulo { display: inline-flex; align-items: center; gap: 0.45rem; margin: 0; color: var(--ink-900); font-size: var(--fs-sm); font-weight: 800; cursor: pointer; }
+    .panel-user-feature-grupo-titulo.is-disabled { cursor: not-allowed; opacity: 0.78; }
+    .panel-user-feature-grupo-titulo .form-check-input { margin: 0; }
+    .panel-user-feature-grupo-conta { color: var(--ink-500); font-size: var(--fs-xs); font-weight: 650; }
     .panel-user-feature-card { min-height: 66px; display: flex; align-items: flex-start; gap: 0.5rem; margin: 0; padding: 0.55rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); cursor: pointer; transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
     .panel-user-feature-card:hover { border-color: var(--brand-600); background: rgba(37, 99, 235, 0.05); }
     .panel-user-feature-card:has(.panel-user-feature:checked) { border-color: rgba(37, 99, 235, 0.45); background: var(--tone-info-bg); box-shadow: inset 3px 0 0 var(--brand-600); }
@@ -493,3 +500,97 @@
     .recolha-dashboard-grid[data-vazio]::before, .usage-metric-grid[data-vazio]::before { content: attr(data-vazio-msg); }
     :is(.recolha-dashboard-grid, .usage-metric-grid)[data-vazio] + :is(.recolha-dashboard-grid, .usage-metric-grid)[data-vazio] { display: none !important; }
     #entregaPane .recolha-dashboard-grid[data-vazio] { color: var(--ep-muted); border-color: var(--ep-line-strong); }
+    /* Clientes e Rota Financeira: reaproveita os cartões de Pedidos; aqui só o que é exclusivo. */
+    #clientesPane { max-width: 1240px; margin: 0 auto; }
+    #clientesPane .pedido-shell > *, #clientesFicha { min-width: 0; }
+    #clientesFicha .pedido-subtab { color: var(--ink-700); }
+    #clientesFicha .pedido-subtab.is-active { color: var(--brand-700); }
+    .clientes-busca { display: grid; grid-template-columns: minmax(160px, .8fr) minmax(260px, 2fr); gap: .65rem; align-items: end; }
+    .clientes-filtros { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .65rem; }
+    .clientes-filtro { min-height: 36px; padding: .35rem .7rem; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); color: var(--ink-700); background: var(--surface); font-size: var(--fs-sm); font-weight: 700; }
+    .clientes-filtro[aria-pressed="true"] { color: var(--brand-700); border-color: var(--brand-600); background: var(--brand-100); }
+    .clientes-filtro:focus-visible, .cliente-resultado .btn:focus-visible { outline: 2px solid var(--brand-600); outline-offset: 2px; }
+    .cliente-resultado { cursor: default; }
+    .cliente-resultado-main { min-width: 0; }
+    .cliente-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
+    .cliente-tag { display: inline-flex; align-items: center; gap: .3rem; padding: .16rem .5rem; border: 1px solid var(--line); border-radius: var(--radius-pill); color: var(--ink-700); background: var(--surface-soft); font-size: var(--fs-xs); font-weight: 750; white-space: nowrap; }
+    .cliente-tag[data-tom="ok"] { color: var(--success); background: var(--tone-ok-bg); border-color: rgba(4,120,87,.3); }
+    .cliente-tag[data-tom="warn"] { color: var(--warning); background: var(--tone-warn-bg); border-color: rgba(180,83,9,.3); }
+    .cliente-tag[data-tom="err"] { color: var(--danger); background: var(--tone-err-bg); border-color: rgba(185,28,28,.35); }
+    .cliente-tag[data-tom="info"] { color: var(--brand-700); background: var(--tone-info-bg); border-color: rgba(37,99,235,.3); }
+    .clientes-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .clientes-kpis small { display: block; margin-top: .15rem; font-size: var(--fs-xs); }
+    .cliente-acoes { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .cliente-tabela td, .cliente-tabela th { white-space: nowrap; }
+    .cliente-tabela tr[data-situacao="vencido"] > td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+    .cliente-tabela tr[data-situacao="hoje"] > td:first-child, .cliente-tabela tr[data-situacao="amanha"] > td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+    .cliente-linha { min-width: 280px; white-space: normal !important; overflow-wrap: anywhere; font-size: var(--fs-xs); }
+    .cliente-acoes-financeiras { display: grid; gap: .2rem; padding: .7rem .85rem; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); color: var(--ink-700); font-size: var(--fs-sm); }
+    @media (max-width: 767px) { .clientes-busca { grid-template-columns: 1fr; } .clientes-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cliente-resultado { grid-template-columns: auto minmax(0, 1fr); } .cliente-resultado .cliente-ver-ficha { grid-column: 1 / -1; min-height: 40px; } }
+    /* Rota Financeira: só o que não existe em Pedidos/Clientes. */
+    #rotaFinanceiraPane { max-width: 1440px; margin: 0 auto; }
+    #rotaFinanceiraPane .pedido-shell > * { min-width: 0; }
+    .rota-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .65rem; align-items: end; }
+    .rota-filtros > div:last-child { grid-column: span 2; }
+    .rota-kpis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .55rem; }
+    .rota-kpi { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; text-align: left; color: inherit; }
+    .rota-kpi small { display: block; margin-top: .15rem; color: var(--ink-500); font-size: var(--fs-xs); }
+    button.rota-kpi { cursor: pointer; }
+    button.rota-kpi:hover { border-color: var(--brand-600); }
+    button.rota-kpi[aria-pressed="true"] { border-color: var(--brand-600); box-shadow: inset 0 0 0 1px var(--brand-600); }
+    button.rota-kpi:focus-visible, .rota-cliente:focus-visible { outline: 2px solid var(--brand-600); outline-offset: 2px; }
+    .rota-tabela { min-width: 1080px; }
+    .rota-tabela td, .rota-tabela th { white-space: nowrap; }
+    .rota-tabela tr[data-faixa="1"] > td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+    .rota-tabela tr[data-faixa="2"] > td:first-child, .rota-tabela tr[data-faixa="3"] > td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+    .rota-prioridade { display: inline-grid; min-width: 28px; height: 28px; place-items: center; border-radius: 50%; color: var(--ink-700); background: var(--surface-soft); font-size: var(--fs-xs); font-weight: 800; }
+    .rota-cliente { display: grid; padding: 0; border: 0; color: inherit; background: transparent; text-align: left; }
+    .rota-cliente strong { color: var(--ink-900); }
+    .rota-cliente span { color: var(--ink-500); font-size: var(--fs-xs); }
+    .rota-acoes { display: inline-flex; gap: .3rem; }
+    .rota-acao-texto { margin-left: .3rem; }
+    .rota-paginacao { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-top: .75rem; }
+    .rota-detalhe { --bs-offcanvas-width: min(520px, 100vw); background: var(--surface); color: var(--ink-700); }
+    .rota-detalhe-fatos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .rota-detalhe-fatos .pedido-client-fact:nth-child(4n) { border-right: 1px solid var(--line); }
+    .rota-detalhe-fatos .pedido-client-fact:nth-child(3n) { border-right: 0; }
+    .rota-detalhe-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+    .rota-detalhe-resumo div { padding: .6rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
+    .rota-detalhe-resumo span { display: block; color: var(--ink-500); font-size: var(--fs-2xs); font-weight: 800; text-transform: uppercase; }
+    .rota-detalhe-titulos { display: grid; gap: .5rem; }
+    .rota-titulo { padding: .65rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+    @media (max-width: 1279px) { .rota-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 767px) { .rota-filtros > div:last-child { grid-column: auto; } .rota-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rota-acao-texto { display: none; } .rota-detalhe-fatos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    /* Rota Financeira no celular: lista compacta (3 linhas por cliente) para varrer a fila e agir rápido.
+       Linha 1: nome e valor. Linha 2: resumo (NB, títulos, vencimento, boleto) e situação. Linha 3: ações. */
+    .rota-c-resumo, .rota-acao-movel { display: none; }
+    @media (max-width: 767px) {
+      #rotaFinanceiraPane .table-responsive { overflow: visible; }
+      .rota-tabela { min-width: 0; }
+      .rota-tabela thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      .rota-tabela, .rota-tabela tbody { display: block; width: 100%; }
+      .rota-tabela tr.rota-linha { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-areas: "prior cliente pendente" "prior situacao situacao" "prior resumo resumo" "prior acoes acoes"; gap: .15rem .55rem; align-items: center; padding: .6rem .5rem .6rem .35rem; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; }
+      .rota-tabela tr.rota-linha > td { display: none; padding: 0; border: 0; box-shadow: none !important; background: transparent; }
+      .rota-tabela tr.rota-linha > td.rota-c-prior { display: block; grid-area: prior; align-self: start; }
+      .rota-tabela tr.rota-linha > td.rota-c-cliente { display: block; grid-area: cliente; min-width: 0; }
+      .rota-tabela td.rota-c-cliente strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .rota-tabela td.rota-c-cliente .mono { display: none; }
+      .rota-tabela tr.rota-linha > td.rota-c-pendente { display: block; grid-area: pendente; text-align: right; }
+      .rota-tabela tr.rota-linha > td.rota-c-resumo { display: block; grid-area: resumo; min-width: 0; color: var(--ink-500); font-size: var(--fs-xs); white-space: normal; }
+      .rota-tabela tr.rota-linha > td.rota-c-situacao { display: block; grid-area: situacao; text-align: left; }
+      .rota-tabela tr.rota-linha > td.rota-c-acoes { display: block; grid-area: acoes; margin-top: .3rem; text-align: left; }
+      .rota-tabela .rota-prioridade { min-width: 24px; height: 24px; }
+      .rota-tabela td.rota-c-acoes .rota-acoes { display: flex; gap: .35rem; }
+      .rota-tabela td.rota-c-acoes .btn { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; min-height: 38px; padding: .25rem .35rem; }
+      .rota-tabela .rota-acao-movel { display: inline; font-size: var(--fs-xs); font-weight: 700; }
+      .rota-tabela .rota-acao-texto { display: inline; margin-left: 0; font-size: var(--fs-xs); }
+      .rota-tabela tr[data-faixa="1"] { border-left-color: var(--danger); }
+      .rota-tabela tr[data-faixa="2"], .rota-tabela tr[data-faixa="3"] { border-left-color: var(--warning); }
+      .rota-tabela tr:hover > td { background: transparent; }
+      .rota-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+      .rota-filtros > div:last-child { grid-column: 1 / -1; }
+      #rotaFinanceiraPane .clientes-filtros { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .2rem; }
+      #rotaFinanceiraPane .clientes-filtro { flex: 0 0 auto; }
+      .rota-kpis { display: flex; gap: .45rem; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: .2rem; }
+      .rota-kpis > .rota-kpi { flex: 0 0 auto; min-width: 132px; padding: .55rem .65rem; scroll-snap-align: start; }
+    }

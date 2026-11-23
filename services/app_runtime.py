@@ -21,6 +21,7 @@ from bot_api.services.admin_broadcast_config import build_admin_broadcast_config
 from bot_api.services.admin_financeiro_service import AdminFinanceiroService
 from bot_api.services.admin_import_config import ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS, build_admin_import_datasets
 from bot_api.services.admin_templates import AdminTemplateLoader
+from bot_api.services.rota_financeira_query_service import RotaFinanceiraQueryService
 from bot_api.services.app_lifecycle import register_app_lifecycle
 from bot_api.services.admin_panel_session_service import AdminPanelSessionService
 from bot_api.services.admin_panel_user_service import AdminPanelUserService
@@ -636,6 +637,15 @@ def configure_app_runtime(
     return None
 
 
+def _rota_financeira_query_service(dclientes_query_service: Any) -> RotaFinanceiraQueryService:
+    """A Rota Financeira lê o mesmo banco de relatórios do dClientes."""
+    return RotaFinanceiraQueryService(
+        database_url=dclientes_query_service.database_url,
+        schema=dclientes_query_service.schema,
+        connect_timeout_seconds=dclientes_query_service.connect_timeout_seconds,
+    )
+
+
 def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "settings": runtime["settings"],
@@ -736,6 +746,8 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "estoque_020304_import_services": runtime["services"].estoque_020304_import_services,
         "cora_estoque_import_service": runtime["services"].cora_estoque_import_service,
         "cora_estoque_query_service": runtime["services"].cora_estoque_query_service,
+        "boletos_query_service": runtime["services"].boletos_query_service,
+        "rota_financeira_query_service": _rota_financeira_query_service(runtime["services"].dclientes_query_service),
         "relatorio_031120_import_services": runtime["services"].relatorio_031120_import_services,
         "relatorio_03114902_import_service": runtime["services"].relatorio_03114902_import_service,
         "inadimplencia_import_service": runtime["services"].inadimplencia_import_service,
