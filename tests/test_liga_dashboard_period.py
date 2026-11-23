@@ -9,6 +9,7 @@ from bot_api.services.liga_entrega_dashboard_service import (
     deduplicate_devolucoes,
     _is_valid_roster_candidate,
     expand_role_people,
+    refresh_snapshot_from_sql,
 )
 from datetime import date
 
@@ -295,6 +296,41 @@ def test_sql_dashboard_does_not_fall_back_to_previous_month_snapshot():
 
     assert result["competencia"] == "2026-10"
     assert requested == [{"competencia": "2026-10", "period": "atual"}]
+
+
+def test_snapshot_refresh_enriches_devolucao_gv_from_dclientes():
+    class SnapshotStore:
+        def __init__(self):
+            self.payloads = {
+                period: {
+                    "summary": {}, "rotas": [], "equipe": [], "equipe_candidatos": [],
+                    "devolucoes_auxiliares": [{
+                        "filial": "PATOS", "cliente_cod": "00123", "data": "2026-11-10",
+                        "gv": "", "aju": [], "cod": "7302",
+                    }],
+                    "_liga_facts": {"ent_m": {}, "ent_a": {}, "checklist": []},
+                }
+                for period in ("atual", "fechado")
+            }
+
+        def get_latest(self, *, competencia, period):
+            return competencia, self.payloads[period]
+
+        def put(self, *, competencia, period, signature, payload):
+            self.payloads[period] = payload
+
+    class Expurgos:
+        def list_expurgos(self, **_kwargs):
+            return {"items": []}
+
+    class DClientes:
+        def lookup_liga_clientes(self, keys):
+            assert keys == [("PATOS", "00123")]
+            return {("3", "123"): {"cliente_nome": "Cliente", "setor": "101", "rn": "101", "area": "1", "gv": "7"}}
+
+    store = SnapshotStore()
+    assert refresh_snapshot_from_sql(store, Expurgos(), "2026-11", dclientes_query_service=DClientes())
+    assert all(payload["devolucoes_auxiliares"][0]["gv"] == "7" for payload in store.payloads.values())
 
 
 def test_auxiliary_manifest_matches_operational_csv_date_when_uploaded_next_month(tmp_path):

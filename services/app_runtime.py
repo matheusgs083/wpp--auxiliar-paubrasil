@@ -187,6 +187,10 @@ def configure_app_runtime(
                     report_store=liga_entrega_report_store,
                     expurgo_service=liga_entrega_expurgo_service,
                     status_service=liga_entrega_status_service,
+                    # Devoluções do 03.02.24 não trazem o GV. Enriquecer o
+                    # snapshot já na materialização evita que a aba
+                    # operacional receba linhas sem essa classificação.
+                    dclientes_query_service=dclientes_query_service,
                     snapshot_store=liga_entrega_snapshot_store,
                     raw_sql_import_service=liga_entrega_raw_sql_import_service,
                     route_team_service=liga_entrega_route_team_service,

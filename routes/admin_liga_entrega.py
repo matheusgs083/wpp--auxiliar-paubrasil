@@ -199,7 +199,29 @@ def create_admin_liga_entrega_router(
         latest = liga_entrega_snapshot_store.get_latest(competencia=selected, period=period)
         if latest is None or not isinstance(latest[1], dict):
             raise HTTPException(status_code=404, detail="Não há devoluções importadas para a competência selecionada.")
-        return latest[1]
+        payload = latest[1]
+        # Corrige snapshots já materializados antes do enriquecimento por
+        # dClientes. Sem isso, a aba de devoluções só enxerga ``gv`` vazio e
+        # agrupa todos os registros como "Sem informação".
+        missing_gv = any(
+            isinstance(item, dict)
+            and str(item.get("cliente_cod") or "").strip().lstrip("0")
+            and not str(item.get("gv") or "").strip()
+            for item in payload.get("devolucoes_auxiliares") or []
+        )
+        if missing_gv and dclientes_query_service is not None:
+            refresh_snapshot_from_sql(
+                liga_entrega_snapshot_store,
+                liga_entrega_expurgo_service,
+                selected,
+                status_service=liga_entrega_status_service,
+                route_team_service=liga_entrega_route_team_service,
+                dclientes_query_service=dclientes_query_service,
+            )
+            refreshed = liga_entrega_snapshot_store.get_latest(competencia=selected, period=period)
+            if refreshed is not None and isinstance(refreshed[1], dict):
+                payload = refreshed[1]
+        return payload
 
     def jornada_mapas_source(competencia: str | None) -> dict[str, Any]:
         selected = str(competencia or "").strip()
