@@ -29,6 +29,16 @@
           <div class="form-text mt-2" id="estoqueImportStatus">Selecione a filial correspondente ao arquivo exportado.</div>
         </section>
 
+        <section class="panel-card p-3 mb-3" id="importar030237Card">
+          <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start mb-2">
+            <div><h2 class="h6 fw-bold mb-1"><i class="bi bi-cart-check me-2 text-primary"></i>Importar 03.02.37 com itens</h2><div class="form-text">Envie os CSVs da <span class="mono">03.02.37</span> com itens, um por filial e mês. Eles alimentam compras, crédito, devoluções e o giro de vasilhames da ficha do cliente. Arquivo repetido é ignorado.</div></div>
+            <span class="pill warn">Administrador</span>
+          </div>
+          <div class="row g-2 align-items-end"><div class="col-md-9"><label class="form-label small mb-1" for="importar030237Arquivos">CSVs da 03.02.37</label><input class="form-control" id="importar030237Arquivos" type="file" accept=".csv,text/csv" multiple></div><div class="col-md-3"><button class="btn btn-primary w-100" id="importar030237Btn" type="button"><i class="bi bi-cloud-arrow-up me-1"></i>Importar</button></div></div>
+          <div class="form-text mt-2" id="importar030237Status" role="status" aria-live="polite">Pode selecionar vários arquivos de uma vez.</div>
+          <ul class="small mb-0 mt-2 ps-3" id="importar030237Lista"></ul>
+        </section>
+
         <section class="panel-card p-3 mb-3">
           <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
             <div>

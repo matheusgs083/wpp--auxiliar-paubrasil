@@ -42,6 +42,8 @@ class ComodatoRecord:
     sub_tipo_material: str
     saldo: str
     planilha_atualizada_em: str
+    # Vencimento do contrato de comodato (coluna da 02.02.20 guardada no payload), dd/mm/aaaa.
+    vencimento: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -505,7 +507,8 @@ class ComodatosQueryService:
                 c.sub_tipo_material,
                 {saldo_sql} AS saldo,
                 COALESCE(b.reference_date::text, '') AS reference_date,
-                c.batch_imported_at
+                c.batch_imported_at,
+                c.payload
             FROM {schema}.comodatos_latest c
             JOIN {schema}.dclientes_latest d
               ON d.filial = c.unb
@@ -545,6 +548,7 @@ class ComodatosQueryService:
                 sub_tipo_material=str(row["sub_tipo_material"] or ""),
                 saldo=_format_quantity(row.get("saldo")),
                 planilha_atualizada_em=_format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
+                vencimento=vencimento_do_payload(row.get("payload")),
             )
             for row in rows
         ]
@@ -715,3 +719,33 @@ def _format_reference_date(reference_date: Any, batch_imported_at: Any) -> str:
             return batch_imported_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         return batch_imported_at.strftime("%Y-%m-%d %H:%M:%S")
     return str(batch_imported_at or "")
+
+
+def vencimento_do_payload(payload: Any) -> str:
+    """Data de vencimento do comodato na linha original da 02.02.20 (coluna "Vencimento").
+
+    "00/00/0000" é data vazia no Promax e 31/12/2199 (ou qualquer ano a partir de
+    2100) é comodato permanente: nos dois casos não há vencimento.
+    """
+    if not isinstance(payload, dict):
+        return ""
+    chaves = [chave for chave in payload if str(chave or "").strip().lower() == "vencimento"]
+    chaves += [
+        chave for chave in payload
+        if "venc" in str(chave or "").lower() and chave not in chaves
+        and not any(trecho in str(chave).lower() for trecho in ("1o", "cr venc", "saldo"))
+    ]
+    for chave in chaves:
+        texto = str(payload.get(chave) or "").strip()
+        data = re.fullmatch(r"(\d{2})/(\d{2})/(\d{4})", texto)
+        iso = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2}).*", texto)
+        if data:
+            dia, mes, ano = data.groups()
+        elif iso:
+            ano, mes, dia = iso.groups()
+        else:
+            continue
+        if ano == "0000" or int(ano) >= 2100:
+            return ""
+        return f"{dia}/{mes}/{ano}"
+    return ""

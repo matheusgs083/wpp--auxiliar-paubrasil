@@ -71,6 +71,11 @@
       </nav>
       <ul class="nav nav-pills" id="adminTabs" role="tablist">
         <li class="nav-item" role="presentation" data-grupo="vendedor">
+          <a class="nav-link" id="rotaFinanceiraTab" href="/rota-financeira" data-admin-page-link="true" data-bs-target="#rotaFinanceiraPane" role="tab" aria-controls="rotaFinanceiraPane" aria-selected="false">
+            <i class="bi bi-signpost-2 me-1"></i>Rota Financeira
+          </a>
+        </li>
+        <li class="nav-item" role="presentation" data-grupo="vendedor">
           <a class="nav-link" id="pedidosTab" href="/pedidos" data-admin-page-link="true" data-bs-target="#pedidosPane" role="tab" aria-controls="pedidosPane" aria-selected="false">
             <i class="bi bi-cart-plus me-1"></i>Pedidos
           </a>
@@ -78,11 +83,6 @@
         <li class="nav-item" role="presentation" data-grupo="vendedor">
           <a class="nav-link" id="clientesTab" href="/clientes" data-admin-page-link="true" data-bs-target="#clientesPane" role="tab" aria-controls="clientesPane" aria-selected="false">
             <i class="bi bi-person-vcard me-1"></i>Clientes
-          </a>
-        </li>
-        <li class="nav-item" role="presentation" data-grupo="vendedor">
-          <a class="nav-link" id="rotaFinanceiraTab" href="/rota-financeira" data-admin-page-link="true" data-bs-target="#rotaFinanceiraPane" role="tab" aria-controls="rotaFinanceiraPane" aria-selected="false">
-            <i class="bi bi-signpost-2 me-1"></i>Rota Financeira
           </a>
         </li>
         <li class="nav-item" role="presentation" data-grupo="operacao">
@@ -180,6 +180,8 @@
 
       <!--#include painel/abas/rota-financeira.html -->
 
+      <!--#include painel/abas/ficha-cliente.html -->
+
       <!--#include painel/abas/estoque.html -->
 
       <!--#include painel/abas/armazem.html -->
@@ -223,7 +225,9 @@
 <!--#include painel/js/20-uso-evolution.js -->
 <!--#include painel/js/21-clientes.js -->
 <!--#include painel/js/22-rota-financeira.js -->
+<!--#include painel/js/24-ficha-cliente.js -->
 <!--#include painel/js/23-gerar-critica.js -->
+<!--#include painel/js/25-importar-030237.js -->
 <!--#include painel/js/99-inicio.js -->
   </script>
 </body>

@@ -559,17 +559,72 @@
     .rota-acoes { display: inline-flex; gap: .3rem; }
     .rota-acao-texto { margin-left: .3rem; }
     .rota-paginacao { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-top: .75rem; }
-    .rota-detalhe { --bs-offcanvas-width: min(520px, 100vw); background: var(--surface); color: var(--ink-700); }
-    .rota-detalhe-fatos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .rota-detalhe-fatos .pedido-client-fact:nth-child(4n) { border-right: 1px solid var(--line); }
-    .rota-detalhe-fatos .pedido-client-fact:nth-child(3n) { border-right: 0; }
-    .rota-detalhe-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
-    .rota-detalhe-resumo div { padding: .6rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
-    .rota-detalhe-resumo span { display: block; color: var(--ink-500); font-size: var(--fs-2xs); font-weight: 800; text-transform: uppercase; }
-    .rota-detalhe-titulos { display: grid; gap: .5rem; }
-    .rota-titulo { padding: .65rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+    /* Ficha do cliente em blocos (Rota Financeira e Clientes): painel lateral no computador,
+       tela cheia no celular. Cada bloco: ícone, título, resumo numa linha e chevron. */
+    .ficha-cliente { --bs-offcanvas-width: min(600px, 100vw); background: var(--canvas); color: var(--ink-900); }
+    .ficha-topo { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem .75rem; border-bottom: 1px solid var(--line); background: var(--surface); }
+    .ficha-voltar { padding-left: 0; color: var(--ink-700); font-weight: 700; text-decoration: none; }
+    .ficha-cliente .offcanvas-body { padding: .85rem; }
+    .ficha-cabecalho { display: grid; gap: .6rem; margin-bottom: .85rem; padding: .85rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+    .ficha-cabecalho-nome .mono { color: var(--ink-500); font-size: var(--fs-xs); font-weight: 800; }
+    .ficha-acoes { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .ficha-fatos { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .45rem .75rem; margin: 0; }
+    .ficha-fatos dt { color: var(--ink-500); font-size: var(--fs-2xs); font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+    .ficha-fatos dd { margin: 0; color: var(--ink-900); font-size: var(--fs-sm); font-weight: 650; overflow-wrap: anywhere; }
+    .ficha-blocos { display: grid; gap: .5rem; }
+    .ficha-bloco { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); overflow: hidden; }
+    .ficha-bloco.is-open { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+    .ficha-bloco-h { margin: 0; font-size: inherit; }
+    .ficha-bloco-cab { display: flex; align-items: center; gap: .7rem; width: 100%; min-height: 56px; padding: .6rem .75rem; border: 0; color: inherit; background: transparent; text-align: left; }
+    .ficha-bloco-cab:hover { background: var(--surface-soft); }
+    .ficha-bloco-cab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+    .ficha-bloco-icone { display: inline-grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: var(--radius-sm); color: var(--brand-700); background: var(--tone-info-bg); font-size: 1.05rem; }
+    .ficha-bloco[data-estado="vazio"] .ficha-bloco-icone { color: var(--ink-500); background: var(--surface-soft); }
+    .ficha-bloco[data-estado="indisponivel"] .ficha-bloco-icone { color: var(--warning); background: var(--tone-warn-bg); }
+    .ficha-bloco-texto { display: grid; min-width: 0; flex: 1 1 auto; }
+    .ficha-bloco-titulo { color: var(--ink-900); font-size: var(--fs-md); font-weight: 800; }
+    .ficha-bloco-resumo { overflow: hidden; color: var(--ink-700); font-size: var(--fs-sm); text-overflow: ellipsis; white-space: nowrap; }
+    .ficha-bloco[data-estado="indisponivel"] .ficha-bloco-resumo { color: var(--warning); }
+    .ficha-bloco-chevron { flex: 0 0 auto; color: var(--ink-500); transition: transform .18s ease; }
+    .ficha-bloco.is-open .ficha-bloco-chevron { transform: rotate(180deg); }
+    .ficha-bloco-corpo { padding: .25rem .75rem .75rem; border-top: 1px solid var(--line); }
+    .ficha-lista { display: grid; gap: .5rem; margin-top: .5rem; }
+    .ficha-item { display: grid; gap: .45rem; padding: .65rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
+    .ficha-item[data-situacao="vencido"] { border-left: 3px solid var(--danger); }
+    .ficha-item-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; }
+    .ficha-item-acoes .cliente-acoes { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .ficha-sub { margin: .85rem 0 .4rem; color: var(--ink-700); font-size: var(--fs-xs); font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+    .ficha-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .45rem; margin: .5rem 0; }
+    .ficha-kpis > div { padding: .55rem .6rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
+    .ficha-kpis span { display: block; color: var(--ink-500); font-size: var(--fs-2xs); font-weight: 800; text-transform: uppercase; }
+    .ficha-kpis strong { display: block; color: var(--ink-900); font-size: var(--fs-md); }
+    .ficha-kpis small { color: var(--ink-500); font-size: var(--fs-2xs); }
+    .ficha-grafico { display: block; width: 100%; max-width: 420px; height: auto; }
+    .ficha-barra { fill: var(--brand-600); }
+    .ficha-barra.is-atual { fill: var(--brand-600); opacity: .55; }
+    .ficha-barra.is-sem-base { fill: var(--line-strong); }
+    .ficha-barra-valor { fill: var(--ink-700); font-size: 10px; font-weight: 700; }
+    .ficha-barra-mes { fill: var(--ink-500); font-size: 10px; font-weight: 700; }
+    .ficha-grafico-eixo { stroke: var(--line-strong); stroke-width: 1; }
+    .ficha-tops { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; }
+    .ficha-top, .ficha-linhas, .ficha-docs { margin: 0; padding: 0; list-style: none; }
+    .ficha-top li, .ficha-linhas li, .ficha-docs li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .32rem 0; border-bottom: 1px dashed var(--line); font-size: var(--fs-sm); }
+    .ficha-top li span, .ficha-linhas li span { min-width: 0; overflow: hidden; color: var(--ink-700); text-overflow: ellipsis; white-space: nowrap; }
+    .ficha-linhas small { color: var(--ink-500); white-space: nowrap; }
+    .ficha-tabela th, .ficha-tabela td { font-size: var(--fs-sm); }
+    .ficha-justificativa { margin: 0; padding: .45rem .55rem; border-radius: var(--radius-sm); color: var(--ink-700); background: var(--surface); font-size: var(--fs-sm); }
+    .ficha-progresso { height: 6px; margin: 0; border-radius: var(--radius-pill); background: var(--line); overflow: hidden; }
+    .ficha-progresso span { display: block; height: 100%; background: var(--success); }
+    #rotaLista tr.rota-linha { cursor: pointer; }
+    .ficha-rodape { margin-top: .65rem; color: var(--ink-500); font-size: var(--fs-2xs); }
+    @media (max-width: 767.98px) {
+      .ficha-cliente { --bs-offcanvas-width: 100vw; }
+      .ficha-cliente .offcanvas-body { padding: .6rem; }
+      .ficha-fatos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .ficha-acoes .btn { flex: 1 1 0; }
+    }
     @media (max-width: 1279px) { .rota-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-    @media (max-width: 767px) { .rota-filtros > div:last-child { grid-column: auto; } .rota-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rota-acao-texto { display: none; } .rota-detalhe-fatos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 767px) { .rota-filtros > div:last-child { grid-column: auto; } .rota-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rota-acao-texto { display: none; } }
     /* Rota Financeira no celular: lista compacta (3 linhas por cliente) para varrer a fila e agir rápido.
        Linha 1: nome e valor. Linha 2: resumo (NB, títulos, vencimento, boleto) e situação. Linha 3: ações. */
     .rota-c-resumo, .rota-acao-movel { display: none; }

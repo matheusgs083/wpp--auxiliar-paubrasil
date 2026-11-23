@@ -1391,6 +1391,8 @@
       setPanelTabVisible("estoqueTab", Boolean(state.panel && state.panel.canEstoque));
       const estoqueImportCard = document.getElementById("estoqueImportCard");
       if (estoqueImportCard) estoqueImportCard.style.display = state.panel && state.panel.isAdmin ? "" : "none";
+      const importar030237Card = document.getElementById("importar030237Card");
+      if (importar030237Card) importar030237Card.style.display = state.panel && state.panel.isAdmin ? "" : "none";
       setPanelTabVisible("armazemTab", Boolean(state.panel && state.panel.canArmazem));
       setPanelTabVisible("entregaTab", Boolean(state.panel && state.panel.canEntrega));
       setPanelTabVisible("criticaTab", Boolean(state.panel && state.panel.canViewCritica));
@@ -1401,6 +1403,17 @@
       setPanelTabVisible("protestosTab", Boolean(state.panel && state.panel.canProtestos) && !isCritica);
       setPanelTabVisible("giroRecolhaTab", Boolean(state.panel && state.panel.canViewGiro));
       applySimplePanelMode();
+      // Quem tem a Rota Financeira começa por ela (só na primeira carga e só na raiz /;
+      // um endereço direto como /clientes continua abrindo a aba pedida).
+      if (state.panel && !state.primeiraTelaDefinida) {
+        state.primeiraTelaDefinida = true;
+        if (!isCritica && currentPanelPath() === "/" && state.panel.canRotaFinanceira) {
+          // Esquece o grupo escolhido antes, para a barra de grupos acompanhar a aba (Vendedor).
+          const barraGrupos = document.getElementById("panelGroups");
+          if (barraGrupos) delete barraGrupos.dataset.selecionado;
+          showPanelTab("rotaFinanceiraTab");
+        }
+      }
       const activeTab = document.querySelector("#adminTabs .nav-link.active");
       // Na raiz (/) o endereço fica limpo; em outro endereço, ele passa a apontar para a aba aberta.
       const replaceAddress = currentPanelPath() !== "/";

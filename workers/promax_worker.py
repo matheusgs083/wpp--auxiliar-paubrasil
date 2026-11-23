@@ -497,6 +497,7 @@ class PromaxWorker:
                         self._import_03114902_relatorio_if_needed(job, job_id, lease_token, result)
                         self._import_120601_inadimplencia_if_needed(job, job_id, lease_token, result)
                         self._import_020220_comodatos_if_needed(job, job_id, lease_token, result)
+                        self._import_030237_giro_if_needed(job, job_id, lease_token, result)
                         self._import_0105070402_dclientes_if_needed(job, job_id, lease_token, result)
                         self._import_0112_dmateriais_if_needed(job, job_id, lease_token, result)
                         self._import_031702_documentacao_if_needed(job, job_id, lease_token, result)
@@ -1282,6 +1283,42 @@ class PromaxWorker:
                 files=files,
                 reference_date=reference_date,
             ),
+        )
+
+    def _import_030237_giro_if_needed(
+        self,
+        job: Mapping[str, Any],
+        job_id: str,
+        lease_token: str,
+        result: PromaxRunResult,
+    ) -> None:
+        def importar(files: Mapping[str, bytes], reference_date: str | None) -> Mapping[str, Any]:
+            # Um CSV por requisição: cada filial tem dezenas de MB e todas juntas
+            # passariam do tamanho razoável de uma chamada.
+            total = {"rows": 0, "arquivos": 0, "ignorados": 0}
+            for nome, conteudo in files.items():
+                resposta = self.client.import_030237_csvs(
+                    job_id=job_id,
+                    lease_token=lease_token,
+                    files={nome: conteudo},
+                    reference_date=reference_date,
+                )
+                self._heartbeat_active_job(job_id, lease_token)
+                parcial = resposta.get("result") if isinstance(resposta, Mapping) else {}
+                for chave in total:
+                    total[chave] += int((parcial or {}).get(chave) or 0)
+            return {"result": total}
+
+        self._import_csv_folder_if_needed(
+            job,
+            job_id,
+            lease_token,
+            result,
+            routine_id="030237_GIRO",
+            folder_name="030237 Giro",
+            label="Compras 030237_GIRO",
+            event_prefix="promax_030237_auto_import",
+            importer=importar,
         )
 
     def _import_0105070402_dclientes_if_needed(

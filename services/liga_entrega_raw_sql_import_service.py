@@ -20,6 +20,8 @@ COLUNAS_HISTORICO = {
     "030237": (
         "Empresa", "Filial", "Motorista", "ajudante-1", "ajudante-2", "Dt. Operacao", "Emissao",
         "Nota", "Serie", "Status", "Cliente", "Produto", "Unidade", "Qtde", "Total", "Mapa",
+        # Devoluções (status D) da ficha do cliente: motivo e nota de origem.
+        "Mot. Cancelamento", "NF Referencia", "Data NF Referencia",
     ),
 }
 
@@ -28,7 +30,14 @@ def _payload_historico(routine: str, row: dict[str, Any]) -> dict[str, Any]:
     columns = COLUNAS_HISTORICO.get(str(routine))
     if not columns:
         return row
-    return {column: row[column] for column in columns if column in row}
+    payload = {column: row[column] for column in columns if column in row}
+    if str(routine) == "030237":
+        # O CSV vem em cp1252 e é lido como UTF-8, então "Descrição" chega com
+        # caracteres trocados. Guarda pela raiz do nome, sob uma chave estável.
+        descricao = next((value for key, value in row.items() if str(key).lower().startswith("descri")), None)
+        if descricao not in (None, ""):
+            payload["Descricao"] = descricao
+    return payload
 
 
 def _payload_competencia(payload: dict[str, Any]) -> str:

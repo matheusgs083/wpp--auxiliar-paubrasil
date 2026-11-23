@@ -262,6 +262,11 @@ def _register_admin_clientes_routes(app: FastAPI, *, deps: dict[str, Any]) -> No
             boletos_query_service=deps.get("boletos_query_service"),
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps.get("record_admin_panel_action"),
+            prazo_limite_query_service=deps.get("prazo_limite_query_service"),
+            giro_vasilhame_service=deps.get("giro_vasilhame_service"),
+            documentacao_pendente_query_service=deps.get("documentacao_pendente_query_service"),
+            compras_030237_service=deps.get("compras_030237_service"),
+            devolucoes_justificativas_service=deps.get("devolucoes_justificativas_service"),
         )
     )
 
@@ -376,6 +381,7 @@ def _register_admin_promax_routes(app: FastAPI, *, deps: dict[str, Any]) -> None
             relatorio_03114902_import_service=deps["relatorio_03114902_import_service"],
             inadimplencia_import_service=deps["inadimplencia_import_service"],
             comodatos_import_service=deps["comodatos_import_service"],
+            compras_030237_service=deps.get("compras_030237_service"),
             dclientes_import_service=deps["dclientes_import_service"],
             dmateriais_import_service=deps["dmateriais_import_service"],
             documentacao_pendente_import_service=deps["documentacao_pendente_import_service"],

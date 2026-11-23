@@ -1,5 +1,5 @@
-    // Aba Rota Financeira: fila do dia priorizada pelo risco. Usa os componentes da aba Clientes
-    // (tags, ações de boleto, ficha) e os endpoints dela para ficha, linha digitável e PDF.
+    // Aba Rota Financeira: fila do dia priorizada pelo risco. Ao tocar num cliente abre a
+    // ficha em blocos (24-ficha-cliente.js); as tags vêm da aba Clientes.
 
     const ROTA_SITUACAO_ROTULO = { todos: "Todos", vencidos: "Vencidos", hoje: "Vence hoje", amanha: "Vence amanhã", dois_dias: "Vence em 2 dias", com_boleto: "Com boleto", sem_boleto: "Sem boleto" };
 
@@ -135,7 +135,6 @@
         const whats = item.telefone_whatsapp ? `<a class="btn btn-outline-success btn-sm" href="https://wa.me/${encodeURIComponent(item.telefone_whatsapp)}" target="_blank" rel="noopener" aria-label="WhatsApp de ${escapeHtml(nome)}"><i class="bi bi-whatsapp" aria-hidden="true"></i><span class="rota-acao-movel">WhatsApp</span></a>` : "";
         const ligar = item.telefone_discagem ? `<a class="btn btn-outline-secondary btn-sm" href="tel:${encodeURIComponent(item.telefone_discagem)}" aria-label="Ligar para ${escapeHtml(nome)}"><i class="bi bi-telephone" aria-hidden="true"></i><span class="rota-acao-movel">Ligar</span></a>` : "";
         const boleto = item.boletos ? `<button class="btn btn-outline-primary btn-sm rota-acao" type="button" data-acao="boleto" data-index="${index}" aria-label="Boletos de ${escapeHtml(nome)}"><i class="bi bi-upc-scan" aria-hidden="true"></i><span class="rota-acao-movel">Boleto</span></button>` : "";
-        const ficha = state.panel?.canClientes ? `<button class="btn btn-outline-secondary btn-sm rota-acao" type="button" data-acao="ficha" data-index="${index}" aria-label="Abrir ficha completa de ${escapeHtml(nome)}"><i class="bi bi-person-lines-fill" aria-hidden="true"></i><span class="rota-acao-texto">Ficha</span></button>` : "";
         // Linha de resumo que só aparece no celular (no computador cada dado tem sua coluna).
         const resumoBoleto = !item.titulos ? "" : item.boletos ? "com boleto" : "sem boleto";
         const resumoTitulos = item.titulos ? `${item.titulos} tít.${item.titulos_vencidos ? ` (${item.titulos_vencidos} venc.)` : ""}` : "";
@@ -152,7 +151,7 @@
           <td data-label="Vencimento">${escapeHtml(rotaVencimentoTexto(item))}</td>
           <td class="rota-c-situacao" data-label="Situação">${clientesTag(item.situacao.texto, item.situacao.tom)}</td>
           <td data-label="Boleto">${clientesTag(item.boleto.texto, item.boleto.tom)}</td>
-          <td class="text-end rota-c-acoes"><div class="rota-acoes">${whats}${ligar}${boleto}${ficha}</div></td>
+          <td class="text-end rota-c-acoes"><div class="rota-acoes">${whats}${ligar}${boleto}</div></td>
         </tr>`;
       }).join("");
     }
@@ -173,52 +172,6 @@
       document.querySelectorAll("[data-rota-situacao]").forEach(botao => botao.setAttribute("aria-pressed", String(botao.dataset.rotaSituacao === rotaUi.situacao)));
       rotaSetStatus(`Filtro ${ROTA_SITUACAO_ROTULO[rotaUi.situacao]} ativado. Atualizando...`);
       syncRotaFinanceira({ pagina: 1 });
-    }
-
-    async function abrirDetalheRota(item, { focarBoletos = false } = {}) {
-      const painel = document.getElementById("rotaDetalhe");
-      const corpo = document.getElementById("rotaDetalheCorpo");
-      const titulo = document.getElementById("rotaDetalheTitulo");
-      if (!painel || !corpo) return;
-      if (titulo) titulo.textContent = item.nome || "Cliente";
-      corpo.innerHTML = '<div class="text-secondary py-3" role="status"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Carregando títulos e boletos...</div>';
-      bootstrap.Offcanvas.getOrCreateInstance(painel).show();
-      const sequencia = ++rotaUi.detalheSeq;
-      try {
-        const ficha = await req(`${CONFIG.endpoints.clientes.ficha}/${encodeURIComponent(item.filial)}/${encodeURIComponent(item.cliente)}`);
-        if (sequencia !== rotaUi.detalheSeq) return;
-        renderDetalheRota(ficha);
-        if (focarBoletos) document.getElementById("rotaDetalheTitulos")?.scrollIntoView({ block: "start" });
-      } catch (error) {
-        if (sequencia !== rotaUi.detalheSeq) return;
-        corpo.innerHTML = `<div class="alert alert-danger mb-0" role="alert">${escapeHtml(error.message || "Não foi possível abrir o detalhe.")}</div>`;
-      }
-    }
-
-    function renderDetalheRota(ficha) {
-      const corpo = document.getElementById("rotaDetalheCorpo");
-      if (!corpo) return;
-      const c = ficha.cliente || {};
-      const k = ficha.kpis || {};
-      const fin = ficha.financeiro || {};
-      const titulos = fin.titulos || [];
-      const fatos = [["NB", c.cliente], ["Filial", c.filial], ["Setor", rotaRotuloChave(c.setor) || "-"], ["GV", rotaRotuloChave(c.gv) || "-"], ["Telefone", c.telefone || "-"], ["Visita", c.dia_visita || "-"]];
-      corpo.innerHTML = `<div class="pedido-client-card mb-3"><div class="pedido-client-facts rota-detalhe-fatos">${fatos.map(([label, value]) => `<div class="pedido-client-fact"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(String(value))}</span></div>`).join("")}</div></div>
-        <div class="rota-detalhe-resumo mb-3"><div><span>Pendente</span><strong>${escapeHtml(formatMoneyText(k.total_pendente || 0))}</strong></div><div><span>Vencido</span><strong>${escapeHtml(formatMoneyText(k.total_vencido || 0))}</strong></div><div><span>Boletos</span><strong>${escapeHtml(String(k.boletos_disponiveis || 0))}</strong></div></div>
-        ${clientesFonteAviso(fin.fonte)}${clientesFonteAviso((ficha.boletos || {}).fonte)}
-        <h4 class="h6 fw-bold" id="rotaDetalheTitulos">Títulos da 12.06.01</h4>
-        ${titulos.length ? `<div class="rota-detalhe-titulos">${titulos.map(t => {
-          const s = CLIENTES_SITUACAO[t.situacao] || CLIENTES_SITUACAO.sem_data;
-          return `<article class="rota-titulo"><div class="d-flex justify-content-between gap-2 flex-wrap"><strong class="mono">NF ${escapeHtml(t.nota_fiscal || "-")}</strong>${clientesTag(s.rotulo, s.tom, s.icone)}</div><div class="small text-secondary">Vence ${escapeHtml(t.vencimento || "-")} · ${escapeHtml(formatMoneyText(t.valor_pendente))}</div><div class="mt-2">${clientesAcoesBoleto(c, t.boleto)}</div></article>`;
-        }).join("")}</div>` : (fin.fonte && !fin.fonte.disponivel ? "" : clientesVazio("Sem títulos em aberto na 12.06.01."))}
-        <div class="d-grid mt-3"${state.panel?.canClientes ? "" : " hidden"}><button class="btn btn-primary rota-abrir-ficha" type="button" data-filial="${escapeHtml(c.filial)}" data-cliente="${escapeHtml(c.cliente)}"><i class="bi bi-person-lines-fill me-1" aria-hidden="true"></i>Abrir ficha completa</button></div>`;
-    }
-
-    function abrirFichaDaRota(filial, cliente) {
-      const painel = document.getElementById("rotaDetalhe");
-      if (painel) bootstrap.Offcanvas.getInstance(painel)?.hide();
-      navigatePanelPage("clientesTab");
-      abrirFichaCliente(filial, cliente);
     }
 
     function setupRotaFinanceiraPanel() {
@@ -243,13 +196,15 @@
         if (acao) {
           const item = rotaUi.clientes[Number(acao.dataset.index)];
           if (!item) return;
-          if (acao.dataset.acao === "ficha") abrirFichaDaRota(item.filial, item.cliente);
-          else abrirDetalheRota(item, { focarBoletos: acao.dataset.acao === "boleto" });
+          abrirFichaBlocos(item.filial, item.cliente, { bloco: acao.dataset.acao === "boleto" ? "titulos" : "" });
           return;
         }
-        const ficha = event.target.closest(".rota-abrir-ficha");
-        if (ficha) { abrirFichaDaRota(ficha.dataset.filial, ficha.dataset.cliente); return; }
-        const copiar = event.target.closest(".cliente-copiar");
-        if (copiar) copiarLinhaDigitavel(copiar);
+        // O cliente inteiro (linha no computador, cartão no celular) abre a ficha;
+        // WhatsApp e Ligar continuam sendo links próprios.
+        const linha = event.target.closest("tr.rota-linha");
+        if (linha && !event.target.closest("a, button, input, select, label")) {
+          const item = rotaUi.clientes[Number(linha.dataset.index)];
+          if (item) abrirFichaBlocos(item.filial, item.cliente);
+        }
       });
     }

@@ -395,6 +395,23 @@ class PromaxClient:
             reference_date=reference_date,
         )
 
+    def import_030237_csvs(
+        self,
+        *,
+        job_id: str,
+        lease_token: str,
+        files: Mapping[str, bytes],
+        reference_date: str | None = None,
+    ) -> dict[str, Any]:
+        """03.02.37 no padrão do giro (CSV mensal por filial) para a ficha do cliente."""
+        return self._import_csv_batch(
+            path="/api/internal/promax/030237/import",
+            job_id=job_id,
+            lease_token=lease_token,
+            files=files,
+            reference_date=reference_date,
+        )
+
     def import_dclientes_csv(
         self,
         *,

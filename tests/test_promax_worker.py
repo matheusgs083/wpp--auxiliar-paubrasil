@@ -1199,6 +1199,47 @@ class PromaxClientTests(unittest.TestCase):
         client.import_comodatos_csvs.assert_called_once()
         self.assertEqual(client.heartbeat_job.call_count, 2)
 
+    def test_030237_giro_importa_um_csv_por_chamada(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir)
+            (source_dir / "01-2026 Sume.csv").write_bytes(b"Filial;Cliente;Produto\n4;1;2\n")
+            (source_dir / "01-2026 Patos.csv").write_bytes(b"Filial;Cliente;Produto\n3;1;2\n")
+            client = Mock()
+            client.import_030237_csvs.return_value = {"ok": True, "result": {"arquivos": 1, "ignorados": 0, "rows": 1}}
+            worker = PromaxWorker(
+                config=WorkerConfig(
+                    api_url="http://localhost:8080",
+                    token="token",
+                    worker_id="worker",
+                    driver_dir=str(source_dir),
+                    python_executable=str(source_dir / "python.exe"),
+                    lease_seconds=360,
+                    boleto_import_timeout_seconds=300,
+                ),
+                client=client,
+                runner=Mock(),
+                catalog_provider=None,
+            )
+
+            worker._import_030237_giro_if_needed(
+                {"payload": {"routines": ["030237_GIRO"], "end_date": "2026-01-31"}},
+                "job-1",
+                "lease-token",
+                PromaxRunResult(
+                    status="success",
+                    return_code=0,
+                    child_pid=123,
+                    details={
+                        "run_started_at_epoch": 1.0,
+                        "metadata": {"publication_mapping": {str(source_dir.parent / "030237 Giro"): str(source_dir)}},
+                    },
+                ),
+            )
+
+        self.assertEqual(client.import_030237_csvs.call_count, 2)
+        enviados = [len(chamada.kwargs["files"]) for chamada in client.import_030237_csvs.call_args_list]
+        self.assertEqual(enviados, [1, 1])
+
     def test_020220_bot_imports_only_csvs_created_by_current_run(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source_dir = Path(temp_dir)

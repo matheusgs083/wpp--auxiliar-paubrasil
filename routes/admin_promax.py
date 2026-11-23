@@ -15,7 +15,8 @@ from typing import Any, Literal
 from unicodedata import normalize as unicode_normalize
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Path, Query, Request, UploadFile
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from bot_api.services.promax_jobs_service import LeaseLostError
@@ -994,6 +995,7 @@ def create_admin_promax_router(
     critica_operacao_import_services: Mapping[str, Any] | None = None,
     liga_entrega_report_store: Any | None = None,
     liga_entrega_raw_sql_import_service: Any | None = None,
+    compras_030237_service: Any | None = None,
     after_critica_operacao_import: Callable[[str], Mapping[str, Any] | None] | None = None,
     require_admin_panel_auth: Callable[..., dict[str, Any]],
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
@@ -2600,6 +2602,86 @@ def create_admin_promax_router(
             data={"event": "promax_020220_auto_import_success", "result": result},
         )
         return {"ok": True, "result": result}
+
+    @router.post("/api/internal/promax/030237/import")
+    def api_internal_promax_import_030237_csvs(
+        payload: PromaxInadimplenciaImportRequest,
+        _worker_auth: None = Depends(require_worker_auth),
+    ) -> dict[str, Any]:
+        """03.02.37 no padrão do giro (um CSV mensal por filial): base de Compras e Vasilhames da ficha."""
+        if compras_030237_service is None:
+            raise HTTPException(status_code=400, detail="Importador da 03.02.37 nao configurado.")
+        lease_token = resolve_job_lease_token(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            provided_lease_token=payload.lease_token,
+        )
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=f"Importacao automatica 030237_GIRO iniciada: {len(payload.files)} arquivo(s) CSV.",
+            data={"event": "promax_030237_auto_import_start", "files": [item.filename for item in payload.files]},
+        )
+        arquivos: dict[str, bytes] = {}
+        for item in payload.files:
+            try:
+                conteudo = base64.b64decode(item.file_base64.encode("ascii"), validate=True)
+            except (UnicodeEncodeError, binascii.Error) as exc:
+                raise HTTPException(status_code=400, detail="Arquivo CSV em base64 invalido.") from exc
+            if not conteudo.strip():
+                raise HTTPException(status_code=400, detail=f"Arquivo CSV vazio: {item.filename}.")
+            arquivos[item.filename] = conteudo
+        try:
+            result = compras_030237_service.importar_arquivos_giro(arquivos)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        service.append_job_log(
+            job_id=payload.job_id,
+            worker_id=payload.worker_id,
+            lease_token=lease_token,
+            level="info",
+            message=(
+                "Importacao automatica 030237_GIRO concluida: "
+                f"{result.get('arquivos', 0)} arquivo(s) novo(s), {result.get('ignorados', 0)} repetido(s), "
+                f"{result.get('rows', 0)} linha(s)."
+            ),
+            data={"event": "promax_030237_auto_import_success", "result": result},
+        )
+        return {"ok": True, "result": result}
+
+    @router.post("/api/admin/promax/030237/importar")
+    async def api_admin_promax_importar_030237(
+        request: Request,
+        arquivo: UploadFile = File(...),
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        """Upload manual de uma 03.02.37 com itens (mesmo padrão do giro), um CSV por chamada."""
+        if compras_030237_service is None:
+            raise HTTPException(status_code=503, detail="Importador da 03.02.37 nao configurado.")
+        nome = FilePath(str(arquivo.filename or "")).name.strip()
+        if not nome.lower().endswith(".csv"):
+            raise HTTPException(status_code=422, detail="Envie o CSV da 03.02.37 com itens.")
+        conteudo = await arquivo.read()
+        if not conteudo.strip():
+            raise HTTPException(status_code=422, detail=f"Arquivo CSV vazio: {nome}.")
+        try:
+            result = await run_in_threadpool(compras_030237_service.importar_arquivos_giro, {nome: conteudo})
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        record_admin_event(request, "admin_promax_030237_import", reason=f"arquivos={result.get('arquivos', 0)};rows={result.get('rows', 0)}")
+        record_panel_action(
+            request,
+            context,
+            action="importar_030237_itens",
+            target_type="arquivo",
+            target_id=nome,
+            metadata={"arquivos": result.get("arquivos", 0), "ignorados": result.get("ignorados", 0), "rows": result.get("rows", 0), "meses": result.get("meses", [])},
+        )
+        return {"ok": True, "arquivo": nome, "result": result}
 
     @router.post("/api/internal/promax/dclientes/import")
     def api_internal_promax_import_dclientes_csv(

@@ -22,6 +22,8 @@ from bot_api.services.admin_financeiro_service import AdminFinanceiroService
 from bot_api.services.admin_import_config import ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS, build_admin_import_datasets
 from bot_api.services.admin_templates import AdminTemplateLoader
 from bot_api.services.rota_financeira_query_service import RotaFinanceiraQueryService
+from bot_api.services.compras_030237_service import Compras030237Service, mes_anterior
+from bot_api.services.giro_vasilhame_service import GiroVasilhameService
 from bot_api.services.app_lifecycle import register_app_lifecycle
 from bot_api.services.admin_panel_session_service import AdminPanelSessionService
 from bot_api.services.admin_panel_user_service import AdminPanelUserService
@@ -141,6 +143,18 @@ def configure_app_runtime(
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
+    # Compras e devoluções por cliente (ficha do cliente), resumidas da 03.02.37
+    # que a importação da Liga já grava em liga_entrega_raw_rows.
+    compras_030237_service = Compras030237Service(
+        settings.reports_database_url,
+        settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    giro_vasilhame_service = GiroVasilhameService(
+        settings.reports_database_url,
+        settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
     liga_entrega_route_team_service = LigaEntregaRouteTeamService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
@@ -201,9 +215,42 @@ def configure_app_runtime(
             except Exception:
                 logger.exception("Falha ao reconstruir snapshot da Liga após importação SQL: %s", competencia)
 
-    liga_entrega_raw_sql_import_service.set_post_import_callback(
-        _rebuild_liga_snapshots_after_sql_import
-    )
+    def _rebuild_compras_after_sql_import(
+        manifests: dict[str, list[dict[str, Any]]],
+        result: dict[str, int],
+    ) -> None:
+        """Refaz o resumo de compras dos meses de emissão tocados pela carga da 03.02.37."""
+        if not manifests.get("030237") or not (result.get("files") or result.get("rows")):
+            return
+        meses: set[str] = set()
+        for manifest in manifests.get("030237") or []:
+            metadata = manifest.get("metadata") if isinstance(manifest, dict) else {}
+            for value in ((metadata or {}).get("competencia"), manifest.get("reference_date") if isinstance(manifest, dict) else None):
+                match = re.search(r"(\d{4}-\d{2})", str(value or ""))
+                if match:
+                    meses.add(match.group(1))
+        # Um acumulado do mês M pode trazer emissões do início do mês; começar
+        # um mês antes cobre o reenvio do fechamento sem refazer o histórico todo.
+        desde = mes_anterior(min(meses)) if meses else None
+        try:
+            resumo = compras_030237_service.rebuild(desde_mes=desde)
+            logger.info("Resumo de compras 03.02.37 refeito: %s", resumo)
+        except Exception:
+            logger.exception("Falha ao refazer o resumo de compras 03.02.37 (desde %s)", desde)
+
+    def _after_liga_sql_import(
+        manifests: dict[str, list[dict[str, Any]]],
+        result: dict[str, int],
+    ) -> None:
+        # Cada etapa é independente: falha no snapshot da Liga não impede o
+        # resumo de compras, e vice-versa.
+        try:
+            _rebuild_liga_snapshots_after_sql_import(manifests, result)
+        except Exception:
+            logger.exception("Falha no pós-importação da Liga")
+        _rebuild_compras_after_sql_import(manifests, result)
+
+    liga_entrega_raw_sql_import_service.set_post_import_callback(_after_liga_sql_import)
     ADMIN_UPLOAD_CHUNK_SIZE_BYTES = 1024 * 1024
     ADMIN_PANEL_SESSION_COOKIE = "bot_admin_session"
     ADMIN_PANEL_SESSION_TTL_SECONDS = 12 * 60 * 60
@@ -748,6 +795,10 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "cora_estoque_query_service": runtime["services"].cora_estoque_query_service,
         "boletos_query_service": runtime["services"].boletos_query_service,
         "rota_financeira_query_service": _rota_financeira_query_service(runtime["services"].dclientes_query_service),
+        "compras_030237_service": runtime["compras_030237_service"],
+        "giro_vasilhame_service": runtime["giro_vasilhame_service"],
+        "prazo_limite_query_service": runtime["services"].prazo_limite_query_service,
+        "documentacao_pendente_query_service": runtime["services"].documentacao_pendente_query_service,
         "relatorio_031120_import_services": runtime["services"].relatorio_031120_import_services,
         "relatorio_03114902_import_service": runtime["services"].relatorio_03114902_import_service,
         "inadimplencia_import_service": runtime["services"].inadimplencia_import_service,

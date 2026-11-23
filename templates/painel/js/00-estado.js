@@ -1082,6 +1082,7 @@
       "Outro"
     ];
 
-    const rotaUi = { opcoes: null, dados: null, clientes: [], situacao: "todos", pagina: 1, seq: 0, detalheSeq: 0 };
-    const clientesUi = { rows: [], filtros: new Set(), seq: 0, fichaSeq: 0, atual: null, ficha: null, aba: "financeiro" };
+    const rotaUi = { opcoes: null, dados: null, clientes: [], situacao: "todos", pagina: 1, seq: 0 };
+    const clientesUi = { rows: [], filtros: new Set(), seq: 0, atual: null };
+    const fichaUi = { seq: 0, atual: null, cliente: null, blocos: {}, abertos: [], pedido: "", inicialFeito: 0 };
     const pedidosUi = { client: null, items: [], loadingClient: false, stockTimers: {}, conditions: [], queue: [], config: null, audit: [], productLimits: [], selectedLimitProduct: null, managerProductTimer: null };
