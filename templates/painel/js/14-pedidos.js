@@ -310,8 +310,8 @@
     function pedidoTextoBusca(valor) {
       return String(valor || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
     }
+    // Só pela descrição: o litrão também vem em DZ na grade, mas a caixa dele é de 1 dúzia.
     function pedidoCaixaFechada(item) {
-      if (["DZ", "DUZ", "DUZIA", "DUZIAS"].includes(pedidoTextoBusca(item.unidade).replace(/\.$/, ""))) return true;
       const texto = pedidoTextoBusca(item.descricao);
       return /\b600\s*(ML|M\b|\b)/.test(texto) && !/ONE\s*WAY|\bPET\b|\bLATA\b|\bLT\b|C\/\s*\d+|\bCAIXA\b|\bCX\b/.test(texto);
     }

@@ -17,7 +17,12 @@ class RegraTest(unittest.TestCase):
     def test_600_retornavel_exige_caixa(self) -> None:
         for descricao in ("SKOL 600ML", "ANTARCTICA PILSEN 600", "STELLA ARTOIS 600 ML", "BUDWEISER 600ML"):
             self.assertTrue(exige_caixa_fechada(descricao), descricao)
-        self.assertTrue(exige_caixa_fechada("QUALQUER", "Dz"))
+        self.assertTrue(exige_caixa_fechada("SKOL 600ML", "DZ"))
+
+    def test_litrao_em_duzia_nao_trava(self) -> None:
+        # O litrão também vem em DZ na grade, mas a caixa dele é de 1 dúzia.
+        self.assertFalse(exige_caixa_fechada("BRAHMA CHOPP GFA VD 1L COM TTC", "DZ"))
+        self.assertFalse(exige_caixa_fechada("SKOL LITRAO 1L", "DZ"))
 
     def test_o_que_ja_sai_em_caixa_fica_livre(self) -> None:
         for descricao in ("SPATEN N ONE WAY 600M", "KAS GUARANA MARACUJA PET 600ML CAIXA C/24", "SKOL LATA 350ML", "BRAHMA 1600 ML", "SKOL 300ML"):
@@ -41,6 +46,7 @@ def _app() -> tuple[TestClient, MagicMock]:
     estoque.availability.return_value = {"ready": True, "ok": True, "produtos": {
         "982": {"descricao": "SKOL 600ML", "unidade": "DZ"},
         "21668": {"descricao": "SPATEN N ONE WAY 600M", "unidade": "CX"},
+        "1695": {"descricao": "BRAHMA CHOPP GFA VD 1L COM TTC", "unidade": "DZ"},
     }}
     app = FastAPI()
     app.include_router(create_admin_pedidos_router(
@@ -73,6 +79,7 @@ class DigitacaoTest(unittest.TestCase):
         cliente, jobs = _app()
         self.assertEqual(cliente.post("/api/admin/pedidos/jobs", json=_pedido(4)).status_code, 202)
         self.assertEqual(cliente.post("/api/admin/pedidos/jobs", json=_pedido(3, produto="21668")).status_code, 202)
+        self.assertEqual(cliente.post("/api/admin/pedidos/jobs", json=_pedido(3, produto="1695")).status_code, 202)
 
 
 if __name__ == "__main__":
