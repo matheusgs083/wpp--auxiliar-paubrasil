@@ -93,7 +93,7 @@
       alvo.innerHTML = rows.map((item, index) => `<div class="pedido-client-result cliente-resultado">
           <span class="nb mono" title="NB">${escapeHtml(item.cliente)}</span>
           <span class="cliente-resultado-main"><strong>${escapeHtml(item.nome || item.razao_social || "-")}</strong>
-            <span class="meta">${escapeHtml(item.cidade || "Sem cidade")} · Filial ${escapeHtml(item.filial)} · Setor ${escapeHtml(clientesChave(item.setor) || "-")} · GV ${escapeHtml(clientesChave(item.gv) || "-")} · Visita ${escapeHtml(item.dia_visita || "-")}</span>
+            <span class="meta">${escapeHtml(item.cidade || "Sem cidade")} · Filial ${escapeHtml(item.filial)} · Setor ${escapeHtml(clientesChave(item.setor) || "-")} · GV ${escapeHtml(clientesChave(item.gv) || "-")} · Visita ${escapeHtml(diasVisitaTexto(item.dia_visita) || "-")}</span>
             <span class="meta">${escapeHtml(item.telefone || "Sem telefone")} · ${escapeHtml(item.status || "-")} · Cond. ${escapeHtml(item.cond_pagto || "-")} · Limite ${escapeHtml(item.limite_credito ? formatMoneyText(item.limite_credito) : "-")}</span>
             <span class="cliente-tags">${clientesBadgesResultado(item)}</span></span>
           <button class="btn btn-outline-primary btn-sm cliente-ver-ficha" type="button" data-index="${index}" aria-label="Ver ficha do cliente ${escapeHtml(item.nome || item.cliente)}"><i class="bi bi-person-lines-fill me-1" aria-hidden="true"></i>Ver ficha</button>

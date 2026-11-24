@@ -1460,6 +1460,15 @@
       return `${yyyy}-${mm}-${dd}`;
     }
 
+    // "SEG/QUI" -> "Segunda, Quinta" (dias de visita do cadastro, em ordem da semana).
+    const DIAS_VISITA = [["SEG", "Segunda"], ["TER", "Terça"], ["QUA", "Quarta"], ["QUI", "Quinta"], ["SEX", "Sexta"], ["SAB", "Sábado"], ["DOM", "Domingo"]];
+    function diasVisitaTexto(valor) {
+      const texto = String(valor || "").trim();
+      const siglas = new Set(texto.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^A-Z]+/).map(parte => parte.slice(0, 3)));
+      const nomes = DIAS_VISITA.filter(([sigla]) => siglas.has(sigla)).map(([, nome]) => nome);
+      return nomes.length ? nomes.join(", ") : texto;
+    }
+
     function escapeHtml(value) {
       return String(value || "")
         .replace(/&/g, "&amp;")

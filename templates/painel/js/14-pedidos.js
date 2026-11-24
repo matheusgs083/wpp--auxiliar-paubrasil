@@ -366,7 +366,7 @@
       const blocked = Boolean(inad.bloqueado);
       const facts = [
         ["NB", client.cliente], ["Filial", client.filial], ["Cidade", client.cidade || "-"], ["Setor", client.vendedor || "-"],
-        ["Telefone", client.telefone || "-"], ["Visita", client.dia_visita || "-"], ["Condição", client.cond_pagto || "Não informada"], ["Status", client.status || "-"],
+        ["Telefone", client.telefone || "-"], ["Visita", diasVisitaTexto(client.dia_visita) || "-"], ["Condição", client.cond_pagto || "Não informada"], ["Status", client.status || "-"],
         ["Limite crédito", client.limite_credito || "-"], ["Valor em aberto", client.total_pendente || "-"], ["Comodatos", client.comodatos_pendentes || "0"], ["Atualizado em", client.atualizado_em || "-"]
       ];
       const titles = Array.isArray(inad.titulos) ? inad.titulos.slice(0, 5) : [];

@@ -73,7 +73,7 @@
         c.telefone_discagem ? `<a class="btn btn-outline-secondary btn-sm" href="tel:${encodeURIComponent(c.telefone_discagem)}" aria-label="Ligar para ${escapeHtml(nome)}"><i class="bi bi-telephone me-1" aria-hidden="true"></i>Ligar</a>` : "",
         c.mapa_url ? `<a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(c.mapa_url)}" target="_blank" rel="noopener" aria-label="Abrir endereço de ${escapeHtml(nome)} no mapa"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>Mapa</a>` : ""
       ].join("");
-      const fatos = [["Filial", c.filial], ["Setor / RN", clientesChave(c.setor)], ["GV", clientesChave(c.gv)], ["Cidade", c.cidade], ["Visita", c.dia_visita], ["Status", c.status], ["Telefone", c.telefone]];
+      const fatos = [["Filial", c.filial], ["Setor / RN", clientesChave(c.setor)], ["GV", clientesChave(c.gv)], ["Cidade", c.cidade], ["Visita", diasVisitaTexto(c.dia_visita)], ["Status", c.status], ["Telefone", c.telefone]];
       return `<header class="ficha-cabecalho">
           <div class="ficha-cabecalho-nome"><span class="mono">NB ${escapeHtml(c.cliente || "")}</span><h2 class="h5 fw-bold mb-0">${escapeHtml(nome)}</h2>${c.razao_social && c.razao_social !== nome ? `<div class="small text-secondary">${escapeHtml(c.razao_social)}</div>` : ""}</div>
           ${fichaFatos(fatos)}
@@ -177,7 +177,7 @@
       },
       credito(d) {
         const disponivel = d.limite_disponivel ? `${formatMoneyText(d.limite_disponivel)}${d.limite_disponivel_calculado ? " (calculado)" : ""}` : "-";
-        const fatos = fichaFatos([["Limite total", d.limite_total ? formatMoneyText(d.limite_total) : "-"], ["Limite utilizado", d.limite_utilizado ? formatMoneyText(d.limite_utilizado) : "-"], ["Limite disponível", disponivel], ["Condição de pagamento", d.condicao_pagamento], ["Prazo atual", d.prazo_atual], ["Pag. em atraso", d.percentual_pag_atraso]]);
+        const fatos = fichaFatos([["Limite total", d.limite_total ? formatMoneyText(d.limite_total) : "-"], ["Limite utilizado", d.limite_utilizado ? formatMoneyText(d.limite_utilizado) : "-"], ["Limite disponível", disponivel], ["Condição de pagamento", d.condicao_pagamento], ["Prazo atual", d.prazo_atual], ["Pagamentos em atraso", d.percentual_pag_atraso]]);
         const fat = (d.faturamento || []).length
           ? `<h4 class="ficha-sub">Faturamento entregue</h4><ul class="ficha-linhas">${d.faturamento.map(f => `<li><span>${escapeHtml(f.kpi || "-")}</span><strong>${escapeHtml(f.faturamento_com_pdv || "-")}</strong><small>${escapeHtml(f.pedidos === "" ? "" : `${f.pedidos} nota(s)`)}</small></li>`).join("")}</ul>`
           : `<h4 class="ficha-sub">Faturamento entregue</h4><div class="small text-secondary">${d.faturamento_fonte === "indisponivel" ? "O faturamento não pôde ser carregado agora." : "Nenhuma compra registrada."}</div>`;

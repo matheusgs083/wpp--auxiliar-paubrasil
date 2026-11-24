@@ -38,7 +38,7 @@
         if (escopo) escopo.textContent = opcoes.escopo || "";
         const dia = document.getElementById("rotaDia");
         if (dia) {
-          dia.innerHTML = (opcoes.dias || []).map(item => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("") || '<option value="">Sem dias de visita</option>';
+          dia.innerHTML = (opcoes.dias || []).map(item => `<option value="${escapeHtml(item)}">${escapeHtml(diasVisitaTexto(item))}</option>`).join("") || '<option value="">Sem dias de visita</option>';
           if (opcoes.dia_sugerido) dia.value = opcoes.dia_sugerido;
         }
         rotaOpcoesSelect(document.getElementById("rotaFilial"), opcoes.filiais || [], "Todas");
@@ -80,7 +80,8 @@
         renderRotaLista(resposta.clientes || []);
         renderRotaPaginacao(resposta);
         const filtro = ROTA_SITUACAO_ROTULO[rotaUi.situacao] || "Todos";
-        rotaSetStatus(resposta.total ? `${resposta.total} cliente(s) na rota de ${dia} · filtro ${filtro}.` : `Nenhum cliente na rota de ${dia} com o filtro ${filtro}.`);
+        const diaTexto = diasVisitaTexto(dia);
+        rotaSetStatus(resposta.total ? `${resposta.total} cliente(s) na rota de ${diaTexto} · filtro ${filtro}.` : `Nenhum cliente na rota de ${diaTexto} com o filtro ${filtro}.`);
       } catch (error) {
         if (sequencia !== rotaUi.seq) return;
         rotaUi.dados = null;

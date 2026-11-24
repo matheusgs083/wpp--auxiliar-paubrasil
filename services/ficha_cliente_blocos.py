@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -154,7 +154,7 @@ def bloco_credito(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dic
     limite_total = _primeiro(entradas, "limite_total") or str(getattr(cliente.registro, "limite_credito", "") or "")
     prazo = _primeiro(entradas, "prazo_atual")
     condicao = _primeiro(entradas, "cond_pag_atual") or str(getattr(cliente.registro, "cond_pag_atual", "") or "")
-    atraso = _primeiro(entradas, "percentual_pag_atraso")
+    atraso = percentual_texto(_primeiro(entradas, "percentual_pag_atraso"))
     financeiro = _carregar_titulos(fontes.inadimplencia, cliente.filial, cliente.cliente, cliente.escopo)
     pendente = sum((_decimal(t["valor_pendente"]) for t in financeiro["titulos"]), Decimal("0")) if financeiro["fonte"]["disponivel"] else None
     limite = _decimal(limite_total)
@@ -323,6 +323,28 @@ def _valor_dos_equipamentos(itens: list[dict[str, str]]) -> dict[str, Decimal]:
         if tipo and _decimal(item["saldo"]) > 0:
             total[tipo] = total.get(tipo, Decimal("0")) + _decimal(item["valor"])
     return total
+
+
+def percentual_texto(valor: str) -> str:
+    """Percentual para leitura: '0,0423' ou '0.0423' (fração) e '4.23' ou '4,23%' viram '4,2%'."""
+    texto = str(valor or "").strip()
+    if not texto or texto == "-":
+        return texto
+    com_simbolo = texto.endswith("%")
+    numero = texto.rstrip("%").strip()
+    if "," in numero and "." in numero:
+        numero = numero.replace(".", "").replace(",", ".")
+    else:
+        numero = numero.replace(",", ".")
+    try:
+        quantia = Decimal(numero)
+    except InvalidOperation:
+        return texto
+    if not com_simbolo and abs(quantia) <= 1:
+        quantia *= 100  # veio como fração (0,0423 = 4,23%)
+    arredondado = quantia.quantize(Decimal("0.1"))
+    inteiro = arredondado == arredondado.to_integral_value()
+    return f"{arredondado:.0f}%" if inteiro else f"{arredondado:.1f}%".replace(".", ",")
 
 
 def _resumo_equipamentos(tipos: list[dict[str, Any]], mix: dict[str, Any] | None) -> str:

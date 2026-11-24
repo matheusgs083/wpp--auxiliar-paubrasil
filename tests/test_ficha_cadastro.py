@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 from types import SimpleNamespace
 
+from bot_api.services.ficha_cliente_blocos import percentual_texto
 from bot_api.services.ficha_cadastro import dias_da_visita, montar_cadastro, proxima_data, visitas_no_mes
 
 # Linha real da dClientes (cliente 1 de Sousa), com os nomes de coluna do relatório.
@@ -49,6 +50,16 @@ class MontarCadastroTest(unittest.TestCase):
     def test_visitas_no_mes(self) -> None:
         self.assertEqual(visitas_no_mes(["SEG", "QUI"], 2026, 11), 9)  # 5 segundas + 4 quintas
         self.assertEqual(visitas_no_mes(["SEG", "QUI"], 2026, 11, desde=24), 2)  # 26 e 30
+
+
+
+class PercentualTest(unittest.TestCase):
+    def test_pagamentos_em_atraso_em_percentual(self) -> None:
+        self.assertEqual(percentual_texto("0,0423"), "4,2%")  # fração
+        self.assertEqual(percentual_texto("0.25"), "25%")
+        self.assertEqual(percentual_texto("4,23%"), "4,2%")
+        self.assertEqual(percentual_texto("12"), "12%")
+        self.assertEqual(percentual_texto("-"), "-")
 
 
 if __name__ == "__main__":
