@@ -26,22 +26,23 @@ from bot_api.services.clientes_fontes import (
     _carregar_titulos,
     _cruzar_titulos_boletos,
     _decimal,
+    _documento_formatado,
     _dinheiro,
     _quantidade,
 )
-from bot_api.services.compras_030237_service import DIAS_DEVOLUCAO
-from bot_api.services.giro_equipamentos_service import equipamentos_em_comodato, giro_por_equipamento
+from bot_api.services.compras_030237_service import DIAS_DEVOLUCAO, meses_fechados
+from bot_api.services.ficha_cadastro import dias_da_visita, dias_por_extenso, montar_cadastro
+from bot_api.services.giro_equipamentos_service import (
+    REGRAS,
+    equipamentos_em_comodato,
+    giro_por_equipamento,
+    mix_cerveja,
+    previsao_do_mes,
+    situacao_do_giro,
+)
 from bot_api.services.giro_vasilhame_service import MULTIPLICADOR, caixas_em_comodato, giro_por_tipo
 
 BLOCOS = ("titulos", "credito", "compras", "vasilhames", "equipamentos", "comodatos", "devolucoes", "cadastro")
-DOCUMENTOS = (
-    ("contrato_social", "Contrato social"),
-    ("comprovante_residencia", "Comprovante de residência"),
-    ("cpf", "CPF"),
-    ("rg", "RG"),
-    ("fachada", "Fachada"),
-    ("ficha_cadastro", "Ficha cadastral"),
-)
 SITUACAO_BOLETO_SEM_VINCULO = "Boleto não importado"
 
 
@@ -251,29 +252,62 @@ def bloco_equipamentos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -
     if fontes.giro_equipamentos is None or fontes.comodatos is None:
         return _indisponivel("equipamentos", titulo, fonte, "Giro de equipamentos não configurado.")
     competencia = f"{hoje.year:04d}-{hoje.month:02d}"
+    anteriores = meses_fechados(hoje)
     try:
         comodatos = fontes.comodatos.search_by_registration(
             cliente.filial, cliente.cliente, allowed_sectors=cliente.escopo.allowed_sectors, allowed_gv_vdes=cliente.escopo.allowed_gv_vdes, limit=200
         )
-        itens = [{"sub_tipo": str(r.sub_tipo_material or ""), "saldo": str(r.saldo or "0")} for r in comodatos]
+        itens = [{"sub_tipo": str(r.sub_tipo_material or ""), "saldo": str(r.saldo or "0"), "valor": str(getattr(r, "valor", "") or "")} for r in comodatos]
         equipamentos = equipamentos_em_comodato(itens)
         compras = fontes.giro_equipamentos.compras_por_cesta(cliente.filial, cliente.cliente, competencia) if any(equipamentos.values()) else {}
+        cervejas = (
+            fontes.giro_equipamentos.produtos_da_cesta(cliente.filial, cliente.cliente, [*anteriores, competencia])
+            if equipamentos.get("sopi") else []
+        )
     except Exception:
         return _indisponivel("equipamentos", titulo, fonte, "Base do giro de equipamentos indisponível (comodatos, 03.02.37 ou Cesta de Produtos).")
     tipos = giro_por_equipamento(equipamentos, compras)
+    valores = _valor_dos_equipamentos(itens)
     for t in tipos:
+        previsao = previsao_do_mes(t["comprado"], hoje)
+        t["situacao"] = situacao_do_giro(t["meta"], t["comprado"], previsao) if t["equipamentos"] else ""
+        t["previsao"] = _dinheiro(previsao)
+        t["valor_equipamentos"] = _dinheiro(valores.get(t["tipo"], Decimal("0")))
         for campo in ("meta_por_equipamento", "meta", "comprado", "falta"):
             t[campo] = _dinheiro(t[campo])
+    mix = mix_cerveja(cervejas, competencia, anteriores) if equipamentos.get("sopi") else None
     dados = {
         "tipos": tipos,
+        "mix": mix,
         "competencia": competencia,
-        "explicacao": "Meta por equipamento no mês: SOPI R$ 2.000,00 em cerveja e Visa R$ 1.200,00 em refrigerante. Conta a 03.02.37 do mês atual; cerveja e refrigerante pela Cesta de Produtos.",
+        "explicacao": "Meta por equipamento no mês: SOPI R$ 2.000,00 em cerveja e Visa R$ 1.200,00 em refrigerante, pela 03.02.37 e pela Cesta de Produtos. A previsão segue o ritmo do mês até hoje.",
     }
     if not any(equipamentos.values()):
         return _bloco("equipamentos", titulo, estado="vazio", resumo="Sem SOPI ou Visa em comodato", dados=dados, fonte=fonte)
-    em_risco = [t["rotulo"].split(" ")[0] for t in tipos if t["em_risco"]]
-    resumo = f"{' e '.join(em_risco)} abaixo da meta de compra do mês" if em_risco else "Giro de equipamentos batido no mês"
-    return _bloco("equipamentos", titulo, estado="ok", resumo=resumo, dados=dados, fonte=fonte, atualizado_em=getattr(comodatos[0], "planilha_atualizada_em", "") if comodatos else "")
+    return _bloco("equipamentos", titulo, estado="ok", resumo=_resumo_equipamentos(tipos, mix), dados=dados, fonte=fonte,
+                  atualizado_em=getattr(comodatos[0], "planilha_atualizada_em", "") if comodatos else "")
+
+
+def _valor_dos_equipamentos(itens: list[dict[str, str]]) -> dict[str, Decimal]:
+    """Soma da coluna Valor da 02.02.20 dos SOPI/Visa que estão no cliente."""
+    por_sub_tipo = {regra.sub_tipo: regra.tipo for regra in REGRAS}
+    total: dict[str, Decimal] = {}
+    for item in itens:
+        tipo = por_sub_tipo.get(item["sub_tipo"].strip().upper())
+        if tipo and _decimal(item["saldo"]) > 0:
+            total[tipo] = total.get(tipo, Decimal("0")) + _decimal(item["valor"])
+    return total
+
+
+def _resumo_equipamentos(tipos: list[dict[str, Any]], mix: dict[str, Any] | None) -> str:
+    frases = {"batido": "giro batido", "deve_atingir": "deve atingir a meta no mês", "em_risco": "abaixo da meta no ritmo atual"}
+    partes = [
+        f"{t['rotulo'].split(' ')[0]}: {frases[t['situacao']]}"
+        for t in tipos if t["equipamentos"]
+    ]
+    if mix is not None:
+        partes.append(f"mix de cerveja {mix['skus_mes']} de {mix['meta']} SKUs")
+    return " · ".join(partes)
 
 
 def bloco_comodatos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
@@ -332,44 +366,46 @@ def bloco_devolucoes(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> 
 def bloco_cadastro(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
     titulo = "Cadastro e documentos"
     r = cliente.registro
-    cadastro = _cadastro_completo(fontes.dclientes, cliente.filial, cliente.cliente)
-    dados: dict[str, Any] = {
-        "razao_social": str(getattr(r, "razao_social", "") or ""),
-        "nome_fantasia": str(getattr(r, "nome_fantasia", "") or ""),
-        "documento": cadastro.get("documento", ""),
-        "endereco": cadastro.get("endereco", ""),
-        "complemento": cadastro.get("complemento", ""),
-        "cep": cadastro.get("cep", ""),
-        "bairro": cadastro.get("bairro", ""),
-        "cidade": str(getattr(r, "cidade", "") or ""),
-        "cidade_uf": cadastro.get("cidade_uf", ""),
-        "telefone": str(getattr(r, "telefone", "") or ""),
-        "email": cadastro.get("email", ""),
-        "setor": str(getattr(r, "vendedor", "") or ""),
-        "gv": str(getattr(r, "gv", "") or ""),
-        "dia_visita": str(getattr(r, "dia_visita", "") or ""),
-        "status": str(getattr(r, "status", "") or ""),
-        "documentos": [],
-        "documentos_disponivel": True,
-    }
-    pendentes = 0
+    try:
+        perfil = fontes.dclientes.get_payip_profile_by_registration(cliente.filial, cliente.cliente)
+    except Exception:
+        perfil = None
+    payload = dict(getattr(perfil, "payload", None) or {})
     try:
         docs = fontes.documentacao.search_by_registration(
             cliente.filial, cliente.cliente, allowed_sectors=cliente.escopo.allowed_sectors, allowed_gv_vdes=cliente.escopo.allowed_gv_vdes, limit=5
         ) if fontes.documentacao is not None else None
     except Exception:
         docs = None
-    if docs is None:
-        dados["documentos_disponivel"] = False
-    elif docs:
-        doc = docs[0]
-        dados["documentos"] = [{"campo": campo, "rotulo": rotulo, "status": str(getattr(doc, campo, "") or "")} for campo, rotulo in DOCUMENTOS]
-        pendentes = int(getattr(doc, "pending_count", 0) or 0)
-    status = dados["status"] or "sem status"
-    resumo = f"Cadastro {status.lower()} · {pendentes} documento{'s' if pendentes != 1 else ''} pendente{'s' if pendentes != 1 else ''}"
-    if not dados["documentos_disponivel"]:
-        resumo = f"Cadastro {status.lower()} · documentos indisponíveis"
+    dados = montar_cadastro(payload, docs[0] if docs else None, hoje=hoje, docs_disponivel=docs is not None)
+    # Sem a linha completa da dClientes, fica o básico do registro do cliente.
+    for chave, atributo in (("razao_social", "razao_social"), ("nome_fantasia", "nome_fantasia"), ("status", "status"), ("setor", "vendedor"), ("gv", "gv")):
+        dados[chave] = dados[chave] or str(getattr(r, atributo, "") or "")
+    if not dados["visita_vendedor"]:
+        dia = str(getattr(r, "dia_visita", "") or "")
+        dados["visita_vendedor"] = dias_por_extenso(dias_da_visita(dia)) or dia
+    if perfil is not None and not payload:
+        dados["documento"] = _documento_formatado(getattr(perfil, "documento", ""))
+        dados["endereco"] = ", ".join(p for p in (getattr(perfil, "endereco", ""), getattr(perfil, "numero", "")) if p)
+        dados["bairro_cidade"] = ", ".join(p for p in (getattr(perfil, "bairro", ""), getattr(perfil, "cidade", ""), getattr(perfil, "uf", "")) if p)
+        dados["cep"] = str(getattr(perfil, "cep", "") or "")
+    if not dados["telefones"] and getattr(r, "telefone", ""):
+        dados["telefones"] = [str(r.telefone)]
+    partes = [f"Setor {_setor_curto(dados['setor'])}" if dados["setor"] else "", dados["visita_vendedor"]]
+    doc = dados["documentacao"]
+    if doc["completa"] is True:
+        partes.append("documentação completa")
+    elif doc["pendentes"]:
+        partes.append(f"{doc['pendentes']} documento{'s' if doc['pendentes'] != 1 else ''} pendente{'s' if doc['pendentes'] != 1 else ''}")
+    elif doc["completa"] is False:
+        partes.append("documentação pendente")
+    resumo = " · ".join(p for p in partes if p) or "Cadastro do cliente"
     return _bloco("cadastro", titulo, estado="ok", resumo=resumo, dados=dados, fonte="dClientes + documentação pendente", atualizado_em=getattr(r, "ultima_atualizacao_tabela", ""))
+
+
+def _setor_curto(setor: str) -> str:
+    """'3_107' -> '107' (a chave filial_setor só interessa pelo setor)."""
+    return setor.split("_", 1)[-1] if "_" in setor else setor
 
 
 _CONSTRUTORES: dict[str, Callable[[ClienteAutorizado, Fontes, date], dict[str, Any]]] = {

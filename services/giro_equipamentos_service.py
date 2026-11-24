@@ -11,11 +11,18 @@ A meta vale por equipamento: dois SOPI pedem R$ 4.000,00.
 - Compras: 03.02.37 do mês atual (resumo por produto, valor total entregue).
 - O que é cerveja e o que é refrigerante sai da Cesta de Produtos
   (cestas "Cerveja TT" e "Refrigerante TT").
+
+Previsão do mês: o faturado até hoje no ritmo dos dias corridos (faturado ÷ dia do
+mês × dias do mês). Mix de cerveja: SKUs de cerveja diferentes comprados no mês,
+meta de ``META_SKUS_CERVEJA``; "para completar" são as cervejas dos 3 meses anteriores
+que ainda não vieram neste mês.
 """
 
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -37,6 +44,9 @@ REGRAS = (
     RegraEquipamento("sopi", "SOPI (cerveja)", "SOPI", "Cerveja TT", "cerveja", Decimal("2000.00")),
     RegraEquipamento("visa", "Visa (refrigerante)", "VISA", "Refrigerante TT", "refrigerante", Decimal("1200.00")),
 )
+
+META_SKUS_CERVEJA = 10
+CESTA_CERVEJA = "Cerveja TT"
 
 
 class GiroEquipamentosService:
@@ -75,6 +85,38 @@ class GiroEquipamentosService:
             linhas = cur.fetchall()
         return {str(cesta): Decimal(str(total or 0)) for cesta, total in linhas}
 
+    def produtos_da_cesta(self, filial: str, cliente: str, competencias: list[str], cesta: str = CESTA_CERVEJA) -> list[dict[str, Any]]:
+        """Produtos da cesta comprados pelo cliente em cada competência (para o mix)."""
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                sql.SQL(
+                    """
+                    SELECT p.competencia, p.produto, max(p.descricao), sum(p.total), max(p.ultima_data)
+                    FROM {compras} p
+                    WHERE p.filial = %s AND p.cliente = %s AND p.competencia = ANY(%s)
+                      AND p.produto IN (SELECT codigo FROM {cestas} WHERE nome_cesta = %s)
+                    GROUP BY p.competencia, p.produto
+                    """
+                ).format(
+                    compras=sql.SQL("{}.{}").format(sql.Identifier(self.schema), sql.Identifier("compras_030237_produto")),
+                    cestas=sql.SQL("{}.{}").format(sql.Identifier(self.schema), sql.Identifier("produto_cestas_latest")),
+                ),
+                (_codigo(filial), _codigo(cliente), competencias, cesta),
+            )
+            linhas = cur.fetchall()
+            cur.execute(
+                sql.SQL("SELECT DISTINCT mes_emissao FROM {} WHERE filial = %s AND mes_emissao = ANY(%s)").format(
+                    sql.SQL("{}.{}").format(sql.Identifier(self.schema), sql.Identifier("compras_030237_cargas"))
+                ),
+                (_codigo(filial), competencias),
+            )
+            com_base = {str(m) for (m,) in cur.fetchall()}
+        # Mês sem 03.02.37 importada vem marcado: zero SKU ali não quer dizer que ele não comprou.
+        return [{"competencia": c, "sem_base": True} for c in competencias if c not in com_base] + [
+            {"competencia": str(c), "produto": str(p), "descricao": str(d or ""), "total": Decimal(str(t or 0)), "ultima_data": u}
+            for c, p, d, t, u in linhas
+        ]
+
 
 def equipamentos_em_comodato(itens: list[dict[str, Any]]) -> dict[str, int]:
     """Quantos SOPI e Visa o cliente tem em comodato (saldo de cada linha)."""
@@ -107,6 +149,56 @@ def giro_por_equipamento(equipamentos: dict[str, int], compras: dict[str, Decima
             "percentual": round(min(comprado / meta, Decimal("1")) * 100) if meta else None,
         })
     return linhas
+
+
+def previsao_do_mes(faturado: Decimal, hoje: date) -> Decimal:
+    """Faturado até hoje projetado para o mês inteiro, no ritmo dos dias corridos."""
+    dias_no_mes = calendar.monthrange(hoje.year, hoje.month)[1]
+    return (faturado / hoje.day * dias_no_mes).quantize(Decimal("0.01"))
+
+
+def situacao_do_giro(meta: Decimal, faturado: Decimal, previsao: Decimal) -> str:
+    if faturado >= meta:
+        return "batido"
+    return "deve_atingir" if previsao >= meta else "em_risco"
+
+
+def mix_cerveja(linhas: list[dict[str, Any]], atual: str, anteriores: list[str], meta: int = META_SKUS_CERVEJA) -> dict[str, Any]:
+    """SKUs de cerveja no mês, nos meses anteriores e quais faltam para completar o mix."""
+    sem_base = {l["competencia"] for l in linhas if l.get("sem_base")}
+    linhas = [l for l in linhas if not l.get("sem_base")]
+    do_mes = sorted((l for l in linhas if l["competencia"] == atual), key=lambda l: -l["total"])
+    no_mes = {l["produto"] for l in do_mes}
+    por_mes = [
+        {"competencia": c, "skus": len({l["produto"] for l in linhas if l["competencia"] == c})}
+        for c in anteriores
+    ]
+    for mes in por_mes:
+        mes["bateu"] = mes["skus"] >= meta
+        mes["sem_base"] = mes["competencia"] in sem_base
+    candidatos: dict[str, dict[str, Any]] = {}
+    for linha in linhas:
+        if linha["competencia"] not in anteriores or linha["produto"] in no_mes:
+            continue
+        item = candidatos.setdefault(linha["produto"], {"produto": linha["produto"], "descricao": linha["descricao"], "meses": 0, "ultima_competencia": "", "ultima_data": None})
+        item["meses"] += 1
+        item["ultima_competencia"] = max(item["ultima_competencia"], linha["competencia"])
+        if linha["ultima_data"] and (item["ultima_data"] is None or linha["ultima_data"] > item["ultima_data"]):
+            item["ultima_data"] = linha["ultima_data"]
+    # Primeiro o que ele compra com mais frequência; empate, o comprado mais recentemente.
+    completar = sorted(candidatos.values(), key=lambda i: (i["meses"], i["ultima_competencia"], i["ultima_data"] or date.min), reverse=True)
+    return {
+        "meta": meta,
+        "skus_mes": len(no_mes),
+        "faltam": max(meta - len(no_mes), 0),
+        "meses_anteriores": por_mes,
+        "comprados": [{"produto": l["produto"], "descricao": l["descricao"]} for l in do_mes],
+        "completar": [
+            {"produto": i["produto"], "descricao": i["descricao"], "meses": i["meses"], "de_meses": len(anteriores),
+             "ultima": i["ultima_data"].strftime("%d/%m") if i["ultima_data"] else "", "ultima_competencia": i["ultima_competencia"]}
+            for i in completar
+        ],
+    }
 
 
 def _numero(valor: Any) -> Decimal:

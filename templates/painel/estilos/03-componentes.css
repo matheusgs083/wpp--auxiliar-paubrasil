@@ -571,6 +571,10 @@
     .ficha-fatos { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .45rem .75rem; margin: 0; }
     .ficha-fatos dt { color: var(--ink-500); font-size: var(--fs-2xs); font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
     .ficha-fatos dd { margin: 0; color: var(--ink-900); font-size: var(--fs-sm); font-weight: 650; overflow-wrap: anywhere; }
+    .ficha-fatos + .ficha-fatos { margin-top: .7rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+    .ficha-doc-titulo { margin-bottom: .25rem; font-size: var(--fs-sm); }
+    .ficha-detalhe summary { cursor: pointer; padding: .3rem 0; font-size: var(--fs-sm); font-weight: 750; color: var(--ink-900); }
+    .ficha-detalhe summary:focus-visible { outline: 2px solid var(--brand-500, #3b82f6); outline-offset: 2px; border-radius: 4px; }
     .ficha-blocos { display: grid; gap: .5rem; }
     .ficha-bloco { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); overflow: hidden; }
     .ficha-bloco.is-open { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }

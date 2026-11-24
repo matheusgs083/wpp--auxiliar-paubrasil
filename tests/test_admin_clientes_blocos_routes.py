@@ -39,7 +39,7 @@ class FakeComodatos(Escopado):
         if not self._permitido(cod_pdv, allowed_sectors, allowed_gv_vdes):
             return []
         return [
-            SimpleNamespace(nro_comodato="5521", material="REFRIGERADOR,BRAHMA,NORMAL PC,220W", sub_tipo_material="SOPI", saldo="1", vencimento="10/01/2026", planilha_atualizada_em="22/11/2026"),
+            SimpleNamespace(nro_comodato="5521", material="REFRIGERADOR,BRAHMA,NORMAL PC,220W", sub_tipo_material="SOPI", saldo="1", valor="4.850,00", vencimento="10/01/2026", planilha_atualizada_em="22/11/2026"),
             SimpleNamespace(nro_comodato="5522", material="GARRAFEIRA PLAST PRETA 23 GARRAFAS 30OML", sub_tipo_material="GARRAFEIRA CERVEJA 1/2", saldo="10", vencimento="10/01/2027", planilha_atualizada_em="22/11/2026"),
         ]
 
@@ -71,6 +71,9 @@ class FakeGiroEquipamentos:
     def compras_por_cesta(self, filial: str, cliente: str, competencia: str) -> dict[str, Decimal]:
         self.pedidos.append((filial, cliente, competencia))
         return {"Cerveja TT": Decimal("1200"), "Refrigerante TT": Decimal("5000")}
+
+    def produtos_da_cesta(self, filial: str, cliente: str, competencias: list[str]) -> list[dict[str, Any]]:
+        return [{"competencia": competencias[-1], "produto": "1", "descricao": "SKOL LATA 350ML", "total": Decimal("1200"), "ultima_data": None}]
 
 
 class FakeDocumentos(Escopado):
@@ -207,9 +210,10 @@ class ConteudoDosBlocosTest(unittest.TestCase):
 
     def test_documentos_pendentes_no_cadastro(self) -> None:
         bloco = self.dados("cadastro")
-        self.assertEqual(bloco["resumo"], "Cadastro ativo · 2 documentos pendentes")
-        status = {d["campo"]: d["status"] for d in bloco["dados"]["documentos"]}
-        self.assertEqual(status["rg"], "PENDENTE")
+        self.assertEqual(bloco["resumo"], "Setor 107 · Terça · 2 documentos pendentes")
+        docs = {d["rotulo"]: d["ok"] for d in bloco["dados"]["documentacao"]["itens"]}
+        self.assertFalse(docs["Identidade"])  # RG pendente, mesmo com CPF OK
+        self.assertTrue(docs["Contrato social"])
         self.assertEqual(bloco["dados"]["documento"], "12.345.678/0001-90")
 
     def test_credito_mostra_disponivel_calculado(self) -> None:
@@ -247,7 +251,10 @@ class ConteudoDosBlocosTest(unittest.TestCase):
         self.assertTrue(sopi["em_risco"])
         visa = next(t for t in bloco["dados"]["tipos"] if t["tipo"] == "visa")
         self.assertFalse(visa["em_risco"])  # comprou refrigerante, mas não tem Visa em comodato
-        self.assertEqual(bloco["resumo"], "SOPI abaixo da meta de compra do mês")
+        self.assertEqual(sopi["valor_equipamentos"], "4.850,00")
+        self.assertEqual(sopi["situacao"], "em_risco")  # 1.200 até o dia 23: prevê 1.565,22
+        self.assertEqual(bloco["dados"]["mix"]["skus_mes"], 1)
+        self.assertEqual(bloco["resumo"], "SOPI: abaixo da meta no ritmo atual · mix de cerveja 1 de 10 SKUs")
 
     def test_cabecalho_traz_contato_e_mapa(self) -> None:
         cabecalho = self.cliente.get("/api/admin/clientes/3/100/cabecalho").json()["cliente"]

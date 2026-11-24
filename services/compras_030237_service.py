@@ -39,7 +39,7 @@ TABELA_GIRO = "raw_030237_giro"
 STATUS_ENTREGUE = ("A", "E")
 STATUS_DEVOLVIDO = "D"
 MESES_MEDIA = 3
-DIAS_DEVOLUCAO = 60
+DIAS_DEVOLUCAO = 90
 TOP_PRODUTOS = 5
 
 
@@ -199,6 +199,9 @@ class Compras030237Service:
             cur.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} (filial, mes_emissao, source_key, imported_at)").format(
                 sql.Identifier(f"{TABELA_GIRO}_versao_idx"), self._t(TABELA_GIRO)
             ))
+            # Última compra do produto no mês (mix de cerveja da ficha). Linhas antigas ficam
+            # sem a data até a próxima reconstrução do mês.
+            cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS ultima_data DATE").format(self._t("compras_030237_produto")))
             for tabela in ("compras_030237_mes", "compras_030237_produto", "devolucoes_030237"):
                 cur.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} (filial, cliente)").format(
                     sql.Identifier(f"{tabela}_cliente_idx"), self._t(tabela)
@@ -401,9 +404,9 @@ class Compras030237Service:
         ).format(self._t("compras_030237_mes"))
         por_produto = sql.SQL(
             """
-            INSERT INTO {} (filial, mes_emissao, cliente, competencia, produto, descricao, unidade, total, qtde)
+            INSERT INTO {} (filial, mes_emissao, cliente, competencia, produto, descricao, unidade, total, qtde, ultima_data)
             SELECT filial, mes_emissao, cliente, to_char(data_operacao, 'YYYY-MM'), produto,
-                   max(descricao), max(unidade), sum(total), sum(qtde)
+                   max(descricao), max(unidade), sum(total), sum(qtde), max(data_operacao)
             FROM compras_030237_linhas
             WHERE status IN ('A', 'E') AND produto <> '0'
             GROUP BY filial, mes_emissao, cliente, to_char(data_operacao, 'YYYY-MM'), produto

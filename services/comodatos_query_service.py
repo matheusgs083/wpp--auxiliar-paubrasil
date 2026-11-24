@@ -44,6 +44,7 @@ class ComodatoRecord:
     planilha_atualizada_em: str
     # Vencimento do contrato de comodato (coluna da 02.02.20 guardada no payload), dd/mm/aaaa.
     vencimento: str = ""
+    valor: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -549,6 +550,7 @@ class ComodatosQueryService:
                 saldo=_format_quantity(row.get("saldo")),
                 planilha_atualizada_em=_format_reference_date(row.get("reference_date"), row.get("batch_imported_at")),
                 vencimento=vencimento_do_payload(row.get("payload")),
+                valor=valor_do_payload(row.get("payload")),
             )
             for row in rows
         ]
@@ -719,6 +721,16 @@ def _format_reference_date(reference_date: Any, batch_imported_at: Any) -> str:
             return batch_imported_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         return batch_imported_at.strftime("%Y-%m-%d %H:%M:%S")
     return str(batch_imported_at or "")
+
+
+def valor_do_payload(payload: Any) -> str:
+    """Valor do material em comodato (coluna "Valor" da 02.02.20), como veio: '4.850,00'."""
+    if not isinstance(payload, dict):
+        return ""
+    for chave, valor in payload.items():
+        if str(chave or "").strip().lower() == "valor":
+            return str(valor or "").strip()
+    return ""
 
 
 def vencimento_do_payload(payload: Any) -> str:

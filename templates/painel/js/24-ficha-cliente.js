@@ -12,7 +12,6 @@
       { id: "devolucoes", titulo: "Devoluções", icone: "bi-arrow-return-left" },
       { id: "cadastro", titulo: "Cadastro e documentos", icone: "bi-person-vcard" }
     ];
-    const FICHA_DOC_TOM = { OK: "ok", PENDENTE: "warn" };
 
     function fichaUrl(filial, cliente, sufixo) {
       return `${CONFIG.endpoints.clientes.ficha}/${encodeURIComponent(filial)}/${encodeURIComponent(cliente)}/${sufixo}`;
@@ -215,12 +214,13 @@
       equipamentos(d, bloco) {
         if (bloco.estado === "vazio") return clientesVazio("O cliente não tem SOPI nem Visa em comodato na 02.02.20.");
         const cartoes = (d.tipos || []).filter(t => Number(t.equipamentos) > 0).map(t => {
-          const situacao = t.em_risco ? clientesTag(`Faltam R$ ${t.falta}`, "warn", "bi-exclamation-triangle") : clientesTag("Giro batido", "ok", "bi-check2");
+          const tag = FICHA_GIRO_TAG[t.situacao] || FICHA_GIRO_TAG.em_risco;
           const barra = t.percentual === null ? "" : `<div class="ficha-progresso" role="progressbar" aria-label="Giro de ${escapeHtml(t.rotulo)}: ${t.percentual}%" aria-valuenow="${t.percentual}" aria-valuemin="0" aria-valuemax="100"><span style="width:${t.percentual}%"></span></div>`;
-          return `<article class="ficha-item"><div class="ficha-item-topo"><strong>${escapeHtml(t.rotulo)}</strong>${situacao}</div>${barra}
-              ${fichaFatos([["Em comodato", String(t.equipamentos)], [`Meta (R$ ${t.meta_por_equipamento} cada)`, `R$ ${t.meta}`], [`Comprado de ${t.cesta} no mês`, `R$ ${t.comprado}`], ["Falta", `R$ ${t.falta}`]])}</article>`;
+          const nome = t.rotulo.split(" ")[0];
+          return `<article class="ficha-item"><div class="ficha-item-topo"><strong>${escapeHtml(nome)} · ${t.equipamentos} equipamento${t.equipamentos > 1 ? "s" : ""}</strong>${clientesTag(tag[0], tag[1], tag[2])}</div>${barra}
+              ${fichaFatos([[`Faturado de ${t.cesta} no mês`, `R$ ${t.comprado} de R$ ${t.meta}`], ["Faltam", `R$ ${t.falta}`], ["Previsão do mês", `R$ ${t.previsao}`], ["Valor dos equipamentos", `R$ ${t.valor_equipamentos}`]])}</article>`;
         }).join("");
-        return `<div class="ficha-lista">${cartoes}</div><div class="small text-secondary mt-2">${escapeHtml(d.explicacao || "")}</div>`;
+        return `<div class="ficha-lista">${cartoes}${d.mix ? fichaMixCerveja(d.mix) : ""}</div><div class="small text-secondary mt-2">${escapeHtml(d.explicacao || "")}</div>`;
       },
       comodatos(d, bloco) {
         if (bloco.estado === "vazio") return clientesVazio("Nenhum comodato em aberto na 02.02.20.");
@@ -230,7 +230,7 @@
           </article>`).join("")}</div><div class="small text-secondary mt-2">Saldo total: ${escapeHtml(d.saldo_total || "0")}</div>`;
       },
       devolucoes(d, bloco) {
-        if (!(d.itens || []).length) return clientesVazio(`Nenhuma devolução nos últimos ${d.dias || 60} dias.`);
+        if (!(d.itens || []).length) return clientesVazio(`Nenhuma devolução nos últimos ${d.dias || 90} dias.`);
         return `<div class="ficha-lista">${d.itens.map(i => `<article class="ficha-item">
             <div class="ficha-item-topo"><strong class="mono">NF ${escapeHtml(i.nota || "-")}</strong><span class="small text-secondary">${escapeHtml(fichaDataBr(i.data))}</span></div>
             ${fichaFatos([["Motivo", i.motivo], ["Responsabilidade", i.responsabilidade || "-"], ["NF de origem", i.nf_referencia || "-"], ["Volume", fichaNumero(i.qtde)], ["Valor", formatMoneyText(i.total)]])}
@@ -238,15 +238,52 @@
           </article>`).join("")}</div>`;
       },
       cadastro(d) {
-        const fatos = fichaFatos([["Razão social", d.razao_social], ["Nome fantasia", d.nome_fantasia], ["CPF/CNPJ", d.documento], ["Endereço", [d.endereco, d.complemento].filter(Boolean).join(" - ")], ["CEP", d.cep], ["Bairro", d.bairro], ["Cidade", d.cidade_uf || d.cidade], ["Telefone", d.telefone], ["E-mail", d.email], ["Setor / RN", clientesChave(d.setor)], ["GV", clientesChave(d.gv)], ["Dia de visita", d.dia_visita], ["Status cadastral", d.status]]);
-        const docs = !d.documentos_disponivel
-          ? '<div class="small text-warning-emphasis">Base de documentação pendente indisponível agora.</div>'
-          : (d.documentos || []).length
-            ? `<ul class="ficha-docs">${d.documentos.map(doc => `<li><span>${escapeHtml(doc.rotulo)}</span>${clientesTag(doc.status || "-", FICHA_DOC_TOM[String(doc.status || "").toUpperCase()] || "neutral")}</li>`).join("")}</ul>`
-            : '<div class="small text-secondary">Cliente fora da base de documentação pendente.</div>';
-        return `${fatos}<h4 class="ficha-sub">Documentos</h4>${docs}<div class="small text-secondary mt-2">Só o status de cada documento; os arquivos não ficam aqui.</div>`;
+        return `${fichaDocumentacao(d.documentacao || {})}
+          ${fichaFatos([["Endereço", d.endereco], ["Bairro e cidade", d.bairro_cidade], ["CEP", d.cep], ["Telefones", (d.telefones || []).join(" · ")]])}
+          ${fichaFatos([["Setor", clientesChave(d.setor)], ["Gerente (GV)", clientesChave(d.gv)], ["Visita do vendedor", d.visita_vendedor], ["Próxima visita", d.proxima_visita], ["Contato do BEES", d.contato_bees], ["Próximo contato BEES", d.proximo_contato_bees]])}
+          ${fichaFatos([["Categoria", d.categoria], ["Segmento", d.segmento], ...(d.rede ? [["Rede", d.rede]] : []), ["Cliente desde", d.cliente_desde]])}
+          ${fichaFatos([["Razão social", d.razao_social], ["Nome fantasia", d.nome_fantasia], ["CPF/CNPJ", d.documento], ["Tipo de pessoa", d.tipo_pessoa], ["Situação na Receita", d.situacao_rf], ["Status do cliente", d.status]])}`;
       }
     };
+
+    const FICHA_GIRO_TAG = {
+      batido: ["Giro batido", "ok", "bi-check2"],
+      deve_atingir: ["Deve atingir", "ok", "bi-graph-up-arrow"],
+      em_risco: ["Em risco", "warn", "bi-exclamation-triangle"]
+    };
+
+    // Mix de cerveja do SOPI: SKUs no mês, nos 3 meses anteriores e o que falta comprar.
+    function fichaMixCerveja(mix) {
+      const tag = mix.faltam ? clientesTag(`Faltam ${mix.faltam} SKU${mix.faltam > 1 ? "s" : ""}`, "warn", "bi-exclamation-triangle") : clientesTag("Mix completo", "ok", "bi-check2");
+      const meses = (mix.meses_anteriores || []).map(m => m.sem_base
+        ? clientesTag(`${fichaMesBr(m.competencia)}: sem base`, "neutral")
+        : clientesTag(`${fichaMesBr(m.competencia)}: ${m.skus}`, m.bateu ? "ok" : "err", m.bateu ? "bi-check2" : "bi-x-lg")).join(" ");
+      const comprados = (mix.comprados || []).map(p => `<li>${escapeHtml(p.descricao || p.produto)}</li>`).join("");
+      const completar = (mix.completar || []).map(p => {
+        const frequencia = p.meses === p.de_meses ? `Comprou nos ${p.de_meses} meses` : `Comprou em ${p.meses} de ${p.de_meses} meses`;
+        const ultima = p.ultima ? `a última em ${p.ultima}` : `a última em ${fichaMesBr(p.ultima_competencia)}`;
+        return `<li><span>${escapeHtml(p.descricao || p.produto)}<small class="d-block text-secondary">${escapeHtml(`${frequencia}, ${ultima}`)}</small></span></li>`;
+      }).join("");
+      return `<article class="ficha-item"><div class="ficha-item-topo"><strong>Mix de cerveja</strong>${tag}</div>
+          ${fichaFatos([["SKUs de cerveja no mês", `${mix.skus_mes} de ${mix.meta}`]])}
+          <div class="small text-secondary mt-2 mb-1">SKUs nos meses anteriores</div><div class="d-flex flex-wrap gap-1">${meses}</div>
+          <details class="ficha-detalhe mt-2"><summary>Comprados no mês (${(mix.comprados || []).length})</summary>${comprados ? `<ul class="ficha-linhas">${comprados}</ul>` : '<div class="small text-secondary">Nenhuma cerveja no mês ainda.</div>'}</details>
+          <details class="ficha-detalhe mt-1"${completar ? " open" : ""}><summary>Para completar o mix (${(mix.completar || []).length})</summary>
+            <div class="small text-secondary mb-1">Cervejas que o cliente comprou nos 3 meses anteriores e ainda não comprou neste. Primeiro as que ele compra com mais frequência.</div>
+            ${completar ? `<ul class="ficha-linhas">${completar}</ul>` : '<div class="small text-secondary">Nada a sugerir: ele já comprou neste mês tudo o que comprava antes.</div>'}</details></article>`;
+    }
+
+    // Documentação: completa ou quantos faltam, e o status de cada documento.
+    function fichaDocumentacao(doc) {
+      const titulo = doc.completa === true
+        ? '<div class="ficha-doc-titulo text-success-emphasis fw-semibold">Documentação completa</div>'
+        : doc.completa === false
+          ? `<div class="ficha-doc-titulo text-warning-emphasis fw-semibold">${doc.pendentes ? `${doc.pendentes} documento${doc.pendentes > 1 ? "s" : ""} pendente${doc.pendentes > 1 ? "s" : ""}` : "Documentação pendente"}</div>`
+          : '<div class="ficha-doc-titulo text-secondary">Documentação sem informação</div>';
+      if (doc.disponivel === false) return `${titulo}<div class="small text-warning-emphasis mb-2">Base de documentação pendente indisponível agora.</div>`;
+      const itens = (doc.itens || []).map(item => `<li><span>${escapeHtml(item.rotulo)}${item.observacao ? `<small class="d-block text-secondary">${escapeHtml(item.observacao)}</small>` : ""}</span>${item.ok ? clientesTag("OK", "ok", "bi-check2") : clientesTag("Pendente", "warn", "bi-exclamation-triangle")}</li>`).join("");
+      return `${titulo}${itens ? `<ul class="ficha-docs">${itens}</ul><div class="small text-secondary mb-2">Status de cada documento na base de documentação pendente do Promax.</div>` : ""}`;
+    }
 
     // Barras simples do faturamento mensal (3 meses fechados + mês atual parcial).
     function fichaGraficoCompras(serie) {
