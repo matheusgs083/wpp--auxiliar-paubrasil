@@ -6,10 +6,10 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto
 from bot_api.services.filial_labels import FILIAL_LABELS
@@ -29,7 +29,8 @@ class _StrictPayload(BaseModel):
 class PedidoItemRequest(_StrictPayload):
     produto: str = Field(min_length=1, max_length=20)
     quantidade: int = Field(ge=1, le=99999)
-    preco: str = Field(min_length=1, max_length=20)
+    # Vazio só na bonificação (operação 2): o preço vem da tabela do Promax.
+    preco: str = Field(default="", max_length=20)
 
     @field_validator("produto")
     @classmethod
@@ -43,6 +44,8 @@ class PedidoItemRequest(_StrictPayload):
     @classmethod
     def preco_valido(cls, value: str) -> str:
         normalized = str(value or "").strip().replace("R$", "").replace(" ", "")
+        if not normalized:
+            return ""
         if normalized.count(",") > 1 or normalized.count(".") > 1:
             raise ValueError("Preço inválido.")
         if "," in normalized and "." in normalized:
@@ -67,7 +70,18 @@ class PedidoCreateRequest(_StrictPayload):
     itens: list[PedidoItemRequest] = Field(min_length=1, max_length=200)
     cond_pagto: str = Field(default="", max_length=8)
     motivo_digitacao: str = Field(min_length=1, max_length=80)
+    # Operação da 03.01.04: 1 = venda (sempre, para todos); 2 = bonificação (só admin, sem preço).
+    operacao: Literal["1", "2"] = "1"
     target_worker_id: str | None = Field(default=None, min_length=1, max_length=160)
+
+    @model_validator(mode="after")
+    def preco_conforme_operacao(self) -> "PedidoCreateRequest":
+        if self.operacao == "1" and any(not item.preco for item in self.itens):
+            raise ValueError("Informe o preço unitário de cada item.")
+        if self.operacao == "2":
+            for item in self.itens:
+                item.preco = ""
+        return self
 
     @field_validator("filial", "cliente")
     @classmethod
@@ -495,6 +509,9 @@ def create_admin_pedidos_router(
         x_admin_token: str | None = Header(default=None),
     ) -> dict[str, Any]:
         context = context_for_pedidos(request, authorization, x_api_token, x_admin_token)
+        if payload.operacao == "2" and not bool(context.get("is_admin")):
+            record_security_event(request, channel="api", event_type="admin_pedidos_create", decision="denied", reason=f"bonificacao_sem_admin;filial={payload.filial};cliente={payload.cliente}")
+            raise HTTPException(status_code=403, detail="Pedido de bonificação só pode ser digitado por administrador.")
         filial = str(payload.filial)
         unidade = _UNIT_BY_FILIAL.get(filial)
         if not unidade:
@@ -528,7 +545,7 @@ def create_admin_pedidos_router(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Cliente possui títulos em aberto na 12.06.01. "
+                    "Cliente possui títulos em aberto. "
                     "A digitação de pedido está bloqueada até a regularização."
                 ),
             )
@@ -593,6 +610,7 @@ def create_admin_pedidos_router(
             "cliente": payload.cliente,
             "cond_pagto": payload.cond_pagto,
             "motivo_digitacao": payload.motivo_digitacao,
+            "operacao": payload.operacao,
             "itens": [{"produto": item.produto, "quantidade": item.quantidade, "preco": item.preco} for item in payload.itens],
         }
         job = promax_jobs_service.enqueue_job(
@@ -601,8 +619,8 @@ def create_admin_pedidos_router(
             priority=80,
             created_by=_pedido_created_by(context),
         )
-        record_security_event(request, channel="api", event_type="admin_pedidos_create", decision="allowed", reason=f"filial={filial};cliente={payload.cliente};motivo={payload.motivo_digitacao};itens={len(payload.itens)}")
-        record_action(request, context, "enviar_pedido", filial=filial, cliente=payload.cliente, vendedor=vendedor, motivo=payload.motivo_digitacao, itens=len(payload.itens), job_id=str(job.get("id") or ""))
+        record_security_event(request, channel="api", event_type="admin_pedidos_create", decision="allowed", reason=f"filial={filial};cliente={payload.cliente};motivo={payload.motivo_digitacao};operacao={payload.operacao};itens={len(payload.itens)}")
+        record_action(request, context, "enviar_pedido", filial=filial, cliente=payload.cliente, vendedor=vendedor, motivo=payload.motivo_digitacao, operacao=payload.operacao, itens=len(payload.itens), job_id=str(job.get("id") or ""))
         return {"ok": True, "job": job, "cliente": _client_payload(cliente), "unidade": unidade}
 
     return router
@@ -617,6 +635,7 @@ def _bloqueio_payload(config: Mapping[str, Any], context: Mapping[str, Any]) -> 
     return {
         **situacao_bloqueio(str(config.get("horario_bloqueio") or "")),
         "pode_ignorar_bloqueio": bool(context.get("is_admin")),
+        "pode_bonificar": bool(context.get("is_admin")),
     }
 
 

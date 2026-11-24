@@ -86,11 +86,31 @@
       syncPedidoControls();
     }
 
+    // Bonificação (operação 2 da 03.01.04) só aparece para administrador; venda não muda.
+    function configurePedidoOperacao(config) {
+      const wrap = document.getElementById("pedidoOperacaoWrap");
+      const select = document.getElementById("pedidoOperacao");
+      if (!wrap || !select) return;
+      wrap.hidden = !config?.pode_bonificar;
+      if (wrap.hidden) select.value = "1";
+      aplicarPedidoOperacao();
+    }
+
+    function pedidoBonificacao() {
+      const wrap = document.getElementById("pedidoOperacaoWrap");
+      return Boolean(wrap && !wrap.hidden && document.getElementById("pedidoOperacao")?.value === "2");
+    }
+
+    function aplicarPedidoOperacao() {
+      document.querySelector(".pedido-items-table")?.classList.toggle("pedido-sem-preco", pedidoBonificacao());
+    }
+
     async function syncPedidoConfig() {
       try {
         const response = await req("/api/admin/pedidos/config");
         pedidosUi.config = response;
         configurePedidoFiliais();
+        configurePedidoOperacao(response);
         renderPedidoMotivos(response);
         renderPedidoBloqueio(response);
         return true;
@@ -293,7 +313,7 @@
         const selected = item.produto ? `<div class="pedido-product-selected"><strong class="mono">${escapeHtml(item.produto)}</strong>${item.descricao ? ` · ${escapeHtml(item.descricao)}` : ""}${stock ? ` · ${stock}` : ""}</div>` : "";
         const suggestions = Array.isArray(item.suggestions) && item.suggestions.length ? `<div class="pedido-product-suggestions" role="listbox" aria-label="Produtos encontrados">${item.suggestions.map((product, productIndex) => `<button class="pedido-product-option" data-index="${index}" data-product-index="${productIndex}" type="button" role="option"><span class="code mono">${escapeHtml(product.codigo_produto)}</span><span class="name">${escapeHtml(product.descricao_produto)}</span><span class="stock">${escapeHtml(formatStockNumber(product.saldo_disponivel))}</span></button>`).join("")}</div>` : "";
         const max = item.saldo_disponivel !== undefined && Number(item.saldo_disponivel) >= 0 ? `max="${Math.floor(Number(item.saldo_disponivel))}"` : "max=\"99999\"";
-        return `<tr><td class="pedido-product-cell"><label class="d-md-none small text-secondary">Produto na grade</label><input class="form-control form-control-sm pedido-item-produto" data-index="${index}" value="${escapeHtml(item.busca || item.produto || "")}" autocomplete="off" placeholder="Nome (3 letras) ou código" ${disabled}>${selected}${suggestions}</td><td><label class="d-md-none small text-secondary">Quantidade</label><input class="form-control form-control-sm mono pedido-item-qtd" data-index="${index}" value="${escapeHtml(String(item.quantidade || 1))}" inputmode="numeric" type="number" min="1" ${max} ${disabled}></td><td><label class="d-md-none small text-secondary">Preço unitário</label><div class="input-group input-group-sm"><span class="input-group-text">R$</span><input class="form-control mono pedido-item-preco" data-index="${index}" value="${escapeHtml(String(item.preco || ""))}" inputmode="decimal" placeholder="0,00" ${disabled}></div></td><td class="text-end"><button class="btn btn-outline-danger btn-sm pedido-item-remove" data-index="${index}" type="button" ${disabled || pedidosUi.items.length === 1 ? "disabled" : ""} aria-label="Remover item"><i class="bi bi-trash"></i></button></td></tr>`;
+        return `<tr><td class="pedido-product-cell"><label class="d-md-none small text-secondary">Produto na grade</label><input class="form-control form-control-sm pedido-item-produto" data-index="${index}" value="${escapeHtml(item.busca || item.produto || "")}" autocomplete="off" placeholder="Nome (3 letras) ou código" ${disabled}>${selected}${suggestions}</td><td><label class="d-md-none small text-secondary">Quantidade</label><input class="form-control form-control-sm mono pedido-item-qtd" data-index="${index}" value="${escapeHtml(String(item.quantidade || 1))}" inputmode="numeric" type="number" min="1" ${max} ${disabled}></td><td class="pedido-col-preco"><label class="d-md-none small text-secondary">Preço unitário</label><div class="input-group input-group-sm"><span class="input-group-text">R$</span><input class="form-control mono pedido-item-preco" data-index="${index}" value="${escapeHtml(String(item.preco || ""))}" inputmode="decimal" placeholder="0,00" ${disabled}></div></td><td class="text-end"><button class="btn btn-outline-danger btn-sm pedido-item-remove" data-index="${index}" type="button" ${disabled || pedidosUi.items.length === 1 ? "disabled" : ""} aria-label="Remover item"><i class="bi bi-trash"></i></button></td></tr>`;
       }).join("");
       body.querySelectorAll(".pedido-item-produto").forEach(input => input.addEventListener("input", event => pesquisarProdutoPedido(Number(event.target.dataset.index), event.target.value, event.target)));
       body.querySelectorAll(".pedido-item-qtd").forEach(input => input.addEventListener("input", event => { pedidosUi.items[Number(event.target.dataset.index)].quantidade = Number(event.target.value || 0); }));
@@ -490,18 +510,20 @@
       const filial = document.getElementById("pedidoFilial")?.value || "";
       const condPagto = document.getElementById("pedidoCondicao")?.value.trim() || "";
       const motivo = document.getElementById("pedidoMotivo")?.value.trim() || "";
-      const itens = pedidosUi.items.filter(item => item.produto && Number(item.quantidade) > 0).map(item => ({ produto: item.produto, quantidade: Number(item.quantidade), preco: String(item.preco || "").trim() }));
+      const bonificacao = pedidoBonificacao();
+      const operacao = bonificacao ? "2" : "1";
+      const itens = pedidosUi.items.filter(item => item.produto && Number(item.quantidade) > 0).map(item => ({ produto: item.produto, quantidade: Number(item.quantidade), preco: bonificacao ? "" : String(item.preco || "").trim() }));
       if (pedidosUi.bloqueadoPorHorario) { pedidosSetStatus(pedidosUi.config?.mensagem || "A digitação de novos pedidos está encerrada.", "err"); return; }
       if (!pedidosUi.client || !filial) { pedidosSetStatus("Selecione a filial e um cliente autorizado.", "err"); return; }
-      if (!pedidosUi.client.pedido_liberado) { pedidosSetStatus("Cliente bloqueado pela 12.06.01. Não é possível digitar pedido.", "err"); return; }
+      if (!pedidosUi.client.pedido_liberado) { pedidosSetStatus("Cliente com títulos em aberto. Não é possível digitar pedido.", "err"); return; }
       if (String(pedidosUi.client.filial) !== String(filial)) { pedidosSetStatus("A filial escolhida é diferente da filial do cliente.", "err"); return; }
       if (!itens.length) { pedidosSetStatus("Inclua ao menos um item válido.", "err"); return; }
       if (!motivo) { pedidosSetStatus("Selecione o motivo da digitação.", "err"); return; }
-      if (itens.some(item => !item.preco)) { pedidosSetStatus("Informe o preço unitário de cada item.", "err"); return; }
-      if (!await askConfirmation(`Enviar pedido para ${pedidosUi.client.nome || pedidosUi.client.razao_social}?`)) return;
+      if (!bonificacao && itens.some(item => !item.preco)) { pedidosSetStatus("Informe o preço unitário de cada item.", "err"); return; }
+      if (!await askConfirmation(`Enviar ${bonificacao ? "bonificação" : "pedido"} para ${pedidosUi.client.nome || pedidosUi.client.razao_social}?`)) return;
       pedidosSetStatus("Validando e enviando para a fila...");
       try {
-        const result = await req("/api/admin/pedidos/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filial, cliente: pedidosUi.client.cliente, itens, cond_pagto: condPagto, motivo_digitacao: motivo }) });
+        const result = await req("/api/admin/pedidos/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filial, cliente: pedidosUi.client.cliente, itens, cond_pagto: condPagto, motivo_digitacao: motivo, operacao }) });
         const cliente = pedidosUi.client.cliente;
         clearTimeoutsPedidoStock();
         pedidosUi.items = [{ produto: "", quantidade: 1 }];
@@ -509,6 +531,7 @@
         const resultados = document.getElementById("pedidoClienteResultadosWrap"); if (resultados) resultados.hidden = true;
         const resultadoBody = document.getElementById("pedidoClienteResultados"); if (resultadoBody) resultadoBody.innerHTML = "";
         const motivoInput = document.getElementById("pedidoMotivo"); if (motivoInput) motivoInput.value = "";
+        const operacaoInput = document.getElementById("pedidoOperacao"); if (operacaoInput) { operacaoInput.value = "1"; aplicarPedidoOperacao(); }
         clearPedidoClient(`Pedido do NB ${cliente} enviado para a fila. Você já pode iniciar um novo pedido.`);
         pedidosSetStatus(`Pedido do NB ${cliente} enviado para a fila.`, "ok");
         addLog(`Pedido enviado: cliente ${cliente}.`, "ok");
@@ -532,6 +555,7 @@
       document.getElementById("pedidoClienteBuscarBtn")?.addEventListener("click", buscarPedidoCliente);
       document.getElementById("pedidoClienteBusca")?.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); buscarPedidoCliente(); } });
       document.getElementById("pedidoEnviarBtn")?.addEventListener("click", enviarPedido);
+      document.getElementById("pedidoOperacao")?.addEventListener("change", aplicarPedidoOperacao);
       document.getElementById("pedidoFilaAtualizarBtn")?.addEventListener("click", () => syncPedidoQueue());
       document.getElementById("pedidoFilial")?.addEventListener("change", () => clearPedidoClient("A filial foi alterada. Pesquise novamente o cliente."));
       document.querySelectorAll(".pedido-subtab").forEach(button => button.addEventListener("click", () => setPedidoSubtab(button.dataset.pedidoSubtab || "digitacao")));

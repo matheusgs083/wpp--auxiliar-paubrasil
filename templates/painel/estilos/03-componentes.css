@@ -545,6 +545,7 @@
     .rota-kpi { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; text-align: left; color: inherit; }
     .rota-kpi small { display: block; margin-top: .15rem; color: var(--ink-500); font-size: var(--fs-xs); }
     button.rota-kpi { cursor: pointer; }
+    .pedido-items-table.pedido-sem-preco .pedido-col-preco { display: none; }
     .rota-contagem { display: inline-block; min-width: 1.35rem; margin-left: .35rem; padding: 0 .35rem; border-radius: 999px; background: var(--soft-panel); color: var(--ink-700); font-size: var(--fs-2xs); font-weight: 800; line-height: 1.35rem; text-align: center; }
     .clientes-filtro[aria-pressed="true"] .rota-contagem { background: var(--brand-600); color: #fff; }
     .clientes-filtro.rota-filtro-vazio { color: var(--ink-500); border-style: dashed; }
