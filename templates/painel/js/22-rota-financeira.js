@@ -41,7 +41,7 @@
           dia.innerHTML = (opcoes.dias || []).map(item => `<option value="${escapeHtml(item)}">${escapeHtml(diasVisitaTexto(item))}</option>`).join("") || '<option value="">Sem dias de visita</option>';
           if (opcoes.dia_sugerido) dia.value = opcoes.dia_sugerido;
         }
-        rotaOpcoesSelect(document.getElementById("rotaFilial"), opcoes.filiais || [], "Todas");
+        rotaOpcoesSelect(document.getElementById("rotaFilial"), opcoes.filiais || [], "Todas", filial => (opcoes.filiais_nomes || {})[filial] || `Filial ${filial}`);
         const gvWrap = document.getElementById("rotaGvWrap");
         if (gvWrap) gvWrap.hidden = !opcoes.mostrar_gv;
         rotaOpcoesSelect(document.getElementById("rotaGv"), opcoes.gvs || [], "Todos", rotaRotuloChave);

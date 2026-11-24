@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from bot_api.commercial_scope import FILIAL_SCOPE_PREFIX, normalize_numeric_code, normalize_sector_scope_input
+from bot_api.services.filial_labels import FILIAL_LABELS
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ class EscopoClientes:
         if self.gvs:
             partes.append("GVs: " + ", ".join(item.replace("_", "-") for item in self.gvs))
         if self.filiais:
-            partes.append("Operações: " + ", ".join(self.filiais))
+            partes.append("Operações: " + ", ".join(FILIAL_LABELS.get(filial, filial) for filial in self.filiais))
         return " · ".join(partes)
 
 

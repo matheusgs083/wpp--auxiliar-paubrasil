@@ -18,6 +18,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 
 from bot_api.commercial_scope import normalize_numeric_code
 from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto, telefone_discagem, telefone_whatsapp
+from bot_api.services.filial_labels import FILIAL_LABELS
 from bot_api.services.rota_financeira_giro import SITUACOES_GIRO, ctes_giro
 from bot_api.services.rota_financeira_query_service import SITUACOES
 
@@ -75,6 +76,8 @@ def create_admin_rota_financeira_router(
             "dias": list(dias),
             "dia_sugerido": _dia_de_hoje(dias),
             "filiais": filiais,
+            # Nome de cada revenda vem da dRevendas (FILIAL_LABELS é recarregado dela).
+            "filiais_nomes": {filial: FILIAL_LABELS.get(filial, "") for filial in filiais},
             "gvs": gvs,
             "mostrar_gv": len(gvs) > 1,
             "setores": setores,

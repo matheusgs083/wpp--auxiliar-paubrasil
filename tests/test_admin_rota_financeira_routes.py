@@ -134,6 +134,7 @@ class RotaEscopoTest(unittest.TestCase):
     def test_gv_so_recebe_os_gvs_da_carteira(self) -> None:
         opcoes = _app(GV_4).get("/api/admin/rota-financeira/opcoes").json()
         self.assertEqual(opcoes["gvs"], ["3_4"])
+        self.assertEqual(opcoes["filiais_nomes"], {"3": "Patos"})  # nome da revenda, não o código
         self.assertEqual(sorted(item["setor"] for item in opcoes["setores"]), ["3_107", "3_108"])
         lista = _app(GV_4).get("/api/admin/rota-financeira", params={"dia": "SEG"})
         self.assertNotIn("300", _nbs(lista))

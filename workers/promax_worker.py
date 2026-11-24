@@ -1292,6 +1292,10 @@ class PromaxWorker:
         lease_token: str,
         result: PromaxRunResult,
     ) -> None:
+        payload = job.get("payload")
+        if not isinstance(payload, Mapping) or str(payload.get("category") or "").strip().lower() != "bot_zap":
+            return
+
         def importar(files: Mapping[str, bytes], reference_date: str | None) -> Mapping[str, Any]:
             # Um CSV por requisição: cada filial tem dezenas de MB e todas juntas
             # passariam do tamanho razoável de uma chamada.
@@ -1315,8 +1319,8 @@ class PromaxWorker:
             lease_token,
             result,
             routine_id="030237_GIRO",
-            folder_name="030237 Giro",
-            label="Compras 030237_GIRO",
+            folder_name="030237 bot",
+            label="Compras 030237 com itens",
             event_prefix="promax_030237_auto_import",
             importer=importar,
         )

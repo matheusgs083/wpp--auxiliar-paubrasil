@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 import os
 import re
@@ -22,7 +23,7 @@ from bot_api.services.admin_financeiro_service import AdminFinanceiroService
 from bot_api.services.admin_import_config import ADMIN_IMPORT_CRITICA_PIPELINE_DATASETS, build_admin_import_datasets
 from bot_api.services.admin_templates import AdminTemplateLoader
 from bot_api.services.rota_financeira_query_service import RotaFinanceiraQueryService
-from bot_api.services.compras_030237_service import Compras030237Service, mes_anterior
+from bot_api.services.compras_030237_service import Compras030237Service
 from bot_api.services.giro_equipamentos_service import GiroEquipamentosService
 from bot_api.services.giro_vasilhame_service import GiroVasilhameService
 from bot_api.services.app_lifecycle import register_app_lifecycle
@@ -225,31 +226,51 @@ def configure_app_runtime(
         manifests: dict[str, list[dict[str, Any]]],
         result: dict[str, int],
     ) -> None:
-        """Refaz o resumo de compras dos meses de emissão tocados pela carga da 03.02.37."""
+        """Depois de uma carga da 03.02.37, refaz o resumo de compras só do mês atual.
+
+        Meses anteriores não mudam no dia a dia; quando precisar, use
+        scripts/reconstruir_compras_030237.py ou a importação com itens do painel.
+        """
         if not manifests.get("030237") or not (result.get("files") or result.get("rows")):
             return
-        meses: set[str] = set()
-        for manifest in manifests.get("030237") or []:
-            metadata = manifest.get("metadata") if isinstance(manifest, dict) else {}
-            for value in ((metadata or {}).get("competencia"), manifest.get("reference_date") if isinstance(manifest, dict) else None):
-                match = re.search(r"(\d{4}-\d{2})", str(value or ""))
-                if match:
-                    meses.add(match.group(1))
-        # Um acumulado do mês M pode trazer emissões do início do mês; começar
-        # um mês antes cobre o reenvio do fechamento sem refazer o histórico todo.
-        desde = mes_anterior(min(meses)) if meses else None
-        try:
-            resumo = compras_030237_service.rebuild(desde_mes=desde)
-            logger.info("Resumo de compras 03.02.37 refeito: %s", resumo)
-        except Exception:
-            logger.exception("Falha ao refazer o resumo de compras 03.02.37 (desde %s)", desde)
+        _agendar_rebuild_compras(datetime.now().strftime("%Y-%m"))
+
+    # O resumo de compras roda numa fila própria. Na fila da importação ele
+    # atrasava o próximo lote e o snapshot da Liga, que ficava no dia anterior.
+    compras_rebuild_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="compras-030237-rebuild")
+    compras_rebuild_lock = Lock()
+    compras_rebuild_estado: dict[str, Any] = {"desde": None, "rodando": False}
+
+    def _agendar_rebuild_compras(desde: str) -> None:
+        with compras_rebuild_lock:
+            atual = compras_rebuild_estado["desde"]
+            compras_rebuild_estado["desde"] = min(atual, desde) if atual else desde
+            if compras_rebuild_estado["rodando"]:
+                return
+            compras_rebuild_estado["rodando"] = True
+        compras_rebuild_executor.submit(_rodar_rebuild_compras)
+
+    def _rodar_rebuild_compras() -> None:
+        # Pedidos que chegam durante uma reconstrução viram uma só.
+        while True:
+            with compras_rebuild_lock:
+                desde = compras_rebuild_estado["desde"]
+                compras_rebuild_estado["desde"] = None
+                if not desde:
+                    compras_rebuild_estado["rodando"] = False
+                    return
+            try:
+                resumo = compras_030237_service.rebuild(desde_mes=desde, ate_mes=datetime.now().strftime("%Y-%m"))
+                logger.info("Resumo de compras 03.02.37 refeito: %s", resumo)
+            except Exception:
+                logger.exception("Falha ao refazer o resumo de compras 03.02.37 (desde %s)", desde)
 
     def _after_liga_sql_import(
         manifests: dict[str, list[dict[str, Any]]],
         result: dict[str, int],
     ) -> None:
-        # Cada etapa é independente: falha no snapshot da Liga não impede o
-        # resumo de compras, e vice-versa.
+        # Primeiro o snapshot da Liga; o resumo de compras só é agendado em
+        # outra fila, então não segura a Liga nem a próxima importação.
         try:
             _rebuild_liga_snapshots_after_sql_import(manifests, result)
         except Exception:

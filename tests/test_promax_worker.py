@@ -1222,7 +1222,13 @@ class PromaxClientTests(unittest.TestCase):
             )
 
             worker._import_030237_giro_if_needed(
-                {"payload": {"routines": ["030237_GIRO"], "end_date": "2026-01-31"}},
+                {
+                    "payload": {
+                        "category": "bot_zap",
+                        "groups": [{"category": "bot_zap", "routines": ["030237_GIRO"]}],
+                        "end_date": "2026-01-31",
+                    }
+                },
                 "job-1",
                 "lease-token",
                 PromaxRunResult(
@@ -1231,7 +1237,7 @@ class PromaxClientTests(unittest.TestCase):
                     child_pid=123,
                     details={
                         "run_started_at_epoch": 1.0,
-                        "metadata": {"publication_mapping": {str(source_dir.parent / "030237 Giro"): str(source_dir)}},
+                        "metadata": {"publication_mapping": {str(source_dir.parent / "030237 bot"): str(source_dir)}},
                     },
                 ),
             )
