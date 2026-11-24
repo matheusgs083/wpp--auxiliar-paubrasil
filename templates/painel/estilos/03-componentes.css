@@ -541,10 +541,9 @@
     #rotaFinanceiraPane .pedido-shell > * { min-width: 0; }
     .rota-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .65rem; align-items: end; }
     .rota-filtros > div:last-child { grid-column: span 2; }
-    .rota-kpis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .55rem; }
+    .rota-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; }
     .rota-kpi { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; text-align: left; color: inherit; }
     .rota-kpi small { display: block; margin-top: .15rem; color: var(--ink-500); font-size: var(--fs-xs); }
-    button.rota-kpi { cursor: pointer; }
     .pedido-items-table.pedido-sem-preco .pedido-col-preco { display: none; }
     .pedido-caixa-aviso { margin-top: .25rem; color: var(--ink-700); font-size: var(--fs-xs); font-weight: 600; }
     /* Gerencial de pedidos: clientes bloqueados pela 12.06.01 e liberações. */
@@ -596,19 +595,15 @@
     .clientes-filtro[aria-pressed="true"] .rota-contagem { background: var(--brand-600); color: #fff; }
     .clientes-filtro.rota-filtro-vazio { color: var(--ink-500); border-style: dashed; }
     .rota-tabela.rota-uma-filial .rota-c-filial, .rota-tabela.rota-um-setor .rota-c-setor { display: none; }
-    button.rota-kpi:hover { border-color: var(--brand-600); }
-    button.rota-kpi[aria-pressed="true"] { border-color: var(--brand-600); box-shadow: inset 0 0 0 1px var(--brand-600); }
-    button.rota-kpi:focus-visible, .rota-cliente:focus-visible { outline: 2px solid var(--brand-600); outline-offset: 2px; }
+    .rota-cliente:focus-visible { outline: 2px solid var(--brand-600); outline-offset: 2px; }
     .rota-tabela { min-width: 1080px; }
     .rota-tabela td, .rota-tabela th { white-space: nowrap; }
     .rota-tabela tr[data-faixa="1"] > td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
     .rota-tabela tr[data-faixa="2"] > td:first-child, .rota-tabela tr[data-faixa="3"] > td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
-    .rota-prioridade { display: inline-grid; min-width: 28px; height: 28px; place-items: center; border-radius: 50%; color: var(--ink-700); background: var(--surface-soft); font-size: var(--fs-xs); font-weight: 800; }
     .rota-cliente { display: grid; padding: 0; border: 0; color: inherit; background: transparent; text-align: left; }
     .rota-cliente strong { color: var(--ink-900); }
     .rota-cliente span { color: var(--ink-500); font-size: var(--fs-xs); }
     .rota-acoes { display: inline-flex; gap: .3rem; }
-    .rota-acao-texto { margin-left: .3rem; }
     .rota-paginacao { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-top: .75rem; }
     /* Ficha do cliente em blocos (Rota Financeira e Clientes): painel lateral no computador,
        tela cheia no celular. Cada bloco: ícone, título, resumo numa linha e chevron. */
@@ -678,40 +673,61 @@
       .ficha-fatos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .ficha-acoes .btn { flex: 1 1 0; }
     }
-    @media (max-width: 1279px) { .rota-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-    @media (max-width: 767px) { .rota-filtros > div:last-child { grid-column: auto; } .rota-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rota-acao-texto { display: none; } }
-    /* Rota Financeira no celular: lista compacta (3 linhas por cliente) para varrer a fila e agir rápido.
-       Linha 1: nome e valor. Linha 2: resumo (NB, títulos, vencimento, boleto) e situação. Linha 3: ações. */
-    .rota-c-resumo, .rota-acao-movel { display: none; }
+    /* Rota Financeira no celular: lista compacta para varrer a fila e agir rápido.
+       Linha 1: nome e valor. Linha 2: situação. Linha 3: NB, títulos e boleto. Linha 4: ações. */
+    .rota-c-resumo { display: none; }
+    .rota-acao-movel { margin-left: .3rem; }
+    .rota-destaque { margin: .75rem 0 0; color: var(--ink-700); font-size: var(--fs-sm); }
+    .rota-destaque strong { color: var(--danger); }
+    .rota-filtros-extras { margin-top: .5rem; padding-top: .5rem; border-top: 1px dashed var(--line); }
+    .rota-mais-filtros .rota-contagem { background: var(--brand-600); color: #fff; }
+    /* Botões das ações: WhatsApp verde cheio (contraste 5:1) e os demais em contorno neutro legível nos dois temas. */
+    .rota-btn-whats { --bs-btn-color: #fff; --bs-btn-bg: #15803d; --bs-btn-border-color: #15803d; --bs-btn-hover-color: #fff; --bs-btn-hover-bg: #166534; --bs-btn-hover-border-color: #166534; --bs-btn-active-color: #fff; --bs-btn-active-bg: #14532d; color: #fff; background: #15803d; border-color: #15803d; }
+    .rota-btn-whats:hover, .rota-btn-whats:focus-visible { color: #fff; background: #166534; border-color: #166534; }
+    .rota-btn-neutro, .rota-busca-btn { color: var(--ink-700); background: var(--surface); border: 1px solid var(--line-strong); }
+    .rota-btn-neutro:hover, .rota-btn-neutro:focus-visible, .rota-busca-btn:hover, .rota-busca-btn:focus-visible { color: var(--ink-900); background: var(--soft-panel); border-color: var(--line-strong); }
+    .rota-btn-boleto { color: var(--brand-700); background: var(--surface); border: 1px solid var(--brand-600); }
+    .rota-btn-boleto:hover, .rota-btn-boleto:focus-visible { color: var(--brand-700); background: var(--brand-100); border-color: var(--brand-600); }
+    .rota-btn-neutro:disabled { color: var(--ink-500); background: transparent; border-style: dashed; opacity: 1; }
+    .rota-busca-texto { margin-left: .35rem; }
+    /* Computador: as três ações em colunas fixas, alinhadas de uma linha para a outra. */
+    .rota-tabela td.rota-c-acoes .rota-acoes { display: inline-grid; grid-template-columns: 104px 72px 112px; gap: .3rem; }
+    @media (min-width: 768px) { .rota-tabela tr.rota-linha > td:first-child { padding-left: .65rem; } }
+    /* Filtro marcado no tema escuro: texto claro para passar de 4,5:1. */
+    body[data-theme="dark"] .clientes-filtro[aria-pressed="true"] { color: var(--ink-900); }
+    body[data-theme="dark"] .clientes-filtro[aria-pressed="true"] .rota-contagem, body[data-theme="dark"] .rota-mais-filtros .rota-contagem { background: #1d4ed8; }
+    .rota-paginacao #rotaPaginaInfo { color: var(--ink-700); }
+    @media (min-width: 768px) { .rota-destaque { display: none; } }
     @media (max-width: 767px) {
+      .rota-cabecalho { display: none; }
+      .rota-rotulo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .rota-busca-texto { display: none; }
+      .rota-busca-btn { min-width: 44px; }
       #rotaFinanceiraPane .table-responsive { overflow: visible; }
       .rota-tabela { min-width: 0; }
       .rota-tabela thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
       .rota-tabela, .rota-tabela tbody { display: block; width: 100%; }
-      .rota-tabela tr.rota-linha { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-areas: "prior cliente pendente" "prior situacao situacao" "prior resumo resumo" "prior acoes acoes"; gap: .15rem .55rem; align-items: center; padding: .6rem .5rem .6rem .35rem; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; }
+      .rota-tabela tr.rota-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "cliente pendente" "situacao situacao" "resumo resumo" "acoes acoes"; gap: .2rem .55rem; align-items: center; padding: .65rem .5rem .65rem .6rem; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; }
       .rota-tabela tr.rota-linha > td { display: none; padding: 0; border: 0; box-shadow: none !important; background: transparent; }
-      .rota-tabela tr.rota-linha > td.rota-c-prior { display: block; grid-area: prior; align-self: start; }
       .rota-tabela tr.rota-linha > td.rota-c-cliente { display: block; grid-area: cliente; min-width: 0; }
       .rota-tabela td.rota-c-cliente strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .rota-tabela td.rota-c-cliente .mono { display: none; }
       .rota-tabela tr.rota-linha > td.rota-c-pendente { display: block; grid-area: pendente; text-align: right; }
       .rota-tabela tr.rota-linha > td.rota-c-resumo { display: block; grid-area: resumo; min-width: 0; color: var(--ink-500); font-size: var(--fs-xs); white-space: normal; }
       .rota-tabela tr.rota-linha > td.rota-c-situacao { display: block; grid-area: situacao; text-align: left; }
-      .rota-tabela tr.rota-linha > td.rota-c-acoes { display: block; grid-area: acoes; margin-top: .3rem; text-align: left; }
-      .rota-tabela .rota-prioridade { min-width: 24px; height: 24px; }
-      .rota-tabela td.rota-c-acoes .rota-acoes { display: flex; gap: .35rem; }
-      .rota-tabela td.rota-c-acoes .btn { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; min-height: 38px; padding: .25rem .35rem; }
-      .rota-tabela .rota-acao-movel { display: inline; font-size: var(--fs-xs); font-weight: 700; }
-      .rota-tabela .rota-acao-texto { display: inline; margin-left: 0; font-size: var(--fs-xs); }
+      .rota-tabela tr.rota-linha > td.rota-c-acoes { display: block; grid-area: acoes; margin-top: .35rem; text-align: left; }
+      .rota-tabela td.rota-c-acoes .rota-acoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+      .rota-tabela td.rota-c-acoes .btn { min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; min-height: 44px; padding: .25rem .35rem; }
+      .rota-tabela .rota-acao-movel { margin-left: 0; font-size: var(--fs-sm); font-weight: 700; }
       .rota-tabela tr[data-faixa="1"] { border-left-color: var(--danger); }
       .rota-tabela tr[data-faixa="2"], .rota-tabela tr[data-faixa="3"] { border-left-color: var(--warning); }
       .rota-tabela tr:hover > td { background: transparent; }
-      .rota-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
-      .rota-filtros > div:last-child { grid-column: 1 / -1; }
-      /* A faixa de filtros corre para o lado; o esmaecido na borda mostra que tem mais. */
-      #rotaFinanceiraPane .clientes-filtros { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .2rem; padding-right: 1.5rem; -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); mask-image: linear-gradient(to right, #000 85%, transparent); }
-      #rotaFinanceiraPane .clientes-filtro { flex: 0 0 auto; }
-      .rota-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
-      .rota-kpis > .rota-kpi { min-width: 0; padding: .55rem .65rem; }
-      .rota-kpis > .rota-kpi-extra { display: none; }
+      .rota-filtros { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: .5rem; }
+      .rota-filtros > div:last-child { grid-column: auto; }
+      .rota-filtros .form-select, .rota-filtros .form-control { min-height: 44px; }
+      /* Os filtros quebram linha em vez de correr para o lado: nenhum fica escondido. */
+      #rotaFinanceiraPane .clientes-filtros { flex-wrap: wrap; gap: .4rem; }
+      #rotaFinanceiraPane .clientes-filtro { min-height: 40px; }
+      .rota-kpis { display: none; }
+    }
     }

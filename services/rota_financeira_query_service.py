@@ -34,7 +34,7 @@ from bot_api.services.dclientes_query_service import (
 from bot_api.services.inadimplencia_query_service import _days_to_due_sql, _money_to_numeric_sql
 from bot_api.services.rota_financeira_giro import FILTRO_GIRO, SITUACOES_GIRO
 
-SITUACOES = ("todos", "vencidos", "hoje", "amanha", "dois_dias", "com_boleto", "sem_boleto", *SITUACOES_GIRO)
+SITUACOES = ("todos", "vencidos", "ate_dois_dias", "hoje", "amanha", "dois_dias", "com_boleto", "sem_boleto", *SITUACOES_GIRO)
 LIMITE_PAGINA = 50
 
 # Faixa de prioridade de cada cliente (menor = mais urgente).
@@ -46,6 +46,8 @@ _FILTRO_SITUACAO = {
     "hoje": f"faixa = {FAIXA_HOJE}",
     "amanha": f"faixa = {FAIXA_AMANHA}",
     "dois_dias": f"faixa = {FAIXA_DOIS_DIAS}",
+    # Filtro principal da tela: hoje, amanhã e depois de amanhã juntos.
+    "ate_dois_dias": f"faixa IN ({FAIXA_HOJE}, {FAIXA_AMANHA}, {FAIXA_DOIS_DIAS})",
     "com_boleto": "titulos > 0 AND boletos > 0",
     "sem_boleto": "titulos > 0 AND boletos = 0",
     **FILTRO_GIRO,

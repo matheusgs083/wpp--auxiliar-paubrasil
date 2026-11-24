@@ -67,6 +67,10 @@ class RotaFinanceiraSqlTest(unittest.TestCase):
             self.assertIn(f"AS {campo}", resumo)
         self.assertIn("COUNT(*) FILTER (WHERE faixa = 3)::int AS vence_amanha", resumo)
 
+    def test_filtro_vencem_ate_dois_dias_junta_hoje_amanha_e_depois(self) -> None:
+        texto, _params = self.consulta(situacao="ate_dois_dias")
+        self.assertIn("faixa IN (2, 3, 4)", texto)
+
     def test_escopo_vai_sempre_na_consulta(self) -> None:
         texto, params = self.consulta(setor="3_109", busca="300")
         self.assertIn("filial_setor_key", texto)

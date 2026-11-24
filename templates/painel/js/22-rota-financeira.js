@@ -1,13 +1,14 @@
     // Aba Rota Financeira: fila do dia priorizada pelo risco. Ao tocar num cliente abre a
     // ficha em blocos (24-ficha-cliente.js); as tags vêm da aba Clientes.
 
-    const ROTA_SITUACAO_ROTULO = { todos: "Todos", vencidos: "Vencidos", hoje: "Vence hoje", amanha: "Vence amanhã", dois_dias: "Vence em 2 dias", com_boleto: "Com boleto", sem_boleto: "Sem boleto", sem_giro_vasilhame: "Sem giro de vasilhame", sem_giro_equipamento: "Sem giro de equipamento" };
+    const ROTA_SITUACAO_ROTULO = { todos: "Todos", vencidos: "Vencidos", ate_dois_dias: "Até 2 dias", hoje: "Vence hoje", amanha: "Vence amanhã", dois_dias: "Vence em 2 dias", com_boleto: "Com boleto", sem_boleto: "Sem boleto", sem_giro_vasilhame: "Sem giro de vasilhame", sem_giro_equipamento: "Sem giro de equipamento" };
 
+    // A situação só é lida pelo leitor de tela; na tela aparece apenas quando é erro.
     function rotaSetStatus(message, kind = "") {
       const element = document.getElementById("rotaStatus");
       if (!element) return;
       element.textContent = message;
-      element.className = `form-text mt-2 ${kind === "err" ? "text-danger" : kind === "ok" ? "text-success" : ""}`;
+      element.className = kind === "err" ? "form-text mt-2 text-danger" : "visually-hidden";
     }
 
     function rotaOpcoesSelect(select, valores, rotuloTodos, rotular = valor => valor) {
@@ -87,6 +88,7 @@
         rotaUi.pagina = resposta.pagina || 1;
         renderRotaAvisos(resposta.fontes || {});
         renderRotaKpis(resposta.resumo || {});
+        renderRotaDestaque(resposta.resumo || {});
         renderRotaContagens(resposta.resumo || {});
         renderRotaLista(resposta.clientes || []);
         renderRotaPaginacao(resposta);
@@ -99,6 +101,7 @@
         rotaUi.dados = null;
         renderRotaLista([]);
         renderRotaKpis({});
+        renderRotaDestaque(null);
         rotaSetStatus(error.message || "Não foi possível montar a rota agora.", "err");
       } finally {
         if (sequencia === rotaUi.seq) {
@@ -111,35 +114,40 @@
     function renderRotaAvisos(fontes) {
       const alvo = document.getElementById("rotaAvisos");
       if (!alvo) return;
-      alvo.innerHTML = Object.values(fontes).filter(fonte => fonte && !fonte.disponivel).map(fonte => `<div class="alert alert-warning py-2 mt-2 mb-0" role="status"><i class="bi bi-database-exclamation me-1" aria-hidden="true"></i>${escapeHtml(fonte.mensagem)}</div>`).join("");
+      alvo.innerHTML = Object.values(fontes).filter(fonte => fonte && typeof fonte === "object" && !fonte.disponivel && fonte.mensagem).map(fonte => `<div class="alert alert-warning py-2 mt-2 mb-0" role="status"><i class="bi bi-database-exclamation me-1" aria-hidden="true"></i>${escapeHtml(fonte.mensagem)}</div>`).join("");
     }
 
     function renderRotaKpis(resumo) {
       const alvo = document.getElementById("rotaKpis");
       if (!alvo) return;
       const clientes = n => `${n} ${Number(n) === 1 ? "cliente" : "clientes"}`;
-      // Os 4 primeiros são os de cobrança; os demais ficam só no computador.
+      // Só no computador e só informação: quem filtra são os botões acima, que já têm as contagens.
       const cartoes = [
-        ["Valor vencido", formatMoneyText(resumo.total_vencido || 0), clientes(resumo.clientes_vencidos ?? 0), "vencidos", false],
-        ["Vence hoje", String(resumo.vence_hoje ?? 0), Number(resumo.vence_hoje) === 1 ? "cliente" : "clientes", "hoje", false],
-        ["Clientes com pendência", String(resumo.clientes_pendencia ?? 0), resumo.clientes ? `de ${resumo.clientes} na rota` : "", "", false],
-        ["Títulos sem boleto", String(resumo.titulos_sem_boleto ?? 0), "", "sem_boleto", false],
-        ["Valor pendente", formatMoneyText(resumo.total_pendente || 0), "", "", true],
-        ["Títulos em aberto", String(resumo.titulos ?? 0), "", "", true],
-        ["Boletos disponíveis", String(resumo.boletos ?? 0), "", "com_boleto", true]
+        ["Valor vencido", formatMoneyText(resumo.total_vencido || 0), clientes(resumo.clientes_vencidos ?? 0)],
+        ["Valor em aberto", formatMoneyText(resumo.total_pendente || 0), `${resumo.titulos ?? 0} ${Number(resumo.titulos) === 1 ? "título" : "títulos"}`],
+        ["Clientes com pendência", String(resumo.clientes_pendencia ?? 0), resumo.clientes ? `de ${resumo.clientes} na rota` : ""]
       ];
-      alvo.innerHTML = cartoes.map(([rotulo, valor, nota, filtro, extra]) => {
-        const conteudo = `<span>${escapeHtml(rotulo)}</span><strong>${escapeHtml(valor)}</strong>${nota ? `<small>${escapeHtml(nota)}</small>` : ""}`;
-        const classe = `pedido-manager-kpi rota-kpi${extra ? " rota-kpi-extra" : ""}`;
-        return filtro
-          ? `<button class="${classe}" type="button" data-rota-situacao="${filtro}" aria-pressed="${rotaUi.situacao === filtro}" aria-label="${escapeHtml(`${rotulo}: ${valor}. Filtrar por ${ROTA_SITUACAO_ROTULO[filtro]}`)}">${conteudo}</button>`
-          : `<div class="${classe}">${conteudo}</div>`;
-      }).join("");
+      alvo.innerHTML = cartoes.map(([rotulo, valor, nota]) => `<div class="pedido-manager-kpi rota-kpi"><span>${escapeHtml(rotulo)}</span><strong>${escapeHtml(valor)}</strong>${nota ? `<small>${escapeHtml(nota)}</small>` : ""}</div>`).join("");
+    }
+
+    // No celular, uma linha no lugar dos cartões: quanto está vencido e quantos devem.
+    function renderRotaDestaque(resumo) {
+      const alvo = document.getElementById("rotaDestaque");
+      if (!alvo) return;
+      if (!resumo || resumo.clientes === undefined) { alvo.hidden = true; return; }
+      const devem = Number(resumo.clientes_pendencia || 0);
+      const vencido = Number(resumo.total_vencido || 0);
+      alvo.innerHTML = devem
+        ? `${vencido ? `<strong>${escapeHtml(formatMoneyText(vencido))} vencido</strong> · ` : ""}${devem} de ${escapeHtml(String(resumo.clientes))} ${Number(resumo.clientes) === 1 ? "cliente" : "clientes"} com pendência`
+        : `Nenhum cliente com pendência na rota (${escapeHtml(String(resumo.clientes))} ${Number(resumo.clientes) === 1 ? "cliente" : "clientes"}).`;
+      alvo.hidden = false;
     }
 
     // Quantos clientes cada filtro traz (os do giro não têm contagem: a conta é pesada).
-    const ROTA_CONTAGEM = { todos: "clientes", vencidos: "clientes_vencidos", hoje: "vence_hoje", amanha: "vence_amanha", dois_dias: "vence_dois_dias", com_boleto: "clientes_com_boleto", sem_boleto: "clientes_sem_boleto" };
-    function renderRotaContagens(resumo) {
+    const ROTA_CONTAGEM = { todos: "clientes", vencidos: "clientes_vencidos", ate_dois_dias: "vence_ate_dois_dias", hoje: "vence_hoje", amanha: "vence_amanha", dois_dias: "vence_dois_dias", com_boleto: "clientes_com_boleto", sem_boleto: "clientes_sem_boleto" };
+    function renderRotaContagens(resumoServidor) {
+      const resumo = { ...resumoServidor };
+      if (resumo.vence_hoje !== undefined) resumo.vence_ate_dois_dias = Number(resumo.vence_hoje || 0) + Number(resumo.vence_amanha || 0) + Number(resumo.vence_dois_dias || 0);
       document.querySelectorAll("#rotaFinanceiraPane .clientes-filtros [data-rota-situacao]").forEach(botao => {
         const campo = ROTA_CONTAGEM[botao.dataset.rotaSituacao];
         let contagem = botao.querySelector(".rota-contagem");
@@ -153,6 +161,7 @@
         contagem.textContent = String(valor);
         botao.classList.toggle("rota-filtro-vazio", valor === 0 && botao.dataset.rotaSituacao !== "todos");
       });
+      rotaMarcarMaisFiltros();
     }
 
     function rotaVencimentoTexto(item) {
@@ -163,23 +172,21 @@
       const alvo = document.getElementById("rotaLista");
       if (!alvo) return;
       rotaUi.clientes = clientes;
-      if (!clientes.length) { alvo.innerHTML = '<tr><td colspan="11" class="text-center text-secondary py-4">Nenhum cliente para mostrar.</td></tr>'; return; }
+      if (!clientes.length) { alvo.innerHTML = '<tr><td colspan="9" class="text-center text-secondary py-4">Nenhum cliente para mostrar.</td></tr>'; return; }
       alvo.innerHTML = clientes.map((item, index) => {
         const nome = item.nome || item.razao_social || "Cliente";
         const mensagem = encodeURIComponent(rotaMensagemWhatsapp(item, nome));
-        const whats = item.telefone_whatsapp ? `<a class="btn btn-outline-success btn-sm" href="https://wa.me/${encodeURIComponent(item.telefone_whatsapp)}?text=${mensagem}" target="_blank" rel="noopener" title="Abrir o WhatsApp com a mensagem de cobrança" aria-label="WhatsApp de ${escapeHtml(nome)}"><i class="bi bi-whatsapp" aria-hidden="true"></i><span class="rota-acao-movel">WhatsApp</span></a>` : "";
-        const ligar = item.telefone_discagem ? `<a class="btn btn-outline-secondary btn-sm" href="tel:${encodeURIComponent(item.telefone_discagem)}" title="Ligar para o cliente" aria-label="Ligar para ${escapeHtml(nome)}"><i class="bi bi-telephone" aria-hidden="true"></i><span class="rota-acao-movel">Ligar</span></a>` : "";
-        const boleto = item.boletos ? `<button class="btn btn-outline-primary btn-sm rota-acao" type="button" data-acao="boleto" data-index="${index}" title="Ver os boletos" aria-label="Boletos de ${escapeHtml(nome)}"><i class="bi bi-upc-scan" aria-hidden="true"></i><span class="rota-acao-movel">Boleto</span></button>` : "";
+        // Os três botões aparecem sempre, no mesmo lugar; o que não se aplica fica desabilitado.
+        const whats = item.telefone_whatsapp ? `<a class="btn btn-sm rota-btn-whats" href="https://wa.me/${encodeURIComponent(item.telefone_whatsapp)}?text=${mensagem}" target="_blank" rel="noopener" title="Abrir o WhatsApp com a mensagem de cobrança" aria-label="WhatsApp de ${escapeHtml(nome)}"><i class="bi bi-whatsapp" aria-hidden="true"></i><span class="rota-acao-movel">WhatsApp</span></a>` : `<button class="btn btn-sm rota-btn-neutro" type="button" disabled aria-label="Sem WhatsApp cadastrado"><i class="bi bi-whatsapp" aria-hidden="true"></i><span class="rota-acao-movel">WhatsApp</span></button>`;
+        const ligar = item.telefone_discagem ? `<a class="btn btn-sm rota-btn-neutro" href="tel:${encodeURIComponent(item.telefone_discagem)}" title="Ligar para o cliente" aria-label="Ligar para ${escapeHtml(nome)}"><i class="bi bi-telephone" aria-hidden="true"></i><span class="rota-acao-movel">Ligar</span></a>` : `<button class="btn btn-sm rota-btn-neutro" type="button" disabled aria-label="Sem telefone cadastrado"><i class="bi bi-telephone" aria-hidden="true"></i><span class="rota-acao-movel">Ligar</span></button>`;
+        const boleto = item.boletos ? `<button class="btn btn-sm rota-btn-boleto rota-acao" type="button" data-acao="boleto" data-index="${index}" title="Ver os boletos" aria-label="Boletos de ${escapeHtml(nome)}"><i class="bi bi-upc-scan" aria-hidden="true"></i><span class="rota-acao-movel">Boleto</span></button>` : `<button class="btn btn-sm rota-btn-neutro" type="button" disabled aria-label="Sem boleto"><i class="bi bi-upc-scan" aria-hidden="true"></i><span class="rota-acao-movel">Sem boleto</span></button>`;
         // Linha de resumo que só aparece no celular (no computador cada dado tem sua coluna).
-        const resumoBoleto = !item.titulos ? "" : item.boletos ? "com boleto" : "sem boleto";
         const resumoTitulos = item.titulos
           ? `${item.titulos} ${item.titulos === 1 ? "título" : "títulos"}${item.titulos_vencidos ? `, ${item.titulos_vencidos} ${item.titulos_vencidos === 1 ? "vencido" : "vencidos"}` : ""}`
           : "";
-        const venceu = item.menor_dias !== null && item.menor_dias < 0;
-        const resumoVencimento = item.vencimento_proximo ? `${venceu ? "venceu" : "vence"} em ${item.vencimento_proximo.slice(0, 5)}` : "";
-        const resumo = [`NB ${item.cliente}`, resumoTitulos, resumoVencimento, resumoBoleto].filter(Boolean).join(" · ");
+        // O vencimento está na etiqueta e o boleto no botão; aqui fica só o que eles não dizem.
+        const resumo = [`NB ${item.cliente}`, resumoTitulos].filter(Boolean).join(" · ");
         return `<tr class="rota-linha" data-index="${index}" data-faixa="${escapeHtml(String(item.prioridade))}">
-          <td class="text-center rota-c-prior" data-label="Prioridade"><span class="rota-prioridade" title="Prioridade ${escapeHtml(String(item.prioridade))}">${escapeHtml(String(index + 1 + ((rotaUi.pagina || 1) - 1) * (rotaUi.dados?.por_pagina || 25)))}</span></td>
           <td class="rota-c-cliente"><button class="rota-cliente rota-acao" type="button" data-acao="detalhe" data-index="${index}"><strong>${escapeHtml(nome)}</strong><span class="mono">NB ${escapeHtml(item.cliente)}</span></button></td>
           <td class="rota-c-resumo">${escapeHtml(resumo)}</td>
           <td class="rota-c-filial" data-label="Filial">${escapeHtml(item.filial_nome || item.filial)}</td>
@@ -189,7 +196,6 @@
           <td class="text-end fw-semibold rota-c-pendente" data-label="Pendente">${item.titulos ? escapeHtml(formatMoneyText(item.total_pendente)) : "—"}</td>
           <td data-label="Vencimento">${escapeHtml(rotaVencimentoTexto(item))}</td>
           <td class="rota-c-situacao" data-label="Situação">${clientesTag(item.situacao.texto, item.situacao.tom)}</td>
-          <td data-label="Boleto">${clientesTag(item.boleto.texto, item.boleto.tom)}</td>
           <td class="text-end rota-c-acoes"><div class="rota-acoes">${whats}${ligar}${boleto}</div></td>
         </tr>`;
       }).join("");
@@ -214,6 +220,9 @@
       const pagina = resposta.pagina || 1;
       const paginas = resposta.paginas || 1;
       if (info) info.textContent = `Página ${pagina} de ${paginas}`;
+      // Com uma página só, a navegação de páginas não aparece.
+      const nav = document.getElementById("rotaPaginacao");
+      if (nav) nav.hidden = paginas <= 1;
       if (anterior) anterior.disabled = pagina <= 1;
       if (proxima) proxima.disabled = pagina >= paginas;
     }
@@ -221,8 +230,25 @@
     function rotaSelecionarSituacao(situacao) {
       rotaUi.situacao = ROTA_SITUACAO_ROTULO[situacao] ? situacao : "todos";
       document.querySelectorAll("[data-rota-situacao]").forEach(botao => botao.setAttribute("aria-pressed", String(botao.dataset.rotaSituacao === rotaUi.situacao)));
+      rotaMarcarMaisFiltros();
       rotaSetStatus(`Filtro ${ROTA_SITUACAO_ROTULO[rotaUi.situacao]} ativado. Atualizando...`);
       syncRotaFinanceira({ pagina: 1 });
+    }
+
+    // "Mais filtros" mostra quando o filtro ativo está escondido lá dentro.
+    function rotaMarcarMaisFiltros() {
+      const ativoDentro = Boolean(document.querySelector(`#rotaMaisFiltros [data-rota-situacao="${rotaUi.situacao}"]`));
+      const marca = document.getElementById("rotaMaisFiltrosAtivo");
+      if (marca) marca.hidden = !ativoDentro;
+    }
+
+    function rotaAlternarMaisFiltros(abrir) {
+      const painel = document.getElementById("rotaMaisFiltros");
+      const botao = document.getElementById("rotaMaisFiltrosBtn");
+      if (!painel || !botao) return;
+      const aberto = abrir ?? painel.hidden;
+      painel.hidden = !aberto;
+      botao.setAttribute("aria-expanded", String(aberto));
     }
 
     function setupRotaFinanceiraPanel() {
@@ -240,6 +266,7 @@
       document.getElementById("rotaAtualizarBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: rotaUi.pagina || 1 }));
       document.getElementById("rotaAnteriorBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: Math.max(1, (rotaUi.pagina || 1) - 1) }));
       document.getElementById("rotaProximaBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: (rotaUi.pagina || 1) + 1 }));
+      document.getElementById("rotaMaisFiltrosBtn")?.addEventListener("click", () => rotaAlternarMaisFiltros());
       document.getElementById("rotaFinanceiraPane")?.addEventListener("click", event => {
         const filtro = event.target.closest("[data-rota-situacao]");
         if (filtro) { rotaSelecionarSituacao(filtro.dataset.rotaSituacao); return; }

@@ -188,6 +188,20 @@
     .nav-celular-link[aria-current="page"] i { color: var(--brand-700); }
     body[data-theme="dark"] .nav-celular-menu .btn-close { filter: invert(1) grayscale(1); }
     @media (max-width: 767.98px) {
+      /* Barra do usuário: situação à esquerda e ações em ícones de 44 px à direita, na mesma linha.
+         A busca de usuários (só admin) fica numa linha própria acima. */
+      .ops-bar .row { align-items: center; }
+      .ops-bar .row > .col-md-3 { flex: 0 0 100%; }
+      .ops-bar .ops-status { flex: 1 1 0; min-width: 0; flex-wrap: nowrap !important; overflow: hidden; }
+      .ops-bar .ops-status .pill { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* No celular fica só quem está logado; a situação das importações aparece no computador. */
+      .ops-bar #runningState, .ops-bar #lastJobState { display: none; }
+      .ops-bar .ops-actions { flex: 0 0 auto; width: auto !important; }
+      .ops-bar .ops-actions .btn { min-width: 44px; min-height: 44px; padding: .35rem .6rem; }
+      body.panel-simple-mode #refreshBtn, .ops-bar #refreshBtn { min-width: 44px; }
+      .ops-bar #refreshBtn .ops-btn-texto { display: none; }
+      .ops-bar #refreshBtn .bi, .ops-bar #refreshBtn .spinner-border { margin-right: 0 !important; }
+      .admin-tabs-card { margin-bottom: .6rem !important; }
       .nav-celular { display: flex; align-items: center; gap: .6rem; }
       .nav-celular-btn { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-900); font-size: 1.35rem; }
       .nav-celular-atual { min-width: 0; overflow: hidden; color: var(--ink-900); font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }

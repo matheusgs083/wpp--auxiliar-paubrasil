@@ -1126,7 +1126,7 @@
     function setSyncState(syncing) {
       const btn = document.getElementById("refreshBtn");
       btn.disabled = syncing;
-      btn.innerHTML = syncing ? '<span class="spinner-border spinner-border-sm me-1"></span>Atualizando' : '<i class="bi bi-arrow-repeat me-1"></i>Atualizar';
+      btn.innerHTML = syncing ? '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span><span class="ops-btn-texto">Atualizando</span>' : '<i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i><span class="ops-btn-texto">Atualizar</span>';
       if (E.main) E.main.setAttribute("aria-busy", syncing ? "true" : "false");
       if (syncing) showSkeletonLoading();
     }
