@@ -1060,7 +1060,7 @@
       const activeTabId = currentActiveTabId();
       if (!force && state.lazyTabs && state.lazyTabs[activeTabId]) {
         if (activeTabId === "payipTab") startPayipGeneratedPolling();
-        if (activeTabId === "gerarCriticaTab") syncGerarCritica({ silent: true });
+        if (activeTabId === "criticaTab") syncGerarCritica({ silent: true });
         return true;
       }
 
@@ -1085,9 +1085,9 @@
       } else if (activeTabId === "giroRecolhaTab") {
         if (state.panel && state.panel.canViewGiro) tasks.push(syncGiroRecolha({ silent }));
       } else if (activeTabId === "criticaTab") {
-        if (state.panel && state.panel.canViewCritica) tasks.push(syncCriticaDashboard({ silent }));
+        if (state.panel && state.panel.canViewCritica) tasks.push(syncCriticaDashboard({ silent }), syncGerarCritica({ silent }));
       } else if (activeTabId === "gerarCriticaTab") {
-        tasks.push(syncGerarCritica({ silent }));
+        tasks.push(syncCriticaCarteira({ silent }));
       } else if (activeTabId === "entregaTab") {
         if (state.panel && state.panel.canManagePromax && !state.promax.catalog) tasks.push(syncPromax({ silent }));
         tasks.push(syncLigaEntregaReports({ silent, force }));

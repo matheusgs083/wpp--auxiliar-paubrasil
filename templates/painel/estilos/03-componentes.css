@@ -546,6 +546,38 @@
     .rota-kpi small { display: block; margin-top: .15rem; color: var(--ink-500); font-size: var(--fs-xs); }
     button.rota-kpi { cursor: pointer; }
     .pedido-items-table.pedido-sem-preco .pedido-col-preco { display: none; }
+    /* Aba Gerar crítica (PDF da carteira): filtros curtos e uma lista de relatórios com as ações à direita. */
+    #gerarCriticaPane .pedido-shell { max-width: 880px; }
+    #gerarCriticaPane .pedido-shell > * { min-width: 0; }
+    .crit-data { margin-top: .15rem; color: var(--ink-700); font-size: var(--fs-xs); font-weight: 600; }
+    .crit-busca { width: 220px; max-width: 100%; }
+    .crit-erro { flex-basis: 100%; margin: 0; padding-left: calc(36px + .75rem); color: var(--danger); font-size: var(--fs-xs); font-weight: 600; }
+    .crit-filtros { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)) 1fr; gap: .65rem; align-items: end; }
+    .crit-filtros-ajuda { align-self: center; margin: 0 0 .45rem; }
+    .crit-lista-card { padding: 0; overflow: hidden; }
+    .crit-lista-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem .75rem; padding: .8rem 1rem; border-bottom: 1px solid var(--line); }
+    .crit-lista { margin: 0; padding: 0; list-style: none; }
+    .crit-grupo { padding: .55rem 1rem .35rem; color: var(--ink-500); background: var(--surface-soft); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+    .crit-item { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; padding: .7rem 1rem; border-bottom: 1px solid var(--line); }
+    .crit-item:last-child { border-bottom: 0; }
+    .crit-icone { display: grid; flex: 0 0 auto; width: 36px; height: 36px; place-items: center; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--brand-700); background: var(--surface-soft); }
+    .crit-texto { display: grid; flex: 1 1 auto; min-width: 0; }
+    .crit-texto strong { color: var(--ink-900); font-size: var(--fs-sm); }
+    .crit-texto span { color: var(--ink-500); font-size: var(--fs-xs); }
+    .crit-acoes { display: flex; flex: 0 0 auto; gap: .4rem; }
+    .crit-acoes .btn { min-width: 108px; }
+    /* Contorno neutro legível nos dois temas (o cinza do Bootstrap some no escuro). */
+    .crit-acoes .btn-outline-secondary { --bs-btn-color: var(--ink-700); --bs-btn-border-color: var(--line-strong); --bs-btn-hover-color: var(--ink-900); --bs-btn-hover-bg: var(--soft-panel); --bs-btn-hover-border-color: var(--line-strong); --bs-btn-active-color: var(--ink-900); --bs-btn-active-bg: var(--soft-panel); --bs-btn-disabled-color: var(--ink-500); color: var(--ink-700); border-color: var(--line-strong); }
+    .crit-acoes .btn-outline-secondary:hover, .crit-acoes .btn-outline-secondary:focus-visible { color: var(--ink-900); background: var(--soft-panel); }
+    .crit-vazio { padding: 1.25rem 1rem; color: var(--ink-500); font-size: var(--fs-sm); text-align: center; }
+    @media (max-width: 575px) {
+      .crit-filtros { grid-template-columns: minmax(0, 1fr); }
+      .crit-filtros-ajuda { margin: 0; }
+      .crit-item { flex-wrap: wrap; padding: .7rem .85rem; }
+      .crit-acoes { width: 100%; padding-left: calc(36px + .75rem); }
+      .crit-acoes .btn { flex: 1 1 0; min-width: 0; min-height: 44px; }
+      .crit-busca { width: 100%; }
+    }
     .rota-contagem { display: inline-block; min-width: 1.35rem; margin-left: .35rem; padding: 0 .35rem; border-radius: 999px; background: var(--soft-panel); color: var(--ink-700); font-size: var(--fs-2xs); font-weight: 800; line-height: 1.35rem; text-align: center; }
     .clientes-filtro[aria-pressed="true"] .rota-contagem { background: var(--brand-600); color: #fff; }
     .clientes-filtro.rota-filtro-vazio { color: var(--ink-500); border-style: dashed; }

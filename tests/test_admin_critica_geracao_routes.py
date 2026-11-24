@@ -9,8 +9,9 @@ from fastapi.testclient import TestClient
 
 from bot_api.routes.admin_critica_geracao import _hoje, create_admin_critica_geracao_router, resumo_geracao
 
-COM_PERMISSAO = {"is_admin": False, "mode": "usuario", "username": "ana", "features": ("gerar_critica",)}
-SO_CRITICA = {"is_admin": False, "mode": "usuario", "username": "bia", "features": ("critica",)}
+# A geração no Cora fica na aba Crítica; "gerar_critica" passou a ser o PDF da carteira.
+COM_PERMISSAO = {"is_admin": False, "mode": "usuario", "username": "ana", "features": ("critica",)}
+SO_PDF_CARTEIRA = {"is_admin": False, "mode": "usuario", "username": "bia", "features": ("gerar_critica",)}
 
 
 class FakeJobs:
@@ -86,10 +87,10 @@ class GerarCriticaTest(unittest.TestCase):
         self.assertEqual(cliente.post("/api/admin/critica/geracao", json={"data": amanha}).status_code, 422)
         self.assertEqual(cliente.post("/api/admin/critica/geracao", json={"data": antiga}).status_code, 422)
 
-    def test_exige_permissao_gerar_critica(self) -> None:
+    def test_exige_permissao_da_aba_critica(self) -> None:
         jobs = FakeJobs()
-        self.assertEqual(_app(SO_CRITICA, jobs).post("/api/admin/critica/geracao", json={}).status_code, 403)
-        self.assertEqual(_app(SO_CRITICA, jobs).get("/api/admin/critica/geracao").status_code, 403)
+        self.assertEqual(_app(SO_PDF_CARTEIRA, jobs).post("/api/admin/critica/geracao", json={}).status_code, 403)
+        self.assertEqual(_app(SO_PDF_CARTEIRA, jobs).get("/api/admin/critica/geracao").status_code, 403)
         self.assertEqual(_app(None, jobs).get("/api/admin/critica/geracao").status_code, 401)
         self.assertEqual(jobs.enfileirados, [])
 

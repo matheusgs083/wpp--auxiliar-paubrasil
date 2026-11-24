@@ -1,4 +1,4 @@
-"""Aba "Gerar crítica": pede ao worker a Crítica do portal Cora, sem passar pela aba Promax.
+"""Aba Crítica: pede ao worker a Crítica do portal Cora, sem passar pela aba Promax.
 
 O worker baixa o CSV e chama a importação interna da crítica por operação, então o
 usuário só precisa apertar o botão e acompanhar a situação aqui.
@@ -14,7 +14,8 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-FEATURE_GERAR_CRITICA = "gerar_critica"
+# Quem usa a aba Crítica (área Dados) pede a geração; "gerar_critica" agora é o PDF da carteira.
+FEATURE_GERAR_CRITICA = "critica"
 JOB_TYPE_CRITICA = "cora_critica"
 STATUS_ATIVOS = ("pending", "running", "cancel_requested")
 DIAS_PARA_TRAS = 31

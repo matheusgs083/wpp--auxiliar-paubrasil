@@ -826,6 +826,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "giro_vasilhame_service": runtime["giro_vasilhame_service"],
         "giro_equipamentos_service": runtime["giro_equipamentos_service"],
         "prazo_limite_query_service": runtime["services"].prazo_limite_query_service,
+        "critica_rn_query_service": runtime["services"].critica_rn_query_service,
         "documentacao_pendente_query_service": runtime["services"].documentacao_pendente_query_service,
         "relatorio_031120_import_services": runtime["services"].relatorio_031120_import_services,
         "relatorio_03114902_import_service": runtime["services"].relatorio_03114902_import_service,

@@ -1,4 +1,5 @@
-    // Aba "Gerar crítica": pede a Crítica do Cora ao worker e acompanha até importar.
+    // Aba Crítica, bloco "Buscar crítica no Cora": pede a Crítica ao worker e acompanha até importar.
+    // (A aba "Gerar crítica" da área Vendedor é outra coisa: o PDF da carteira, em 26-critica-carteira.js.)
     const gerarCriticaUi = { timer: null, seq: 0, enviando: false, ultimoAtivo: "" };
     const GERAR_CRITICA_INTERVALO_MS = 10000;
 
@@ -38,12 +39,12 @@
         return;
       }
       if (!ultimo) {
-        alvo.innerHTML = '<div class="small text-secondary">Nenhuma crítica gerada por aqui ainda.</div>';
+        alvo.innerHTML = '<div class="small text-secondary">Nenhuma busca no Cora feita por aqui ainda.</div>';
         return;
       }
       const concluiu = ultimo.status === "success" || ultimo.status === "partial_success";
-      const link = concluiu && state.panel && state.panel.canViewCritica
-        ? '<button class="btn btn-link btn-sm p-0 ms-1" type="button" data-gerar-critica-ver>Ver na aba Crítica</button>'
+      const link = concluiu
+        ? '<button class="btn btn-link btn-sm p-0 ms-1" type="button" data-gerar-critica-ver>Atualizar os totais</button>'
         : "";
       alvo.innerHTML = `<div class="gerar-critica-cartao"><div class="d-flex flex-wrap align-items-center gap-2">${gerarCriticaPill(ultimo)}<strong>Última: crítica de ${escapeHtml(gerarCriticaDataBr(ultimo.data_referencia))}</strong><span class="small text-secondary">terminou ${escapeHtml(gerarCriticaHora(ultimo.finalizado_em))}</span></div><div class="mt-1">${gerarCriticaResultado(ultimo)}${link}</div></div>`;
     }
@@ -52,7 +53,7 @@
       const corpo = document.getElementById("gerarCriticaHistorico");
       if (!corpo) return;
       if (!historico.length) {
-        corpo.innerHTML = '<tr><td colspan="5" class="text-secondary small py-3 text-center">Nenhuma geração ainda.</td></tr>';
+        corpo.innerHTML = '<tr><td colspan="5" class="text-secondary small py-3 text-center">Nenhuma busca ainda.</td></tr>';
         return;
       }
       corpo.innerHTML = historico.map(item => `<tr><td data-label="Pedido em" class="mono small">${escapeHtml(gerarCriticaHora(item.criado_em))}</td><td data-label="Data" class="mono small">${escapeHtml(gerarCriticaDataBr(item.data_referencia))}</td><td data-label="Situação">${gerarCriticaPill(item)}</td><td data-label="Resultado">${gerarCriticaResultado(item)}</td><td data-label="Quem pediu" class="small">${escapeHtml(item.criado_por || "-")}</td></tr>`).join("");
@@ -63,13 +64,13 @@
       gerarCriticaUi.timer = null;
       if (!ativo) return;
       gerarCriticaUi.timer = window.setTimeout(() => {
-        if (currentActiveTabId() === "gerarCriticaTab") syncGerarCritica({ silent: true });
+        if (currentActiveTabId() === "criticaTab") syncGerarCritica({ silent: true });
         else agendarGerarCritica(true);
       }, GERAR_CRITICA_INTERVALO_MS);
     }
 
     async function syncGerarCritica({ silent = false } = {}) {
-      if (!(state.panel && state.panel.canGerarCritica)) return;
+      if (!(state.panel && state.panel.canViewCritica)) return;
       const sequencia = ++gerarCriticaUi.seq;
       try {
         const dados = await req(CONFIG.endpoints.gerarCritica, { timeoutMs: 20000 });
@@ -107,7 +108,7 @@
 
     async function gerarCriticaAgora() {
       const data = document.getElementById("gerarCriticaData")?.value || "";
-      const confirmado = await askConfirmation(`Gerar a crítica de ${gerarCriticaDataBr(data)} agora? O Cora será consultado e todas as operações serão reimportadas.`);
+      const confirmado = await askConfirmation(`Buscar a crítica de ${gerarCriticaDataBr(data)} no Cora agora? Todas as operações serão reimportadas.`);
       if (!confirmado) return;
       const botao = document.getElementById("gerarCriticaBtn");
       gerarCriticaUi.enviando = true;
@@ -119,7 +120,7 @@
           body: JSON.stringify(data ? { data } : {}),
           timeoutMs: 30000
         });
-        addLog(resposta && resposta.ja_na_fila ? "Já existe uma crítica sendo gerada; acompanhando a mesma." : "Crítica pedida ao worker.", "ok");
+        addLog(resposta && resposta.ja_na_fila ? "Já existe uma busca da crítica em andamento; acompanhando a mesma." : "Busca da crítica no Cora pedida.", "ok");
       } catch (err) {
         addLog(`Falha ao pedir a crítica: ${err.message}`, "err");
       } finally {
@@ -132,6 +133,6 @@
       document.getElementById("gerarCriticaBtn")?.addEventListener("click", gerarCriticaAgora);
       document.getElementById("gerarCriticaAtualizarBtn")?.addEventListener("click", () => syncGerarCritica());
       document.getElementById("gerarCriticaAtual")?.addEventListener("click", event => {
-        if (event.target.closest("[data-gerar-critica-ver]")) navigatePanelPage("criticaTab");
+        if (event.target.closest("[data-gerar-critica-ver]")) syncCriticaDashboard({ silent: false });
       });
     }

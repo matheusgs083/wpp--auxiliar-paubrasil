@@ -9,6 +9,7 @@ from bot_api.routes.admin_access import create_admin_access_router
 from bot_api.routes.admin_broadcast import create_admin_broadcast_router
 from bot_api.routes.admin_conferencia import create_admin_conferencia_router
 from bot_api.routes.admin_critica import create_admin_critica_router
+from bot_api.routes.admin_critica_carteira import create_admin_critica_carteira_router
 from bot_api.routes.admin_critica_geracao import create_admin_critica_geracao_router
 from bot_api.routes.admin_financeiro import create_admin_financeiro_router
 from bot_api.routes.admin_giro import create_admin_giro_router
@@ -35,6 +36,7 @@ def build_admin_route_registrars(deps: dict[str, Any]) -> tuple[RouteRegistrar, 
         lambda app: _register_admin_giro_routes(app, deps=deps),
         lambda app: _register_admin_critica_routes(app, deps=deps),
         lambda app: _register_admin_critica_geracao_routes(app, deps=deps),
+        lambda app: _register_admin_critica_carteira_routes(app, deps=deps),
         lambda app: _register_admin_panel_routes(app, deps=deps),
         lambda app: _register_admin_recolha_routes(app, deps=deps),
         lambda app: _register_admin_financeiro_routes(app, deps=deps),
@@ -294,6 +296,20 @@ def _register_admin_critica_geracao_routes(app: FastAPI, *, deps: dict[str, Any]
             require_admin_panel_auth=deps["require_admin_panel_auth"],
             require_admin_panel_feature=deps["require_admin_panel_feature"],
             promax_jobs_service=deps["promax_jobs_service"],
+            record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps.get("record_admin_panel_action"),
+        )
+    )
+
+
+def _register_admin_critica_carteira_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    app.include_router(
+        create_admin_critica_carteira_router(
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
+            dclientes_query_service=deps["dclientes_query_service"],
+            critica_rn_query_service=deps["critica_rn_query_service"],
+            parse_admin_critica_date=deps["parse_admin_critica_date"],
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps.get("record_admin_panel_action"),
         )
