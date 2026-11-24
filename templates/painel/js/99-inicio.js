@@ -1,5 +1,6 @@
     setupNavCelular();
     setupPedidosPanel();
+    setupPedidoBloqueados();
     setupClientesPanel();
     setupRotaFinanceiraPanel();
     setupFichaCliente();

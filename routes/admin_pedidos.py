@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto
 from bot_api.services.filial_labels import FILIAL_LABELS
+from bot_api.services.pedido_caixa_fechada import DUZIAS_POR_CAIXA, exige_caixa_fechada, mensagem_caixa_fechada
 from bot_api.services.pedido_horario_bloqueio import normalizar_horario_bloqueio, situacao_bloqueio
 
 
@@ -146,8 +147,18 @@ def create_admin_pedidos_router(
     promax_jobs_service: Any,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
+    pedido_liberacoes_service: Any | None = None,
 ) -> APIRouter:
     router = APIRouter()
+
+    def liberacao_do_cliente(filial: str, cliente: str) -> dict[str, Any] | None:
+        """Liberação do administrador que deixa digitar mesmo com título na 12.06.01."""
+        if pedido_liberacoes_service is None:
+            return None
+        try:
+            return pedido_liberacoes_service.ativa(filial, cliente)
+        except ValueError:
+            return None
 
     def context_for_pedidos(request: Request, authorization: str | None, x_api_token: str | None, x_admin_token: str | None) -> dict[str, Any]:
         context = require_admin_panel_auth(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
@@ -218,8 +229,9 @@ def create_admin_pedidos_router(
             escopo=escopo,
         )
         payload = _client_payload(cliente_registro)
+        inadimplencia["liberacao"] = liberacao_do_cliente(filial, cliente) if inadimplencia["bloqueado"] else None
         payload["inadimplencia"] = inadimplencia
-        payload["pedido_liberado"] = not bool(inadimplencia["bloqueado"])
+        payload["pedido_liberado"] = not bool(inadimplencia["bloqueado"]) or bool(inadimplencia["liberacao"])
         record_security_event(
             request,
             channel="api",
@@ -541,7 +553,8 @@ def create_admin_pedidos_router(
             cliente=payload.cliente,
             escopo=escopo,
         )
-        if inadimplencia["bloqueado"]:
+        liberacao = liberacao_do_cliente(filial, payload.cliente) if inadimplencia["bloqueado"] else None
+        if inadimplencia["bloqueado"] and not liberacao:
             raise HTTPException(
                 status_code=409,
                 detail=(
@@ -589,6 +602,12 @@ def create_admin_pedidos_router(
             raise HTTPException(status_code=503, detail="Não foi possível consultar a grade de estoque. O pedido não foi enviado por segurança.") from exc
         if not estoque.get("ready"):
             raise HTTPException(status_code=409, detail="Não existe grade Stock_Product atualizada para esta filial. Importe o relatório do Cora antes de digitar pedidos.")
+        # 600 retornável: digitado em dúzias, só sai em caixa (2 dúzias). Venda e bonificação.
+        produtos_da_grade = estoque.get("produtos") or {}
+        for item in payload.itens:
+            dados = produtos_da_grade.get(item.produto) or {}
+            if exige_caixa_fechada(str(dados.get("descricao") or ""), str(dados.get("unidade") or "")) and item.quantidade % DUZIAS_POR_CAIXA:
+                raise HTTPException(status_code=422, detail=mensagem_caixa_fechada(item.produto, str(dados.get("descricao") or ""), item.quantidade))
         if not estoque.get("ok"):
             detalhes = []
             for item in estoque.get("indisponiveis", []):
@@ -611,6 +630,8 @@ def create_admin_pedidos_router(
             "cond_pagto": payload.cond_pagto,
             "motivo_digitacao": payload.motivo_digitacao,
             "operacao": payload.operacao,
+            # Quem liberou o cliente bloqueado na 12.06.01, para a auditoria do pedido.
+            "liberacao_inadimplencia": liberacao["liberado_por"] if liberacao else "",
             "itens": [{"produto": item.produto, "quantidade": item.quantidade, "preco": item.preco} for item in payload.itens],
         }
         job = promax_jobs_service.enqueue_job(

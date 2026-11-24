@@ -546,6 +546,20 @@
     .rota-kpi small { display: block; margin-top: .15rem; color: var(--ink-500); font-size: var(--fs-xs); }
     button.rota-kpi { cursor: pointer; }
     .pedido-items-table.pedido-sem-preco .pedido-col-preco { display: none; }
+    .pedido-caixa-aviso { margin-top: .25rem; color: var(--ink-700); font-size: var(--fs-xs); font-weight: 600; }
+    /* Gerencial de pedidos: clientes bloqueados pela 12.06.01 e liberações. */
+    .pedido-liberacao-aviso { padding: .72rem .85rem; border-top: 1px solid var(--line); color: var(--ink-700); background: color-mix(in srgb, var(--brand-600) 7%, var(--surface)); font-size: var(--fs-sm); font-weight: 600; }
+    .pedido-bloqueados-table { min-width: 640px; }
+    .pedido-bloqueados-table td:first-child strong { display: block; color: var(--ink-900); }
+    .pedido-bloqueados-table td:first-child span { color: var(--ink-500); font-size: var(--fs-xs); }
+    .pedido-liberar-form { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; }
+    .pedido-liberar-form .form-select { width: auto; }
+    .pedido-liberar-form .form-control { width: 220px; max-width: 100%; }
+    .pedido-liberado-tag { display: inline-flex; align-items: center; gap: .3rem; padding: .15rem .55rem; border-radius: var(--radius-pill); color: var(--success); background: var(--tone-ok-bg); font-size: var(--fs-xs); font-weight: 700; }
+    .pedido-liberacoes-ativas { margin-bottom: .75rem; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
+    .pedido-liberacoes-ativas ul { margin: .35rem 0 0; padding: 0; list-style: none; }
+    .pedido-liberacoes-ativas li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .35rem .75rem; padding: .35rem 0; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+    .pedido-liberacoes-ativas li:first-child { border-top: 0; }
     /* Aba Gerar crítica (PDF da carteira): filtros curtos e uma lista de relatórios com as ações à direita. */
     #gerarCriticaPane .pedido-shell { max-width: 880px; }
     #gerarCriticaPane .pedido-shell > * { min-width: 0; }

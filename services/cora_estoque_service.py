@@ -195,7 +195,7 @@ class CoraEstoqueQueryService:
             return {"ready": False, "reason": "Nenhuma grade Stock_Product foi importada para esta filial."}
         requested = {_code(item.get("produto")): int(item.get("quantidade") or 0) for item in products}
         with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql.SQL("SELECT codigo_produto, descricao_produto, saldo_disponivel FROM {}.cora_estoque_items WHERE batch_id = %s AND codigo_produto = ANY(%s)").format(sql.Identifier(self.schema)), (batch["id"], list(requested)))
+            cur.execute(sql.SQL("SELECT codigo_produto, descricao_produto, unidade_medida, saldo_disponivel FROM {}.cora_estoque_items WHERE batch_id = %s AND codigo_produto = ANY(%s)").format(sql.Identifier(self.schema)), (batch["id"], list(requested)))
             found = {str(row["codigo_produto"]): row for row in cur.fetchall()}
         unavailable = []
         for code, quantity in requested.items():
@@ -204,7 +204,9 @@ class CoraEstoqueQueryService:
                 unavailable.append({"produto": code, "motivo": "Produto não consta na grade atual."})
             elif Decimal(str(row["saldo_disponivel"] or 0)) < quantity:
                 unavailable.append({"produto": code, "descricao": str(row["descricao_produto"]), "saldo_disponivel": str(row["saldo_disponivel"]), "quantidade_solicitada": quantity, "motivo": "Saldo disponível insuficiente."})
-        return {"ready": True, "ok": not unavailable, "batch": _serialize_row(batch), "indisponiveis": unavailable}
+        # Descrição e unidade de cada produto achado, para as travas da digitação (ex.: caixa fechada do 600).
+        produtos = {code: {"descricao": str(row["descricao_produto"] or ""), "unidade": str(row["unidade_medida"] or "")} for code, row in found.items()}
+        return {"ready": True, "ok": not unavailable, "batch": _serialize_row(batch), "indisponiveis": unavailable, "produtos": produtos}
 
     def _latest_batch(self, filial: str) -> dict[str, Any] | None:
         if not self.database_url:

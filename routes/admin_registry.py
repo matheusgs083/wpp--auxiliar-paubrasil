@@ -19,6 +19,7 @@ from bot_api.routes.admin_panel import create_admin_panel_router
 from bot_api.routes.admin_payip import create_admin_payip_router
 from bot_api.routes.admin_clientes import create_admin_clientes_router
 from bot_api.routes.admin_pedidos import create_admin_pedidos_router
+from bot_api.routes.admin_pedidos_liberacoes import create_admin_pedidos_liberacoes_router
 from bot_api.routes.admin_rota_financeira import create_admin_rota_financeira_router
 from bot_api.routes.admin_estoque import create_admin_estoque_router
 from bot_api.routes.admin_promax import create_admin_promax_router
@@ -249,6 +250,19 @@ def _register_admin_pedidos_routes(app: FastAPI, *, deps: dict[str, Any]) -> Non
             promax_jobs_service=deps["promax_jobs_service"],
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps["record_admin_panel_action"],
+            pedido_liberacoes_service=deps.get("pedido_liberacoes_service"),
+        )
+    )
+    if deps.get("pedido_liberacoes_service") is None:
+        return  # sem o arquivo de liberações, a digitação segue só com o bloqueio da 12.06.01
+    app.include_router(
+        create_admin_pedidos_liberacoes_router(
+            require_admin_panel_auth=deps["require_admin_panel_auth"],
+            require_admin_panel_feature=deps["require_admin_panel_feature"],
+            inadimplencia_query_service=deps["inadimplencia_query_service"],
+            pedido_liberacoes_service=deps["pedido_liberacoes_service"],
+            record_security_event=deps["record_security_event"],
+            record_admin_panel_action=deps.get("record_admin_panel_action"),
         )
     )
 
@@ -303,6 +317,8 @@ def _register_admin_critica_geracao_routes(app: FastAPI, *, deps: dict[str, Any]
 
 
 def _register_admin_critica_carteira_routes(app: FastAPI, *, deps: dict[str, Any]) -> None:
+    if deps.get("critica_rn_query_service") is None:
+        return  # sem a base da crítica (ex.: testes de rotas) a aba fica sem as rotas do PDF
     app.include_router(
         create_admin_critica_carteira_router(
             require_admin_panel_auth=deps["require_admin_panel_auth"],

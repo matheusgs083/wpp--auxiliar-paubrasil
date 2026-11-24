@@ -51,6 +51,7 @@ from bot_api.services.liga_entrega_rules_service import LigaEntregaRulesService
 from bot_api.services.devolucoes_operacionais_service import DevolucoesCadastrosService
 from bot_api.services.devolucoes_justificativas_service import DevolucoesJustificativasService
 from bot_api.services.jornada_mapas_justificativas_service import JornadaMapasJustificativasService
+from bot_api.services.pedido_liberacoes_service import PedidoLiberacoesService
 from bot_api.services.entrega_frota_service import EntregaFrotaService
 from bot_api.services.promax_scheduler import PromaxScheduler
 from bot_api.services.webhook_runtime import WebhookRuntime
@@ -173,6 +174,7 @@ def configure_app_runtime(
     devolucoes_cadastros_service = DevolucoesCadastrosService(DEVOLUCOES_CADASTROS_PATH)
     devolucoes_justificativas_service = DevolucoesJustificativasService(PROJECT_ROOT / 'exports' / 'devolucoes_justificativas.json')
     jornada_mapas_justificativas_service = JornadaMapasJustificativasService(PROJECT_ROOT / 'exports' / 'jornada_mapas_justificativas.json')
+    pedido_liberacoes_service = PedidoLiberacoesService(PROJECT_ROOT / 'exports' / 'pedido_liberacoes.json')
     entrega_frota_service = EntregaFrotaService(PROJECT_ROOT / 'exports' / 'entrega_frota.json')
 
     def _rebuild_liga_snapshots_after_sql_import(
@@ -846,6 +848,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "devolucoes_cadastros_service": runtime["devolucoes_cadastros_service"],
         "devolucoes_justificativas_service": runtime["devolucoes_justificativas_service"],
         "jornada_mapas_justificativas_service": runtime["jornada_mapas_justificativas_service"],
+        "pedido_liberacoes_service": runtime["pedido_liberacoes_service"],
         "entrega_frota_service": runtime["entrega_frota_service"],
         "liga_entrega_route_team_service": runtime["liga_entrega_route_team_service"],
         "dclientes_query_service": runtime["services"].dclientes_query_service,
