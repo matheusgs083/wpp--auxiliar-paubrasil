@@ -1,3 +1,4 @@
+    setupNavCelular();
     setupPedidosPanel();
     setupClientesPanel();
     setupRotaFinanceiraPanel();

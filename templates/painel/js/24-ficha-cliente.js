@@ -204,12 +204,18 @@
       vasilhames(d, bloco) {
         if (bloco.estado === "vazio") return clientesVazio("O cliente não tem garrafeiras em comodato na 02.02.20.");
         const cartoes = (d.tipos || []).filter(t => Number(String(t.caixas).replace(",", ".")) > 0).map(t => {
-          const situacao = t.em_risco ? clientesTag(`Faltam ${t.falta} cx`, "warn", "bi-exclamation-triangle") : clientesTag("Giro batido", "ok", "bi-check2");
+          const tag = FICHA_CAIXAS_TAG[t.situacao] || FICHA_CAIXAS_TAG.em_risco;
           const barra = t.percentual === null ? "" : `<div class="ficha-progresso" role="progressbar" aria-label="Giro de ${escapeHtml(t.rotulo)}: ${t.percentual}%" aria-valuenow="${t.percentual}" aria-valuemin="0" aria-valuemax="100"><span style="width:${t.percentual}%"></span></div>`;
-          return `<article class="ficha-item"><div class="ficha-item-topo"><strong>${escapeHtml(t.rotulo)}</strong>${situacao}</div>${barra}
-              ${fichaFatos([["Caixas em comodato", t.caixas], [`Meta (${d.multiplicador || 2}×)`, t.meta], ["Compradas no mês", t.compradas], ["Falta", t.falta]])}</article>`;
+          const pendente = t.situacao !== "batido";
+          const fatos = [["Comprou no mês", `${t.compradas} de ${t.meta} cx`]];
+          if (pendente) fatos.push(["Faltam", `${t.falta} cx`], ["Previsão do mês", `${t.previsao} cx`]);
+          fatos.push(["Em comodato", `${t.caixas} cx, giro ${d.multiplicador || 2}`]);
+          if (t.visitas_restantes !== null && t.visitas_restantes !== undefined) fatos.push(["Visitas que faltam no mês", String(t.visitas_restantes)]);
+          const media = pendente ? `<div class="small text-secondary mt-1">Costuma comprar ${escapeHtml(t.media_mensal)} cx por mês (média dos 3 meses anteriores).</div>` : "";
+          return `<article class="ficha-item"><div class="ficha-item-topo"><strong>${escapeHtml(t.rotulo)}</strong>${clientesTag(tag[0], tag[1], tag[2])}</div>${barra}${fichaFatos(fatos)}${media}</article>`;
         }).join("");
-        return `<div class="ficha-lista">${cartoes}</div><div class="small text-secondary mt-2">${escapeHtml(d.explicacao || "")}</div>`;
+        const ate = d.compras_ate ? `<div class="small text-secondary mt-2">Compras até ${escapeHtml(d.compras_ate)}</div>` : "";
+        return `<div class="ficha-lista">${cartoes}</div>${ate}<div class="small text-secondary mt-2">${escapeHtml(d.explicacao || "")}</div>`;
       },
       equipamentos(d, bloco) {
         if (bloco.estado === "vazio") return clientesVazio("O cliente não tem SOPI nem Visa em comodato na 02.02.20.");
@@ -246,6 +252,11 @@
       }
     };
 
+    const FICHA_CAIXAS_TAG = {
+      batido: ["Já bateu", "ok", "bi-check2"],
+      deve_bater: ["Deve bater", "ok", "bi-graph-up-arrow"],
+      em_risco: ["Em risco", "warn", "bi-exclamation-triangle"]
+    };
     const FICHA_GIRO_TAG = {
       batido: ["Giro batido", "ok", "bi-check2"],
       deve_atingir: ["Deve atingir", "ok", "bi-graph-up-arrow"],

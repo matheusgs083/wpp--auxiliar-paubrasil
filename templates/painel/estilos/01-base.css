@@ -175,6 +175,24 @@
     #adminTabs .nav-item.fora-do-grupo { display: none !important; }
     .admin-tabs-card:has(.panel-groups:not([hidden])) #adminTabs .nav-link.active { color: var(--brand-700); background: var(--tone-info-bg); border-color: transparent; }
     @media (max-width: 576px) { .panel-group-btn { flex: 1 1 0; min-height: 40px; padding: 0.35rem 0.4rem; } }
+    /* Celular: grupos e abas saem do topo e vão para o menu lateral aberto pelo ☰. */
+    .nav-celular { display: none; }
+    .nav-celular-menu { --bs-offcanvas-width: min(300px, 86vw); background: var(--canvas); color: var(--ink-900); }
+    .nav-celular-grupo + .nav-celular-grupo { margin-top: .85rem; }
+    .nav-celular-titulo { margin: 0 0 .25rem .55rem; color: var(--ink-500); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+    .nav-celular-link { display: flex; align-items: center; gap: .65rem; min-height: 44px; padding: .45rem .65rem; border-radius: var(--radius-sm); color: var(--ink-900); font-weight: 650; text-decoration: none; }
+    .nav-celular-link i { width: 1.25rem; color: var(--ink-500); font-size: 1.1rem; text-align: center; }
+    .nav-celular-link:hover { background: var(--soft-panel); color: var(--ink-900); }
+    .nav-celular-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+    .nav-celular-link[aria-current="page"] { color: var(--brand-700); background: var(--tone-info-bg); }
+    .nav-celular-link[aria-current="page"] i { color: var(--brand-700); }
+    body[data-theme="dark"] .nav-celular-menu .btn-close { filter: invert(1) grayscale(1); }
+    @media (max-width: 767.98px) {
+      .nav-celular { display: flex; align-items: center; gap: .6rem; }
+      .nav-celular-btn { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-900); font-size: 1.35rem; }
+      .nav-celular-atual { min-width: 0; overflow: hidden; color: var(--ink-900); font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+      .admin-tabs-card #panelGroups, .admin-tabs-card #adminTabs { display: none !important; }
+    }
     .dataset-groups, .dataset-group { display: grid; gap: 0.75rem; }
     .dataset-group { margin-bottom: 0.9rem; }
     .dataset-group:last-child { margin-bottom: 0; }

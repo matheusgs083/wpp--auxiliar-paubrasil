@@ -59,9 +59,13 @@ class FakeGiroVasilhame:
     def catalogo(self) -> dict[str, dict[str, str]]:
         return {"863059": {"descricao": "GARRAFEIRA PLAST PRETA 23 GARRAFAS 30OML", "tipo": "litrinho"}}
 
-    def caixas_compradas(self, filial: str, cliente: str, competencia: str) -> dict[str, float]:
-        self.pedidos.append((filial, cliente, competencia))
-        return {"litrinho": 12.0, "inteira": 5.0, "litrao": 0.0}
+    def caixas_compradas_meses(self, filial: str, cliente: str, competencias: list[str]) -> dict[str, dict[str, float]]:
+        self.pedidos.append((filial, cliente, competencias[-1]))
+        anteriores = {c: {"litrinho": 16.0, "inteira": 0.0, "litrao": 0.0} for c in competencias[:-1]}
+        return {**anteriores, competencias[-1]: {"litrinho": 12.0, "inteira": 5.0, "litrao": 0.0}}
+
+    def compras_ate(self, filial: str, competencia: str) -> date:
+        return date(2026, 11, 22)
 
 
 class FakeGiroEquipamentos:
@@ -230,6 +234,10 @@ class ConteudoDosBlocosTest(unittest.TestCase):
         inteira = next(t for t in vasilhames["dados"]["tipos"] if t["tipo"] == "inteira")
         self.assertFalse(inteira["em_risco"])  # comprou, mas não tem garrafeira de inteira em comodato
         self.assertEqual(vasilhames["resumo"], "1 vasilhame em risco de não bater o giro")
+        # Visita às terças: 4 no mês, falta 1 (24/11). Costuma comprar 16 cx: 12 + 16 ÷ 4 = 16 < 20.
+        self.assertEqual((litrinho["media_mensal"], litrinho["previsao"], litrinho["visitas_restantes"]), ("16", "16", 1))
+        self.assertEqual(litrinho["situacao"], "em_risco")
+        self.assertEqual(vasilhames["dados"]["compras_ate"], "22/11/2026")
 
     def test_giro_de_vasilhames_separado_do_giro_comercial(self) -> None:
         vasilhames = self.dados("vasilhames")

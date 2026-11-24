@@ -3,7 +3,14 @@ from __future__ import annotations
 import unittest
 
 from bot_api.services.compras_030237_service import ler_csv_030237
-from bot_api.services.giro_vasilhame_service import caixas_em_comodato, giro_por_tipo, somar_por_tipo, tipo_da_garrafeira
+from bot_api.services.giro_vasilhame_service import (
+    caixas_em_comodato,
+    giro_por_tipo,
+    previsao_por_visitas,
+    situacao_das_caixas,
+    somar_por_tipo,
+    tipo_da_garrafeira,
+)
 
 CATALOGO = {
     "863059": {"descricao": "GARRAFEIRA PLAST PRETA 23 GARRAFAS 30OML", "tipo": "litrinho"},
@@ -64,6 +71,20 @@ class LeituraCsvGiroTest(unittest.TestCase):
         self.assertEqual(linhas[0]["Emissao"], "02/01/2026")
         self.assertEqual(linhas[0]["Descricao"], "GUARANÁ")
         self.assertNotIn("Operacao .", linhas[0])
+
+
+
+class PrevisaoPorVisitasTest(unittest.TestCase):
+    def test_exemplo_da_ficha(self) -> None:
+        # 31 cx compradas, costuma comprar 44 por mês em 9 visitas, faltam 3 visitas: ~46 cx.
+        previsao = previsao_por_visitas(31, 44, 9, 3)
+        self.assertEqual(round(previsao), 46)
+        self.assertEqual(situacao_das_caixas(40, 31, previsao), "deve_bater")
+        self.assertEqual(situacao_das_caixas(16, 19, 19), "batido")
+        self.assertEqual(situacao_das_caixas(40, 10, 20), "em_risco")
+
+    def test_sem_dia_de_visita_a_previsao_e_o_que_ja_comprou(self) -> None:
+        self.assertEqual(previsao_por_visitas(12, 30, 0, 0), 12)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ from bot_api.services.clientes_fontes import (
     _quantidade,
 )
 from bot_api.services.compras_030237_service import DIAS_DEVOLUCAO, meses_fechados
-from bot_api.services.ficha_cadastro import dias_da_visita, dias_por_extenso, montar_cadastro
+from bot_api.services.ficha_cadastro import dias_da_visita, dias_por_extenso, montar_cadastro, visitas_no_mes
 from bot_api.services.giro_equipamentos_service import (
     REGRAS,
     equipamentos_em_comodato,
@@ -40,7 +40,13 @@ from bot_api.services.giro_equipamentos_service import (
     previsao_do_mes,
     situacao_do_giro,
 )
-from bot_api.services.giro_vasilhame_service import MULTIPLICADOR, caixas_em_comodato, giro_por_tipo
+from bot_api.services.giro_vasilhame_service import (
+    MULTIPLICADOR,
+    caixas_em_comodato,
+    giro_por_tipo,
+    previsao_por_visitas,
+    situacao_das_caixas,
+)
 
 BLOCOS = ("titulos", "credito", "compras", "vasilhames", "equipamentos", "comodatos", "devolucoes", "cadastro")
 SITUACAO_BOLETO_SEM_VINCULO = "Boleto não importado"
@@ -220,29 +226,49 @@ def bloco_vasilhames(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> 
     if fontes.giro_vasilhame is None or fontes.comodatos is None:
         return _indisponivel("vasilhames", titulo, fonte, "Giro de vasilhames não configurado.")
     competencia = f"{hoje.year:04d}-{hoje.month:02d}"
+    anteriores = meses_fechados(hoje)
     try:
         catalogo = fontes.giro_vasilhame.catalogo()
         comodatos = fontes.comodatos.search_by_registration(
             cliente.filial, cliente.cliente, allowed_sectors=cliente.escopo.allowed_sectors, allowed_gv_vdes=cliente.escopo.allowed_gv_vdes, limit=200
         )
-        compradas = fontes.giro_vasilhame.caixas_compradas(cliente.filial, cliente.cliente, competencia)
+        por_mes = fontes.giro_vasilhame.caixas_compradas_meses(cliente.filial, cliente.cliente, [*anteriores, competencia])
+        compras_ate = fontes.giro_vasilhame.compras_ate(cliente.filial, competencia)
     except Exception:
         return _indisponivel("vasilhames", titulo, fonte, "Base do giro de vasilhames indisponível (comodatos, 03.02.37 ou garrafeiras).")
     itens = [{"material": str(r.material or ""), "sub_tipo": str(r.sub_tipo_material or ""), "saldo": str(r.saldo or "0")} for r in comodatos]
-    tipos = giro_por_tipo(caixas_em_comodato(itens, catalogo), compradas)
+    tipos = giro_por_tipo(caixas_em_comodato(itens, catalogo), por_mes[competencia])
+    # Previsão pelas visitas: o que ele costuma comprar por visita × visitas que ainda faltam.
+    dias_visita = dias_da_visita(str(getattr(cliente.registro, "dia_visita", "") or ""))
+    visitas_mes = visitas_no_mes(dias_visita, hoje.year, hoje.month)
+    visitas_restantes = visitas_no_mes(dias_visita, hoje.year, hoje.month, desde=hoje.day)
     for t in tipos:
+        media = sum(por_mes[m].get(t["tipo"], 0.0) for m in anteriores) / len(anteriores)
+        previsao = previsao_por_visitas(t["compradas"], media, visitas_mes, visitas_restantes)
+        t["situacao"] = situacao_das_caixas(t["meta"], t["compradas"], previsao) if t["caixas"] else ""
+        t["media_mensal"] = _quantidade(Decimal(str(round(media))))
+        t["previsao"] = _quantidade(Decimal(str(round(previsao))))
+        t["visitas_restantes"] = visitas_restantes if dias_visita else None
         for campo in ("caixas", "meta", "compradas", "falta"):
             t[campo] = _quantidade(Decimal(str(round(t[campo], 3))))
     dados = {
         "tipos": tipos,
         "competencia": competencia,
         "multiplicador": MULTIPLICADOR,
-        "explicacao": f"Para girar, o cliente precisa comprar no mês {MULTIPLICADOR}× as caixas que tem em comodato (10 caixas → 20 caixas). Conta só a 03.02.37 do mês atual.",
+        "compras_ate": compras_ate.strftime("%d/%m/%Y") if hasattr(compras_ate, "strftime") else "",
+        "explicacao": f"Para girar, o cliente precisa comprar no mês {MULTIPLICADOR}× as caixas que tem em comodato (10 caixas → 20 caixas). Conta a 03.02.37 do mês atual; a previsão soma o que ele costuma comprar por visita nas visitas que faltam.",
     }
-    if not any(_decimal(t["caixas"]) > 0 for t in tipos):
+    ativos = [t for t in tipos if _decimal(t["caixas"]) > 0]
+    if not ativos:
         return _bloco("vasilhames", titulo, estado="vazio", resumo="Sem garrafeiras em comodato", dados=dados, fonte=fonte)
-    em_risco = sum(1 for t in tipos if t["em_risco"])
-    resumo = f"{em_risco} vasilhame{'s' if em_risco != 1 else ''} em risco de não bater o giro" if em_risco else "Giro de vasilhames batido no mês"
+    situacoes = {t["situacao"] for t in ativos}
+    if situacoes == {"batido"}:
+        resumo = "Giro de vasilhames batido no mês"
+    elif "em_risco" in situacoes:
+        em_risco = sum(1 for t in ativos if t["situacao"] == "em_risco")
+        resumo = f"{em_risco} vasilhame{'s' if em_risco != 1 else ''} em risco de não bater o giro"
+    else:
+        resumo = "Ainda não bateu, mas deve bater o giro no mês"
     return _bloco("vasilhames", titulo, estado="ok", resumo=resumo, dados=dados, fonte=fonte, atualizado_em=getattr(comodatos[0], "planilha_atualizada_em", "") if comodatos else "")
 
 

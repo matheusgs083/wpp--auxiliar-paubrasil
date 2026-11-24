@@ -62,6 +62,10 @@
     </section>
 
     <section class="panel-card mb-3 admin-tabs-card">
+      <div class="nav-celular">
+        <button class="btn nav-celular-btn" type="button" id="navCelularBtn" data-bs-toggle="offcanvas" data-bs-target="#navCelular" aria-controls="navCelular" aria-label="Abrir o menu de telas"><i class="bi bi-list" aria-hidden="true"></i></button>
+        <span class="nav-celular-atual" id="navCelularAtual">Menu</span>
+      </div>
       <nav class="panel-groups" id="panelGroups" aria-label="Áreas do painel">
         <button type="button" class="panel-group-btn" data-grupo="vendedor" aria-pressed="false"><i class="bi bi-person-badge me-1" aria-hidden="true"></i>Vendedor</button>
         <button type="button" class="panel-group-btn" data-grupo="operacao" aria-pressed="false"><i class="bi bi-truck me-1" aria-hidden="true"></i>Operação</button>
@@ -163,6 +167,14 @@
       </ul>
     </section>
 
+    <div class="offcanvas offcanvas-start nav-celular-menu" tabindex="-1" id="navCelular" aria-labelledby="navCelularTitulo">
+      <div class="offcanvas-header">
+        <h2 class="offcanvas-title h6 fw-bold" id="navCelularTitulo">Central Pau Brasil</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar o menu"></button>
+      </div>
+      <nav class="offcanvas-body" id="navCelularLista" aria-label="Telas do painel"></nav>
+    </div>
+
     <div class="tab-content">
       <!--#include painel/abas/operacao.html -->
 
@@ -210,6 +222,7 @@
   <script>
 <!--#include painel/js/00-estado.js -->
 <!--#include painel/js/01-nucleo.js -->
+<!--#include painel/js/04-nav-celular.js -->
 <!--#include painel/js/02-relatorios.js -->
 <!--#include painel/js/03-usuarios.js -->
 <!--#include painel/js/10-promax.js -->

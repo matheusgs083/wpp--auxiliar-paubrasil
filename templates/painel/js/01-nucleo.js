@@ -70,6 +70,7 @@
       const agrupar = gruposComAbas > 1;
       barra.hidden = !agrupar;
       itens.forEach(item => item.classList.toggle("fora-do-grupo", agrupar && item.dataset.grupo !== grupo));
+      renderNavCelular();
       if (ativa && grupoAtivo) {
         try { localStorage.setItem(`painel_aba_${grupoAtivo}`, ativa.id); } catch (_err) { /* sem armazenamento: ignora */ }
       }

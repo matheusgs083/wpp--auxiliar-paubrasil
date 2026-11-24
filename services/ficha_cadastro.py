@@ -6,6 +6,7 @@ cada documento, que vem da base de documentação pendente (OK/Nok por documento
 
 from __future__ import annotations
 
+import calendar
 import re
 import unicodedata
 from datetime import date, timedelta
@@ -87,6 +88,13 @@ def proxima_data(codigos: list[str], hoje: date) -> date | None:
         if any(DIAS_SEMANA[c][1] == dia.weekday() for c in codigos):
             return dia
     return None
+
+
+def visitas_no_mes(codigos: list[str], ano: int, mes: int, *, desde: int = 1) -> int:
+    """Quantos dias de visita há no mês a partir do dia ``desde`` (inclusive)."""
+    dias = calendar.monthrange(ano, mes)[1]
+    semana = {DIAS_SEMANA[c][1] for c in codigos}
+    return sum(1 for dia in range(desde, dias + 1) if date(ano, mes, dia).weekday() in semana)
 
 
 def telefones(texto: str) -> list[str]:

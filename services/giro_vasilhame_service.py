@@ -22,7 +22,7 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
-TIPOS = (("litrinho", "Litrinho (1/2)"), ("inteira", "Inteira (1/1)"), ("litrao", "Litrão"))
+TIPOS = (("litrinho", "Cerveja 1/2 (litrinho)"), ("inteira", "Cerveja 1/1"), ("litrao", "Cerveja Litrão"))
 MULTIPLICADOR = 2
 CACHE_SEGUNDOS = 600
 
@@ -99,18 +99,22 @@ class GiroVasilhameService:
 
     def caixas_compradas(self, filial: str, cliente: str, competencia: str) -> dict[str, float]:
         """Caixas compradas no mês por tipo de garrafeira (produto → garrafeira pelo dProdutos)."""
+        return self.caixas_compradas_meses(filial, cliente, [competencia])[competencia]
+
+    def caixas_compradas_meses(self, filial: str, cliente: str, competencias: list[str]) -> dict[str, dict[str, float]]:
+        """Caixas por tipo de garrafeira em cada competência pedida (mês sem compra vem zerado)."""
         catalogo = self.catalogo()
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 sql.SQL(
                     """
                     WITH compras AS (
-                        SELECT produto, sum(qtde) AS qtde
+                        SELECT competencia, produto, sum(qtde) AS qtde
                         FROM {compras}
-                        WHERE filial = %s AND cliente = %s AND competencia = %s
-                        GROUP BY produto
+                        WHERE filial = %s AND cliente = %s AND competencia = ANY(%s)
+                        GROUP BY competencia, produto
                     )
-                    SELECT c.produto,
+                    SELECT c.competencia, c.produto,
                            NULLIF(ltrim(trim(COALESCE(p.payload->>'Garrrafeira', p.payload->>'Garrafeira', '')), '0'), '') AS garrafeira,
                            c.qtde
                     FROM compras c
@@ -120,10 +124,21 @@ class GiroVasilhameService:
                     compras=sql.SQL("{}.{}").format(sql.Identifier(self.schema), sql.Identifier("compras_030237_produto")),
                     produtos=sql.SQL("{}.{}").format(sql.Identifier(self.schema), sql.Identifier("dprodutos_latest")),
                 ),
-                (_codigo(filial), _codigo(cliente), competencia),
+                (_codigo(filial), _codigo(cliente), list(competencias)),
             )
             linhas = cur.fetchall()
-        return somar_por_tipo(linhas, catalogo)
+        return {c: somar_por_tipo([l[1:] for l in linhas if l[0] == c], catalogo) for c in competencias}
+
+    def compras_ate(self, filial: str, competencia: str) -> Any:
+        """Última data de operação da 03.02.37 importada no mês, para a filial (None sem dado)."""
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                sql.SQL("SELECT max(ultima_data) FROM {} WHERE filial = %s AND competencia = %s").format(
+                    sql.SQL("{}.{}").format(sql.Identifier(self.schema), sql.Identifier("compras_030237_produto"))
+                ),
+                (_codigo(filial), competencia),
+            )
+            return (cur.fetchone() or (None,))[0]
 
 
 def somar_por_tipo(linhas: list[tuple[Any, ...]], catalogo: dict[str, dict[str, str]]) -> dict[str, float]:
@@ -170,6 +185,19 @@ def giro_por_tipo(caixas: dict[str, float], compradas: dict[str, float]) -> list
             "percentual": round(min(comprou / meta, 1) * 100) if meta else None,
         })
     return linhas
+
+
+def previsao_por_visitas(compradas: float, media_mensal: float, visitas_no_mes: int, visitas_restantes: int) -> float:
+    """Comprado até agora + o que ele costuma comprar por visita × visitas que faltam no mês."""
+    if not visitas_no_mes:
+        return compradas
+    return compradas + media_mensal / visitas_no_mes * visitas_restantes
+
+
+def situacao_das_caixas(meta: float, compradas: float, previsao: float) -> str:
+    if compradas >= meta:
+        return "batido"
+    return "deve_bater" if previsao >= meta else "em_risco"
 
 
 def _numero(valor: Any) -> float:
