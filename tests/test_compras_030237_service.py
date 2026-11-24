@@ -6,6 +6,7 @@ from datetime import date
 from bot_api.services.compras_030237_service import (
     Compras030237Service,
     devolucao_payload,
+    linhas_para_gravar,
     media_mensal,
     meses_fechados,
     montar_resumo,
@@ -64,7 +65,17 @@ class ReconstrucaoTest(unittest.TestCase):
     def test_reimportacao_cumulativa_usa_so_a_versao_mais_recente(self) -> None:
         self.assertIn("DISTINCT ON (filial, mes_emissao)", self.texto)
         self.assertIn("ORDER BY filial, mes_emissao, imported_at DESC", self.texto)
-        self.assertIn("JOIN escolhidas e USING (filial, mes_emissao, source_key)", self.texto)
+        self.assertIn("JOIN compras_030237_versoes e USING (filial, mes_emissao, source_key)", self.texto)
+
+    def test_importacao_refaz_so_a_filial_do_arquivo(self) -> None:
+        comandos = Compras030237Service("postgresql://x").comandos_rebuild("2026-11", "2026-11", ["03"])
+        deletes = [params for comando, params in comandos if _sql(comando).strip().startswith("DELETE")]
+        self.assertTrue(all(params[-2:] == (["3"], ["3"]) for params in deletes))
+        self.assertTrue(all("filial = ANY" in _sql(c) for c, _ in comandos if _sql(c).strip().startswith("DELETE")))
+
+    def test_linha_gravada_leva_mes_e_filial(self) -> None:
+        registros = linhas_para_gravar("giro|x", "0111.csv", [{"Filial": "003", "Emissao": "05/11/2026", "Produto": "1"}])
+        self.assertEqual(registros[0][:5], ("giro|x", "0111.csv", 1, "2026-11", "3"))
 
     def test_reconstrucao_apaga_antes_de_gravar_os_meses(self) -> None:
         primeiro_insert = next(i for i, c in enumerate(self.comandos) if "INSERT INTO" in c)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import gzip
 import csv
 import io
 import re
@@ -2661,9 +2662,17 @@ def create_admin_promax_router(
         if compras_030237_service is None:
             raise HTTPException(status_code=503, detail="Importador da 03.02.37 nao configurado.")
         nome = FilePath(str(arquivo.filename or "")).name.strip()
+        if nome.lower().endswith(".csv.gz"):
+            nome = nome[:-3]
         if not nome.lower().endswith(".csv"):
             raise HTTPException(status_code=422, detail="Envie o CSV da 03.02.37 com itens.")
         conteudo = await arquivo.read()
+        if conteudo[:2] == b"\x1f\x8b":
+            # O painel comprime o CSV (gzip) antes de enviar: sobe ~10x menos dados.
+            try:
+                conteudo = await run_in_threadpool(gzip.decompress, conteudo)
+            except (OSError, EOFError) as exc:
+                raise HTTPException(status_code=422, detail=f"{nome}: arquivo compactado inválido.") from exc
         if not conteudo.strip():
             raise HTTPException(status_code=422, detail=f"Arquivo CSV vazio: {nome}.")
         try:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import sys
 import unittest
 from pathlib import Path
@@ -62,6 +63,14 @@ class Importar030237PeloPainelTest(unittest.TestCase):
         self.assertEqual(resposta.json()["result"]["meses"], ["2026-11"])
         self.assertEqual(list(compras.chamadas[0]), ["0111.csv"])
         self.assertEqual(acoes[0]["action"], "importar_030237_itens")
+
+    def test_aceita_o_csv_compactado_pelo_painel(self) -> None:
+        compras = FakeCompras030237()
+        cliente, _ = _cliente(compras)
+        original = b"Emissao;Produto\n01/11/2026;123\n"
+        resposta = _enviar(cliente, nome="0111.csv.gz", conteudo=gzip.compress(original))
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(compras.chamadas[0], {"0111.csv": original})
 
     def test_quem_nao_e_admin_nao_importa(self) -> None:
         compras = FakeCompras030237()

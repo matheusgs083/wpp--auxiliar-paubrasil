@@ -16,6 +16,17 @@
       return `${Number(r.rows || 0).toLocaleString("pt-BR")} linha(s), meses ${meses}`;
     }
 
+    async function importar030237Compactar(arquivo) {
+      // CSV comprime ~10x: menos tempo subindo o arquivo. Sem suporte no navegador, vai como está.
+      if (typeof CompressionStream === "undefined") return arquivo;
+      try {
+        const compactado = await new Response(arquivo.stream().pipeThrough(new CompressionStream("gzip"))).blob();
+        return new File([compactado], `${arquivo.name}.gz`, { type: "application/gzip" });
+      } catch (_error) {
+        return arquivo;
+      }
+    }
+
     async function importar030237() {
       if (importar030237Ui.enviando) return;
       const input = document.getElementById("importar030237Arquivos");
@@ -32,12 +43,16 @@
       try {
         for (const [indice, arquivo] of arquivos.entries()) {
           if (status) status.textContent = `Importando ${indice + 1} de ${arquivos.length}: ${arquivo.name}...`;
-          const item = importar030237Item(`${arquivo.name}: enviando...`, "text-secondary");
-          const data = new FormData();
-          data.append("arquivo", arquivo);
+          const item = importar030237Item(`${arquivo.name}: compactando...`, "text-secondary");
+          const inicio = performance.now();
           try {
+            const envio = await importar030237Compactar(arquivo);
+            item.textContent = `${arquivo.name}: enviando e processando...`;
+            const data = new FormData();
+            data.append("arquivo", envio);
             const resposta = await req("/api/admin/promax/030237/importar", { method: "POST", body: data, timeoutMs: 600000 });
-            item.textContent = `${arquivo.name}: ${importar030237Resumo(resposta.result)}`;
+            const segundos = Math.max(1, Math.round((performance.now() - inicio) / 1000));
+            item.textContent = `${arquivo.name}: ${importar030237Resumo(resposta.result)} (${segundos}s)`;
             item.className = "text-success";
             ok += 1;
           } catch (error) {

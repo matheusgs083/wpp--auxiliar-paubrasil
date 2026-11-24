@@ -192,6 +192,13 @@ class Compras030237Service:
             cur.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} (mes_emissao)").format(
                 sql.Identifier(f"{TABELA_GIRO}_mes_idx"), self._t(TABELA_GIRO)
             ))
+            # Filial gravada na linha: a reconstrução escolhe a versão de cada (filial, mês)
+            # só pelo índice, sem abrir o payload das versões antigas do acumulado.
+            cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS filial VARCHAR(10)").format(self._t(TABELA_GIRO)))
+            cur.execute(sql.SQL(f"UPDATE {{}} SET filial = {_texto_codigo('Filial')} WHERE filial IS NULL").format(self._t(TABELA_GIRO)))
+            cur.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} (filial, mes_emissao, source_key, imported_at)").format(
+                sql.Identifier(f"{TABELA_GIRO}_versao_idx"), self._t(TABELA_GIRO)
+            ))
             for tabela in ("compras_030237_mes", "compras_030237_produto", "devolucoes_030237"):
                 cur.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} (filial, cliente)").format(
                     sql.Identifier(f"{tabela}_cliente_idx"), self._t(tabela)
@@ -210,11 +217,14 @@ class Compras030237Service:
             raise RuntimeError("Banco de relatórios não configurado.")
         arquivos_novos = linhas_total = 0
         meses: set[str] = set()
+        filiais: set[str] = set()
         with self._connect() as conn:
             self.ensure_schema(conn)
             with conn.cursor() as cur:
                 for nome, conteudo in arquivos.items():
                     source_key = f"giro|{hashlib.sha256(conteudo).hexdigest()}"
+                    # Mesmo arquivo chegando junto pelo painel e pelo worker: um espera o outro.
+                    cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (source_key,))
                     cur.execute(sql.SQL("SELECT 1 FROM {} WHERE source_key = %s LIMIT 1").format(self._t(TABELA_GIRO)), (source_key,))
                     if cur.fetchone():
                         continue
@@ -223,23 +233,34 @@ class Compras030237Service:
                         raise ValueError(f"{nome}: nenhuma linha da 03.02.37 encontrada.")
                     if "Produto" not in linhas[0]:
                         raise ValueError(f"{nome}: a 03.02.37 precisa vir com itens (coluna Produto).")
-                    meses.update(m for m in (_mes_da_data(l.get("Emissao")) for l in linhas) if m)
-                    cur.executemany(
-                        sql.SQL(
-                            "INSERT INTO {} (source_key, filename, row_number, mes_emissao, payload) VALUES (%s, %s, %s, %s, %s::jsonb) "
-                            "ON CONFLICT (source_key, row_number) DO NOTHING"
-                        ).format(self._t(TABELA_GIRO)),
-                        [(source_key, nome, i, _mes_da_data(linha.get("Emissao")) or None, _json(linha)) for i, linha in enumerate(linhas, start=1)],
-                    )
+                    registros = linhas_para_gravar(source_key, nome, linhas)
+                    meses.update(r[3] for r in registros if r[3])
+                    filiais.update(r[4] for r in registros)
+                    with cur.copy(sql.SQL(
+                        "COPY {} (source_key, filename, row_number, mes_emissao, filial, payload) FROM STDIN"
+                    ).format(self._t(TABELA_GIRO))) as copia:
+                        for registro in registros:
+                            copia.write_row(registro)
                     arquivos_novos += 1
                     linhas_total += len(linhas)
             conn.commit()
-        resumo = self.rebuild(desde_mes=min(meses), ate_mes=max(meses)) if meses else {"ok": True}
-        return {"arquivos": arquivos_novos, "ignorados": len(arquivos) - arquivos_novos, "rows": linhas_total, "meses": sorted(meses), "resumo": resumo}
+        resumo = (
+            self.rebuild(desde_mes=min(meses), ate_mes=max(meses), filiais=sorted(filiais))
+            if meses else {"ok": True}
+        )
+        return {
+            "arquivos": arquivos_novos, "ignorados": len(arquivos) - arquivos_novos, "rows": linhas_total,
+            "meses": sorted(meses), "filiais": sorted(filiais), "resumo": resumo,
+        }
 
     # ------------------------------------------------------------- reconstrução
-    def rebuild(self, *, desde_mes: str | None = None, ate_mes: str | None = None) -> dict[str, Any]:
+    def rebuild(
+        self, *, desde_mes: str | None = None, ate_mes: str | None = None, filiais: list[str] | None = None
+    ) -> dict[str, Any]:
         """Refaz o resumo dos meses de emissão entre ``desde_mes`` e ``ate_mes`` (None = sem limite).
+
+        ``filiais`` limita às filiais informadas (None = todas): a importação de um
+        arquivo só refaz a filial dele.
 
         Roda numa transação só: quem lê a ficha durante a carga vê o resumo
         anterior inteiro, nunca meio apagado.
@@ -249,28 +270,36 @@ class Compras030237Service:
         with self._connect() as conn:
             self.ensure_schema(conn)
             with conn.cursor() as cur:
-                for comando, params in self.comandos_rebuild(desde_mes, ate_mes):
+                for comando, params in self.comandos_rebuild(desde_mes, ate_mes, filiais):
                     cur.execute(comando, params)
                 cur.execute(sql.SQL("SELECT count(*), COALESCE(sum(linhas), 0) FROM {} WHERE ").format(
                     self._t("compras_030237_cargas")
-                ) + sql.SQL("(%s::text IS NULL OR mes_emissao >= %s) AND (%s::text IS NULL OR mes_emissao <= %s)"), (desde_mes, desde_mes, ate_mes, ate_mes))
+                ) + _FILTRO_MES + sql.SQL(" AND ") + _FILTRO_FILIAL, _params_filtro(desde_mes, ate_mes, filiais))
                 cargas, linhas = cur.fetchone() or (0, 0)
             conn.commit()
-        return {"ok": True, "desde_mes": desde_mes or "", "ate_mes": ate_mes or "", "meses_filial": int(cargas or 0), "linhas": int(linhas or 0)}
+        return {
+            "ok": True, "desde_mes": desde_mes or "", "ate_mes": ate_mes or "", "filiais": list(filiais or []),
+            "meses_filial": int(cargas or 0), "linhas": int(linhas or 0),
+        }
 
-    def comandos_rebuild(self, desde_mes: str | None, ate_mes: str | None = None) -> list[tuple[sql.Composable, tuple[Any, ...]]]:
+    def comandos_rebuild(
+        self, desde_mes: str | None, ate_mes: str | None = None, filiais: list[str] | None = None
+    ) -> list[tuple[sql.Composable, tuple[Any, ...]]]:
         raw = self._t("liga_entrega_raw_rows")
+        giro = self._t(TABELA_GIRO)
         # A competência da linha crua é o mês da Dt. Operacao; uma linha emitida
         # em M pode ter operação em M-1 (ex.: 31/10 emitida em 03/11).
         competencia_minima = mes_anterior(desde_mes) if desde_mes else None
-        filtro_mes = sql.SQL("(%s::text IS NULL OR mes_emissao >= %s) AND (%s::text IS NULL OR mes_emissao <= %s)")
-        faixa = (desde_mes, desde_mes, ate_mes, ate_mes)
+        filtro = _params_filtro(desde_mes, ate_mes, filiais)
         apagar = [
-            (sql.SQL("DELETE FROM {} WHERE ").format(self._t(tabela)) + filtro_mes, faixa)
+            (sql.SQL("DELETE FROM {} WHERE ").format(self._t(tabela)) + _FILTRO_MES + sql.SQL(" AND ") + _FILTRO_FILIAL, filtro)
             for tabela in ("compras_030237_mes", "compras_030237_produto", "devolucoes_030237", "compras_030237_cargas")
         ]
-        temporaria = sql.SQL(
+        temporarias = sql.SQL(
             """
+            CREATE TEMP TABLE IF NOT EXISTS compras_030237_versoes (
+                filial TEXT, mes_emissao TEXT, source_key TEXT, imported_at TIMESTAMPTZ, origem TEXT
+            ) ON COMMIT DROP;
             CREATE TEMP TABLE IF NOT EXISTS compras_030237_linhas (
                 source_key TEXT, imported_at TIMESTAMPTZ, filial TEXT, mes_emissao TEXT, cliente TEXT,
                 status TEXT, data_operacao DATE, nota TEXT, serie TEXT, produto TEXT, descricao TEXT,
@@ -278,7 +307,41 @@ class Compras030237Service:
             ) ON COMMIT DROP
             """
         )
-        limpar = sql.SQL("TRUNCATE compras_030237_linhas")
+        limpar = sql.SQL("TRUNCATE compras_030237_versoes, compras_030237_linhas")
+        liga_filial = sql.SQL(_texto_codigo("Filial"))
+        liga_mes = sql.SQL(f"to_char({_texto_data('Emissao')}, 'YYYY-MM')")
+        liga_competencia = sql.SQL(
+            "routine = %s AND payload ? 'Produto' AND (%s::text IS NULL OR competencia >= %s) AND (%s::text IS NULL OR competencia <= %s)"
+        )
+        params_liga = (ROTINA, competencia_minima, competencia_minima, ate_mes, ate_mes)
+        # 1) Qual arquivo vale para cada (filial, mês): o importado por último. No giro
+        #    isso sai do índice (filial, mes_emissao, source_key, imported_at).
+        versoes = sql.SQL(
+            """
+            INSERT INTO compras_030237_versoes
+            SELECT DISTINCT ON (filial, mes_emissao) filial, mes_emissao, source_key, imported_at, origem
+            FROM (
+                SELECT filial, mes_emissao, source_key, max(imported_at) AS imported_at, 'giro' AS origem
+                FROM {giro}
+                WHERE mes_emissao IS NOT NULL AND {filtro_mes} AND {filtro_filial}
+                GROUP BY filial, mes_emissao, source_key
+                UNION ALL
+                SELECT filial, mes_emissao, source_key, max(imported_at), 'liga'
+                FROM (
+                    SELECT source_key, imported_at, {liga_filial} AS filial, {liga_mes} AS mes_emissao
+                    FROM {raw} WHERE {liga_competencia}
+                ) liga
+                WHERE mes_emissao IS NOT NULL AND {filtro_mes} AND {filtro_filial}
+                GROUP BY filial, mes_emissao, source_key
+            ) todas
+            ORDER BY filial, mes_emissao, imported_at DESC, source_key DESC
+            """
+        ).format(
+            giro=giro, raw=raw, filtro_mes=_FILTRO_MES, filtro_filial=_FILTRO_FILIAL,
+            liga_filial=liga_filial, liga_mes=liga_mes, liga_competencia=liga_competencia,
+        )
+        params_versoes = (*filtro, *params_liga, *filtro)
+        # 2) Só as linhas dos arquivos escolhidos entram na conta.
         linhas = sql.SQL(
             f"""
             WITH base AS (
@@ -298,34 +361,27 @@ class Compras030237Service:
                        COALESCE(NULLIF(ltrim(trim(COALESCE(payload->>'NF Referencia', '')), '0'), ''), '') AS nf_referencia,
                        trim(COALESCE(payload->>'Mot. Cancelamento', '')) AS motivo_codigo
                 FROM (
-                    SELECT source_key, imported_at, payload FROM {{raw}}
-                    WHERE routine = %s AND payload ? 'Produto'
-                      AND (%s::text IS NULL OR competencia >= %s) AND (%s::text IS NULL OR competencia <= %s)
+                    SELECT g.source_key, g.imported_at, g.payload
+                    FROM {{giro}} g
+                    JOIN compras_030237_versoes v
+                      ON v.origem = 'giro' AND v.source_key = g.source_key
+                     AND v.filial = g.filial AND v.mes_emissao = g.mes_emissao
                     UNION ALL
-                    SELECT source_key, imported_at, payload FROM {{giro}}
-                    WHERE (%s::text IS NULL OR mes_emissao >= %s) AND (%s::text IS NULL OR mes_emissao <= %s)
+                    SELECT r.source_key, r.imported_at, r.payload
+                    FROM {{raw}} r
+                    WHERE r.source_key IN (SELECT source_key FROM compras_030237_versoes WHERE origem = 'liga')
+                      AND {{liga_competencia}}
                 ) origem
-            ),
-            versoes AS (
-                SELECT filial, mes_emissao, source_key, max(imported_at) AS imported_at
-                FROM base
-                WHERE mes_emissao IS NOT NULL AND (%s::text IS NULL OR mes_emissao >= %s) AND (%s::text IS NULL OR mes_emissao <= %s)
-                GROUP BY filial, mes_emissao, source_key
-            ),
-            escolhidas AS (
-                SELECT DISTINCT ON (filial, mes_emissao) filial, mes_emissao, source_key
-                FROM versoes
-                ORDER BY filial, mes_emissao, imported_at DESC, source_key DESC
             )
             INSERT INTO compras_030237_linhas
             SELECT b.source_key, b.imported_at, b.filial, b.mes_emissao, b.cliente, b.status, b.data_operacao,
                    b.nota, b.serie, b.produto, b.descricao, b.unidade, b.qtde, b.total, b.nf_referencia, b.motivo_codigo
             FROM base b
-            JOIN escolhidas e USING (filial, mes_emissao, source_key)
+            JOIN compras_030237_versoes e USING (filial, mes_emissao, source_key)
             WHERE b.data_operacao IS NOT NULL AND b.cliente <> '0'
             """
-        ).format(raw=raw, giro=self._t(TABELA_GIRO))
-        params_linhas = (ROTINA, competencia_minima, competencia_minima, ate_mes, ate_mes, *faixa, *faixa)
+        ).format(giro=giro, raw=raw, liga_competencia=liga_competencia)
+        params_linhas = params_liga
         cargas = sql.SQL(
             """
             INSERT INTO {} (filial, mes_emissao, source_key, imported_at, linhas)
@@ -363,7 +419,10 @@ class Compras030237Service:
             GROUP BY filial, mes_emissao, cliente, nota, serie
             """
         ).format(self._t("devolucoes_030237"))
-        return [*apagar, (temporaria, ()), (limpar, ()), (linhas, params_linhas), (cargas, ()), (por_mes, ()), (por_produto, ()), (devolucoes, ())]
+        return [
+            *apagar, (temporarias, ()), (limpar, ()), (versoes, params_versoes), (linhas, params_linhas),
+            (cargas, ()), (por_mes, ()), (por_produto, ()), (devolucoes, ()),
+        ]
 
     # ----------------------------------------------------------------- leitura
     def resumo_cliente(self, filial: str, cliente: str, *, hoje: date) -> dict[str, Any]:
@@ -516,6 +575,23 @@ def ler_csv_030237(conteudo: bytes) -> list[dict[str, Any]]:
         bruto = {nome: str(valor).strip() for nome, valor in zip(nomes, valores)}
         linhas.append(_payload_historico(ROTINA, bruto))
     return linhas
+
+
+_FILTRO_MES = sql.SQL("(%s::text IS NULL OR mes_emissao >= %s) AND (%s::text IS NULL OR mes_emissao <= %s)")
+_FILTRO_FILIAL = sql.SQL("(%s::text[] IS NULL OR filial = ANY(%s::text[]))")
+
+
+def _params_filtro(desde_mes: str | None, ate_mes: str | None, filiais: list[str] | None) -> tuple[Any, ...]:
+    lista = [_codigo(f) for f in filiais] if filiais else None
+    return (desde_mes, desde_mes, ate_mes, ate_mes, lista, lista)
+
+
+def linhas_para_gravar(source_key: str, nome: str, linhas: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
+    """Registros do COPY: (source_key, arquivo, nº da linha, mês de emissão, filial, payload)."""
+    return [
+        (source_key, nome, i, _mes_da_data(linha.get("Emissao")) or None, _codigo(linha.get("Filial")), _json(linha))
+        for i, linha in enumerate(linhas, start=1)
+    ]
 
 
 def _mes_da_data(valor: Any) -> str:
