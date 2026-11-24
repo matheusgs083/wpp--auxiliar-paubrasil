@@ -127,11 +127,18 @@ class RotaFinanceiraQueryService:
                 COALESCE(SUM(total_vencido), 0) AS total_vencido,
                 COUNT(*) FILTER (WHERE faixa = {vencido})::int AS clientes_vencidos,
                 COUNT(*) FILTER (WHERE faixa = {hoje})::int AS vence_hoje,
+                COUNT(*) FILTER (WHERE faixa = {amanha})::int AS vence_amanha,
+                COUNT(*) FILTER (WHERE faixa = {dois_dias})::int AS vence_dois_dias,
+                COUNT(*) FILTER (WHERE titulos > 0 AND boletos > 0)::int AS clientes_com_boleto,
+                COUNT(*) FILTER (WHERE titulos > 0 AND boletos = 0)::int AS clientes_sem_boleto,
                 COALESCE(SUM(boletos), 0)::int AS boletos,
                 COALESCE(SUM(GREATEST(titulos - boletos, 0)) FILTER (WHERE titulos > 0), 0)::int AS titulos_sem_boleto
             FROM joined
             """
-        ).format(base=base, vencido=sql.Literal(FAIXA_VENCIDO), hoje=sql.Literal(FAIXA_HOJE))
+        ).format(
+            base=base, vencido=sql.Literal(FAIXA_VENCIDO), hoje=sql.Literal(FAIXA_HOJE),
+            amanha=sql.Literal(FAIXA_AMANHA), dois_dias=sql.Literal(FAIXA_DOIS_DIAS),
+        )
 
         limite = max(1, min(int(limite), LIMITE_PAGINA))
         offset = max(0, min(int(offset), 10_000))

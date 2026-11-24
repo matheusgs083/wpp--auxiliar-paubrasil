@@ -1,22 +1,16 @@
       <div class="tab-pane fade" id="rotaFinanceiraPane" role="tabpanel" aria-labelledby="rotaFinanceiraTab" tabindex="0">
         <div class="pedido-shell">
           <section class="panel-card p-3">
-            <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start mb-3">
-              <div>
-                <div class="pedido-step mb-2"><i class="bi bi-signpost-2" aria-hidden="true"></i> Fila do dia</div>
-                <h2 class="h5 fw-bold mb-1">Rota Financeira</h2>
-                <div class="form-text">Priorize clientes da rota por atraso, vencimento e disponibilidade de boleto.</div>
-              </div>
-              <div class="d-flex flex-wrap gap-2 align-items-center">
-                <span class="pill" id="rotaEscopo">Carregando carteira...</span>
-                <button class="btn btn-outline-primary btn-sm" id="rotaAtualizarBtn" type="button"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Atualizar</button>
-              </div>
+            <div class="mb-3">
+              <div class="pedido-step mb-2"><i class="bi bi-signpost-2" aria-hidden="true"></i> Fila do dia</div>
+              <h2 class="h5 fw-bold mb-1">Rota Financeira</h2>
+              <div class="form-text">Os clientes do dia, dos mais atrasados para os que vencem depois.</div>
             </div>
             <form class="rota-filtros" id="rotaFiltrosForm" role="search" autocomplete="off">
               <div><label class="form-label small fw-semibold mb-1" for="rotaDia">Dia de visita</label><select class="form-select" id="rotaDia"><option value="">Carregando...</option></select></div>
-              <div><label class="form-label small fw-semibold mb-1" for="rotaFilial">Filial</label><select class="form-select" id="rotaFilial"><option value="">Todas</option></select></div>
+              <div id="rotaFilialWrap"><label class="form-label small fw-semibold mb-1" for="rotaFilial">Filial</label><select class="form-select" id="rotaFilial"><option value="">Todas</option></select></div>
               <div id="rotaGvWrap" hidden><label class="form-label small fw-semibold mb-1" for="rotaGv">GV</label><select class="form-select" id="rotaGv"><option value="">Todos</option></select></div>
-              <div><label class="form-label small fw-semibold mb-1" for="rotaSetor">Setor / RN</label><select class="form-select" id="rotaSetor"><option value="">Todos</option></select></div>
+              <div id="rotaSetorWrap"><label class="form-label small fw-semibold mb-1" for="rotaSetor">Setor / RN</label><select class="form-select" id="rotaSetor"><option value="">Todos</option></select></div>
               <div><label class="form-label small fw-semibold mb-1" for="rotaBusca">Cliente</label><div class="input-group"><input class="form-control" id="rotaBusca" inputmode="search" maxlength="120" placeholder="NB ou nome"><button class="btn btn-primary" type="submit" id="rotaBuscarBtn"><i class="bi bi-search me-1" aria-hidden="true"></i>Buscar</button></div></div>
             </form>
             <div class="clientes-filtros" role="group" aria-label="Situação">
@@ -37,7 +31,7 @@
           <section class="panel-card p-3">
             <div class="table-responsive">
               <table class="table table-sm table-hover align-middle mb-0 rota-tabela" aria-describedby="rotaStatus">
-                <thead><tr><th class="text-center">Prior.</th><th>Cliente</th><th>Filial</th><th>GV / Setor</th><th>Telefone</th><th class="text-end">Títulos</th><th class="text-end">Pendente</th><th>Vencimento</th><th>Situação</th><th>Boleto</th><th class="text-end">Ações</th></tr></thead>
+                <thead><tr><th class="text-center">Prior.</th><th>Cliente</th><th class="rota-c-filial">Filial</th><th class="rota-c-setor">GV / Setor</th><th>Telefone</th><th class="text-end">Títulos</th><th class="text-end">Pendente</th><th>Vencimento</th><th>Situação</th><th>Boleto</th><th class="text-end">Ações</th></tr></thead>
                 <tbody id="rotaLista"><tr><td colspan="11" class="text-center text-secondary py-4">Escolha o dia de visita para montar a rota.</td></tr></tbody>
               </table>
             </div>

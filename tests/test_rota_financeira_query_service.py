@@ -59,6 +59,14 @@ class RotaFinanceiraSqlTest(unittest.TestCase):
         self.assertLess(ordem.index("f.faixa"), ordem.index("f.total_pendente DESC"))
         self.assertIn("CASE WHEN f.faixa = 1 THEN f.menor_dias END ASC", ordem)
 
+    def test_resumo_conta_cada_filtro_de_situacao(self) -> None:
+        servico = ServicoSemBanco()
+        servico.listar(dia="SEG", allowed_sectors=["3_107"])
+        resumo = servico.registro[1][0]
+        for campo in ("vence_amanha", "vence_dois_dias", "clientes_com_boleto", "clientes_sem_boleto"):
+            self.assertIn(f"AS {campo}", resumo)
+        self.assertIn("COUNT(*) FILTER (WHERE faixa = 3)::int AS vence_amanha", resumo)
+
     def test_escopo_vai_sempre_na_consulta(self) -> None:
         texto, params = self.consulta(setor="3_109", busca="300")
         self.assertIn("filial_setor_key", texto)

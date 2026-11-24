@@ -90,6 +90,7 @@
       try {
         const response = await req("/api/admin/pedidos/config");
         pedidosUi.config = response;
+        configurePedidoFiliais();
         renderPedidoMotivos(response);
         renderPedidoBloqueio(response);
         return true;
@@ -427,21 +428,21 @@
       }
     }
 
+    // Filiais da carteira do usuário (setores, GVs ou operações), vindas de /pedidos/config.
     function configurePedidoFiliais() {
       const select = document.getElementById("pedidoFilial");
-      if (!select || !state.panel) return;
-      const allowed = state.panel.isAdmin ? [] : [...new Set((state.panel.sellerScopes || []).map(scope => String(scope).split(/[-_]/)[0]).filter(Boolean))];
-      Array.from(select.options).forEach(option => {
-        if (!option.value) return;
-        const enabled = !allowed.length || allowed.includes(option.value);
-        option.hidden = !enabled;
-        option.disabled = !enabled;
-      });
-      if (allowed.length === 1 && select.value !== allowed[0]) {
-        select.value = allowed[0];
+      const filiais = pedidosUi.config?.filiais;
+      if (!select || !Array.isArray(filiais)) return;
+      const atual = select.value;
+      const opcoes = filiais.map(item => `<option value="${escapeHtml(item.codigo)}">${escapeHtml(item.nome)}</option>`).join("");
+      select.innerHTML = filiais.length === 1 ? opcoes : `<option value="">${filiais.length ? "Selecione" : "Nenhuma filial na sua carteira"}</option>${opcoes}`;
+      const codigos = filiais.map(item => item.codigo);
+      if (codigos.includes(atual)) {
+        select.value = atual;
+      } else if (codigos.length === 1) {
+        select.value = codigos[0];
         clearPedidoClient("Filial definida pela sua carteira. Pesquise o cliente.");
-      } else if (select.value && allowed.length && !allowed.includes(select.value)) {
-        select.value = "";
+      } else if (atual) {
         clearPedidoClient("Selecione uma filial da sua carteira.");
       }
     }

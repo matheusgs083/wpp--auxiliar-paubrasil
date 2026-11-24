@@ -220,6 +220,7 @@ def boleto_rotulo(item: Mapping[str, Any], boletos_disponiveis: bool) -> dict[st
 def _cliente_da_rota(item: Mapping[str, Any], boletos_disponiveis: bool) -> dict[str, Any]:
     return {
         **item,
+        "filial_nome": FILIAL_LABELS.get(str(item.get("filial") or ""), ""),
         "prioridade": item.get("faixa"),
         "situacao": situacao_rotulo(item),
         "boleto": boleto_rotulo(item, boletos_disponiveis),

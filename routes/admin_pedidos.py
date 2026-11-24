@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto
+from bot_api.services.filial_labels import FILIAL_LABELS
 from bot_api.services.pedido_horario_bloqueio import normalizar_horario_bloqueio, situacao_bloqueio
 
 
@@ -162,6 +163,9 @@ def create_admin_pedidos_router(
     ) -> dict[str, Any]:
         context = context_for_pedidos(request, authorization, x_api_token, x_admin_token)
         escopo = escopo_do_contexto(context)
+        filial = (str(filial or "").strip().lstrip("0") or "0") if filial else None
+        if filial and filial not in {item["codigo"] for item in _filiais_permitidas(escopo)}:
+            raise HTTPException(status_code=403, detail="Sua carteira não tem clientes nesta filial.")
         try:
             if str(busca).strip().isdigit() and filial:
                 rows = dclientes_query_service.search_by_registration(str(filial), str(busca), allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes)
@@ -170,6 +174,9 @@ def create_admin_pedidos_router(
         except (ValueError, RuntimeError) as exc:
             raise HTTPException(status_code=422 if isinstance(exc, ValueError) else 503, detail=str(exc)) from exc
         result = [_client_payload(item) for item in rows]
+        if filial:
+            # Busca por nome cobre a carteira inteira; fica só a filial escolhida.
+            result = [item for item in result if (item["filial"].lstrip("0") or "0") == filial]
         record_security_event(request, channel="api", event_type="admin_pedidos_clientes", decision="allowed", reason=f"total={len(result)}")
         return {"ok": True, "clientes": result, "total": len(result), "seller_scopes": list(escopo.setores), "gv_scopes": list(escopo.gvs), "filiais": list(escopo.filiais)}
 
@@ -297,7 +304,8 @@ def create_admin_pedidos_router(
     ) -> dict[str, Any]:
         context = context_for_pedidos(request, authorization, x_api_token, x_admin_token)
         config = promax_jobs_service.get_pedido_digitacao_config()
-        return {"ok": True, **config, **_bloqueio_payload(config, context)}
+        filiais = _filiais_permitidas(escopo_do_contexto(context))
+        return {"ok": True, **config, **_bloqueio_payload(config, context), "filiais": filiais}
 
     @router.get("/api/admin/pedidos/gerencial/config")
     def obter_configuracao_gerencial_pedidos(
@@ -720,6 +728,13 @@ def _load_inadimplencia(
         "quantidade_titulos": len(titles),
         "titulos": titles,
     }
+
+
+def _filiais_permitidas(escopo: EscopoClientes) -> list[dict[str, str]]:
+    """Filiais que a carteira alcança (setores, GVs ou operações), com o nome da dRevendas."""
+    alcancadas = escopo.filiais_alcancadas()
+    codigos = [codigo for codigo in _UNIT_BY_FILIAL if alcancadas is None or codigo in alcancadas]
+    return [{"codigo": codigo, "nome": FILIAL_LABELS.get(codigo) or f"Filial {codigo}"} for codigo in codigos]
 
 
 def _client_payload(row: Any) -> dict[str, str]:
