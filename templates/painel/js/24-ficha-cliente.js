@@ -212,8 +212,15 @@
         }).join("");
         return `<div class="ficha-lista">${cartoes}</div><div class="small text-secondary mt-2">${escapeHtml(d.explicacao || "")}</div>`;
       },
-      equipamentos() {
-        return clientesVazio("Ainda não há base de equipamentos instalados importada. Quando houver, eles aparecem aqui.");
+      equipamentos(d, bloco) {
+        if (bloco.estado === "vazio") return clientesVazio("O cliente não tem SOPI nem Visa em comodato na 02.02.20.");
+        const cartoes = (d.tipos || []).filter(t => Number(t.equipamentos) > 0).map(t => {
+          const situacao = t.em_risco ? clientesTag(`Faltam R$ ${t.falta}`, "warn", "bi-exclamation-triangle") : clientesTag("Giro batido", "ok", "bi-check2");
+          const barra = t.percentual === null ? "" : `<div class="ficha-progresso" role="progressbar" aria-label="Giro de ${escapeHtml(t.rotulo)}: ${t.percentual}%" aria-valuenow="${t.percentual}" aria-valuemin="0" aria-valuemax="100"><span style="width:${t.percentual}%"></span></div>`;
+          return `<article class="ficha-item"><div class="ficha-item-topo"><strong>${escapeHtml(t.rotulo)}</strong>${situacao}</div>${barra}
+              ${fichaFatos([["Em comodato", String(t.equipamentos)], [`Meta (R$ ${t.meta_por_equipamento} cada)`, `R$ ${t.meta}`], [`Comprado de ${t.cesta} no mês`, `R$ ${t.comprado}`], ["Falta", `R$ ${t.falta}`]])}</article>`;
+        }).join("");
+        return `<div class="ficha-lista">${cartoes}</div><div class="small text-secondary mt-2">${escapeHtml(d.explicacao || "")}</div>`;
       },
       comodatos(d, bloco) {
         if (bloco.estado === "vazio") return clientesVazio("Nenhum comodato em aberto na 02.02.20.");

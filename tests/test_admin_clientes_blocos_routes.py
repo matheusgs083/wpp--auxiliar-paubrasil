@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
@@ -38,7 +39,7 @@ class FakeComodatos(Escopado):
         if not self._permitido(cod_pdv, allowed_sectors, allowed_gv_vdes):
             return []
         return [
-            SimpleNamespace(nro_comodato="5521", material="Geladeira", sub_tipo_material="Refrigerador", saldo="1", vencimento="10/01/2026", planilha_atualizada_em="22/11/2026"),
+            SimpleNamespace(nro_comodato="5521", material="REFRIGERADOR,BRAHMA,NORMAL PC,220W", sub_tipo_material="SOPI", saldo="1", vencimento="10/01/2026", planilha_atualizada_em="22/11/2026"),
             SimpleNamespace(nro_comodato="5522", material="GARRAFEIRA PLAST PRETA 23 GARRAFAS 30OML", sub_tipo_material="GARRAFEIRA CERVEJA 1/2", saldo="10", vencimento="10/01/2027", planilha_atualizada_em="22/11/2026"),
         ]
 
@@ -61,6 +62,15 @@ class FakeGiroVasilhame:
     def caixas_compradas(self, filial: str, cliente: str, competencia: str) -> dict[str, float]:
         self.pedidos.append((filial, cliente, competencia))
         return {"litrinho": 12.0, "inteira": 5.0, "litrao": 0.0}
+
+
+class FakeGiroEquipamentos:
+    def __init__(self) -> None:
+        self.pedidos: list[tuple[str, str, str]] = []
+
+    def compras_por_cesta(self, filial: str, cliente: str, competencia: str) -> dict[str, Decimal]:
+        self.pedidos.append((filial, cliente, competencia))
+        return {"Cerveja TT": Decimal("1200"), "Refrigerante TT": Decimal("5000")}
 
 
 class FakeDocumentos(Escopado):
@@ -117,6 +127,7 @@ def _app(context: dict[str, Any] | None, *, compras: Any = None, inadimplencia: 
         record_security_event=lambda *_args, **_kwargs: None,
         prazo_limite_query_service=FakePrazo(),
         giro_vasilhame_service=FakeGiroVasilhame(),
+        giro_equipamentos_service=FakeGiroEquipamentos(),
         documentacao_pendente_query_service=FakeDocumentos(),
         compras_030237_service=compras or FakeCompras(),
         hoje=lambda: HOJE,
@@ -229,8 +240,14 @@ class ConteudoDosBlocosTest(unittest.TestCase):
         self.assertEqual(devolucoes["resumo"], "1 devolução recente")
         self.assertEqual(devolucoes["dados"]["itens"][0]["responsabilidade"], "LOGISTICA")
 
-    def test_equipamentos_sem_fonte(self) -> None:
-        self.assertEqual(self.dados("equipamentos")["resumo"], "Sem dados de equipamentos")
+    def test_sopi_pede_2000_de_cerveja_no_mes(self) -> None:
+        bloco = self.dados("equipamentos")
+        sopi = next(t for t in bloco["dados"]["tipos"] if t["tipo"] == "sopi")
+        self.assertEqual((sopi["equipamentos"], sopi["meta"], sopi["comprado"], sopi["falta"]), (1, "2.000,00", "1.200,00", "800,00"))
+        self.assertTrue(sopi["em_risco"])
+        visa = next(t for t in bloco["dados"]["tipos"] if t["tipo"] == "visa")
+        self.assertFalse(visa["em_risco"])  # comprou refrigerante, mas não tem Visa em comodato
+        self.assertEqual(bloco["resumo"], "SOPI abaixo da meta de compra do mês")
 
     def test_cabecalho_traz_contato_e_mapa(self) -> None:
         cabecalho = self.cliente.get("/api/admin/clientes/3/100/cabecalho").json()["cliente"]

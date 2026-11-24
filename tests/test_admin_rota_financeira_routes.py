@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -88,7 +89,12 @@ class Pronto:
         return {"ready": self.pronto}
 
 
-def _app(context: dict[str, Any] | None, *, rota: FakeRota | None = None, boletos_prontos: bool = True) -> TestClient:
+class FakeGiroVasilhame:
+    def catalogo(self) -> dict[str, dict[str, str]]:
+        return {"863059": {"descricao": "GARRAFEIRA PLAST PRETA 23 GARRAFAS 30OML", "tipo": "litrinho"}}
+
+
+def _app(context: dict[str, Any] | None, *, rota: FakeRota | None = None, boletos_prontos: bool = True, giro: Any = None) -> TestClient:
     def auth(**_kwargs: Any) -> dict[str, Any]:
         if context is None:
             raise HTTPException(status_code=401, detail="Sessão expirada.")
@@ -107,6 +113,8 @@ def _app(context: dict[str, Any] | None, *, rota: FakeRota | None = None, boleto
         boletos_query_service=Pronto(boletos_prontos),
         rota_financeira_query_service=rota or FakeRota(),
         record_security_event=lambda *_args, **_kwargs: None,
+        giro_vasilhame_service=giro,
+        agora=lambda: datetime(2026, 11, 23, 21, 0),
     ))
     return TestClient(app)
 
@@ -213,6 +221,26 @@ class RotaPrioridadeTest(unittest.TestCase):
         self.assertEqual(situacao_rotulo({"titulos": 1, "menor_dias": 1})["texto"], "Vence amanhã")
         self.assertEqual(situacao_rotulo({"titulos": 1, "menor_dias": 2})["texto"], "Vence em 2 dias")
         self.assertEqual(situacao_rotulo({"titulos": 0, "menor_dias": None})["texto"], "Sem títulos em aberto")
+
+
+class RotaGiroTest(unittest.TestCase):
+    def test_filtro_sem_giro_leva_as_consultas_do_giro_do_mes(self) -> None:
+        rota = FakeRota()
+        for situacao in ("sem_giro_vasilhame", "sem_giro_equipamento"):
+            resposta = _app(VENDEDOR_107, rota=rota, giro=FakeGiroVasilhame()).get("/api/admin/rota-financeira", params={"dia": "SEG", "situacao": situacao})
+            self.assertEqual(resposta.status_code, 200, resposta.text)
+            _ctes, params = rota.chamadas[-1]["giro"]
+            self.assertIn("2026-11", params)  # compras do mês atual
+            self.assertIn(["863059"], params)  # garrafeiras da tabela
+
+    def test_filtros_comuns_nao_pagam_pelo_giro(self) -> None:
+        rota = FakeRota()
+        _app(VENDEDOR_107, rota=rota, giro=FakeGiroVasilhame()).get("/api/admin/rota-financeira", params={"dia": "SEG", "situacao": "vencidos"})
+        self.assertIsNone(rota.chamadas[-1]["giro"])
+
+    def test_sem_base_do_giro_avisa_em_vez_de_listar_errado(self) -> None:
+        resposta = _app(VENDEDOR_107).get("/api/admin/rota-financeira", params={"dia": "SEG", "situacao": "sem_giro_vasilhame"})
+        self.assertEqual(resposta.status_code, 409)
 
 
 if __name__ == "__main__":

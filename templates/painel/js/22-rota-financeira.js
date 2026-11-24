@@ -1,7 +1,7 @@
     // Aba Rota Financeira: fila do dia priorizada pelo risco. Ao tocar num cliente abre a
     // ficha em blocos (24-ficha-cliente.js); as tags vêm da aba Clientes.
 
-    const ROTA_SITUACAO_ROTULO = { todos: "Todos", vencidos: "Vencidos", hoje: "Vence hoje", amanha: "Vence amanhã", dois_dias: "Vence em 2 dias", com_boleto: "Com boleto", sem_boleto: "Sem boleto" };
+    const ROTA_SITUACAO_ROTULO = { todos: "Todos", vencidos: "Vencidos", hoje: "Vence hoje", amanha: "Vence amanhã", dois_dias: "Vence em 2 dias", com_boleto: "Com boleto", sem_boleto: "Sem boleto", sem_giro_vasilhame: "Sem giro de vasilhame", sem_giro_equipamento: "Sem giro de equipamento" };
 
     function rotaSetStatus(message, kind = "") {
       const element = document.getElementById("rotaStatus");

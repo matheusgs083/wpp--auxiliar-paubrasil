@@ -264,6 +264,7 @@ def _register_admin_clientes_routes(app: FastAPI, *, deps: dict[str, Any]) -> No
             record_admin_panel_action=deps.get("record_admin_panel_action"),
             prazo_limite_query_service=deps.get("prazo_limite_query_service"),
             giro_vasilhame_service=deps.get("giro_vasilhame_service"),
+            giro_equipamentos_service=deps.get("giro_equipamentos_service"),
             documentacao_pendente_query_service=deps.get("documentacao_pendente_query_service"),
             compras_030237_service=deps.get("compras_030237_service"),
             devolucoes_justificativas_service=deps.get("devolucoes_justificativas_service"),
@@ -280,6 +281,7 @@ def _register_admin_rota_financeira_routes(app: FastAPI, *, deps: dict[str, Any]
             inadimplencia_query_service=deps["inadimplencia_query_service"],
             boletos_query_service=deps.get("boletos_query_service"),
             rota_financeira_query_service=deps.get("rota_financeira_query_service"),
+            giro_vasilhame_service=deps.get("giro_vasilhame_service"),
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps.get("record_admin_panel_action"),
         )

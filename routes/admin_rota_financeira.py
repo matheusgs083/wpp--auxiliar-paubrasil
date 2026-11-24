@@ -18,6 +18,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 
 from bot_api.commercial_scope import normalize_numeric_code
 from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto, telefone_discagem, telefone_whatsapp
+from bot_api.services.rota_financeira_giro import SITUACOES_GIRO, ctes_giro
 from bot_api.services.rota_financeira_query_service import SITUACOES
 
 FEATURE_ROTA_FINANCEIRA = "rota_financeira"
@@ -34,6 +35,8 @@ def create_admin_rota_financeira_router(
     rota_financeira_query_service: Any,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
+    giro_vasilhame_service: Any | None = None,
+    agora: Callable[[], datetime] = lambda: datetime.now(ZoneInfo("America/Fortaleza")),
 ) -> APIRouter:
     router = APIRouter()
 
@@ -106,6 +109,10 @@ def create_admin_rota_financeira_router(
         if situacao in {"com_boleto", "sem_boleto"} and not incluir_boletos:
             raise HTTPException(status_code=409, detail="A 03.02.06 (boletos) não está importada, então não dá para filtrar por boleto agora.")
 
+        giro = None
+        if situacao in SITUACOES_GIRO:
+            giro = _giro_do_mes(giro_vasilhame_service, getattr(rota_financeira_query_service, "schema", "reports"), agora())
+
         try:
             resultado = rota_financeira_query_service.listar(
                 dia=dia,
@@ -117,6 +124,7 @@ def create_admin_rota_financeira_router(
                 busca=busca or "",
                 situacao=situacao,
                 incluir_boletos=incluir_boletos,
+                giro=giro,
                 limite=TAMANHO_PAGINA,
                 offset=(pagina - 1) * TAMANHO_PAGINA,
             )
@@ -124,6 +132,10 @@ def create_admin_rota_financeira_router(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail="Não foi possível montar a rota agora. Tente de novo em instantes.") from exc
+        except Exception as exc:
+            if giro is None:
+                raise
+            raise HTTPException(status_code=503, detail="Base do giro indisponível (02.02.20, 03.02.37, dProdutos ou Cesta de Produtos).") from exc
 
         clientes = [_cliente_da_rota(item, incluir_boletos) for item in resultado.clientes]
         record_security_event(request, channel="api", event_type="admin_rota_financeira_lista", decision="allowed", reason=f"dia={dia};situacao={situacao};pagina={pagina};total={resultado.total}")
@@ -142,6 +154,17 @@ def create_admin_rota_financeira_router(
         }
 
     return router
+
+
+def _giro_do_mes(giro_vasilhame_service: Any | None, schema: str, agora: datetime) -> tuple[Any, list[Any]]:
+    """CTEs dos filtros "sem giro" do mês atual; a tabela de garrafeiras vem do serviço do giro."""
+    if giro_vasilhame_service is None:
+        raise HTTPException(status_code=409, detail="O giro de vasilhames e equipamentos não está configurado.")
+    try:
+        catalogo = giro_vasilhame_service.catalogo()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Tabela de garrafeiras indisponível: não dá para filtrar pelo giro agora.") from exc
+    return ctes_giro(schema, f"{agora.year:04d}-{agora.month:02d}", catalogo)
 
 
 def _pagina_vazia(escopo: EscopoClientes, pagina: int) -> dict[str, Any]:

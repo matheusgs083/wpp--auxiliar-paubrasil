@@ -23,6 +23,7 @@ from bot_api.services.admin_import_config import ADMIN_IMPORT_CRITICA_PIPELINE_D
 from bot_api.services.admin_templates import AdminTemplateLoader
 from bot_api.services.rota_financeira_query_service import RotaFinanceiraQueryService
 from bot_api.services.compras_030237_service import Compras030237Service, mes_anterior
+from bot_api.services.giro_equipamentos_service import GiroEquipamentosService
 from bot_api.services.giro_vasilhame_service import GiroVasilhameService
 from bot_api.services.app_lifecycle import register_app_lifecycle
 from bot_api.services.admin_panel_session_service import AdminPanelSessionService
@@ -151,6 +152,11 @@ def configure_app_runtime(
         connect_timeout_seconds=settings.access_database_timeout_seconds,
     )
     giro_vasilhame_service = GiroVasilhameService(
+        settings.reports_database_url,
+        settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    giro_equipamentos_service = GiroEquipamentosService(
         settings.reports_database_url,
         settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
@@ -797,6 +803,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "rota_financeira_query_service": _rota_financeira_query_service(runtime["services"].dclientes_query_service),
         "compras_030237_service": runtime["compras_030237_service"],
         "giro_vasilhame_service": runtime["giro_vasilhame_service"],
+        "giro_equipamentos_service": runtime["giro_equipamentos_service"],
         "prazo_limite_query_service": runtime["services"].prazo_limite_query_service,
         "documentacao_pendente_query_service": runtime["services"].documentacao_pendente_query_service,
         "relatorio_031120_import_services": runtime["services"].relatorio_031120_import_services,

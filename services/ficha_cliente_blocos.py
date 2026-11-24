@@ -30,6 +30,7 @@ from bot_api.services.clientes_fontes import (
     _quantidade,
 )
 from bot_api.services.compras_030237_service import DIAS_DEVOLUCAO
+from bot_api.services.giro_equipamentos_service import equipamentos_em_comodato, giro_por_equipamento
 from bot_api.services.giro_vasilhame_service import MULTIPLICADOR, caixas_em_comodato, giro_por_tipo
 
 BLOCOS = ("titulos", "credito", "compras", "vasilhames", "equipamentos", "comodatos", "devolucoes", "cadastro")
@@ -65,6 +66,7 @@ class Fontes:
     compras: Any | None = None
     justificativas: Any | None = None
     giro_vasilhame: Any | None = None
+    giro_equipamentos: Any | None = None
 
 
 def montar_bloco(nome: str, cliente: ClienteAutorizado, fontes: Fontes, *, hoje: date) -> dict[str, Any]:
@@ -244,8 +246,34 @@ def bloco_vasilhames(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> 
 
 
 def bloco_equipamentos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
-    # Não há base de equipamentos instalados importada; o bloco fica pronto para receber uma.
-    return _bloco("equipamentos", "Equipamentos", estado="vazio", resumo="Sem dados de equipamentos", dados={"itens": []}, fonte="Sem fonte importada")
+    titulo = "Equipamentos"
+    fonte = "02.02.20 + 03.02.37 + Cesta de Produtos"
+    if fontes.giro_equipamentos is None or fontes.comodatos is None:
+        return _indisponivel("equipamentos", titulo, fonte, "Giro de equipamentos não configurado.")
+    competencia = f"{hoje.year:04d}-{hoje.month:02d}"
+    try:
+        comodatos = fontes.comodatos.search_by_registration(
+            cliente.filial, cliente.cliente, allowed_sectors=cliente.escopo.allowed_sectors, allowed_gv_vdes=cliente.escopo.allowed_gv_vdes, limit=200
+        )
+        itens = [{"sub_tipo": str(r.sub_tipo_material or ""), "saldo": str(r.saldo or "0")} for r in comodatos]
+        equipamentos = equipamentos_em_comodato(itens)
+        compras = fontes.giro_equipamentos.compras_por_cesta(cliente.filial, cliente.cliente, competencia) if any(equipamentos.values()) else {}
+    except Exception:
+        return _indisponivel("equipamentos", titulo, fonte, "Base do giro de equipamentos indisponível (comodatos, 03.02.37 ou Cesta de Produtos).")
+    tipos = giro_por_equipamento(equipamentos, compras)
+    for t in tipos:
+        for campo in ("meta_por_equipamento", "meta", "comprado", "falta"):
+            t[campo] = _dinheiro(t[campo])
+    dados = {
+        "tipos": tipos,
+        "competencia": competencia,
+        "explicacao": "Meta por equipamento no mês: SOPI R$ 2.000,00 em cerveja e Visa R$ 1.200,00 em refrigerante. Conta a 03.02.37 do mês atual; cerveja e refrigerante pela Cesta de Produtos.",
+    }
+    if not any(equipamentos.values()):
+        return _bloco("equipamentos", titulo, estado="vazio", resumo="Sem SOPI ou Visa em comodato", dados=dados, fonte=fonte)
+    em_risco = [t["rotulo"].split(" ")[0] for t in tipos if t["em_risco"]]
+    resumo = f"{' e '.join(em_risco)} abaixo da meta de compra do mês" if em_risco else "Giro de equipamentos batido no mês"
+    return _bloco("equipamentos", titulo, estado="ok", resumo=resumo, dados=dados, fonte=fonte, atualizado_em=getattr(comodatos[0], "planilha_atualizada_em", "") if comodatos else "")
 
 
 def bloco_comodatos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:

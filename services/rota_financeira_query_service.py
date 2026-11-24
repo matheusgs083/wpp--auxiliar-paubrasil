@@ -32,8 +32,9 @@ from bot_api.services.dclientes_query_service import (
     _normalized_text_sql,
 )
 from bot_api.services.inadimplencia_query_service import _days_to_due_sql, _money_to_numeric_sql
+from bot_api.services.rota_financeira_giro import FILTRO_GIRO, SITUACOES_GIRO
 
-SITUACOES = ("todos", "vencidos", "hoje", "amanha", "dois_dias", "com_boleto", "sem_boleto")
+SITUACOES = ("todos", "vencidos", "hoje", "amanha", "dois_dias", "com_boleto", "sem_boleto", *SITUACOES_GIRO)
 LIMITE_PAGINA = 50
 
 # Faixa de prioridade de cada cliente (menor = mais urgente).
@@ -47,6 +48,7 @@ _FILTRO_SITUACAO = {
     "dois_dias": f"faixa = {FAIXA_DOIS_DIAS}",
     "com_boleto": "titulos > 0 AND boletos > 0",
     "sem_boleto": "titulos > 0 AND boletos = 0",
+    **FILTRO_GIRO,
 }
 
 
@@ -76,19 +78,28 @@ class RotaFinanceiraQueryService:
         busca: str = "",
         situacao: str = "todos",
         incluir_boletos: bool = True,
+        giro: tuple[sql.Composable, list[Any]] | None = None,
         limite: int = 25,
         offset: int = 0,
     ) -> RotaFinanceiraPagina:
+        """``giro`` (de ``rota_financeira_giro.ctes_giro``) é obrigatório nos filtros "sem giro"."""
         if situacao not in _FILTRO_SITUACAO:
             raise ValueError("Filtro de situação inválido.")
         if not self.database_url:
             raise RuntimeError("REPORTS_DATABASE_URL nao configurada.")
+        if situacao in SITUACOES_GIRO and giro is None:
+            raise ValueError("Filtro de giro sem a base do giro.")
 
         where, params = self._filtros_da_rota(
             dia=dia, allowed_sectors=allowed_sectors, allowed_gv_vdes=allowed_gv_vdes,
             filial=filial, gv=gv, setor=setor, busca=busca,
         )
         base = self._ctes(where, incluir_boletos)
+        if situacao in SITUACOES_GIRO and giro is not None:
+            # Os CTEs do giro só entram quando o filtro pede: a rota comum não paga por eles.
+            ctes_giro, params_giro = giro
+            base = sql.Composed([base, ctes_giro])
+            params = [*params, *params_giro]
         consulta_pagina = sql.SQL(
             """
             {base}
