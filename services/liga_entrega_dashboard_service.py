@@ -659,7 +659,11 @@ class LigaEntregaDashboardService:
             rotas_list.append(r)
         rotas_list.sort(key=lambda x: (str(x.get("data") or ""), to_int(x.get("mapa"))))
 
-        apply_route_team_overrides_to_routes(rotas_list, self.route_team_service, comp)
+        route_team_overrides = apply_route_team_overrides_to_routes(rotas_list, self.route_team_service, comp)
+        entregas_m = {code: len(pdvs) for code, pdvs in ent_m.items()}
+        entregas_a = {code: len(pdvs) for code, pdvs in ent_a.items()}
+        if route_team_overrides:
+            _rebalance_route_delivery_facts(rotas_list, entregas_m, entregas_a)
 
         has_farol = bool(manifests.get(RCHK))
         first_week = is_first_week(rotas_list)
@@ -715,7 +719,7 @@ class LigaEntregaDashboardService:
                 % (len(produtos_sem_fator), exemplos, "..." if len(produtos_sem_fator) > 10 else "")
             )
         motoristas, ajudantes = build_rankings(
-            rotas_list, port, devols, {k: len(v) for k, v in ent_m.items()}, {k: len(v) for k, v in ent_a.items()},
+            rotas_list, port, devols, entregas_m, entregas_a,
             checklist, colab, has_farol=has_farol, first_week=first_week,
             entregas_hl_m=entregas_hl_m, entregas_hl_a=entregas_hl_a,
         )
@@ -756,7 +760,7 @@ class LigaEntregaDashboardService:
         # reaplicar expurgos. Os conjuntos de PDVs são convertidos em inteiros
         # para não fazer a persistência falhar silenciosamente.
         equipe = sorted(expand_role_people(colab), key=lambda x: (x.get("funcao") or "", x.get("nome") or ""))
-        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "ranking_version": LIGA_RANKING_VERSION, "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": equipe, "equipe_candidatos": candidatos, "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50], "_liga_facts": {"ent_m": {k: len(v) for k, v in ent_m.items()}, "ent_a": {k: len(v) for k, v in ent_a.items()}, "entregas_hl_m": entregas_hl_m, "entregas_hl_a": entregas_hl_a, "checklist": checklist, "first_week": first_week, "has_farol": has_farol}}
+        result = {"ok": True, "competencia": comp, "generated_at": datetime.now().isoformat(timespec="seconds"), "ranking_version": LIGA_RANKING_VERSION, "summary": {"ready": bool(rotas_list or devols), "rotas": len(rotas_list), "motoristas": len(motoristas), "motoristas_ativos": sum(1 for item in motoristas if item.get("status") == "ativo"), "motoristas_elegiveis": sum(1 for item in motoristas if item.get("elegivel")), "ajudantes": len(ajudantes), "devolucoes": len(active_devols), "devolucoes_expurgadas": len([d for d in devols if d.get("excluida")]), "devolucoes_volume_hl": round(sum(float(d.get("volume_hl") or 0) for d in active_devols), 2), "devolucoes_valor": round(sum(float(d.get("valor") or 0) for d in active_devols), 2), "expurgos": sum(exp_counts.values()), "arquivos": sum(int(m.get("file_count") or 0) for v in manifests.values() for m in v), "warnings": len(warnings)}, "metas": METAS, "pesos": {"motorista": PESOS_MOT, "ajudante": PESOS_AJD}, "reports": manifest_summary(manifests), "rankings": {"motoristas": motoristas, "ajudantes": ajudantes}, "rotas": rotas_list, "devolucoes": devolucoes_auxiliares, "devolucoes_auxiliares": devolucoes_auxiliares, "operacao": operacao, "equipe": equipe, "equipe_candidatos": candidatos, "cobertura": cobertura, "expurgos": {"counts": exp_counts, "items": expurgos}, "first_week": first_week, "has_farol": has_farol, "warnings": warnings[:50], "_liga_facts": {"ent_m_base": {k: len(v) for k, v in ent_m.items()}, "ent_a_base": {k: len(v) for k, v in ent_a.items()}, "ent_m": entregas_m, "ent_a": entregas_a, "entregas_hl_m": entregas_hl_m, "entregas_hl_a": entregas_hl_a, "checklist": checklist, "first_week": first_week, "has_farol": has_farol}}
         with _DASHBOARD_CACHE_LOCK:
             _DASHBOARD_CACHE[cache_key] = (cache_signature, result)
         self._write_persisted_cache(comp, period, cache_signature, result)
@@ -954,12 +958,7 @@ def apply_route_team_overrides(payload: dict[str, Any], route_team_service: Any 
     payload["rotas"] = routes
     colab = {str(item.get("cod")): dict(item) for item in payload.get("equipe") or [] if isinstance(item, dict) and item.get("cod")}
     facts = payload.get("_liga_facts") or {}
-    ent_m = dict(facts.get("ent_m") or {})
-    ent_a = dict(facts.get("ent_a") or {})
-    if not facts.get("_route_team_overrides_applied"):
-        _rebalance_route_delivery_facts(routes, ent_m, ent_a)
-        facts["_route_team_overrides_applied"] = True
-    facts["ent_m"], facts["ent_a"] = ent_m, ent_a
+    ent_m, ent_a = rebuild_route_delivery_facts(routes, facts)
     motoristas, ajudantes = build_rankings(
         routes, {}, [dict(item) for item in payload.get("devolucoes_auxiliares") or [] if isinstance(item, dict)],
         ent_m, ent_a, facts.get("checklist") or [], colab,
@@ -989,6 +988,19 @@ def _rebalance_route_delivery_facts(routes: list[dict[str, Any]], ent_m: dict[st
             ent_a[code] = max(0, int(ent_a.get(code) or 0) - amount)
         for code in new_helpers - old_helpers:
             ent_a[code] = int(ent_a.get(code) or 0) + amount
+
+
+def rebuild_route_delivery_facts(routes: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[dict[str, int], dict[str, int]]:
+    """Recalcula entregas por pessoa a partir da base, sem acumular ajustes."""
+    base_m = dict(facts.get("ent_m_base") or facts.get("ent_m") or {})
+    base_a = dict(facts.get("ent_a_base") or facts.get("ent_a") or {})
+    ent_m = {str(code): int(value or 0) for code, value in base_m.items()}
+    ent_a = {str(code): int(value or 0) for code, value in base_a.items()}
+    facts["ent_m_base"] = dict(ent_m)
+    facts["ent_a_base"] = dict(ent_a)
+    _rebalance_route_delivery_facts(routes, ent_m, ent_a)
+    facts["ent_m"], facts["ent_a"] = ent_m, ent_a
+    return ent_m, ent_a
 
 
 def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, competencia: str, status_service: Any | None = None, route_team_service: Any | None = None, dclientes_query_service: Any | None = None) -> bool:
@@ -1067,12 +1079,7 @@ def refresh_snapshot_from_sql(snapshot_store: Any, expurgo_service: Any, compete
                     candidate = colab.pop(code)
                     if _is_valid_roster_candidate(candidate):
                         candidatos.append(candidate)
-            ent_m = dict(facts.get("ent_m") or {})
-            ent_a = dict(facts.get("ent_a") or {})
-            if not facts.get("_route_team_overrides_applied"):
-                _rebalance_route_delivery_facts(routes, ent_m, ent_a)
-                facts["_route_team_overrides_applied"] = True
-            facts["ent_m"], facts["ent_a"] = ent_m, ent_a
+            ent_m, ent_a = rebuild_route_delivery_facts(routes, facts)
             if status_service is not None:
                 statuses = status_service.statuses(competencia)
                 for code, status in statuses.items():
