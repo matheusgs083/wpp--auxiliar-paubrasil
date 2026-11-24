@@ -160,6 +160,7 @@
       { id: "pedidos", grupo: "vendedor", label: "Pedidos", icon: "bi-cart-plus", description: "Digitação de pedidos para a carteira do vendedor." },
       { id: "cliente", grupo: "vendedor", label: "Clientes", icon: "bi-person-vcard", description: "Ficha do cliente: pendências, boletos e comodatos da carteira." },
       { id: "rota_financeira", grupo: "vendedor", label: "Rota Financeira", icon: "bi-signpost-2", description: "Fila do dia por atraso, vencimento e boleto." },
+      { id: "gerar_critica", grupo: "vendedor", label: "Gerar crítica", icon: "bi-cloud-download", description: "Baixa a crítica no Cora e importa agora." },
       { id: "estoque", grupo: "operacao", label: "Estoque", icon: "bi-boxes", description: "Grade Stock_Product do Cora e saldo disponível." },
       { id: "armazem", grupo: "operacao", label: "Armazem", icon: "bi-box-seam", description: "Consultas basicas de cliente e estoque." },
       { id: "entrega", grupo: "operacao", label: "Entrega", icon: "bi-truck", description: "Liga Entrega, rotas e indicadores." },
@@ -171,7 +172,6 @@
       { id: "protestos", grupo: "financeiro", label: "Protestos", icon: "bi-shield-exclamation", description: "Títulos da inadimplência, provas em PDF e retirada de SPC." },
       { id: "reports", grupo: "dados", label: "Relatórios", icon: "bi-folder2-open", description: "Uploads e histórico de relatórios." },
       { id: "critica", grupo: "dados", label: "Crítica", icon: "bi-clipboard-data", description: "Importação, dashboard e PDFs." },
-      { id: "gerar_critica", grupo: "dados", label: "Gerar crítica", icon: "bi-cloud-download", description: "Baixa a crítica no Cora e importa agora." },
       { id: "promax", grupo: "dados", label: "Promax", icon: "bi-cloud-arrow-down", description: "Execuções, agendas e workers." },
       { id: "operations", grupo: "admin", label: "Acessos e disparos", icon: "bi-sliders", description: "Acessos, disparos e rotinas operacionais." },
       { id: "usage", grupo: "admin", label: "Uso Evolution", icon: "bi-activity", description: "Número x função e auditoria." }
