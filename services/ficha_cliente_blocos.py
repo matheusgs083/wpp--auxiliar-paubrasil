@@ -49,7 +49,7 @@ from bot_api.services.giro_vasilhame_service import (
 )
 
 BLOCOS = ("titulos", "credito", "compras", "vasilhames", "equipamentos", "comodatos", "devolucoes", "cadastro")
-SITUACAO_BOLETO_SEM_VINCULO = "Boleto não importado"
+SITUACAO_BOLETO_SEM_VINCULO = "Sem boleto"
 
 
 @dataclass(frozen=True)
@@ -127,7 +127,7 @@ def bloco_titulos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dic
         elif boletos["fonte"]["disponivel"]:
             item["situacao_boleto"] = SITUACAO_BOLETO_SEM_VINCULO
         else:
-            item["situacao_boleto"] = "Base de boletos indisponível"
+            item["situacao_boleto"] = "Boleto indisponível agora"
     total = sum((_decimal(t["valor_pendente"]) for t in titulos), Decimal("0"))
     vencidos = sum(1 for t in titulos if t["situacao"] == "vencido")
     if not titulos:
@@ -143,13 +143,13 @@ def bloco_titulos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dic
 def bloco_credito(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
     titulo = "Análise de crédito"
     if fontes.prazo_limite is None:
-        return _indisponivel("credito", titulo, "Prazo e limite", "Base de prazo e limite não configurada.")
+        return _indisponivel("credito", titulo, "Prazo e limite", "Crédito indisponível agora.")
     try:
         registros = fontes.prazo_limite.search_by_registration(
             cliente.filial, cliente.cliente, allowed_sectors=cliente.escopo.allowed_sectors, allowed_gv_vdes=cliente.escopo.allowed_gv_vdes, limit=5
         )
     except Exception:
-        return _indisponivel("credito", titulo, "Prazo e limite", "Base de prazo e limite indisponível.")
+        return _indisponivel("credito", titulo, "Prazo e limite", "Crédito indisponível agora.")
     entradas = [entrada for registro in registros for entrada in registro.entries]
     limite_total = _primeiro(entradas, "limite_total") or str(getattr(cliente.registro, "limite_credito", "") or "")
     prazo = _primeiro(entradas, "prazo_atual")
@@ -206,15 +206,15 @@ def _faturamento_030237(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) 
 def bloco_compras(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
     titulo = "Compras"
     if fontes.compras is None:
-        return _indisponivel("compras", titulo, "03.02.37", "Base de compras não configurada.")
+        return _indisponivel("compras", titulo, "03.02.37", "Compras indisponíveis agora.")
     try:
         resumo = fontes.compras.resumo_cliente(cliente.filial, cliente.cliente, hoje=hoje)
     except Exception:
-        return _indisponivel("compras", titulo, "03.02.37", "Base de compras (03.02.37) indisponível.")
+        return _indisponivel("compras", titulo, "03.02.37", "Compras indisponíveis agora.")
     if not resumo.get("base_desde"):
-        return _bloco("compras", titulo, estado="vazio", resumo="Sem compras importadas da 03.02.37", dados=resumo, fonte="03.02.37")
+        return _bloco("compras", titulo, estado="vazio", resumo="Nenhuma compra registrada", dados=resumo, fonte="03.02.37")
     if resumo.get("media_3_meses") is None:
-        texto = f"Base desde {_mes_br(resumo['base_desde'])}"
+        texto = f"Histórico desde {_mes_br(resumo['base_desde'])}"
     else:
         texto = f"Média mensal entregue (3 meses): R$ {_dinheiro(Decimal(str(resumo['media_3_meses'])))}"
     return _bloco("compras", titulo, estado="ok", resumo=texto, dados=resumo, fonte="03.02.37", atualizado_em=resumo.get("atualizado_em"))
@@ -224,7 +224,7 @@ def bloco_vasilhames(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> 
     titulo = "Vasilhames"
     fonte = "02.02.20 + 03.02.37 + garrafeiras"
     if fontes.giro_vasilhame is None or fontes.comodatos is None:
-        return _indisponivel("vasilhames", titulo, fonte, "Giro de vasilhames não configurado.")
+        return _indisponivel("vasilhames", titulo, fonte, "Giro de vasilhames indisponível agora.")
     competencia = f"{hoje.year:04d}-{hoje.month:02d}"
     anteriores = meses_fechados(hoje)
     try:
@@ -235,7 +235,7 @@ def bloco_vasilhames(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> 
         por_mes = fontes.giro_vasilhame.caixas_compradas_meses(cliente.filial, cliente.cliente, [*anteriores, competencia])
         compras_ate = fontes.giro_vasilhame.compras_ate(cliente.filial, competencia)
     except Exception:
-        return _indisponivel("vasilhames", titulo, fonte, "Base do giro de vasilhames indisponível (comodatos, 03.02.37 ou garrafeiras).")
+        return _indisponivel("vasilhames", titulo, fonte, "Giro de vasilhames indisponível agora.")
     itens = [{"material": str(r.material or ""), "sub_tipo": str(r.sub_tipo_material or ""), "saldo": str(r.saldo or "0")} for r in comodatos]
     tipos = giro_por_tipo(caixas_em_comodato(itens, catalogo), por_mes[competencia])
     # Previsão pelas visitas: o que ele costuma comprar por visita × visitas que ainda faltam.
@@ -256,7 +256,7 @@ def bloco_vasilhames(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> 
         "competencia": competencia,
         "multiplicador": MULTIPLICADOR,
         "compras_ate": compras_ate.strftime("%d/%m/%Y") if hasattr(compras_ate, "strftime") else "",
-        "explicacao": f"Para girar, o cliente precisa comprar no mês {MULTIPLICADOR}× as caixas que tem em comodato (10 caixas → 20 caixas). Conta a 03.02.37 do mês atual; a previsão soma o que ele costuma comprar por visita nas visitas que faltam.",
+        "explicacao": f"Para girar, o cliente precisa comprar no mês {MULTIPLICADOR}× as caixas que tem em comodato (10 caixas → 20 caixas). Contam as compras do mês; a previsão soma o que ele costuma comprar por visita nas visitas que faltam.",
     }
     ativos = [t for t in tipos if _decimal(t["caixas"]) > 0]
     if not ativos:
@@ -276,7 +276,7 @@ def bloco_equipamentos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -
     titulo = "Equipamentos"
     fonte = "02.02.20 + 03.02.37 + Cesta de Produtos"
     if fontes.giro_equipamentos is None or fontes.comodatos is None:
-        return _indisponivel("equipamentos", titulo, fonte, "Giro de equipamentos não configurado.")
+        return _indisponivel("equipamentos", titulo, fonte, "Giro de equipamentos indisponível agora.")
     competencia = f"{hoje.year:04d}-{hoje.month:02d}"
     anteriores = meses_fechados(hoje)
     try:
@@ -291,7 +291,7 @@ def bloco_equipamentos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -
             if equipamentos.get("sopi") else []
         )
     except Exception:
-        return _indisponivel("equipamentos", titulo, fonte, "Base do giro de equipamentos indisponível (comodatos, 03.02.37 ou Cesta de Produtos).")
+        return _indisponivel("equipamentos", titulo, fonte, "Giro de equipamentos indisponível agora.")
     tipos = giro_por_equipamento(equipamentos, compras)
     valores = _valor_dos_equipamentos(itens)
     for t in tipos:
@@ -306,7 +306,7 @@ def bloco_equipamentos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -
         "tipos": tipos,
         "mix": mix,
         "competencia": competencia,
-        "explicacao": "Meta por equipamento no mês: SOPI R$ 2.000,00 em cerveja e Visa R$ 1.200,00 em refrigerante, pela 03.02.37 e pela Cesta de Produtos. A previsão segue o ritmo do mês até hoje.",
+        "explicacao": "Meta por equipamento no mês: SOPI R$ 2.000,00 em cerveja e Visa R$ 1.200,00 em refrigerante. A previsão segue o ritmo do mês até hoje.",
     }
     if not any(equipamentos.values()):
         return _bloco("equipamentos", titulo, estado="vazio", resumo="Sem SOPI ou Visa em comodato", dados=dados, fonte=fonte)
@@ -332,20 +332,20 @@ def _resumo_equipamentos(tipos: list[dict[str, Any]], mix: dict[str, Any] | None
         for t in tipos if t["equipamentos"]
     ]
     if mix is not None:
-        partes.append(f"mix de cerveja {mix['skus_mes']} de {mix['meta']} SKUs")
+        partes.append(f"mix: {mix['skus_mes']} de {mix['meta']} cervejas")
     return " · ".join(partes)
 
 
 def bloco_comodatos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
     titulo = "Comodatos"
     if fontes.comodatos is None:
-        return _indisponivel("comodatos", titulo, "02.02.20", "Consulta de comodatos não configurada.")
+        return _indisponivel("comodatos", titulo, "02.02.20", "Comodatos indisponíveis agora.")
     try:
         registros = fontes.comodatos.search_by_registration(
             cliente.filial, cliente.cliente, allowed_sectors=cliente.escopo.allowed_sectors, allowed_gv_vdes=cliente.escopo.allowed_gv_vdes, limit=200
         )
     except Exception:
-        return _indisponivel("comodatos", titulo, "02.02.20", "02.02.20 não importada ou indisponível.")
+        return _indisponivel("comodatos", titulo, "02.02.20", "Comodatos indisponíveis agora.")
     itens = []
     for r in registros:
         vencimento = _data(getattr(r, "vencimento", ""))
@@ -373,13 +373,13 @@ def bloco_comodatos(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> d
 def bloco_devolucoes(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
     titulo = "Devoluções"
     if fontes.compras is None:
-        return _indisponivel("devolucoes", titulo, "03.02.37", "Base de devoluções não configurada.")
+        return _indisponivel("devolucoes", titulo, "03.02.37", "Devoluções indisponíveis agora.")
     desde = hoje - timedelta(days=DIAS_DEVOLUCAO)
     try:
         itens = fontes.compras.devolucoes_cliente(cliente.filial, cliente.cliente, desde=desde)
         atualizado = fontes.compras.atualizado_em(cliente.filial)
     except Exception:
-        return _indisponivel("devolucoes", titulo, "03.02.37", "Base de devoluções (03.02.37) indisponível.")
+        return _indisponivel("devolucoes", titulo, "03.02.37", "Devoluções indisponíveis agora.")
     for item in itens:
         item["justificativa"] = _justificativa(fontes.justificativas, cliente, item)
     dados = {"itens": itens, "desde": desde.isoformat(), "dias": DIAS_DEVOLUCAO}

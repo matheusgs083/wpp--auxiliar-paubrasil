@@ -149,45 +149,45 @@
       const bloco = fichaUi.blocos[id];
       if (!bloco) return '<div class="text-secondary small py-2" role="status"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Carregando...</div>';
       if (bloco.erro) return `<div class="alert alert-danger py-2 mb-0" role="alert">${escapeHtml(bloco.resumo)}</div>`;
-      if (bloco.estado === "indisponivel") return `<div class="alert alert-warning py-2 mb-0" role="status"><i class="bi bi-database-exclamation me-1" aria-hidden="true"></i>${escapeHtml(bloco.fonte?.mensagem || bloco.resumo || "Fonte indisponível.")}</div>${fichaRodape(bloco)}`;
+      if (bloco.estado === "indisponivel") return `<div class="alert alert-warning py-2 mb-0" role="status"><i class="bi bi-database-exclamation me-1" aria-hidden="true"></i>${escapeHtml(bloco.fonte?.mensagem || bloco.resumo || "Não foi possível carregar agora.")}</div>${fichaRodape(bloco)}`;
       const render = FICHA_RENDER[id];
       return `${render ? render(bloco.dados || {}, bloco) : ""}${fichaRodape(bloco)}`;
     }
 
     function fichaRodape(bloco) {
       const fonte = bloco.fonte || {};
-      const quando = fonte.atualizado_em ? ` · atualizado em ${fonte.atualizado_em}` : "";
-      return `<div class="ficha-rodape"><i class="bi bi-database me-1" aria-hidden="true"></i>Fonte: ${escapeHtml(fonte.nome || "-")}${escapeHtml(quando)}</div>`;
+      // Só a data da atualização; o nome do relatório de origem não interessa a quem usa a ficha.
+      return fonte.atualizado_em ? `<div class="ficha-rodape"><i class="bi bi-clock-history me-1" aria-hidden="true"></i>Atualizado em ${escapeHtml(fonte.atualizado_em)}</div>` : "";
     }
 
     const FICHA_RENDER = {
       titulos(d, bloco) {
         const titulos = d.titulos || [];
-        if (!titulos.length) return clientesVazio("Nenhum título em aberto na 12.06.01.");
+        if (!titulos.length) return clientesVazio("Nenhum título em aberto.");
         const c = fichaUi.cliente || {};
         return `<div class="ficha-lista">${titulos.map(t => {
           const s = CLIENTES_SITUACAO[t.situacao] || CLIENTES_SITUACAO.sem_data;
-          const acoes = t.boleto ? clientesAcoesBoleto(c, t.boleto) : clientesTag(t.situacao_boleto || "Boleto não importado", "neutral", "bi-file-earmark-x");
+          const acoes = t.boleto ? clientesAcoesBoleto(c, t.boleto) : clientesTag(t.situacao_boleto || "Sem boleto", "neutral", "bi-file-earmark-x");
           return `<article class="ficha-item" data-situacao="${escapeHtml(t.situacao)}">
               <div class="ficha-item-topo"><strong class="mono">NF ${escapeHtml(t.nota_fiscal || "-")}</strong>${clientesTag(s.rotulo, s.tom, s.icone)}</div>
               ${fichaFatos([["Emissão", t.emissao], ["Vencimento", t.vencimento], ["Dias", t.dias === null || t.dias === undefined ? "-" : t.dias < 0 ? `${-t.dias} de atraso` : t.dias], ["Original", formatMoneyText(t.valor_original)], ["Pendente", formatMoneyText(t.valor_pendente)], ["Corrigido", formatMoneyText(t.valor_corrigido)]])}
               <div class="ficha-item-acoes">${acoes}</div>
             </article>`;
-        }).join("")}</div>${bloco.dados && bloco.dados.boletos_disponivel === false ? '<div class="small text-warning-emphasis mt-2">Base de boletos (03.02.06) indisponível agora.</div>' : ""}`;
+        }).join("")}</div>${bloco.dados && bloco.dados.boletos_disponivel === false ? '<div class="small text-warning-emphasis mt-2">Os boletos não puderam ser carregados agora.</div>' : ""}`;
       },
       credito(d) {
         const disponivel = d.limite_disponivel ? `${formatMoneyText(d.limite_disponivel)}${d.limite_disponivel_calculado ? " (calculado)" : ""}` : "-";
-        const fatos = fichaFatos([["Limite total", d.limite_total ? formatMoneyText(d.limite_total) : "-"], ["Limite utilizado", d.limite_utilizado ? `${formatMoneyText(d.limite_utilizado)} (12.06.01)` : "-"], ["Limite disponível", disponivel], ["Condição de pagamento", d.condicao_pagamento], ["Prazo atual", d.prazo_atual], ["Pag. em atraso", d.percentual_pag_atraso]]);
+        const fatos = fichaFatos([["Limite total", d.limite_total ? formatMoneyText(d.limite_total) : "-"], ["Limite utilizado", d.limite_utilizado ? formatMoneyText(d.limite_utilizado) : "-"], ["Limite disponível", disponivel], ["Condição de pagamento", d.condicao_pagamento], ["Prazo atual", d.prazo_atual], ["Pag. em atraso", d.percentual_pag_atraso]]);
         const fat = (d.faturamento || []).length
-          ? `<h4 class="ficha-sub">Faturamento entregue (03.02.37)</h4><ul class="ficha-linhas">${d.faturamento.map(f => `<li><span>${escapeHtml(f.kpi || "-")}</span><strong>${escapeHtml(f.faturamento_com_pdv || "-")}</strong><small>${escapeHtml(f.pedidos === "" ? "" : `${f.pedidos} nota(s)`)}</small></li>`).join("")}</ul>`
-          : `<h4 class="ficha-sub">Faturamento entregue (03.02.37)</h4><div class="small text-secondary">${d.faturamento_fonte === "indisponivel" ? "Base da 03.02.37 indisponível agora." : "Sem compras importadas."}</div>`;
-        return `${fatos}${fat}<div class="small text-secondary mt-2">Disponível = limite total − pendente da 12.06.01. Faturamento e notas da 03.02.37. Sem score: só os indicadores das bases.</div>`;
+          ? `<h4 class="ficha-sub">Faturamento entregue</h4><ul class="ficha-linhas">${d.faturamento.map(f => `<li><span>${escapeHtml(f.kpi || "-")}</span><strong>${escapeHtml(f.faturamento_com_pdv || "-")}</strong><small>${escapeHtml(f.pedidos === "" ? "" : `${f.pedidos} nota(s)`)}</small></li>`).join("")}</ul>`
+          : `<h4 class="ficha-sub">Faturamento entregue</h4><div class="small text-secondary">${d.faturamento_fonte === "indisponivel" ? "O faturamento não pôde ser carregado agora." : "Nenhuma compra registrada."}</div>`;
+        return `${fatos}${fat}<div class="small text-secondary mt-2">Limite disponível = limite total menos o que está em aberto.</div>`;
       },
       compras(d, bloco) {
-        if (bloco.estado === "vazio") return clientesVazio("Nenhuma compra deste cliente na 03.02.37 importada.");
+        if (bloco.estado === "vazio") return clientesVazio("Nenhuma compra registrada para este cliente.");
         const atual = d.mes_atual || {};
         const media = d.media_3_meses === null || d.media_3_meses === undefined
-          ? `<span class="text-secondary">Base desde ${escapeHtml(fichaMesBr(d.base_desde))}</span>`
+          ? `<span class="text-secondary">Histórico desde ${escapeHtml(fichaMesBr(d.base_desde))}</span>`
           : escapeHtml(formatMoneyText(d.media_3_meses));
         const kpis = `<div class="ficha-kpis">
             <div><span>Mês atual (parcial)</span><strong>${escapeHtml(formatMoneyText(atual.total || 0))}</strong></div>
@@ -196,13 +196,13 @@
             <div><span>Qtde entregue (3 meses)</span><strong>${escapeHtml(fichaNumero(d.qtde_3_meses))}</strong></div>
             <div><span>Última entrega</span><strong>${escapeHtml(fichaDataBr(d.ultima_entrega))}</strong></div>
           </div>`;
-        const aviso = d.historico_suficiente ? "" : `<div class="small text-secondary mb-2">A média aparece quando a base tiver os 3 meses fechados. Base desde ${escapeHtml(fichaMesBr(d.base_desde))}.</div>`;
+        const aviso = d.historico_suficiente ? "" : `<div class="small text-secondary mb-2">A média aparece quando houver 3 meses fechados de histórico. Histórico desde ${escapeHtml(fichaMesBr(d.base_desde))}.</div>`;
         const tops = [["Maior faturamento", d.top_faturamento || [], p => formatMoneyText(p.total)], ["Maior quantidade", d.top_quantidade || [], p => `${fichaNumero(p.qtde)} ${p.unidade || ""}`]]
           .map(([rotulo, itens, valor]) => `<div><h4 class="ficha-sub">${rotulo}</h4>${itens.length ? `<ol class="ficha-top">${itens.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)}</span><strong>${escapeHtml(valor(p))}</strong></li>`).join("")}</ol>` : '<div class="small text-secondary">Sem produtos no período.</div>'}</div>`).join("");
         return `${kpis}${aviso}<h4 class="ficha-sub">Faturamento entregue por mês</h4>${fichaGraficoCompras(d.serie || [])}<div class="ficha-tops">${tops}</div>`;
       },
       vasilhames(d, bloco) {
-        if (bloco.estado === "vazio") return clientesVazio("O cliente não tem garrafeiras em comodato na 02.02.20.");
+        if (bloco.estado === "vazio") return clientesVazio("O cliente não tem garrafeiras em comodato.");
         const cartoes = (d.tipos || []).filter(t => Number(String(t.caixas).replace(",", ".")) > 0).map(t => {
           const tag = FICHA_CAIXAS_TAG[t.situacao] || FICHA_CAIXAS_TAG.em_risco;
           const barra = t.percentual === null ? "" : `<div class="ficha-progresso" role="progressbar" aria-label="Giro de ${escapeHtml(t.rotulo)}: ${t.percentual}%" aria-valuenow="${t.percentual}" aria-valuemin="0" aria-valuemax="100"><span style="width:${t.percentual}%"></span></div>`;
@@ -218,7 +218,7 @@
         return `<div class="ficha-lista">${cartoes}</div>${ate}<div class="small text-secondary mt-2">${escapeHtml(d.explicacao || "")}</div>`;
       },
       equipamentos(d, bloco) {
-        if (bloco.estado === "vazio") return clientesVazio("O cliente não tem SOPI nem Visa em comodato na 02.02.20.");
+        if (bloco.estado === "vazio") return clientesVazio("O cliente não tem SOPI nem Visa em comodato.");
         const cartoes = (d.tipos || []).filter(t => Number(t.equipamentos) > 0).map(t => {
           const tag = FICHA_GIRO_TAG[t.situacao] || FICHA_GIRO_TAG.em_risco;
           const barra = t.percentual === null ? "" : `<div class="ficha-progresso" role="progressbar" aria-label="Giro de ${escapeHtml(t.rotulo)}: ${t.percentual}%" aria-valuenow="${t.percentual}" aria-valuemin="0" aria-valuemax="100"><span style="width:${t.percentual}%"></span></div>`;
@@ -229,7 +229,7 @@
         return `<div class="ficha-lista">${cartoes}${d.mix ? fichaMixCerveja(d.mix) : ""}</div><div class="small text-secondary mt-2">${escapeHtml(d.explicacao || "")}</div>`;
       },
       comodatos(d, bloco) {
-        if (bloco.estado === "vazio") return clientesVazio("Nenhum comodato em aberto na 02.02.20.");
+        if (bloco.estado === "vazio") return clientesVazio("Nenhum comodato em aberto.");
         return `<div class="ficha-lista">${(d.itens || []).map(i => `<article class="ficha-item">
             <div class="ficha-item-topo"><strong>${escapeHtml(i.material || "-")}</strong>${i.vencido ? clientesTag("Contrato vencido", "err", "bi-calendar-x") : (i.vencimento ? clientesTag("Em dia", "ok", "bi-calendar-check") : "")}</div>
             ${fichaFatos([["Subtipo", i.sub_tipo], ["Comodato", i.nro_comodato], ["Saldo", i.saldo], ["Vencimento", i.vencimento || "não informado"]])}
@@ -265,9 +265,9 @@
 
     // Mix de cerveja do SOPI: SKUs no mês, nos 3 meses anteriores e o que falta comprar.
     function fichaMixCerveja(mix) {
-      const tag = mix.faltam ? clientesTag(`Faltam ${mix.faltam} SKU${mix.faltam > 1 ? "s" : ""}`, "warn", "bi-exclamation-triangle") : clientesTag("Mix completo", "ok", "bi-check2");
+      const tag = mix.faltam ? clientesTag(`Faltam ${mix.faltam} cerveja${mix.faltam > 1 ? "s" : ""}`, "warn", "bi-exclamation-triangle") : clientesTag("Mix completo", "ok", "bi-check2");
       const meses = (mix.meses_anteriores || []).map(m => m.sem_base
-        ? clientesTag(`${fichaMesBr(m.competencia)}: sem base`, "neutral")
+        ? clientesTag(`${fichaMesBr(m.competencia)}: sem dados`, "neutral")
         : clientesTag(`${fichaMesBr(m.competencia)}: ${m.skus}`, m.bateu ? "ok" : "err", m.bateu ? "bi-check2" : "bi-x-lg")).join(" ");
       const comprados = (mix.comprados || []).map(p => `<li>${escapeHtml(p.descricao || p.produto)}</li>`).join("");
       const completar = (mix.completar || []).map(p => {
@@ -276,8 +276,8 @@
         return `<li><span>${escapeHtml(p.descricao || p.produto)}<small class="d-block text-secondary">${escapeHtml(`${frequencia}, ${ultima}`)}</small></span></li>`;
       }).join("");
       return `<article class="ficha-item"><div class="ficha-item-topo"><strong>Mix de cerveja</strong>${tag}</div>
-          ${fichaFatos([["SKUs de cerveja no mês", `${mix.skus_mes} de ${mix.meta}`]])}
-          <div class="small text-secondary mt-2 mb-1">SKUs nos meses anteriores</div><div class="d-flex flex-wrap gap-1">${meses}</div>
+          ${fichaFatos([["Cervejas diferentes no mês", `${mix.skus_mes} de ${mix.meta}`]])}
+          <div class="small text-secondary mt-2 mb-1">Cervejas diferentes nos meses anteriores</div><div class="d-flex flex-wrap gap-1">${meses}</div>
           <details class="ficha-detalhe mt-2"><summary>Comprados no mês (${(mix.comprados || []).length})</summary>${comprados ? `<ul class="ficha-linhas">${comprados}</ul>` : '<div class="small text-secondary">Nenhuma cerveja no mês ainda.</div>'}</details>
           <details class="ficha-detalhe mt-1"${completar ? " open" : ""}><summary>Para completar o mix (${(mix.completar || []).length})</summary>
             <div class="small text-secondary mb-1">Cervejas que o cliente comprou nos 3 meses anteriores e ainda não comprou neste. Primeiro as que ele compra com mais frequência.</div>
@@ -291,9 +291,9 @@
         : doc.completa === false
           ? `<div class="ficha-doc-titulo text-warning-emphasis fw-semibold">${doc.pendentes ? `${doc.pendentes} documento${doc.pendentes > 1 ? "s" : ""} pendente${doc.pendentes > 1 ? "s" : ""}` : "Documentação pendente"}</div>`
           : '<div class="ficha-doc-titulo text-secondary">Documentação sem informação</div>';
-      if (doc.disponivel === false) return `${titulo}<div class="small text-warning-emphasis mb-2">Base de documentação pendente indisponível agora.</div>`;
+      if (doc.disponivel === false) return `${titulo}<div class="small text-warning-emphasis mb-2">Os documentos não puderam ser carregados agora.</div>`;
       const itens = (doc.itens || []).map(item => `<li><span>${escapeHtml(item.rotulo)}${item.observacao ? `<small class="d-block text-secondary">${escapeHtml(item.observacao)}</small>` : ""}</span>${item.ok ? clientesTag("OK", "ok", "bi-check2") : clientesTag("Pendente", "warn", "bi-exclamation-triangle")}</li>`).join("");
-      return `${titulo}${itens ? `<ul class="ficha-docs">${itens}</ul><div class="small text-secondary mb-2">Status de cada documento na base de documentação pendente do Promax.</div>` : ""}`;
+      return `${titulo}${itens ? `<ul class="ficha-docs mb-2">${itens}</ul>` : ""}`;
     }
 
     // Barras simples do faturamento mensal (3 meses fechados + mês atual parcial).

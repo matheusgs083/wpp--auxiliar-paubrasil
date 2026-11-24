@@ -199,7 +199,7 @@ class ConteudoDosBlocosTest(unittest.TestCase):
     def test_titulo_sem_boleto_mostra_boleto_nao_importado(self) -> None:
         titulo = next(t for t in self.dados("titulos")["dados"]["titulos"] if t["nota_fiscal"] == "183644")
         self.assertIsNone(titulo["boleto"])
-        self.assertEqual(titulo["situacao_boleto"], "Boleto não importado")
+        self.assertEqual(titulo["situacao_boleto"], "Sem boleto")
 
     def test_credito_traz_faturamento_e_notas_da_030237(self) -> None:
         faturamento = self.dados("credito")["dados"]["faturamento"]
@@ -262,7 +262,7 @@ class ConteudoDosBlocosTest(unittest.TestCase):
         self.assertEqual(sopi["valor_equipamentos"], "4.850,00")
         self.assertEqual(sopi["situacao"], "em_risco")  # 1.200 até o dia 23: prevê 1.565,22
         self.assertEqual(bloco["dados"]["mix"]["skus_mes"], 1)
-        self.assertEqual(bloco["resumo"], "SOPI: abaixo da meta no ritmo atual · mix de cerveja 1 de 10 SKUs")
+        self.assertEqual(bloco["resumo"], "SOPI: abaixo da meta no ritmo atual · mix: 1 de 10 cervejas")
 
     def test_cabecalho_traz_contato_e_mapa(self) -> None:
         cabecalho = self.cliente.get("/api/admin/clientes/3/100/cabecalho").json()["cliente"]

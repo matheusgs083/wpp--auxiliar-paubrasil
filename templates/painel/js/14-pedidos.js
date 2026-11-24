@@ -367,7 +367,7 @@
       const facts = [
         ["NB", client.cliente], ["Filial", client.filial], ["Cidade", client.cidade || "-"], ["Setor", client.vendedor || "-"],
         ["Telefone", client.telefone || "-"], ["Visita", client.dia_visita || "-"], ["Condição", client.cond_pagto || "Não informada"], ["Status", client.status || "-"],
-        ["Limite crédito", client.limite_credito || "-"], ["Pendente dClientes", client.total_pendente || "-"], ["Comodatos", client.comodatos_pendentes || "0"], ["Base atualizada", client.atualizado_em || "-"]
+        ["Limite crédito", client.limite_credito || "-"], ["Valor em aberto", client.total_pendente || "-"], ["Comodatos", client.comodatos_pendentes || "0"], ["Atualizado em", client.atualizado_em || "-"]
       ];
       const titles = Array.isArray(inad.titulos) ? inad.titulos.slice(0, 5) : [];
       selected.className = "pedido-client-card";
@@ -375,7 +375,7 @@
       selected.innerHTML = `<div class="pedido-client-head"><div class="pedido-client-title"><h3>${escapeHtml(client.nome || client.razao_social || "Cliente")}</h3><p>${escapeHtml(client.razao_social || "")}</p></div><span class="pedido-eligibility ${blocked ? "blocked" : "ready"}"><i class="bi ${blocked ? "bi-slash-circle" : "bi-check2-circle"}"></i>${blocked ? "Bloqueado · 12.06.01" : "Liberado para digitação"}</span></div><div class="pedido-client-facts">${facts.map(([label, value]) => `<div class="pedido-client-fact"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(String(value))}</span></div>`).join("")}</div>${blocked ? `<div class="pedido-block-reason"><i class="bi bi-shield-exclamation me-1"></i>Este cliente tem ${escapeHtml(String(inad.quantidade_titulos || titles.length))} título(s) na 12.06.01. A digitação está bloqueada.<ul>${titles.map(title => `<li>NF ${escapeHtml(title.nota_fiscal || "-")} · vence ${escapeHtml(title.vencimento || "-")} · ${escapeHtml(title.valor_pendente || "-")}${title.dias ? ` · ${escapeHtml(title.dias)}` : ""}</li>`).join("")}</ul></div>` : ""}`;
     }
 
-    function clearPedidoClient(message = "Selecione um cliente para consultar os dados da dClientes e a situação na 12.06.01.") {
+    function clearPedidoClient(message = "Selecione um cliente para ver o cadastro e os títulos em aberto.") {
       pedidosUi.client = null;
       pedidosUi.loadingClient = false;
       pedidosUi.conditions = [];
@@ -387,7 +387,7 @@
       pedidosSetStatus("Escolha um cliente elegível para liberar a digitação.");
     }
 
-    function renderPedidoConditions({ message = "A lista é retornada pelo Promax para a filial selecionada." } = {}) {
+    function renderPedidoConditions({ message = "Condições liberadas para este cliente." } = {}) {
       const select = document.getElementById("pedidoCondicao");
       const hint = document.getElementById("pedidoCondicaoHint");
       if (!select) return;
@@ -413,7 +413,7 @@
       // Dinheiro é uma condição liberada operacionalmente e fica visível
       // desde o carregamento, inclusive se o catálogo Promax falhar.
       pedidosUi.conditions = [{ codigo: "2", descricao: "Dinheiro" }];
-      renderPedidoConditions({ message: "Carregando demais condições liberadas pelo Promax..." });
+      renderPedidoConditions({ message: "Carregando as demais condições liberadas..." });
       try {
         const response = await req(`/api/admin/pedidos/condicoes?filial=${encodeURIComponent(filial)}&cliente=${encodeURIComponent(cliente)}`);
         const conditions = Array.isArray(response.condicoes) ? response.condicoes : [];
@@ -451,14 +451,14 @@
       pedidosUi.client = null;
       pedidosUi.loadingClient = true;
       renderPedidoItens();
-      pedidosSetStatus("Consultando dados do cliente e a 12.06.01...");
+      pedidosSetStatus("Consultando o cliente...");
       const selected = document.getElementById("pedidoClienteSelecionado");
-      if (selected) { selected.className = "alert alert-info mb-0"; selected.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Consultando dClientes e 12.06.01...'; }
+      if (selected) { selected.className = "alert alert-info mb-0"; selected.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Consultando o cliente...'; }
       try {
         const response = await req(`/api/admin/pedidos/clientes/${encodeURIComponent(client.filial)}/${encodeURIComponent(client.cliente)}`);
         pedidosUi.client = response.cliente || null;
         pedidosUi.loadingClient = false;
-        if (!pedidosUi.client) throw new Error("Cliente não retornado pela API.");
+        if (!pedidosUi.client) throw new Error("Cliente não encontrado.");
         setPedidoTitle(pedidosUi.client);
         renderPedidoClientDetails(pedidosUi.client);
         await loadPedidoConditions(pedidosUi.client.filial, pedidosUi.client.cliente);

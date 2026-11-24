@@ -106,12 +106,12 @@
       if (!alvo) return;
       const cartoes = [
         ["Clientes com pendência", String(resumo.clientes_pendencia ?? 0), resumo.clientes ? `de ${resumo.clientes} na rota` : "", ""],
-        ["Títulos em aberto", String(resumo.titulos ?? 0), "12.06.01", ""],
+        ["Títulos em aberto", String(resumo.titulos ?? 0), "", ""],
         ["Valor pendente", formatMoneyText(resumo.total_pendente || 0), "", ""],
         ["Valor vencido", formatMoneyText(resumo.total_vencido || 0), `${resumo.clientes_vencidos ?? 0} cliente(s)`, "vencidos"],
         ["Vence hoje", String(resumo.vence_hoje ?? 0), "cliente(s)", "hoje"],
-        ["Boletos disponíveis", String(resumo.boletos ?? 0), "03.02.06", "com_boleto"],
-        ["Títulos sem boleto", String(resumo.titulos_sem_boleto ?? 0), "pela contagem", "sem_boleto"]
+        ["Boletos disponíveis", String(resumo.boletos ?? 0), "", "com_boleto"],
+        ["Títulos sem boleto", String(resumo.titulos_sem_boleto ?? 0), "", "sem_boleto"]
       ];
       alvo.innerHTML = cartoes.map(([rotulo, valor, nota, filtro]) => {
         const conteudo = `<span>${escapeHtml(rotulo)}</span><strong>${escapeHtml(valor)}</strong>${nota ? `<small>${escapeHtml(nota)}</small>` : ""}`;

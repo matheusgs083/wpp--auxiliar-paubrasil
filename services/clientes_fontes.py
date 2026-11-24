@@ -24,7 +24,7 @@ def _carregar_titulos(service: Any, filial: str, cliente: str, escopo: EscopoCli
     try:
         rows = service.search_by_registration(filial, cliente, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=100)
     except Exception:
-        return {"fonte": _fonte(False, "12.06.01 não importada ou indisponível."), "titulos": []}
+        return {"fonte": _fonte(False, "Títulos indisponíveis agora."), "titulos": []}
     titulos = []
     for row in rows:
         dias = _inteiro(row.dias)
@@ -48,11 +48,11 @@ def _carregar_boletos(service: Any | None, filial: str, cliente: str, escopo: Es
     # é por filial + NB desse cliente e vai sem filtro de carteira, porque a base 03.02.06
     # não entende escopo por GV junto com setor, nem escopo por operação.
     if service is None:
-        return {"fonte": _fonte(False, "Consulta de boletos não configurada."), "itens": []}
+        return {"fonte": _fonte(False, "Boletos indisponíveis agora."), "itens": []}
     try:
         status = service.status() if hasattr(service, "status") else {"ready": True}
         if not status.get("ready"):
-            return {"fonte": _fonte(False, "03.02.06 não importada."), "itens": []}
+            return {"fonte": _fonte(False, "Boletos indisponíveis agora."), "itens": []}
         records = service.search_by_registration(
             filial=filial,
             cod_pdv=cliente,
@@ -61,7 +61,7 @@ def _carregar_boletos(service: Any | None, filial: str, cliente: str, escopo: Es
             include_pdf=False,
         )
     except Exception:
-        return {"fonte": _fonte(False, "Base de boletos (03.02.06) indisponível."), "itens": []}
+        return {"fonte": _fonte(False, "Boletos indisponíveis agora."), "itens": []}
     itens = [
         {
             "nosso_numero": _so_digitos(record.nosso_numero),
@@ -80,11 +80,11 @@ def _carregar_boletos(service: Any | None, filial: str, cliente: str, escopo: Es
 
 def _carregar_comodatos(service: Any | None, filial: str, cliente: str, escopo: EscopoClientes) -> dict[str, Any]:
     if service is None:
-        return {"fonte": _fonte(False, "Consulta de comodatos não configurada."), "itens": [], "saldo_total": "0"}
+        return {"fonte": _fonte(False, "Comodatos indisponíveis agora."), "itens": [], "saldo_total": "0"}
     try:
         rows = service.search_by_registration(filial, cliente, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=200)
     except Exception:
-        return {"fonte": _fonte(False, "02.02.20 não importada ou indisponível."), "itens": [], "saldo_total": "0"}
+        return {"fonte": _fonte(False, "Comodatos indisponíveis agora."), "itens": [], "saldo_total": "0"}
     itens = [
         {
             "nro_comodato": str(row.nro_comodato or ""),

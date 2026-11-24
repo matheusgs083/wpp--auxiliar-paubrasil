@@ -210,11 +210,11 @@ class RotaPrioridadeTest(unittest.TestCase):
         self.assertEqual(filtro.status_code, 409)
 
     def test_titulo_sem_boleto_mostra_boleto_nao_importado(self) -> None:
-        self.assertEqual(boleto_rotulo({"titulos": 2, "boletos": 0}, True)["texto"], "Boleto não importado")
+        self.assertEqual(boleto_rotulo({"titulos": 2, "boletos": 0}, True)["texto"], "Sem boleto")
         self.assertEqual(boleto_rotulo({"titulos": 2, "boletos": 1}, True)["texto"], "Boleto disponível (1)")
         self.assertEqual(boleto_rotulo({"titulos": 0, "boletos": 0}, True)["texto"], "Sem título")
         clientes = _app(VENDEDOR_107).get("/api/admin/rota-financeira", params={"dia": "SEG"}).json()["clientes"]
-        self.assertEqual({c["cliente"]: c["boleto"]["texto"] for c in clientes}["100"], "Boleto não importado")
+        self.assertEqual({c["cliente"]: c["boleto"]["texto"] for c in clientes}["100"], "Sem boleto")
 
     def test_textos_de_situacao(self) -> None:
         self.assertEqual(situacao_rotulo({"titulos": 1, "menor_dias": -1})["texto"], "Vencido há 1 dia")

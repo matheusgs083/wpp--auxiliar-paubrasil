@@ -101,7 +101,7 @@ def create_admin_clientes_router(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail="Cadastro de clientes (dClientes) indisponível no momento.") from exc
+            raise HTTPException(status_code=503, detail="Cadastro de clientes indisponível no momento. Tente de novo em instantes.") from exc
         if not rows:
             negar(request, evento, filial, cliente)
         return rows[0]
@@ -138,7 +138,7 @@ def create_admin_clientes_router(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail="Cadastro de clientes (dClientes) indisponível no momento.") from exc
+            raise HTTPException(status_code=503, detail="Cadastro de clientes indisponível no momento. Tente de novo em instantes.") from exc
 
         rows = [row for row in rows if escopo.permite_filial(str(row.filial))]
         if filial_code:
@@ -242,7 +242,7 @@ def create_admin_clientes_router(
                 include_pdf=True,
             )
         except Exception as exc:
-            raise HTTPException(status_code=503, detail="Base de boletos (03.02.06) indisponível no momento.") from exc
+            raise HTTPException(status_code=503, detail="Boletos indisponíveis no momento.") from exc
         record = next((item for item in records if _so_digitos(item.nosso_numero) == alvo), None)
         if record is None or not record.pdf_bytes:
             raise HTTPException(status_code=404, detail="Boleto não encontrado para este cliente.")

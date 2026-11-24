@@ -57,7 +57,7 @@ def create_admin_rota_financeira_router(
             dias = dclientes_query_service.list_visit_days(allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=20)
             combinacoes = dclientes_query_service.list_seller_base_summaries(allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=200)
         except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail="Cadastro de clientes (dClientes) indisponível no momento.") from exc
+            raise HTTPException(status_code=503, detail="Cadastro de clientes indisponível no momento. Tente de novo em instantes.") from exc
         setores: list[dict[str, str]] = []
         for item in combinacoes:
             setor = str(item.seller_code or "")
@@ -104,10 +104,10 @@ def create_admin_rota_financeira_router(
 
         fontes = _fontes(inadimplencia_query_service, boletos_query_service)
         if not fontes["inadimplencia"]["disponivel"]:
-            raise HTTPException(status_code=503, detail="A 12.06.01 (inadimplência) não está importada ou está indisponível. Sem ela a rota financeira não tem títulos para mostrar.")
+            raise HTTPException(status_code=503, detail="Os títulos em aberto estão indisponíveis agora, então a rota não pode ser montada. Tente de novo em instantes.")
         incluir_boletos = fontes["boletos"]["disponivel"]
         if situacao in {"com_boleto", "sem_boleto"} and not incluir_boletos:
-            raise HTTPException(status_code=409, detail="A 03.02.06 (boletos) não está importada, então não dá para filtrar por boleto agora.")
+            raise HTTPException(status_code=409, detail="Os boletos estão indisponíveis agora, então não dá para filtrar por boleto.")
 
         giro = None
         if situacao in SITUACOES_GIRO:
@@ -135,7 +135,7 @@ def create_admin_rota_financeira_router(
         except Exception as exc:
             if giro is None:
                 raise
-            raise HTTPException(status_code=503, detail="Base do giro indisponível (02.02.20, 03.02.37, dProdutos ou Cesta de Produtos).") from exc
+            raise HTTPException(status_code=503, detail="O giro está indisponível agora. Tente de novo em instantes.") from exc
 
         clientes = [_cliente_da_rota(item, incluir_boletos) for item in resultado.clientes]
         record_security_event(request, channel="api", event_type="admin_rota_financeira_lista", decision="allowed", reason=f"dia={dia};situacao={situacao};pagina={pagina};total={resultado.total}")
@@ -159,11 +159,11 @@ def create_admin_rota_financeira_router(
 def _giro_do_mes(giro_vasilhame_service: Any | None, schema: str, agora: datetime) -> tuple[Any, list[Any]]:
     """CTEs dos filtros "sem giro" do mês atual; a tabela de garrafeiras vem do serviço do giro."""
     if giro_vasilhame_service is None:
-        raise HTTPException(status_code=409, detail="O giro de vasilhames e equipamentos não está configurado.")
+        raise HTTPException(status_code=409, detail="O giro está indisponível agora.")
     try:
         catalogo = giro_vasilhame_service.catalogo()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="Tabela de garrafeiras indisponível: não dá para filtrar pelo giro agora.") from exc
+        raise HTTPException(status_code=503, detail="O giro está indisponível agora. Tente de novo em instantes.") from exc
     return ctes_giro(schema, f"{agora.year:04d}-{agora.month:02d}", catalogo)
 
 
@@ -183,8 +183,8 @@ def _fontes(inadimplencia: Any, boletos: Any | None) -> dict[str, dict[str, Any]
     inad_ok = pronto(inadimplencia)
     bol_ok = pronto(boletos)
     return {
-        "inadimplencia": {"disponivel": inad_ok, "mensagem": "" if inad_ok else "12.06.01 não importada ou indisponível."},
-        "boletos": {"disponivel": bol_ok, "mensagem": "" if bol_ok else "03.02.06 não importada: os títulos aparecem, mas sem boleto."},
+        "inadimplencia": {"disponivel": inad_ok, "mensagem": "" if inad_ok else "Títulos em aberto indisponíveis agora."},
+        "boletos": {"disponivel": bol_ok, "mensagem": "" if bol_ok else "Boletos indisponíveis agora: os títulos aparecem, mas sem boleto."},
     }
 
 
@@ -208,10 +208,10 @@ def boleto_rotulo(item: Mapping[str, Any], boletos_disponiveis: bool) -> dict[st
     if not item.get("titulos"):
         return {"texto": "Sem título", "tom": "neutral"}
     if not boletos_disponiveis:
-        return {"texto": "03.02.06 indisponível", "tom": "neutral"}
+        return {"texto": "Boleto indisponível", "tom": "neutral"}
     if item.get("boletos"):
         return {"texto": f"Boleto disponível ({item['boletos']})", "tom": "info"}
-    return {"texto": "Boleto não importado", "tom": "neutral"}
+    return {"texto": "Sem boleto", "tom": "neutral"}
 
 
 def _cliente_da_rota(item: Mapping[str, Any], boletos_disponiveis: bool) -> dict[str, Any]:

@@ -110,7 +110,7 @@
     }
 
     function clientesAcoesBoleto(cliente, boleto) {
-      if (!boleto) return '<span class="cliente-tag" data-tom="neutral"><i class="bi bi-file-earmark-x" aria-hidden="true"></i>Boleto não importado</span>';
+      if (!boleto) return '<span class="cliente-tag" data-tom="neutral"><i class="bi bi-file-earmark-x" aria-hidden="true"></i>Sem boleto</span>';
       const copiar = boleto.linha_digitavel
         ? `<button class="btn btn-outline-secondary btn-sm cliente-copiar" type="button" data-linha="${escapeHtml(boleto.linha_digitavel)}" aria-label="Copiar linha digitável do boleto ${escapeHtml(boleto.nosso_numero)}"><i class="bi bi-clipboard me-1" aria-hidden="true"></i>Copiar linha digitável</button>`
         : "";
