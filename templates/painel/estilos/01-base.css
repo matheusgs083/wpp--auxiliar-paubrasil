@@ -284,6 +284,7 @@
     /* Pedidos: jornada curta para vendedor, com consulta antes da digitação. */
     #pedidosPane { max-width: 1120px; margin: 0 auto; }
     .pedido-shell { display: grid; gap: 0.75rem; }
+    #pedidosPane .pedido-shell > * { min-width: 0; }
     .pedido-step { display: flex; align-items: center; gap: 0.55rem; color: var(--ink-500); font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
     .pedido-step i { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--brand-700); background: var(--surface-soft); font-size: var(--fs-sm); }
     .pedido-search-grid { display: grid; grid-template-columns: minmax(160px, .8fr) minmax(260px, 2fr); gap: 0.65rem; align-items: end; }
