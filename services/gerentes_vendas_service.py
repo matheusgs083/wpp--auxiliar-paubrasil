@@ -24,10 +24,13 @@ def agrupar_gerentes(chaves: list[str], nomes: dict[str, str]) -> list[dict[str,
     grupos: dict[str, dict[str, Any]] = {}
     for chave in sorted({chave_gv(item) for item in chaves}):
         filial, gv = chave.split("_")
-        nome = str(nomes.get(chave) or nome_padrao(chave)).strip()
+        tratamento = gv == "99"
+        nome = "Tratamento" if tratamento else str(nomes.get(chave) or "").strip()
+        if not nome:
+            continue
         normalizado = "".join(c for c in unicodedata.normalize("NFKD", nome.casefold()) if not unicodedata.combining(c))
-        identificador = f"nome:{normalizado}" if nome else f"chave:{chave}"
-        grupo = grupos.setdefault(identificador, {"nome": nome or f"GV {gv} · Filial {filial}", "chaves": [], "filiais": []})
+        identificador = "tratamento:99" if tratamento else f"nome:{normalizado}"
+        grupo = grupos.setdefault(identificador, {"nome": nome, "chaves": [], "filiais": [], "tratamento": tratamento})
         grupo["chaves"].append(chave)
         if filial not in grupo["filiais"]:
             grupo["filiais"].append(filial)

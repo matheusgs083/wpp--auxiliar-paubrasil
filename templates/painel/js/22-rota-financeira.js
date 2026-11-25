@@ -41,7 +41,9 @@
       const filial = document.getElementById("rotaFilial")?.value || "";
       const select = document.getElementById("rotaGv");
       const atual = select.value;
-      const grupos = (opcoes.gerentes || []).filter(item => !filial || item.filiais.includes(filial));
+      const grupos = (opcoes.gerentes || [])
+        .filter(item => (!filial || item.filiais.includes(filial)) && (!item.tratamento || Boolean(filial)))
+        .map(item => ({ ...item, chaves: item.tratamento ? item.chaves.filter(chave => chave.split("_")[0] === filial) : item.chaves }));
       select.innerHTML = '<option value="">Todos</option>' + grupos.map(item => `<option value="${escapeHtml(item.chaves.join(","))}">${escapeHtml(item.nome)}</option>`).join("");
       if (grupos.some(item => item.chaves.join(",") === atual)) select.value = atual;
     }
@@ -59,6 +61,7 @@
           if (opcoes.dia_sugerido) dia.value = opcoes.dia_sugerido;
         }
         rotaOpcoesSelect(document.getElementById("rotaFilial"), opcoes.filiais || [], "Todas", filial => (opcoes.filiais_nomes || {})[filial] || `Filial ${filial}`);
+        if ((opcoes.filiais || []).length === 1) document.getElementById("rotaFilial").value = opcoes.filiais[0];
         const gvWrap = document.getElementById("rotaGvWrap");
         if (gvWrap) gvWrap.hidden = !opcoes.mostrar_gv;
         rotaAtualizarGerentes();

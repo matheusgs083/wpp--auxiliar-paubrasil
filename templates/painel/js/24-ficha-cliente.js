@@ -17,10 +17,6 @@
       return `${CONFIG.endpoints.clientes.ficha}/${encodeURIComponent(filial)}/${encodeURIComponent(cliente)}/${sufixo}`;
     }
 
-    function fichaMaxAbertos() {
-      return window.matchMedia("(max-width: 767.98px)").matches ? 1 : 2;
-    }
-
     function fichaMesBr(competencia) {
       const [ano, mes] = String(competencia || "").split("-");
       return ano && mes ? `${mes}/${ano}` : "-";
@@ -60,7 +56,7 @@
         FICHA_BLOCOS.forEach(item => carregarFichaBloco(item.id, sequencia));
       } catch (error) {
         if (sequencia !== fichaUi.seq) return;
-        corpo.innerHTML = `<div class="alert alert-danger mb-0" role="alert"><i class="bi bi-shield-exclamation me-2" aria-hidden="true"></i>${escapeHtml(error.message || "Não foi possível abrir o cliente.")}</div>`;
+        corpo.innerHTML = `<div class="alert alert-danger mb-0" role="alert"><i class="bi bi-shield-exclamation me-2" aria-hidden="true"></i>${escapeHtml(error.message || "Não foi possível abrir o cliente.")} <button class="btn btn-outline-danger btn-sm ms-2" type="button" data-ficha-repetir="cabecalho">Tentar novamente</button></div>`;
       }
     }
 
@@ -96,6 +92,11 @@
       const { filial, cliente } = fichaUi.atual || {};
       const secao = document.querySelector(`.ficha-bloco[data-bloco="${id}"]`);
       if (!secao) return;
+      delete fichaUi.blocos[id];
+      secao.dataset.estado = "carregando";
+      secao.querySelector(".ficha-bloco-resumo").textContent = "Carregando...";
+      const painelBloco = document.getElementById(`fichaBloco-${id}`);
+      if (painelBloco && !painelBloco.hidden) painelBloco.innerHTML = renderFichaBlocoCorpo(id);
       try {
         const dados = await req(fichaUrl(filial, cliente, `blocos/${id}`));
         if (sequencia !== fichaUi.seq) return;
@@ -137,7 +138,6 @@
       fichaUi.abertos = fichaUi.abertos.filter(item => item !== id);
       if (vaiAbrir) {
         fichaUi.abertos.push(id);
-        while (fichaUi.abertos.length > fichaMaxAbertos()) alternarFichaBloco(fichaUi.abertos[0], false);
         corpo.innerHTML = renderFichaBlocoCorpo(id);
       }
       corpo.hidden = !vaiAbrir;
@@ -148,8 +148,8 @@
     function renderFichaBlocoCorpo(id) {
       const bloco = fichaUi.blocos[id];
       if (!bloco) return '<div class="text-secondary small py-2" role="status"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Carregando...</div>';
-      if (bloco.erro) return `<div class="alert alert-danger py-2 mb-0" role="alert">${escapeHtml(bloco.resumo)}</div>`;
-      if (bloco.estado === "indisponivel") return `<div class="alert alert-warning py-2 mb-0" role="status"><i class="bi bi-database-exclamation me-1" aria-hidden="true"></i>${escapeHtml(bloco.fonte?.mensagem || bloco.resumo || "Não foi possível carregar agora.")}</div>${fichaRodape(bloco)}`;
+      if (bloco.erro) return `<div class="alert alert-danger py-2 mb-0" role="alert">${escapeHtml(bloco.resumo)} <button class="btn btn-outline-danger btn-sm ms-2" type="button" data-ficha-repetir="${escapeHtml(id)}">Tentar novamente</button></div>`;
+      if (bloco.estado === "indisponivel") return `<div class="alert alert-warning py-2 mb-0" role="status"><i class="bi bi-database-exclamation me-1" aria-hidden="true"></i>${escapeHtml(bloco.fonte?.mensagem || bloco.resumo || "Não foi possível carregar agora.")} <button class="btn btn-outline-secondary btn-sm ms-2" type="button" data-ficha-repetir="${escapeHtml(id)}">Tentar novamente</button></div>${fichaRodape(bloco)}`;
       const render = FICHA_RENDER[id];
       return `${render ? render(bloco.dados || {}, bloco) : ""}${fichaRodape(bloco)}`;
     }
@@ -320,6 +320,13 @@
       const corpo = document.getElementById("fichaClienteCorpo");
       if (!corpo) return;
       corpo.addEventListener("click", event => {
+        const repetir = event.target.closest("[data-ficha-repetir]");
+        if (repetir) {
+          const id = repetir.dataset.fichaRepetir;
+          if (id === "cabecalho" && fichaUi.atual) abrirFichaBlocos(fichaUi.atual.filial, fichaUi.atual.cliente, { bloco: fichaUi.pedido || "" });
+          else if (FICHA_BLOCOS.some(item => item.id === id)) carregarFichaBloco(id, fichaUi.seq);
+          return;
+        }
         const cab = event.target.closest("[data-ficha-bloco]");
         if (cab) { alternarFichaBloco(cab.dataset.fichaBloco); return; }
         const copiar = event.target.closest(".cliente-copiar");

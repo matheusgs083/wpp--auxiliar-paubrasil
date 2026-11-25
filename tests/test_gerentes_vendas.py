@@ -14,6 +14,15 @@ class GerentesVendasTest(unittest.TestCase):
         self.assertEqual(sorted(len(g["chaves"]) for g in grupos), [2, 2])
         self.assertEqual(nome_padrao("3_99"), "Tratamento")
 
+    def test_omite_gvs_sem_nome_e_separa_99_como_tratamento(self):
+        grupos = agrupar_gerentes(["3_2", "4_1", "3_5", "3_99", "4_99"], {"3_2": "Maria", "4_1": "MARIA", "3_99": "Outro nome"})
+        self.assertEqual(len(grupos), 2)
+        gerente = next(item for item in grupos if not item["tratamento"])
+        tratamento = next(item for item in grupos if item["tratamento"])
+        self.assertEqual(set(gerente["chaves"]), {"3_2", "4_1"})
+        self.assertEqual(tratamento["nome"], "Tratamento")
+        self.assertEqual(set(tratamento["chaves"]), {"3_99", "4_99"})
+
     def test_somente_administrador_pode_ler_e_salvar(self):
         service = Mock()
         service.catalogo.return_value = [{"chave": "3_2"}]
