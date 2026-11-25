@@ -3,12 +3,11 @@
 
     const ROTA_SITUACAO_ROTULO = { todos: "Todos", vencidos: "Vencidos", ate_dois_dias: "Até 2 dias", hoje: "Vence hoje", amanha: "Vence amanhã", dois_dias: "Vence em 2 dias", com_boleto: "Com boleto", sem_boleto: "Sem boleto", sem_giro_vasilhame: "Sem giro de vasilhame", sem_giro_equipamento: "Sem giro de equipamento" };
 
-    // A situação só é lida pelo leitor de tela; na tela aparece apenas quando é erro.
     function rotaSetStatus(message, kind = "") {
       const element = document.getElementById("rotaStatus");
       if (!element) return;
       element.textContent = message;
-      element.className = kind === "err" ? "form-text mt-2 text-danger" : "visually-hidden";
+      element.className = kind === "err" ? "form-text mt-2 text-danger" : "form-text mt-2";
     }
 
     function rotaOpcoesSelect(select, valores, rotuloTodos, rotular = valor => valor) {
@@ -30,7 +29,10 @@
       const select = document.getElementById("rotaSetor");
       const atual = select.value;
       const filiais = [...new Set(setores.map(item => item.filial))];
-      select.innerHTML = '<option value="">Todos</option>' + filiais.map(codigo => `<optgroup label="${escapeHtml((opcoes.filiais_nomes || {})[codigo] || `Filial ${codigo}`)}">${setores.filter(item => item.filial === codigo).map(item => `<option value="${escapeHtml(item.setor)}">Setor ${escapeHtml(item.setor.split("_").pop())}</option>`).join("")}</optgroup>`).join("");
+      const opcoesSetores = itens => itens.map(item => `<option value="${escapeHtml(item.setor)}">Setor ${escapeHtml(item.setor.split("_").pop())}</option>`).join("");
+      select.innerHTML = '<option value="">Todos</option>' + (filial
+        ? opcoesSetores(setores)
+        : filiais.map(codigo => `<optgroup label="${escapeHtml((opcoes.filiais_nomes || {})[codigo] || `Filial ${codigo}`)}">${opcoesSetores(setores.filter(item => item.filial === codigo))}</optgroup>`).join(""));
       if (setores.some(item => item.setor === atual)) select.value = atual;
     }
 
@@ -40,7 +42,7 @@
       const select = document.getElementById("rotaGv");
       const atual = select.value;
       const grupos = (opcoes.gerentes || []).filter(item => !filial || item.filiais.includes(filial));
-      select.innerHTML = '<option value="">Todos</option>' + grupos.map(item => `<option value="${escapeHtml(item.chaves.join(","))}">${escapeHtml(item.nome)} (${escapeHtml(item.chaves.map(rotaRotuloChave).join(", "))})</option>`).join("");
+      select.innerHTML = '<option value="">Todos</option>' + grupos.map(item => `<option value="${escapeHtml(item.chaves.join(","))}">${escapeHtml(item.nome)}</option>`).join("");
       if (grupos.some(item => item.chaves.join(",") === atual)) select.value = atual;
     }
 
@@ -95,6 +97,13 @@
       if (botao) botao.disabled = true;
       rotaSetStatus("Montando a rota...");
       document.getElementById("rotaLista")?.setAttribute("aria-busy", "true");
+      rotaUi.clientes = [];
+      document.getElementById("rotaLista").innerHTML = '<tr><td colspan="9" class="text-center text-secondary py-4">Atualizando a rota…</td></tr>';
+      document.getElementById("rotaKpis").innerHTML = "";
+      renderRotaAvisos({});
+      renderRotaContagens({});
+      renderRotaDestaque(null);
+      document.getElementById("rotaPaginacao").hidden = true;
       try {
         const resposta = await req(`${CONFIG.endpoints.rotaFinanceira.lista}?${params.toString()}`);
         if (sequencia !== rotaUi.seq) return;
@@ -113,8 +122,9 @@
       } catch (error) {
         if (sequencia !== rotaUi.seq) return;
         rotaUi.dados = null;
-        renderRotaLista([]);
-        renderRotaKpis({});
+        rotaUi.clientes = [];
+        document.getElementById("rotaLista").innerHTML = '<tr><td colspan="9" class="text-center py-4">Não foi possível carregar a rota. <button type="button" class="btn btn-link btn-sm rota-tentar-novamente">Tentar novamente</button></td></tr>';
+        document.getElementById("rotaKpis").innerHTML = "";
         renderRotaDestaque(null);
         rotaSetStatus(error.message || "Não foi possível montar a rota agora.", "err");
       } finally {
@@ -282,7 +292,15 @@
       document.getElementById("rotaAnteriorBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: Math.max(1, (rotaUi.pagina || 1) - 1) }));
       document.getElementById("rotaProximaBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: (rotaUi.pagina || 1) + 1 }));
       document.getElementById("rotaMaisFiltrosBtn")?.addEventListener("click", () => rotaAlternarMaisFiltros());
+      document.getElementById("rotaLimparFiltros")?.addEventListener("click", () => {
+        ["rotaFilial", "rotaGv", "rotaSetor", "rotaBusca"].forEach(id => { const campo = document.getElementById(id); if (campo) campo.value = ""; });
+        rotaAtualizarGerentes();
+        rotaAtualizarSetores();
+        rotaAlternarMaisFiltros(false);
+        rotaSelecionarSituacao("todos");
+      });
       document.getElementById("rotaFinanceiraPane")?.addEventListener("click", event => {
+        if (event.target.closest(".rota-tentar-novamente")) { recarregar(); return; }
         const filtro = event.target.closest("[data-rota-situacao]");
         if (filtro) { rotaSelecionarSituacao(filtro.dataset.rotaSituacao); return; }
         const acao = event.target.closest(".rota-acao");
