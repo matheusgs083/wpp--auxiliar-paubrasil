@@ -57,6 +57,19 @@ class DCondicoesImportServiceTests(unittest.TestCase):
         self.assertEqual(result.unique_condicoes, 1)
         self.assertEqual(result.error_count, 0)
 
+    def test_import_preserves_monthly_adf_and_keeps_missing_distinct_from_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "dCondicoes.csv"
+            path.write_text(
+                "Filial;Condição de Pagto;Descrição;Taxa Mensal p/ ADF;Dias até 1° Vencimento\n"
+                "0003;000000000605;BOLETO;006,11;010\n"
+                "0003;000000000606;OUTRA;000,00;000\n"
+                "0003;000000000607;SEM TAXA;;\n", encoding="utf-8"
+            )
+            rows = _load_dcondicoes_rows(path)
+        self.assertEqual([r.taxa_mensal_adf for r in rows], ["006,11", "000,00", ""])
+        self.assertEqual([r.dias_primeiro_vencimento for r in rows], ["010", "000", ""])
+
 
 if __name__ == "__main__":
     unittest.main()

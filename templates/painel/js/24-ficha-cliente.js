@@ -161,7 +161,7 @@
       },
       credito(d) {
         const disponivel = d.limite_disponivel ? `${formatMoneyText(d.limite_disponivel)}${d.limite_disponivel_calculado ? " (calculado)" : ""}` : "-";
-        const fatos = fichaFatos([["Limite total", d.limite_total ? formatMoneyText(d.limite_total) : "-"], ["Limite utilizado", d.limite_utilizado ? formatMoneyText(d.limite_utilizado) : "-"], ["Limite disponível", disponivel], ["Condição de pagamento", d.condicao_pagamento], ["Prazo atual", d.prazo_atual], ["Pagamentos em atraso", d.percentual_pag_atraso]]);
+        const fatos = fichaFatos([["Limite total", d.limite_total ? formatMoneyText(d.limite_total) : "-"], ["Limite utilizado", d.limite_utilizado ? formatMoneyText(d.limite_utilizado) : "-"], ["Limite disponível", disponivel], ["Condição de pagamento", d.condicao_pagamento_nome || d.condicao_pagamento], ["ADF da condição", d.adf_condicao || "Não informado"], ["Prazo atual", d.prazo_atual], ["Pagamentos em atraso", d.percentual_pag_atraso]]);
         const fat = (d.faturamento || []).length
           ? `<h4 class="ficha-sub">Faturamento entregue</h4><ul class="ficha-linhas">${d.faturamento.map(f => `<li><span>${escapeHtml(f.kpi || "-")}</span><strong>${escapeHtml(f.faturamento_com_pdv || "-")}</strong><small>${escapeHtml(f.pedidos === "" ? "" : `${f.pedidos} nota(s)`)}</small></li>`).join("")}</ul>`
           : `<h4 class="ficha-sub">Faturamento entregue</h4><div class="small text-secondary">${d.faturamento_fonte === "indisponivel" ? "O faturamento não pôde ser carregado agora." : "Nenhuma compra registrada."}</div>`;
@@ -183,7 +183,8 @@
         const aviso = d.historico_suficiente ? "" : `<div class="small text-secondary mb-2">A média aparece quando houver 3 meses fechados de histórico. Histórico desde ${escapeHtml(fichaMesBr(d.base_desde))}.</div>`;
         const tops = [["Maior faturamento", d.top_faturamento || [], p => formatMoneyText(p.total)], ["Maior quantidade", d.top_quantidade || [], p => `${fichaNumero(p.qtde)} ${p.unidade || ""}`]]
           .map(([rotulo, itens, valor]) => `<div><h4 class="ficha-sub">${rotulo}</h4>${itens.length ? `<ol class="ficha-top">${itens.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)}</span><strong>${escapeHtml(valor(p))}</strong></li>`).join("")}</ol>` : '<div class="small text-secondary">Sem produtos no período.</div>'}</div>`).join("");
-        return `${kpis}${aviso}<h4 class="ficha-sub">Faturamento entregue por mês</h4>${fichaGraficoCompras(d.serie || [])}<div class="ficha-tops">${tops}</div>`;
+        const notas = d.notas_disponiveis === false ? '<div class="small text-secondary">Não foi possível carregar as notas agora.</div>' : (d.notas_fiscais || []).length ? `<div class="ficha-lista">${d.notas_fiscais.map(n => `<article class="ficha-item"><div class="ficha-item-topo"><strong>NF ${escapeHtml(n.nota)}${n.serie ? ` · Série ${escapeHtml(n.serie)}` : ""}</strong><span>${escapeHtml(fichaDataBr(n.data))}</span></div>${fichaFatos([["Valor", formatMoneyText(n.total)], ["Itens", fichaNumero(n.itens)], ["Quantidade", fichaNumero(n.qtde, 2)]])}${(n.produtos || []).length ? `<details class="ficha-detalhe"><summary>Ver produtos</summary><ul class="ficha-linhas">${n.produtos.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)} · ${escapeHtml(fichaNumero(p.qtde, 2))} ${escapeHtml(p.unidade || "")}</span><strong>${escapeHtml(formatMoneyText(p.total))}</strong></li>`).join("")}</ul></details>` : ""}</article>`).join("")}</div>` : clientesVazio("Nenhuma nota encontrada na base importada.");
+        return `${kpis}${aviso}<h4 class="ficha-sub">Faturamento entregue por mês</h4>${fichaGraficoCompras(d.serie || [])}<div class="ficha-tops">${tops}</div><details class="ficha-detalhe"><summary>Notas fiscais de compras (${(d.notas_fiscais || []).length})</summary>${notas}<div class="small text-secondary mt-2">Notas das bases importadas; esta consulta não disponibiliza o PDF ou XML.</div></details>`;
       },
       vasilhames(d, bloco) {
         if (bloco.estado === "vazio") return clientesVazio("O cliente não tem garrafeiras em comodato.");
@@ -220,7 +221,7 @@
           </article>`).join("")}</div><div class="small text-secondary mt-2">Saldo total: ${escapeHtml(d.saldo_total || "0")}</div>`;
       },
       devolucoes(d, bloco) {
-        if (!(d.itens || []).length) return clientesVazio(`Nenhuma devolução nos últimos ${d.dias || 90} dias.`);
+        if (!(d.itens || []).length) return clientesVazio("Nenhuma devolução na base importada.");
         return `<div class="ficha-lista">${d.itens.map(i => `<article class="ficha-item">
             <div class="ficha-item-topo"><strong class="mono">NF ${escapeHtml(i.nota || "-")}</strong><span class="small text-secondary">${escapeHtml(fichaDataBr(i.data))}</span></div>
             ${fichaFatos([["Motivo", i.motivo], ["Responsabilidade", i.responsabilidade || "-"], ["NF de origem", i.nf_referencia || "-"], ["Volume", fichaNumero(i.qtde)], ["Valor", formatMoneyText(i.total)]])}

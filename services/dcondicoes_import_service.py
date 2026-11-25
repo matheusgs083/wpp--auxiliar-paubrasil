@@ -24,7 +24,7 @@ from bot_api.services.import_publication import (
 
 EXPECTED_EXTENSION_SET = {".csv"}
 REQUIRED_HEADERS = {"filial", "condicao_codigo", "descricao"}
-OPTIONAL_HEADERS = {"forma_pagto"}
+OPTIONAL_HEADERS = {"forma_pagto", "taxa_mensal_adf", "dias_primeiro_vencimento"}
 HEADER_ALIASES = {
     "filial": "filial",
     "condicaodepagto": "condicao_codigo",
@@ -34,6 +34,9 @@ HEADER_ALIASES = {
     "descricao": "descricao",
     "formadepagto": "forma_pagto",
     "formadepagamento": "forma_pagto",
+    "taxamensalpadf": "taxa_mensal_adf",
+    "diasate1vencimento": "dias_primeiro_vencimento",
+    "diasate1ovencimento": "dias_primeiro_vencimento",
 }
 
 
@@ -78,6 +81,8 @@ class DCondicoesRow:
     forma_pagto: str
     filial_condicao_key: str
     source_row_number: int
+    taxa_mensal_adf: str = ""
+    dias_primeiro_vencimento: str = ""
 
 
 class DCondicoesImportService:
@@ -129,6 +134,24 @@ class DCondicoesImportService:
             unique_condicoes=len({row.filial_condicao_key for row in rows}),
             unique_descricoes=len({row.descricao for row in rows}),
         )
+
+    def consultar_condicao(self, filial: str, codigo: str) -> dict[str, Any] | None:
+        """Consulta a condição publicada da filial, inclusive em bases anteriores à coluna de ADF."""
+        filial = normalize_numeric_code(filial)
+        codigo = normalize_numeric_code(codigo)
+        if not filial or not codigo or not self.database_url:
+            return None
+        query = sql.SQL("""
+            SELECT descricao, to_jsonb(s)->>'taxa_mensal_adf' AS taxa_mensal_adf,
+                   to_jsonb(s)->>'dias_primeiro_vencimento' AS dias_primeiro_vencimento
+            FROM {}.dcondicoes_latest s
+            WHERE filial_condicao_key = %s
+            ORDER BY LENGTH(descricao), descricao, row_number
+            LIMIT 1
+        """).format(sql.Identifier(self.schema))
+        with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(query, (f"{filial}_{codigo}",))
+            return cur.fetchone()
 
     def import_source(self, source_path: Path, reference_date: date | None = None) -> dict[str, Any]:
         if not self.database_url:
@@ -218,6 +241,15 @@ class DCondicoesImportService:
             )
             cur.execute(
                 sql.SQL(
+                    "ALTER TABLE {}.dcondicoes_snapshot ADD COLUMN IF NOT EXISTS taxa_mensal_adf TEXT"
+                ).format(sql.Identifier(self.schema))
+            )
+            cur.execute(
+                sql.SQL("ALTER TABLE {}.dcondicoes_snapshot ADD COLUMN IF NOT EXISTS dias_primeiro_vencimento TEXT")
+                .format(sql.Identifier(self.schema))
+            )
+            cur.execute(
+                sql.SQL(
                     "CREATE INDEX IF NOT EXISTS dcondicoes_snapshot_batch_key_idx ON {}.dcondicoes_snapshot (batch_id, filial_condicao_key)"
                 ).format(sql.Identifier(self.schema))
             )
@@ -263,9 +295,11 @@ class DCondicoesImportService:
                 condicao_codigo,
                 descricao,
                 forma_pagto,
-                filial_condicao_key
+                filial_condicao_key,
+                taxa_mensal_adf,
+                dias_primeiro_vencimento
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
         ).format(sql.Identifier(self.schema))
         params = [
@@ -277,6 +311,8 @@ class DCondicoesImportService:
                 row.descricao,
                 row.forma_pagto,
                 row.filial_condicao_key,
+                row.taxa_mensal_adf or None,
+                row.dias_primeiro_vencimento or None,
             )
             for index, row in enumerate(rows, start=1)
         ]
@@ -301,7 +337,9 @@ class DCondicoesImportService:
                 b.reference_date,
                 b.source_file,
                 b.file_hash,
-                b.imported_at AS batch_imported_at
+                b.imported_at AS batch_imported_at,
+                s.taxa_mensal_adf,
+                s.dias_primeiro_vencimento
             FROM {}.dcondicoes_snapshot s
             JOIN {}.import_batches b ON b.id = s.batch_id
             WHERE {}
@@ -345,6 +383,8 @@ def _load_dcondicoes_rows(path: Path) -> list[DCondicoesRow]:
                 forma_pagto=_clean_text(row.get(header_map.get("forma_pagto", ""), "")),
                 filial_condicao_key=f"{filial}_{condicao_codigo}",
                 source_row_number=row_number,
+                taxa_mensal_adf=_clean_text(row.get(header_map.get("taxa_mensal_adf", ""), "")),
+                dias_primeiro_vencimento=_clean_text(row.get(header_map.get("dias_primeiro_vencimento", ""), "")),
             )
         )
     rows.sort(key=lambda item: (_sort_numeric(item.filial), _sort_numeric(item.condicao_codigo), item.source_row_number))

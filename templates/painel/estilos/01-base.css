@@ -177,7 +177,7 @@
     @media (max-width: 576px) { .panel-group-btn { flex: 1 1 0; min-height: 40px; padding: 0.35rem 0.4rem; } }
     /* Celular: grupos e abas saem do topo e vão para o menu lateral aberto pelo ☰. */
     .nav-celular { display: none; }
-    .nav-celular-menu { --bs-offcanvas-width: min(300px, 86vw); background: var(--canvas); color: var(--ink-900); }
+    .nav-celular-menu { display: none; }
     .nav-celular-grupo + .nav-celular-grupo { margin-top: .85rem; }
     .nav-celular-titulo { margin: 0 0 .25rem .55rem; color: var(--ink-500); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
     .nav-celular-link { display: flex; align-items: center; gap: .65rem; min-height: 44px; padding: .45rem .65rem; border-radius: var(--radius-sm); color: var(--ink-900); font-weight: 650; text-decoration: none; }
@@ -202,7 +202,15 @@
       .ops-bar #refreshBtn .ops-btn-texto { display: none; }
       .ops-bar #refreshBtn .bi, .ops-bar #refreshBtn .spinner-border { margin-right: 0 !important; }
       .admin-tabs-card { margin-bottom: .6rem !important; }
-      .nav-celular { display: flex; align-items: center; gap: .6rem; }
+      .admin-tabs-card { display: none; }
+      body { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+      .nav-celular-menu { display: flex; position: fixed; z-index: 1025; inset: auto 0 0; overflow-x: auto; overscroll-behavior-x: contain; gap: .25rem; padding: .35rem .5rem calc(.35rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-900); box-shadow: 0 -3px 12px rgba(0, 0, 0, .12); }
+      .nav-celular-grupo { display: flex; flex: 0 0 auto; gap: .2rem; }
+      .nav-celular-grupo + .nav-celular-grupo { margin: 0; padding-left: .3rem; border-left: 1px solid var(--line); }
+      .nav-celular-titulo { display: none; }
+      .nav-celular-link { flex-direction: column; justify-content: center; gap: .12rem; min-width: 4.4rem; min-height: 52px; padding: .25rem .35rem; font-size: .7rem; line-height: 1.15; text-align: center; white-space: nowrap; }
+      .nav-celular-link i { font-size: 1.15rem; }
+      #pedidosPane .pedido-send-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
       .nav-celular-btn { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-900); font-size: 1.35rem; }
       .nav-celular-atual { min-width: 0; overflow: hidden; color: var(--ink-900); font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
       .admin-tabs-card #panelGroups, .admin-tabs-card #adminTabs { display: none !important; }

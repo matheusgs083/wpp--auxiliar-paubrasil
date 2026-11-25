@@ -290,6 +290,7 @@ def _register_admin_clientes_routes(app: FastAPI, *, deps: dict[str, Any]) -> No
             documentacao_pendente_query_service=deps.get("documentacao_pendente_query_service"),
             compras_030237_service=deps.get("compras_030237_service"),
             devolucoes_justificativas_service=deps.get("devolucoes_justificativas_service"),
+            dcondicoes_import_service=deps.get("dcondicoes_import_service"),
         )
     )
 

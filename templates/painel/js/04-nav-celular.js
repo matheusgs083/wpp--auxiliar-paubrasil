@@ -1,4 +1,4 @@
-    // Celular: as abas e os grupos viram um menu lateral (offcanvas) aberto pelo ☰.
+    // Celular: a barra inferior usa as mesmas abas e permissões do painel.
     // O menu é montado das próprias abas de #adminTabs, então segue as mesmas permissões.
     function renderNavCelular() {
       const lista = document.getElementById("navCelularLista");
@@ -53,8 +53,6 @@
         const link = event.target.closest(".nav-celular-link");
         if (!link || !isPlainLeftClick(event)) return;
         event.preventDefault();
-        const menu = document.getElementById("navCelular");
-        if (menu && window.bootstrap) bootstrap.Offcanvas.getOrCreateInstance(menu).hide();
         navigatePanelPage(link.dataset.aba);
       });
       renderNavCelular();

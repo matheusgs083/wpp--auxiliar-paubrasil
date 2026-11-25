@@ -74,6 +74,7 @@ class Fontes:
     justificativas: Any | None = None
     giro_vasilhame: Any | None = None
     giro_equipamentos: Any | None = None
+    condicoes: Any | None = None
 
 
 def montar_bloco(nome: str, cliente: ClienteAutorizado, fontes: Fontes, *, hoje: date) -> dict[str, Any]:
@@ -154,6 +155,22 @@ def bloco_credito(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dic
     limite_total = _primeiro(entradas, "limite_total") or str(getattr(cliente.registro, "limite_credito", "") or "")
     prazo = _primeiro(entradas, "prazo_atual")
     condicao = _primeiro(entradas, "cond_pag_atual") or str(getattr(cliente.registro, "cond_pag_atual", "") or "")
+    condicao_nome = ""
+    taxa_adf = ""
+    if condicao and fontes.condicoes is not None:
+        try:
+            referencia = fontes.condicoes.consultar_condicao(cliente.filial, condicao) or {}
+            condicao_nome = str(referencia.get("descricao") or "").strip()
+            taxa_texto = str(referencia.get("taxa_mensal_adf") or "").strip()
+            dias_texto = str(referencia.get("dias_primeiro_vencimento") or "").strip()
+            if taxa_texto and dias_texto:
+                taxa = Decimal(taxa_texto.replace(",", "."))
+                dias = Decimal(dias_texto.replace(",", "."))
+                if taxa.is_finite() and dias.is_finite() and taxa >= 0 and dias >= 0:
+                    percentual = ((Decimal(1) + taxa / 100) ** (dias / 30) - 1) * 100 if taxa and dias else Decimal(0)
+                    taxa_adf = f"{percentual:.2f}".replace(".", ",") + "%"
+        except Exception:
+            pass  # A indisponibilidade do catálogo não impede a consulta de crédito.
     atraso = percentual_texto(_primeiro(entradas, "percentual_pag_atraso"))
     financeiro = _carregar_titulos(fontes.inadimplencia, cliente.filial, cliente.cliente, cliente.escopo)
     pendente = sum((_decimal(t["valor_pendente"]) for t in financeiro["titulos"]), Decimal("0")) if financeiro["fonte"]["disponivel"] else None
@@ -166,6 +183,8 @@ def bloco_credito(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dic
         "limite_disponivel": _dinheiro(disponivel) if disponivel is not None else "",
         "limite_disponivel_calculado": disponivel is not None,
         "condicao_pagamento": condicao,
+        "condicao_pagamento_nome": condicao_nome,
+        "adf_condicao": taxa_adf,
         "prazo_atual": prazo,
         "percentual_pag_atraso": atraso,
         "faturamento": faturamento,
@@ -211,6 +230,12 @@ def bloco_compras(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dic
         resumo = fontes.compras.resumo_cliente(cliente.filial, cliente.cliente, hoje=hoje)
     except Exception:
         return _indisponivel("compras", titulo, "03.02.37", "Compras indisponíveis agora.")
+    try:
+        resumo["notas_fiscais"] = fontes.compras.notas_cliente(cliente.filial, cliente.cliente)
+        resumo["notas_disponiveis"] = True
+    except Exception:
+        resumo["notas_fiscais"] = []
+        resumo["notas_disponiveis"] = False
     if not resumo.get("base_desde"):
         return _bloco("compras", titulo, estado="vazio", resumo="Nenhuma compra registrada", dados=resumo, fonte="03.02.37")
     if resumo.get("media_3_meses") is None:
@@ -396,7 +421,7 @@ def bloco_devolucoes(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> 
     titulo = "Devoluções"
     if fontes.compras is None:
         return _indisponivel("devolucoes", titulo, "03.02.37", "Devoluções indisponíveis agora.")
-    desde = hoje - timedelta(days=DIAS_DEVOLUCAO)
+    desde = date.min
     try:
         itens = fontes.compras.devolucoes_cliente(cliente.filial, cliente.cliente, desde=desde)
         atualizado = fontes.compras.atualizado_em(cliente.filial)
@@ -404,10 +429,10 @@ def bloco_devolucoes(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> 
         return _indisponivel("devolucoes", titulo, "03.02.37", "Devoluções indisponíveis agora.")
     for item in itens:
         item["justificativa"] = _justificativa(fontes.justificativas, cliente, item)
-    dados = {"itens": itens, "desde": desde.isoformat(), "dias": DIAS_DEVOLUCAO}
+    dados = {"itens": itens, "desde": desde.isoformat()}
     if not itens:
-        return _bloco("devolucoes", titulo, estado="vazio", resumo="Sem devoluções recentes", dados=dados, fonte="03.02.37", atualizado_em=atualizado)
-    resumo = f"{len(itens)} devoluç{'ões' if len(itens) != 1 else 'ão'} recente{'s' if len(itens) != 1 else ''}"
+        return _bloco("devolucoes", titulo, estado="vazio", resumo="Sem devoluções na base importada", dados=dados, fonte="03.02.37", atualizado_em=atualizado)
+    resumo = f"{len(itens)} devoluç{'ões' if len(itens) != 1 else 'ão'} na base importada"
     return _bloco("devolucoes", titulo, estado="ok", resumo=resumo, dados=dados, fonte="03.02.37", atualizado_em=atualizado)
 
 

@@ -56,6 +56,7 @@ def create_admin_clientes_router(
     documentacao_pendente_query_service: Any | None = None,
     compras_030237_service: Any | None = None,
     devolucoes_justificativas_service: Any | None = None,
+    dcondicoes_import_service: Any | None = None,
     hoje: Callable[[], date] = date.today,
 ) -> APIRouter:
     router = APIRouter()
@@ -70,6 +71,7 @@ def create_admin_clientes_router(
         documentacao=documentacao_pendente_query_service,
         compras=compras_030237_service,
         justificativas=devolucoes_justificativas_service,
+        condicoes=dcondicoes_import_service,
     )
 
     def autenticar(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import date
+from unittest.mock import MagicMock, patch
 
 from bot_api.services.compras_030237_service import (
     Compras030237Service,
@@ -93,6 +94,20 @@ class ReconstrucaoTest(unittest.TestCase):
     def test_compra_conta_no_mes_da_operacao(self) -> None:
         compras = next(c for c in self.comandos if '"compras_030237_mes"' in c and "INSERT" in c)
         self.assertIn("to_char(data_operacao, 'YYYY-MM')", compras)
+
+    def test_notas_usam_versao_publicada_e_cliente_da_filial(self) -> None:
+        servico = Compras030237Service("postgresql://x")
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [(date(2026, 11, 6), "123", "003", 1, 2, 30, [{"produto": "1", "descricao": "Bebida"}])]
+        with patch.object(servico, "_connect") as conectar, patch.object(servico, "ensure_schema"):
+            conectar.return_value.__enter__.return_value = conn
+            notas = servico.notas_cliente("003", "00100")
+        query, params = cursor.execute.call_args.args
+        self.assertIn('"compras_030237_cargas"', _sql(query))
+        self.assertIn("c.source_key = r.source_key", _sql(query))
+        self.assertEqual(params, ("3", "100", "3", "030237", "100"))
+        self.assertEqual(notas[0]["produtos"][0]["descricao"], "Bebida")
 
 
 class DevolucaoTest(unittest.TestCase):

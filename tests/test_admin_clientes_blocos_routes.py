@@ -109,6 +109,10 @@ class FakeCompras:
             raise RuntimeError("banco fora")
         return [{"data": "2026-11-06", "nota": "231577", "serie": "003", "nf_referencia": "39254", "motivo_codigo": "1", "motivo": "FALTA CAMINHAO", "responsabilidade": "LOGISTICA", "itens": 3, "qtde": 10.0, "total": 5981.6}]
 
+    def notas_cliente(self, filial: str, cliente: str) -> list[dict[str, Any]]:
+        self.pedidos.append((filial, cliente))
+        return [{"data": "2026-01-02", "nota": "1234", "serie": "003", "itens": 2, "qtde": 3, "total": 100}]
+
     def atualizado_em(self, filial: str) -> str:
         return "2026-11-20T08:00:00"
 
@@ -247,9 +251,11 @@ class ConteudoDosBlocosTest(unittest.TestCase):
         self.assertNotIn("media_3_meses", vasilhames["dados"])
 
     def test_compras_e_devolucoes(self) -> None:
-        self.assertEqual(self.dados("compras")["resumo"], "Média mensal entregue (3 meses): R$ 1.500,00")
+        compras = self.dados("compras")
+        self.assertEqual(compras["resumo"], "Média mensal entregue (3 meses): R$ 1.500,00")
+        self.assertEqual(compras["dados"]["notas_fiscais"][0]["nota"], "1234")
         devolucoes = self.dados("devolucoes")
-        self.assertEqual(devolucoes["resumo"], "1 devolução recente")
+        self.assertEqual(devolucoes["resumo"], "1 devolução na base importada")
         self.assertEqual(devolucoes["dados"]["itens"][0]["responsabilidade"], "LOGISTICA")
 
     def test_sopi_pede_2000_de_cerveja_no_mes(self) -> None:
