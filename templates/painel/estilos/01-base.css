@@ -178,6 +178,11 @@
     /* Celular: grupos e abas saem do topo e vão para o menu lateral aberto pelo ☰. */
     .nav-celular { display: none; }
     .nav-celular-menu { display: none; }
+    .nav-categorias { --bs-offcanvas-width: min(300px, 86vw); background: var(--canvas); color: var(--ink-900); }
+    .nav-categoria-link { display: flex; align-items: center; width: 100%; gap: .5rem; min-height: 48px; padding: .65rem .8rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-900); text-align: left; font-weight: 700; }
+    .nav-categoria-link[aria-pressed="true"] { color: var(--brand-700); background: var(--tone-info-bg); }
+    .nav-categoria-link:focus-visible { outline: 2px solid var(--focus); }
+    body[data-theme="dark"] .nav-categorias .btn-close { filter: invert(1) grayscale(1); }
     .nav-celular-grupo + .nav-celular-grupo { margin-top: .85rem; }
     .nav-celular-titulo { margin: 0 0 .25rem .55rem; color: var(--ink-500); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
     .nav-celular-link { display: flex; align-items: center; gap: .65rem; min-height: 44px; padding: .45rem .65rem; border-radius: var(--radius-sm); color: var(--ink-900); font-weight: 650; text-decoration: none; }
@@ -210,6 +215,7 @@
       .nav-celular-titulo { display: none; }
       .nav-celular-link { flex-direction: column; justify-content: center; gap: .12rem; min-width: 4.4rem; min-height: 52px; padding: .25rem .35rem; font-size: .7rem; line-height: 1.15; text-align: center; white-space: nowrap; }
       .nav-celular-link i { font-size: 1.15rem; }
+      button.nav-celular-link { border: 0; background: transparent; }
       #pedidosPane .pedido-send-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
       .nav-celular-btn { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-900); font-size: 1.35rem; }
       .nav-celular-atual { min-width: 0; overflow: hidden; color: var(--ink-900); font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }

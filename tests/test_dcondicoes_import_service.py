@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -69,6 +70,21 @@ class DCondicoesImportServiceTests(unittest.TestCase):
             rows = _load_dcondicoes_rows(path)
         self.assertEqual([r.taxa_mensal_adf for r in rows], ["006,11", "000,00", ""])
         self.assertEqual([r.dias_primeiro_vencimento for r in rows], ["010", "000", ""])
+
+    def test_recuperacao_recusa_csv_diferente_do_lote_ativo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "dCondicoes.csv"
+            path.write_text("Filial;Condição de Pagto;Descrição\n3;611;BOLETO\n", encoding="utf-8")
+            servico = DCondicoesImportService("postgresql://x", "reports")
+            conn = MagicMock()
+            cursor = conn.cursor.return_value.__enter__.return_value
+            cursor.fetchone.return_value = {"file_hash": "outro-arquivo"}
+            with patch.object(servico, "_connect") as conectar, patch.object(servico, "_ensure_schema"), patch("bot_api.services.dcondicoes_import_service.resolve_effective_import_batch_id", return_value=1):
+                conectar.return_value.__enter__.return_value = conn
+                with self.assertRaisesRegex(ValueError, "não corresponde"):
+                    servico.recuperar_adf_lote_ativo(path)
+            cursor.executemany.assert_not_called()
+            conn.commit.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -612,6 +612,14 @@
     .ficha-voltar { padding-left: 0; color: var(--ink-700); font-weight: 700; text-decoration: none; }
     .ficha-cliente .offcanvas-body { padding: .85rem; }
     .ficha-cabecalho { display: grid; gap: .6rem; margin-bottom: .85rem; padding: .85rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+    .ficha-resumo { display: grid; gap: .65rem; margin-bottom: .85rem; padding: .85rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+    .ficha-alerta { margin: 0 0 .55rem; padding: .5rem .65rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-900); background: var(--tone-warn-bg); font-size: var(--fs-sm); font-weight: 700; }
+    .ficha-atalhos { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .ficha-atalhos button { min-height: 40px; padding: .35rem .65rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--ink-900); font-size: var(--fs-sm); font-weight: 700; }
+    .ficha-atalhos button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .ficha-filtros-notas { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: .5rem; margin: .4rem 0; }
+    .ficha-filtros-notas label { display: grid; gap: .2rem; color: var(--ink-700); font-size: var(--fs-xs); font-weight: 700; }
+    .ficha-item[hidden] { display: none; }
     .ficha-cabecalho-nome .mono { color: var(--ink-500); font-size: var(--fs-xs); font-weight: 800; }
     .ficha-acoes { display: flex; flex-wrap: wrap; gap: .4rem; }
     .ficha-fatos { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .45rem .75rem; margin: 0; }

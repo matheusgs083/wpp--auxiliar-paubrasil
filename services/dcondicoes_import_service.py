@@ -153,6 +153,32 @@ class DCondicoesImportService:
             cur.execute(query, (f"{filial}_{codigo}",))
             return cur.fetchone()
 
+    def recuperar_adf_lote_ativo(self, source_path: Path) -> dict[str, Any]:
+        """Restaura campos omitidos somente quando o CSV é idêntico ao lote ativo."""
+        path = source_path.expanduser().resolve()
+        linhas = _load_dcondicoes_rows(path)
+        digest = _sha256(path)
+        with self._connect() as conn:
+            self._ensure_schema(conn)
+            batch = resolve_effective_import_batch_id(conn, self.schema, "dcondicoes", activate_if_missing=False)
+            if batch is None:
+                raise ValueError("Não há lote ativo de condições para recuperar.")
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(sql.SQL("SELECT file_hash FROM {}.import_batches WHERE id = %s AND dataset_name = 'dcondicoes'").format(sql.Identifier(self.schema)), (batch,))
+                registro = cur.fetchone()
+                if not registro or registro["file_hash"] != digest:
+                    raise ValueError("O CSV não corresponde ao lote ativo; importe a versão atual das condições.")
+                cur.execute(sql.SQL("SELECT row_number, filial_condicao_key, descricao FROM {}.dcondicoes_snapshot WHERE batch_id = %s ORDER BY row_number").format(sql.Identifier(self.schema)), (batch,))
+                gravadas = cur.fetchall()
+                esperadas = [(i, linha.filial_condicao_key, linha.descricao) for i, linha in enumerate(linhas, 1)]
+                if [(r["row_number"], r["filial_condicao_key"], r["descricao"]) for r in gravadas] != esperadas:
+                    raise ValueError("As linhas do lote ativo não correspondem ao CSV; recuperação cancelada.")
+                cur.executemany(sql.SQL("UPDATE {}.dcondicoes_snapshot SET taxa_mensal_adf = %s, dias_primeiro_vencimento = %s WHERE batch_id = %s AND row_number = %s").format(sql.Identifier(self.schema)),
+                                [(linha.taxa_mensal_adf or None, linha.dias_primeiro_vencimento or None, batch, i) for i, linha in enumerate(linhas, 1)])
+            self._create_latest_view(conn)
+            conn.commit()
+        return {"ok": True, "batch_id": batch, "linhas": len(linhas), "fonte": str(path)}
+
     def import_source(self, source_path: Path, reference_date: date | None = None) -> dict[str, Any]:
         if not self.database_url:
             raise RuntimeError("REPORTS_DATABASE_URL nao configurada.")

@@ -51,7 +51,7 @@
         const resposta = await req(fichaUrl(filial, cliente, "cabecalho"));
         if (sequencia !== fichaUi.seq) return;
         fichaUi.cliente = resposta.cliente || {};
-        corpo.innerHTML = renderFichaCabecalho(fichaUi.cliente) + `<div class="ficha-blocos">${FICHA_BLOCOS.map(renderFichaBlocoCasca).join("")}</div>`;
+        corpo.innerHTML = renderFichaCabecalho(fichaUi.cliente) + `<section class="ficha-resumo" aria-label="Resumo do cliente"><h3 class="h6 fw-bold">Resumo do cliente</h3><div id="fichaResumoDados" aria-live="polite">Carregando resumo...</div><nav class="ficha-atalhos" aria-label="Acessos rápidos"><button type="button" data-ficha-ir="titulos">Títulos</button><button type="button" data-ficha-ir="compras">Compras e notas</button><button type="button" data-ficha-ir="devolucoes">Devoluções</button></nav></section><div class="ficha-blocos">${FICHA_BLOCOS.map(renderFichaBlocoCasca).join("")}</div>`;
         FICHA_BLOCOS.forEach(item => carregarFichaBloco(item.id, sequencia));
       } catch (error) {
         if (sequencia !== fichaUi.seq) return;
@@ -112,6 +112,31 @@
       }
       const corpo = document.getElementById(`fichaBloco-${id}`);
       if (corpo && !corpo.hidden) corpo.innerHTML = renderFichaBlocoCorpo(id);
+      atualizarFichaResumo();
+    }
+
+    function atualizarFichaResumo() {
+      const alvo = document.getElementById("fichaResumoDados");
+      if (!alvo) return;
+      const resumo = id => {
+        const bloco = fichaUi.blocos[id];
+        if (!bloco) return "Carregando...";
+        if (bloco.erro || bloco.estado === "indisponivel") return "Indisponível";
+        return bloco.resumo || "Sem dados";
+      };
+      const compras = fichaUi.blocos.compras;
+      const ultima = compras && compras.estado === "ok" ? fichaDataBr(compras.dados?.ultima_entrega) : resumo("compras");
+      const titulos = fichaUi.blocos.titulos;
+      const vencidos = Number(titulos?.dados?.vencidos || 0);
+      const alertas = [];
+      if (titulos?.estado === "ok" && vencidos > 0) alertas.push(`${vencidos} título${vencidos === 1 ? " vencido" : "s vencidos"}. Abra Títulos para conferir.`);
+      const dataEntrega = compras?.estado === "ok" ? String(compras.dados?.ultima_entrega || "") : "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dataEntrega)) {
+        const dias = Math.floor((Date.now() - new Date(`${dataEntrega}T12:00:00`).getTime()) / 86400000);
+        if (dias >= 30) alertas.push(`Última entrega há ${dias} dias, conforme a base importada.`);
+      }
+      const alerta = alertas.length ? `<div class="ficha-alerta" role="status">${alertas.map(texto => `<div>${escapeHtml(texto)}</div>`).join("")}</div>` : "";
+      alvo.innerHTML = alerta + fichaFatos([["Títulos", resumo("titulos")], ["Crédito", resumo("credito")], ["Última entrega", ultima], ["Devoluções", resumo("devolucoes")]]);
     }
 
     function alternarFichaBloco(id, abrir) {
@@ -144,6 +169,10 @@
       return fonte.atualizado_em ? `<div class="ficha-rodape"><i class="bi bi-clock-history me-1" aria-hidden="true"></i>Atualizado em ${escapeHtml(fonte.atualizado_em)}</div>` : "";
     }
 
+    function fichaFiltrosNotas(prefixo) {
+      return `<div class="ficha-filtros-notas"><label>Número da NF<input class="form-control form-control-sm" type="search" inputmode="numeric" data-ficha-filtro="nota" placeholder="Buscar nota"></label><label>De<input class="form-control form-control-sm" type="date" data-ficha-filtro="inicio"></label><label>Até<input class="form-control form-control-sm" type="date" data-ficha-filtro="fim"></label></div><div class="small text-secondary" data-ficha-filtro-status aria-live="polite"></div>`;
+    }
+
     const FICHA_RENDER = {
       titulos(d, bloco) {
         const titulos = d.titulos || [];
@@ -165,7 +194,7 @@
         const fat = (d.faturamento || []).length
           ? `<h4 class="ficha-sub">Faturamento entregue</h4><ul class="ficha-linhas">${d.faturamento.map(f => `<li><span>${escapeHtml(f.kpi || "-")}</span><strong>${escapeHtml(f.faturamento_com_pdv || "-")}</strong><small>${escapeHtml(f.pedidos === "" ? "" : `${f.pedidos} nota(s)`)}</small></li>`).join("")}</ul>`
           : `<h4 class="ficha-sub">Faturamento entregue</h4><div class="small text-secondary">${d.faturamento_fonte === "indisponivel" ? "O faturamento não pôde ser carregado agora." : "Nenhuma compra registrada."}</div>`;
-        return `${fatos}${fat}<div class="small text-secondary mt-2">Limite disponível = limite total menos o que está em aberto.</div>`;
+        return `${fatos}${fat}`;
       },
       compras(d, bloco) {
         if (bloco.estado === "vazio") return clientesVazio("Nenhuma compra registrada para este cliente.");
@@ -183,7 +212,7 @@
         const aviso = d.historico_suficiente ? "" : `<div class="small text-secondary mb-2">A média aparece quando houver 3 meses fechados de histórico. Histórico desde ${escapeHtml(fichaMesBr(d.base_desde))}.</div>`;
         const tops = [["Maior faturamento", d.top_faturamento || [], p => formatMoneyText(p.total)], ["Maior quantidade", d.top_quantidade || [], p => `${fichaNumero(p.qtde)} ${p.unidade || ""}`]]
           .map(([rotulo, itens, valor]) => `<div><h4 class="ficha-sub">${rotulo}</h4>${itens.length ? `<ol class="ficha-top">${itens.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)}</span><strong>${escapeHtml(valor(p))}</strong></li>`).join("")}</ol>` : '<div class="small text-secondary">Sem produtos no período.</div>'}</div>`).join("");
-        const notas = d.notas_disponiveis === false ? '<div class="small text-secondary">Não foi possível carregar as notas agora.</div>' : (d.notas_fiscais || []).length ? `<div class="ficha-lista">${d.notas_fiscais.map(n => `<article class="ficha-item"><div class="ficha-item-topo"><strong>NF ${escapeHtml(n.nota)}${n.serie ? ` · Série ${escapeHtml(n.serie)}` : ""}</strong><span>${escapeHtml(fichaDataBr(n.data))}</span></div>${fichaFatos([["Valor", formatMoneyText(n.total)], ["Itens", fichaNumero(n.itens)], ["Quantidade", fichaNumero(n.qtde, 2)]])}${(n.produtos || []).length ? `<details class="ficha-detalhe"><summary>Ver produtos</summary><ul class="ficha-linhas">${n.produtos.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)} · ${escapeHtml(fichaNumero(p.qtde, 2))} ${escapeHtml(p.unidade || "")}</span><strong>${escapeHtml(formatMoneyText(p.total))}</strong></li>`).join("")}</ul></details>` : ""}</article>`).join("")}</div>` : clientesVazio("Nenhuma nota encontrada na base importada.");
+        const notas = d.notas_disponiveis === false ? '<div class="small text-secondary">Não foi possível carregar as notas agora.</div>' : (d.notas_fiscais || []).length ? `<div data-ficha-filtros>${fichaFiltrosNotas("compras")}<div class="ficha-lista">${d.notas_fiscais.map(n => `<article class="ficha-item" data-ficha-nota="${escapeHtml(String(n.nota || ""))}" data-data="${escapeHtml(String(n.data || ""))}"><div class="ficha-item-topo"><strong>NF ${escapeHtml(n.nota)}${n.serie ? ` · Série ${escapeHtml(n.serie)}` : ""}</strong><span>${escapeHtml(fichaDataBr(n.data))}</span></div>${fichaFatos([["Valor", formatMoneyText(n.total)], ["Itens", fichaNumero(n.itens)], ["Quantidade", fichaNumero(n.qtde, 2)]])}${(n.produtos || []).length ? `<details class="ficha-detalhe"><summary>Ver produtos</summary><ul class="ficha-linhas">${n.produtos.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)} · ${escapeHtml(fichaNumero(p.qtde, 2))} ${escapeHtml(p.unidade || "")}</span><strong>${escapeHtml(formatMoneyText(p.total))}</strong></li>`).join("")}</ul></details>` : ""}</article>`).join("")}</div></div>` : clientesVazio("Nenhuma nota encontrada na base importada.");
         return `${kpis}${aviso}<h4 class="ficha-sub">Faturamento entregue por mês</h4>${fichaGraficoCompras(d.serie || [])}<div class="ficha-tops">${tops}</div><details class="ficha-detalhe"><summary>Notas fiscais de compras (${(d.notas_fiscais || []).length})</summary>${notas}<div class="small text-secondary mt-2">Notas das bases importadas; esta consulta não disponibiliza o PDF ou XML.</div></details>`;
       },
       vasilhames(d, bloco) {
@@ -222,11 +251,11 @@
       },
       devolucoes(d, bloco) {
         if (!(d.itens || []).length) return clientesVazio("Nenhuma devolução na base importada.");
-        return `<div class="ficha-lista">${d.itens.map(i => `<article class="ficha-item">
+        return `<div data-ficha-filtros>${fichaFiltrosNotas("devolucoes")}<div class="ficha-lista">${d.itens.map(i => `<article class="ficha-item" data-ficha-nota="${escapeHtml(String(i.nota || ""))}" data-data="${escapeHtml(String(i.data || ""))}">
             <div class="ficha-item-topo"><strong class="mono">NF ${escapeHtml(i.nota || "-")}</strong><span class="small text-secondary">${escapeHtml(fichaDataBr(i.data))}</span></div>
             ${fichaFatos([["Motivo", i.motivo], ["Responsabilidade", i.responsabilidade || "-"], ["NF de origem", i.nf_referencia || "-"], ["Volume", fichaNumero(i.qtde)], ["Valor", formatMoneyText(i.total)]])}
             ${i.justificativa ? `<p class="ficha-justificativa"><i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>${escapeHtml(i.justificativa)}</p>` : ""}
-          </article>`).join("")}</div>`;
+          </article>`).join("")}</div></div>`;
       },
       cadastro(d) {
         return `${fichaDocumentacao(d.documentacao || {})}
@@ -305,6 +334,8 @@
       const corpo = document.getElementById("fichaClienteCorpo");
       if (!corpo) return;
       corpo.addEventListener("click", event => {
+        const atalho = event.target.closest("[data-ficha-ir]");
+        if (atalho) { const id = atalho.dataset.fichaIr; alternarFichaBloco(id, true); document.querySelector(`.ficha-bloco[data-bloco="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
         const repetir = event.target.closest("[data-ficha-repetir]");
         if (repetir) {
           const id = repetir.dataset.fichaRepetir;
@@ -316,5 +347,21 @@
         if (cab) { alternarFichaBloco(cab.dataset.fichaBloco); return; }
         const copiar = event.target.closest(".cliente-copiar");
         if (copiar) copiarLinhaDigitavel(copiar);
+      });
+      corpo.addEventListener("input", event => {
+        if (!event.target.matches("[data-ficha-filtro]")) return;
+        const area = event.target.closest("[data-ficha-filtros]");
+        if (!area) return;
+        const busca = (area.querySelector('[data-ficha-filtro="nota"]')?.value || "").trim().toLowerCase();
+        const inicio = area.querySelector('[data-ficha-filtro="inicio"]')?.value || "";
+        const fim = area.querySelector('[data-ficha-filtro="fim"]')?.value || "";
+        let visiveis = 0;
+        area.querySelectorAll("[data-ficha-nota]").forEach(item => {
+          const data = item.dataset.data || "";
+          item.hidden = Boolean((busca && !item.dataset.fichaNota.toLowerCase().includes(busca)) || (inicio && (!data || data < inicio)) || (fim && (!data || data > fim)));
+          if (!item.hidden) visiveis++;
+        });
+        const status = area.querySelector("[data-ficha-filtro-status]");
+        if (status) status.textContent = `${visiveis} resultado${visiveis === 1 ? "" : "s"}`;
       });
     }
