@@ -13,6 +13,8 @@ from bot_api.routes.admin_critica_carteira import create_admin_critica_carteira_
 from bot_api.routes.admin_critica_geracao import create_admin_critica_geracao_router
 from bot_api.routes.admin_financeiro import create_admin_financeiro_router
 from bot_api.routes.admin_giro import create_admin_giro_router
+from bot_api.routes.admin_gerentes_vendas import create_admin_gerentes_vendas_router
+from bot_api.services.gerentes_vendas_service import GerentesVendasService
 from bot_api.routes.admin_imports import create_admin_imports_router
 from bot_api.routes.admin_liga_entrega import create_admin_liga_entrega_router
 from bot_api.routes.admin_panel import create_admin_panel_router
@@ -31,7 +33,11 @@ RouteRegistrar = Callable[[FastAPI], None]
 
 
 def build_admin_route_registrars(deps: dict[str, Any]) -> tuple[RouteRegistrar, ...]:
+    dsetores = deps.get("dsetores_import_service")
+    if dsetores is not None:
+        deps["gerentes_vendas_service"] = GerentesVendasService(dsetores.database_url, dsetores.schema)
     return (
+        lambda app: app.include_router(create_admin_gerentes_vendas_router(service=deps["gerentes_vendas_service"], require_admin_panel_auth=deps["require_admin_panel_auth"], record_admin_panel_action=deps.get("record_admin_panel_action"))) if deps.get("gerentes_vendas_service") else None,
         lambda app: _register_admin_access_routes(app, deps=deps),
         lambda app: _register_admin_import_routes(app, deps=deps),
         lambda app: _register_admin_giro_routes(app, deps=deps),
@@ -297,6 +303,7 @@ def _register_admin_rota_financeira_routes(app: FastAPI, *, deps: dict[str, Any]
             inadimplencia_query_service=deps["inadimplencia_query_service"],
             boletos_query_service=deps.get("boletos_query_service"),
             rota_financeira_query_service=deps.get("rota_financeira_query_service"),
+            gerentes_vendas_service=deps.get("gerentes_vendas_service"),
             giro_vasilhame_service=deps.get("giro_vasilhame_service"),
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps.get("record_admin_panel_action"),
@@ -325,6 +332,7 @@ def _register_admin_critica_carteira_routes(app: FastAPI, *, deps: dict[str, Any
             require_admin_panel_feature=deps["require_admin_panel_feature"],
             dclientes_query_service=deps["dclientes_query_service"],
             critica_rn_query_service=deps["critica_rn_query_service"],
+            gerentes_vendas_service=deps.get("gerentes_vendas_service"),
             parse_admin_critica_date=deps["parse_admin_critica_date"],
             record_security_event=deps["record_security_event"],
             record_admin_panel_action=deps.get("record_admin_panel_action"),

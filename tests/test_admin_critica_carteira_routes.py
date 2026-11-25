@@ -92,7 +92,7 @@ class OpcoesTest(unittest.TestCase):
     def test_gerente_ve_os_setores_do_gv(self) -> None:
         dados = _app(GERENTE)[0].get("/api/admin/critica/carteira/opcoes").json()
         self.assertEqual([s["setor"] for s in dados["setores"]], ["3_101", "3_102"])
-        self.assertEqual(dados["gvs"], [{"gv": "10", "setores": 2}])
+        self.assertEqual(dados["gvs"], [{"gv": "10", "nome": "", "setores": 2}])
 
     def test_operacao_escolhe_entre_as_filiais_marcadas(self) -> None:
         cliente = _app(OPERACAO)[0]

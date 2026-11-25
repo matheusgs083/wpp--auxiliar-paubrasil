@@ -25,9 +25,23 @@
     function rotaAtualizarSetores() {
       const opcoes = rotaUi.opcoes || {};
       const filial = document.getElementById("rotaFilial")?.value || "";
-      const gv = document.getElementById("rotaGv")?.value || "";
-      const setores = (opcoes.setores || []).filter(item => (!filial || item.filial === filial) && (!gv || item.gv === gv)).map(item => item.setor);
-      rotaOpcoesSelect(document.getElementById("rotaSetor"), [...new Set(setores)], "Todos", rotaRotuloChave);
+      const gv = (document.getElementById("rotaGv")?.value || "").split(",").filter(Boolean);
+      const setores = (opcoes.setores || []).filter(item => (!filial || item.filial === filial) && (!gv.length || gv.includes(item.gv)));
+      const select = document.getElementById("rotaSetor");
+      const atual = select.value;
+      const filiais = [...new Set(setores.map(item => item.filial))];
+      select.innerHTML = '<option value="">Todos</option>' + filiais.map(codigo => `<optgroup label="${escapeHtml((opcoes.filiais_nomes || {})[codigo] || `Filial ${codigo}`)}">${setores.filter(item => item.filial === codigo).map(item => `<option value="${escapeHtml(item.setor)}">Setor ${escapeHtml(item.setor.split("_").pop())}</option>`).join("")}</optgroup>`).join("");
+      if (setores.some(item => item.setor === atual)) select.value = atual;
+    }
+
+    function rotaAtualizarGerentes() {
+      const opcoes = rotaUi.opcoes || {};
+      const filial = document.getElementById("rotaFilial")?.value || "";
+      const select = document.getElementById("rotaGv");
+      const atual = select.value;
+      const grupos = (opcoes.gerentes || []).filter(item => !filial || item.filiais.includes(filial));
+      select.innerHTML = '<option value="">Todos</option>' + grupos.map(item => `<option value="${escapeHtml(item.chaves.join(","))}">${escapeHtml(item.nome)} (${escapeHtml(item.chaves.map(rotaRotuloChave).join(", "))})</option>`).join("");
+      if (grupos.some(item => item.chaves.join(",") === atual)) select.value = atual;
     }
 
     async function carregarOpcoesRota({ forcar = false } = {}) {
@@ -45,7 +59,7 @@
         rotaOpcoesSelect(document.getElementById("rotaFilial"), opcoes.filiais || [], "Todas", filial => (opcoes.filiais_nomes || {})[filial] || `Filial ${filial}`);
         const gvWrap = document.getElementById("rotaGvWrap");
         if (gvWrap) gvWrap.hidden = !opcoes.mostrar_gv;
-        rotaOpcoesSelect(document.getElementById("rotaGv"), opcoes.gvs || [], "Todos", rotaRotuloChave);
+        rotaAtualizarGerentes();
         rotaAtualizarSetores();
         // Seleção com uma opção só não ajuda: some o campo e a coluna da tabela.
         const umaFilial = (opcoes.filiais || []).length <= 1;
@@ -190,7 +204,7 @@
           <td class="rota-c-cliente"><button class="rota-cliente rota-acao" type="button" data-acao="detalhe" data-index="${index}"><strong>${escapeHtml(nome)}</strong><span class="mono">NB ${escapeHtml(item.cliente)}</span></button></td>
           <td class="rota-c-resumo">${escapeHtml(resumo)}</td>
           <td class="rota-c-filial" data-label="Filial">${escapeHtml(item.filial_nome || item.filial)}</td>
-          <td class="small rota-c-setor" data-label="GV / Setor">${escapeHtml(rotaRotuloChave(item.gv) || "-")}<br>${escapeHtml(rotaRotuloChave(item.setor) || "-")}</td>
+          <td class="small rota-c-setor" data-label="GV / Setor">${escapeHtml(item.gerente_nome || "GV")} (${escapeHtml(rotaRotuloChave(item.gv) || "-")})<br>Setor ${escapeHtml(String(item.setor || "-").split("_").pop())}</td>
           <td class="small rota-c-telefone" data-label="Telefone">${escapeHtml(item.telefone || "—")}</td>
           <td class="text-end" data-label="Títulos">${escapeHtml(String(item.titulos))}${item.titulos_vencidos ? `<div class="small text-danger">${escapeHtml(String(item.titulos_vencidos))} ${item.titulos_vencidos === 1 ? "vencido" : "vencidos"}</div>` : ""}</td>
           <td class="text-end fw-semibold rota-c-pendente" data-label="Pendente">${item.titulos ? escapeHtml(formatMoneyText(item.total_pendente)) : "—"}</td>
@@ -262,7 +276,8 @@
       }, 450));
       document.getElementById("rotaDia")?.addEventListener("change", recarregar);
       document.getElementById("rotaSetor")?.addEventListener("change", recarregar);
-      ["rotaFilial", "rotaGv"].forEach(id => document.getElementById(id)?.addEventListener("change", () => { rotaAtualizarSetores(); recarregar(); }));
+      document.getElementById("rotaFilial")?.addEventListener("change", () => { rotaAtualizarGerentes(); rotaAtualizarSetores(); recarregar(); });
+      document.getElementById("rotaGv")?.addEventListener("change", () => { rotaAtualizarSetores(); recarregar(); });
       document.getElementById("rotaAtualizarBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: rotaUi.pagina || 1 }));
       document.getElementById("rotaAnteriorBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: Math.max(1, (rotaUi.pagina || 1) - 1) }));
       document.getElementById("rotaProximaBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: (rotaUi.pagina || 1) + 1 }));

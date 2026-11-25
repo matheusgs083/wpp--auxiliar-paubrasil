@@ -29,6 +29,7 @@ def create_admin_critica_carteira_router(
     require_admin_panel_feature: Callable[[dict[str, Any] | None, str], None],
     dclientes_query_service: Any,
     critica_rn_query_service: Any,
+    gerentes_vendas_service: Any | None = None,
     parse_admin_critica_date: Callable[[str | None], date | None],
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
@@ -70,6 +71,7 @@ def create_admin_critica_carteira_router(
             raise HTTPException(status_code=403, detail="Filial fora da sua carteira.")
         setores = setores_da_filial(escopo, escolhida) if escolhida else []
         gvs = gvs_liberados(escopo, escolhida, setores) if escolhida else []
+        nomes_gvs = gerentes_vendas_service.nomes() if gerentes_vendas_service is not None else {}
         ultima_data = ultima_critica(escopo, escolhida) if escolhida else None
         record_security_event(request, channel="api", event_type="admin_critica_carteira_opcoes", decision="allowed", reason=f"filial={escolhida};setores={len(setores)}")
         return {
@@ -80,7 +82,7 @@ def create_admin_critica_carteira_router(
             "setores": setores,
             # Data que sai quando o usuário não escolhe uma: a tela mostra antes do download.
             "ultima_data": ultima_data.isoformat() if ultima_data else "",
-            "gvs": [{"gv": gv, "setores": sum(1 for s in setores if s["gv"] == gv)} for gv in gvs],
+            "gvs": [{"gv": gv, "nome": nomes_gvs.get(f"{escolhida}_{gv}") or ("Tratamento" if gv == "99" else ""), "setores": sum(1 for s in setores if s["gv"] == gv)} for gv in gvs],
             # Quem tem a filial inteira pode baixar a crítica de todos os setores de uma vez.
             "pode_filial_inteira": escopo.irrestrito or bool(escopo.filiais),
         }

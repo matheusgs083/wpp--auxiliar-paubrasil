@@ -189,7 +189,15 @@ class RotaFinanceiraQueryService:
             filters.append(sql.SQL("filial = %s"))
             params.append(_normalize_filial(filial))
         if gv:
-            _append_scope_value_filter(filters=filters, params=params, value=gv, key_field="filial_gv_key")
+            chaves = gv.split(",")
+            if len(chaves) > 100 or any(not re.fullmatch(r"\d+_\d+", item) for item in chaves):
+                raise ValueError("Filtro de gerentes inválido.")
+            gv_filters: list[Any] = []
+            gv_params: list[Any] = []
+            for chave in chaves:
+                _append_scope_value_filter(filters=gv_filters, params=gv_params, value=chave, key_field="filial_gv_key")
+            filters.append(sql.SQL("({})").format(sql.SQL(" OR ").join(gv_filters)))
+            params.extend(gv_params)
         if setor:
             _append_scope_value_filter(filters=filters, params=params, value=setor, key_field="filial_setor_key")
         texto = _normalize_search_text(busca)

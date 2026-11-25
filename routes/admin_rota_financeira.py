@@ -21,6 +21,7 @@ from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto,
 from bot_api.services.filial_labels import FILIAL_LABELS
 from bot_api.services.rota_financeira_giro import SITUACOES_GIRO, ctes_giro
 from bot_api.services.rota_financeira_query_service import SITUACOES
+from bot_api.services.gerentes_vendas_service import agrupar_gerentes
 
 FEATURE_ROTA_FINANCEIRA = "rota_financeira"
 TAMANHO_PAGINA = 25
@@ -34,6 +35,7 @@ def create_admin_rota_financeira_router(
     inadimplencia_query_service: Any,
     boletos_query_service: Any | None,
     rota_financeira_query_service: Any,
+    gerentes_vendas_service: Any | None = None,
     record_security_event: Callable[..., None],
     record_admin_panel_action: Callable[..., None] | None = None,
     giro_vasilhame_service: Any | None = None,
@@ -56,7 +58,7 @@ def create_admin_rota_financeira_router(
         _context, escopo = autenticar(request, authorization, x_api_token, x_admin_token)
         try:
             dias = dclientes_query_service.list_visit_days(allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=20)
-            combinacoes = dclientes_query_service.list_seller_base_summaries(allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=200)
+            combinacoes = dclientes_query_service.list_seller_base_summaries(allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=10000)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail="Cadastro de clientes indisponível no momento. Tente de novo em instantes.") from exc
         setores: list[dict[str, str]] = []
@@ -69,6 +71,7 @@ def create_admin_rota_financeira_router(
             setores.append({"setor": setor, "gv": "" if gv == "-" else gv, "filial": filial})
         filiais = sorted({item["filial"] for item in setores if item["filial"]}, key=lambda f: int(f))
         gvs = sorted({item["gv"] for item in setores if item["gv"]})
+        nomes_gvs = gerentes_vendas_service.nomes() if gerentes_vendas_service is not None else {}
         record_security_event(request, channel="api", event_type="admin_rota_financeira_opcoes", decision="allowed", reason=f"setores={len(setores)}")
         return {
             "ok": True,
@@ -79,6 +82,7 @@ def create_admin_rota_financeira_router(
             # Nome de cada revenda vem da dRevendas (FILIAL_LABELS é recarregado dela).
             "filiais_nomes": {filial: FILIAL_LABELS.get(filial, "") for filial in filiais},
             "gvs": gvs,
+            "gerentes": agrupar_gerentes(gvs, nomes_gvs),
             "mostrar_gv": len(gvs) > 1,
             "setores": setores,
             "situacoes": list(SITUACOES),
@@ -89,7 +93,7 @@ def create_admin_rota_financeira_router(
         request: Request,
         dia: str = Query(min_length=2, max_length=40),
         filial: str | None = Query(default=None, max_length=8),
-        gv: str | None = Query(default=None, max_length=20),
+        gv: str | None = Query(default=None, max_length=2000),
         setor: str | None = Query(default=None, max_length=20),
         busca: str | None = Query(default=None, max_length=120),
         situacao: str = Query(default="todos", max_length=20),
@@ -140,7 +144,11 @@ def create_admin_rota_financeira_router(
                 raise
             raise HTTPException(status_code=503, detail="O giro está indisponível agora. Tente de novo em instantes.") from exc
 
+        nomes_gvs = gerentes_vendas_service.nomes() if gerentes_vendas_service is not None else {}
         clientes = [_cliente_da_rota(item, incluir_boletos) for item in resultado.clientes]
+        for item in clientes:
+            chave = str(item.get("gv") or "")
+            item["gerente_nome"] = nomes_gvs.get(chave) or ("Tratamento" if chave.endswith("_99") else "")
         record_security_event(request, channel="api", event_type="admin_rota_financeira_lista", decision="allowed", reason=f"dia={dia};situacao={situacao};pagina={pagina};total={resultado.total}")
         if record_admin_panel_action and pagina == 1:
             record_admin_panel_action(request=request, context=context, module="rota_financeira", action="consultar_rota", metadata={"dia": dia, "situacao": situacao, "total": resultado.total})

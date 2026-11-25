@@ -1361,6 +1361,8 @@
 
     function applyPanelPermissions() {
       const isAdminPanel = Boolean(state.panel && state.panel.isAdmin);
+      const gerentesCard = document.getElementById("gerentesVendasCard");
+      if (gerentesCard) gerentesCard.hidden = !isAdminPanel;
       document.body.classList.toggle("panel-admin", isAdminPanel);
       const heroTitle = document.querySelector(".admin-hero .hero-title .text-gradient");
       if (heroTitle) heroTitle.textContent = "Central Pau Brasil";

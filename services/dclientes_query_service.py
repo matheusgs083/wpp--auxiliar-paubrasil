@@ -628,7 +628,7 @@ class DClientesQueryService:
         ]
         params: list[Any] = []
         self._apply_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
-        params.append(max(1, min(limit, 200)))
+        params.append(max(1, min(limit, 10000)))
         query = sql.SQL(
             """
             SELECT

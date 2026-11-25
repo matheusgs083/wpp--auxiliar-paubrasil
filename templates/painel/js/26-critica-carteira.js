@@ -64,7 +64,7 @@
         if (gvs.length) {
           partes.push('<li class="crit-grupo">Gerente de vendas</li>');
           gvs.forEach((item, indice) => partes.push(criticaCarteiraItem({
-            icone: "bi-people", titulo: `Crítica do GV ${item.gv}`,
+            icone: "bi-people", titulo: item.nome ? `Crítica de ${item.nome} (GV ${item.gv})` : `Crítica do GV ${item.gv}`,
             detalhe: item.setores ? `Resumo por setor · ${item.setores} ${item.setores === 1 ? "setor" : "setores"}` : "Resumo por setor do gerente",
             params: { filial, gv: item.gv }, resumo: false, principal: gvs.length === 1 && indice === 0
           })));
