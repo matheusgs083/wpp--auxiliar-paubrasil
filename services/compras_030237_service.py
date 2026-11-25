@@ -505,7 +505,8 @@ class Compras030237Service:
             )
             SELECT data, nota, serie, count(*), sum(qtde), sum(total),
                    jsonb_agg(jsonb_build_object('produto', produto, 'descricao', descricao,
-                       'unidade', unidade, 'qtde', qtde, 'total', total) ORDER BY produto, descricao)
+                       'unidade', unidade, 'qtde', qtde, 'total', total)
+                       ORDER BY produto, descricao)
             FROM notas WHERE data IS NOT NULL AND nota <> '0'
             GROUP BY data, nota, serie ORDER BY data DESC, nota DESC, serie
         """).format(giro=self._t(TABELA_GIRO), cargas=self._t("compras_030237_cargas"), raw=self._t("liga_entrega_raw_rows"))
@@ -545,6 +546,13 @@ def montar_resumo(
     }
     totais = {mes: item.total for mes, item in por_mes.items()}
     media = media_mensal(totais, fechados, meses_com_base)
+    media_semanal = None
+    if media is not None and fechados:
+        inicio = date.fromisoformat(f"{fechados[0]}-01")
+        fim = date.fromisoformat(f"{atual}-01")
+        dias = (fim - inicio).days
+        if dias > 0:
+            media_semanal = round(sum(totais.get(mes, 0.0) for mes in fechados) * 7 / dias, 2)
     base_desde = min(meses_com_base) if meses_com_base else ""
     serie = [
         {
@@ -566,6 +574,7 @@ def montar_resumo(
         "mes_atual": serie[-1],
         "meses_fechados": fechados_serie,
         "media_3_meses": media,
+        "media_semanal": media_semanal,
         "base_desde": base_desde,
         "historico_suficiente": media is not None,
         "qtde_3_meses": round(sum(item["qtde"] for item in fechados_serie), 3),

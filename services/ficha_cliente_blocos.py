@@ -48,7 +48,7 @@ from bot_api.services.giro_vasilhame_service import (
     situacao_das_caixas,
 )
 
-BLOCOS = ("titulos", "credito", "compras", "vasilhames", "equipamentos", "comodatos", "devolucoes", "cadastro")
+BLOCOS = ("titulos", "credito", "compras", "notas", "vasilhames", "equipamentos", "comodatos", "devolucoes", "cadastro")
 SITUACAO_BOLETO_SEM_VINCULO = "Sem boleto"
 
 
@@ -230,12 +230,6 @@ def bloco_compras(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dic
         resumo = fontes.compras.resumo_cliente(cliente.filial, cliente.cliente, hoje=hoje)
     except Exception:
         return _indisponivel("compras", titulo, "03.02.37", "Compras indisponíveis agora.")
-    try:
-        resumo["notas_fiscais"] = fontes.compras.notas_cliente(cliente.filial, cliente.cliente)
-        resumo["notas_disponiveis"] = True
-    except Exception:
-        resumo["notas_fiscais"] = []
-        resumo["notas_disponiveis"] = False
     if not resumo.get("base_desde"):
         return _bloco("compras", titulo, estado="vazio", resumo="Nenhuma compra registrada", dados=resumo, fonte="03.02.37")
     if resumo.get("media_3_meses") is None:
@@ -243,6 +237,18 @@ def bloco_compras(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dic
     else:
         texto = f"Média mensal entregue (3 meses): R$ {_dinheiro(Decimal(str(resumo['media_3_meses'])))}"
     return _bloco("compras", titulo, estado="ok", resumo=texto, dados=resumo, fonte="03.02.37", atualizado_em=resumo.get("atualizado_em"))
+
+
+def bloco_notas(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
+    titulo = "Notas fiscais"
+    if fontes.compras is None:
+        return _indisponivel("notas", titulo, "03.02.37", "Notas indisponíveis agora.")
+    try:
+        notas = fontes.compras.notas_cliente(cliente.filial, cliente.cliente)
+    except Exception:
+        return _indisponivel("notas", titulo, "03.02.37", "Não foi possível carregar as notas agora.")
+    resumo = f"{len(notas)} nota{'s' if len(notas) != 1 else ''} na base importada" if notas else "Nenhuma nota na base importada"
+    return _bloco("notas", titulo, estado="ok" if notas else "vazio", resumo=resumo, dados={"notas_fiscais": notas}, fonte="03.02.37")
 
 
 def bloco_vasilhames(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[str, Any]:
@@ -485,6 +491,7 @@ _CONSTRUTORES: dict[str, Callable[[ClienteAutorizado, Fontes, date], dict[str, A
     "titulos": bloco_titulos,
     "credito": bloco_credito,
     "compras": bloco_compras,
+    "notas": bloco_notas,
     "vasilhames": bloco_vasilhames,
     "equipamentos": bloco_equipamentos,
     "comodatos": bloco_comodatos,

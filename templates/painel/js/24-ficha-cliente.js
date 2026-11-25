@@ -6,6 +6,7 @@
       { id: "titulos", titulo: "Títulos em aberto", icone: "bi-receipt" },
       { id: "credito", titulo: "Análise de crédito", icone: "bi-speedometer2" },
       { id: "compras", titulo: "Compras", icone: "bi-bag-check" },
+      { id: "notas", titulo: "Notas fiscais", icone: "bi-receipt-cutoff" },
       { id: "vasilhames", titulo: "Vasilhames", icone: "bi-recycle" },
       { id: "equipamentos", titulo: "Equipamentos", icone: "bi-plug" },
       { id: "comodatos", titulo: "Comodatos", icone: "bi-box-seam" },
@@ -51,8 +52,8 @@
         const resposta = await req(fichaUrl(filial, cliente, "cabecalho"));
         if (sequencia !== fichaUi.seq) return;
         fichaUi.cliente = resposta.cliente || {};
-        corpo.innerHTML = renderFichaCabecalho(fichaUi.cliente) + `<section class="ficha-resumo" aria-label="Resumo do cliente"><h3 class="h6 fw-bold">Resumo do cliente</h3><div id="fichaResumoDados" aria-live="polite">Carregando resumo...</div><nav class="ficha-atalhos" aria-label="Acessos rápidos"><button type="button" data-ficha-ir="titulos">Títulos</button><button type="button" data-ficha-ir="compras">Compras e notas</button><button type="button" data-ficha-ir="devolucoes">Devoluções</button></nav></section><div class="ficha-blocos">${FICHA_BLOCOS.map(renderFichaBlocoCasca).join("")}</div>`;
-        FICHA_BLOCOS.forEach(item => carregarFichaBloco(item.id, sequencia));
+        corpo.innerHTML = renderFichaCabecalho(fichaUi.cliente) + `<section class="ficha-resumo" aria-label="Resumo do cliente"><h3 class="h6 fw-bold">Resumo do cliente</h3><div id="fichaResumoDados" aria-live="polite">Carregando resumo...</div><nav class="ficha-atalhos" aria-label="Acessos rápidos"><button type="button" data-ficha-ir="titulos">Títulos</button><button type="button" data-ficha-ir="compras">Compras</button><button type="button" data-ficha-ir="notas">Notas</button><button type="button" data-ficha-ir="devolucoes">Devoluções</button></nav></section><div class="ficha-blocos">${FICHA_BLOCOS.map(renderFichaBlocoCasca).join("")}</div>`;
+        FICHA_BLOCOS.filter(item => item.id !== "notas").forEach(item => carregarFichaBloco(item.id, sequencia));
       } catch (error) {
         if (sequencia !== fichaUi.seq) return;
         corpo.innerHTML = `<div class="alert alert-danger mb-0" role="alert"><i class="bi bi-shield-exclamation me-2" aria-hidden="true"></i>${escapeHtml(error.message || "Não foi possível abrir o cliente.")} <button class="btn btn-outline-danger btn-sm ms-2" type="button" data-ficha-repetir="cabecalho">Tentar novamente</button></div>`;
@@ -79,10 +80,10 @@
     }
 
     function renderFichaBlocoCasca(item) {
-      return `<section class="ficha-bloco" data-bloco="${item.id}" data-estado="carregando">
+      return `<section class="ficha-bloco" data-bloco="${item.id}" data-estado="${item.id === "notas" ? "nao-carregado" : "carregando"}">
           <h3 class="ficha-bloco-h"><button class="ficha-bloco-cab" type="button" aria-expanded="false" aria-controls="fichaBloco-${item.id}" data-ficha-bloco="${item.id}">
             <span class="ficha-bloco-icone"><i class="bi ${item.icone}" aria-hidden="true"></i></span>
-            <span class="ficha-bloco-texto"><span class="ficha-bloco-titulo">${escapeHtml(item.titulo)}</span><span class="ficha-bloco-resumo"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Carregando...</span></span>
+            <span class="ficha-bloco-texto"><span class="ficha-bloco-titulo">${escapeHtml(item.titulo)}</span><span class="ficha-bloco-resumo">${item.id === "notas" ? "Toque para consultar as notas importadas" : '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Carregando...'}</span></span>
             <i class="bi bi-chevron-down ficha-bloco-chevron" aria-hidden="true"></i>
           </button></h3>
           <div class="ficha-bloco-corpo" id="fichaBloco-${item.id}" role="region" aria-label="${escapeHtml(item.titulo)}" hidden></div>
@@ -148,6 +149,8 @@
       if (vaiAbrir) {
         fichaUi.abertos.push(id);
         corpo.innerHTML = renderFichaBlocoCorpo(id);
+        const secao = botao.closest(".ficha-bloco");
+        if (id === "notas" && secao?.dataset.estado === "nao-carregado") carregarFichaBloco(id, fichaUi.seq);
       }
       corpo.hidden = !vaiAbrir;
       botao.setAttribute("aria-expanded", String(vaiAbrir));
@@ -206,14 +209,18 @@
             <div><span>Mês atual (parcial)</span><strong>${escapeHtml(formatMoneyText(atual.total || 0))}</strong></div>
             <div><span>Média mensal entregue</span><strong>${media}</strong><small>3 meses fechados</small></div>
             <div><span>Notas (3 meses)</span><strong>${escapeHtml(fichaNumero(d.notas_3_meses))}</strong></div>
-            <div><span>Qtde entregue (3 meses)</span><strong>${escapeHtml(fichaNumero(d.qtde_3_meses))}</strong></div>
+            <div><span>Média semanal entregue</span><strong>${d.media_semanal === null || d.media_semanal === undefined ? "—" : escapeHtml(formatMoneyText(d.media_semanal))}</strong><small>3 meses fechados</small></div>
             <div><span>Última entrega</span><strong>${escapeHtml(fichaDataBr(d.ultima_entrega))}</strong></div>
           </div>`;
         const aviso = d.historico_suficiente ? "" : `<div class="small text-secondary mb-2">A média aparece quando houver 3 meses fechados de histórico. Histórico desde ${escapeHtml(fichaMesBr(d.base_desde))}.</div>`;
         const tops = [["Maior faturamento", d.top_faturamento || [], p => formatMoneyText(p.total)], ["Maior quantidade", d.top_quantidade || [], p => `${fichaNumero(p.qtde)} ${p.unidade || ""}`]]
           .map(([rotulo, itens, valor]) => `<div><h4 class="ficha-sub">${rotulo}</h4>${itens.length ? `<ol class="ficha-top">${itens.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)}</span><strong>${escapeHtml(valor(p))}</strong></li>`).join("")}</ol>` : '<div class="small text-secondary">Sem produtos no período.</div>'}</div>`).join("");
-        const notas = d.notas_disponiveis === false ? '<div class="small text-secondary">Não foi possível carregar as notas agora.</div>' : (d.notas_fiscais || []).length ? `<div data-ficha-filtros>${fichaFiltrosNotas("compras")}<div class="ficha-lista">${d.notas_fiscais.map(n => `<article class="ficha-item" data-ficha-nota="${escapeHtml(String(n.nota || ""))}" data-data="${escapeHtml(String(n.data || ""))}"><div class="ficha-item-topo"><strong>NF ${escapeHtml(n.nota)}${n.serie ? ` · Série ${escapeHtml(n.serie)}` : ""}</strong><span>${escapeHtml(fichaDataBr(n.data))}</span></div>${fichaFatos([["Valor", formatMoneyText(n.total)], ["Itens", fichaNumero(n.itens)], ["Quantidade", fichaNumero(n.qtde, 2)]])}${(n.produtos || []).length ? `<details class="ficha-detalhe"><summary>Ver produtos</summary><ul class="ficha-linhas">${n.produtos.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)} · ${escapeHtml(fichaNumero(p.qtde, 2))} ${escapeHtml(p.unidade || "")}</span><strong>${escapeHtml(formatMoneyText(p.total))}</strong></li>`).join("")}</ul></details>` : ""}</article>`).join("")}</div></div>` : clientesVazio("Nenhuma nota encontrada na base importada.");
-        return `${kpis}${aviso}<h4 class="ficha-sub">Faturamento entregue por mês</h4>${fichaGraficoCompras(d.serie || [])}<div class="ficha-tops">${tops}</div><details class="ficha-detalhe"><summary>Notas fiscais de compras (${(d.notas_fiscais || []).length})</summary>${notas}<div class="small text-secondary mt-2">Notas das bases importadas; esta consulta não disponibiliza o PDF ou XML.</div></details>`;
+        return `${kpis}${aviso}<h4 class="ficha-sub">Faturamento entregue por mês</h4>${fichaGraficoCompras(d.serie || [])}<div class="ficha-tops">${tops}</div>`;
+      },
+      notas(d) {
+        const notas = d.notas_fiscais || [];
+        if (!notas.length) return clientesVazio("Nenhuma nota encontrada na base importada.");
+        return `<div data-ficha-filtros>${fichaFiltrosNotas("notas")}<div class="ficha-lista">${notas.map(n => `<details class="ficha-item ficha-nota" data-ficha-nota="${escapeHtml(String(n.nota || ""))}" data-data="${escapeHtml(String(n.data || ""))}"><summary class="ficha-nota-resumo"><span><strong>NF ${escapeHtml(n.nota)}${n.serie ? ` · Série ${escapeHtml(n.serie)}` : ""}</strong><small>${escapeHtml(fichaDataBr(n.data))} · ${escapeHtml(fichaNumero(n.itens))} itens</small></span><strong>${escapeHtml(formatMoneyText(n.total))}</strong></summary>${(n.produtos || []).length ? `<ul class="ficha-linhas">${n.produtos.map(p => `<li><span>${escapeHtml(p.descricao || `Produto ${p.produto}`)}<small class="d-block text-secondary">Quantidade: ${escapeHtml(fichaNumero(p.qtde, 2))} ${escapeHtml(p.unidade || "")}</small></span><strong aria-label="Valor total do item">${escapeHtml(formatMoneyText(p.total))}</strong></li>`).join("")}</ul>` : '<div class="small text-secondary">Produtos indisponíveis.</div>'}</details>`).join("")}</div><p class="small text-secondary mt-2">Valores dos produtos conforme a coluna Total da importação. PDF e XML não estão disponíveis nesta base.</p></div>`;
       },
       vasilhames(d, bloco) {
         if (bloco.estado === "vazio") return clientesVazio("O cliente não tem garrafeiras em comodato.");

@@ -24,7 +24,7 @@ from bot_api.tests.test_admin_clientes_routes import (
 HOJE = date(2026, 11, 23)
 GV_5 = {"is_admin": False, "mode": "usuario", "username": "gv5", "features": ("cliente",), "gv_scopes": ("3-5",)}
 SO_ROTA = {"is_admin": False, "mode": "usuario", "username": "rota", "features": ("rota_financeira",), "seller_scopes": ("3-107",)}
-BLOCOS = ("titulos", "credito", "compras", "vasilhames", "equipamentos", "comodatos", "devolucoes", "cadastro")
+BLOCOS = ("titulos", "credito", "compras", "notas", "vasilhames", "equipamentos", "comodatos", "devolucoes", "cadastro")
 
 
 class Escopado:
@@ -253,7 +253,7 @@ class ConteudoDosBlocosTest(unittest.TestCase):
     def test_compras_e_devolucoes(self) -> None:
         compras = self.dados("compras")
         self.assertEqual(compras["resumo"], "Média mensal entregue (3 meses): R$ 1.500,00")
-        self.assertEqual(compras["dados"]["notas_fiscais"][0]["nota"], "1234")
+        self.assertEqual(self.dados("notas")["dados"]["notas_fiscais"][0]["nota"], "1234")
         devolucoes = self.dados("devolucoes")
         self.assertEqual(devolucoes["resumo"], "1 devolução na base importada")
         self.assertEqual(devolucoes["dados"]["itens"][0]["responsabilidade"], "LOGISTICA")

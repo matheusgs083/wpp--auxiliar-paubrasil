@@ -32,6 +32,18 @@ class MediaTest(unittest.TestCase):
         fechados = ["2026-08", "2026-09", "2026-10"]
         self.assertIsNone(media_mensal({"2026-09": 900.0, "2026-10": 900.0}, fechados, {"2026-09", "2026-10"}))
 
+    def test_media_semanal_usa_dias_reais_dos_tres_meses_fechados(self) -> None:
+        resumo = montar_resumo(atual="2026-11", fechados=["2026-08", "2026-09", "2026-10"],
+            cargas=[("2026-08", None), ("2026-09", None), ("2026-10", None)],
+            meses=[("2026-08", 3100, 0, 1), ("2026-09", 3000, 0, 1), ("2026-10", 3100, 0, 1)],
+            ultima_entrega=None, produtos=[])
+        self.assertEqual(resumo["media_semanal"], 700.0)
+
+    def test_media_semanal_nao_inventa_periodo_sem_base(self) -> None:
+        resumo = montar_resumo(atual="2026-11", fechados=["2026-08", "2026-09", "2026-10"],
+            cargas=[("2026-09", None), ("2026-10", None)], meses=[], ultima_entrega=None, produtos=[])
+        self.assertIsNone(resumo["media_semanal"])
+
     def test_resumo_mostra_base_desde_e_serie(self) -> None:
         resumo = montar_resumo(
             atual="2026-11",
@@ -127,6 +139,11 @@ class DevolucaoTest(unittest.TestCase):
         self.assertEqual(payload["NF Referencia"], "39254")
         self.assertEqual(payload["Descricao"], "CERVEJA")
         self.assertNotIn("Placa", payload)
+
+    def test_historico_preserva_total_do_item(self) -> None:
+        payload = _payload_historico("030237", {"Produto": "37450", "Qtde": "10", "Total": "389,00"})
+        self.assertEqual(payload["Total"], "389,00")
+        self.assertEqual(payload["Qtde"], "10")
 
 
 if __name__ == "__main__":
