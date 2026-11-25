@@ -313,7 +313,7 @@
       const liberado = pedidoPodeDigitar();
       document.getElementById("pedidoEnviarBtn")?.toggleAttribute("disabled", !liberado);
       document.getElementById("pedidoAdicionarItemBtn")?.toggleAttribute("disabled", !liberado);
-      document.querySelectorAll(".pedido-item-produto, .pedido-item-qtd, .pedido-item-preco, .pedido-item-remove, #pedidoCondicao, #pedidoMotivo").forEach(element => {
+      document.querySelectorAll(".pedido-item-produto, .pedido-item-qtd, .pedido-item-preco, .pedido-item-tabela, .pedido-item-remove, #pedidoCondicao, #pedidoMotivo").forEach(element => {
         element.toggleAttribute("disabled", !liberado || (element.classList.contains("pedido-item-remove") && pedidosUi.items.length === 1));
       });
     }
@@ -330,6 +330,24 @@
       return /\b600\s*(ML|M\b|\b)/.test(texto) && !/ONE\s*WAY|\bPET\b|\bLATA\b|\bLT\b|C\/\s*\d+|\bCAIXA\b|\bCX\b/.test(texto);
     }
 
+    function pedidoTabelasPreco(item, index, disabled) {
+      if (!item.produto) return "";
+      const precos = item.precos_referencia || {};
+      const unidade = pedidoTextoBusca(item.unidade);
+      // A DPrecos guarda valores por caixa. Em 600 ml, a grade em DZ usa meia caixa.
+      const porUnidade = /^(UN|UND|UNID|UNIDADE)$/.test(unidade);
+      const divisor = unidade.startsWith("DZ") && pedidoTextoBusca(item.descricao).includes("600") ? 2 : 1;
+      const options = [["asr", "ASR"], ["sub", "SUB"], ["frio", "Frio"]].map(([key, label]) => {
+        const value = Number(precos[key]);
+        if (!Number.isFinite(value) || value <= 0) return `<option disabled>${label} · indisponível</option>`;
+        const amount = porUnidade ? value : value / divisor;
+        const formatted = amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        return `<option value="${key}" ${item.tabela_preco === key ? "selected" : ""} ${porUnidade ? "disabled" : ""}>${label} · ${escapeHtml(formatted)}${porUnidade ? " / caixa" : ""}</option>`;
+      }).join("");
+      const aviso = porUnidade ? '<div class="form-text pedido-tabela-aviso">Referências por caixa; informe o preço unitário.</div>' : '';
+      return `<label class="visually-hidden" for="pedidoTabela${index}">Tabela de preço do item ${index + 1}</label><select id="pedidoTabela${index}" class="form-select form-select-sm pedido-item-tabela mb-1" data-index="${index}" ${disabled}><option value="livre">Preço livre</option>${options}</select>${aviso}`;
+    }
+
     function renderPedidoItens(focusProductIndex = null) {
       const body = document.getElementById("pedidoItensBody");
       if (!body) return;
@@ -342,11 +360,30 @@
         const selected = item.produto ? `<div class="pedido-product-selected"><strong class="mono">${escapeHtml(item.produto)}</strong>${item.descricao ? ` · ${escapeHtml(item.descricao)}` : ""}${stock ? ` · ${stock}` : ""}</div>${aviso}` : "";
         const suggestions = Array.isArray(item.suggestions) && item.suggestions.length ? `<div class="pedido-product-suggestions" role="listbox" aria-label="Produtos encontrados">${item.suggestions.map((product, productIndex) => `<button class="pedido-product-option" data-index="${index}" data-product-index="${productIndex}" type="button" role="option"><span class="code mono">${escapeHtml(product.codigo_produto)}</span><span class="name">${escapeHtml(product.descricao_produto)}</span><span class="stock">${escapeHtml(formatStockNumber(product.saldo_disponivel))}</span></button>`).join("")}</div>` : "";
         const max = item.saldo_disponivel !== undefined && Number(item.saldo_disponivel) >= 0 ? `max="${Math.floor(Number(item.saldo_disponivel))}"` : "max=\"99999\"";
-        return `<tr><td class="pedido-product-cell"><label class="d-md-none small text-secondary">Produto na grade</label><input class="form-control form-control-sm pedido-item-produto" aria-label="Produto do item ${index + 1}" data-index="${index}" value="${escapeHtml(item.busca || item.produto || "")}" autocomplete="off" placeholder="Nome (3 letras) ou código" ${disabled}>${selected}${suggestions}</td><td><label class="d-md-none small text-secondary">Quantidade</label><input class="form-control form-control-sm mono pedido-item-qtd" aria-label="Quantidade do item ${index + 1}" data-index="${index}" value="${escapeHtml(String(item.quantidade || 1))}" inputmode="numeric" type="number" ${caixa ? `min="${PEDIDO_DUZIAS_POR_CAIXA}" step="${PEDIDO_DUZIAS_POR_CAIXA}" aria-describedby="pedidoCaixaAviso${index}"` : 'min="1"'} ${max} ${disabled}></td><td class="pedido-col-preco"><label class="d-md-none small text-secondary">Preço unitário</label><div class="input-group input-group-sm"><span class="input-group-text">R$</span><input class="form-control mono pedido-item-preco" aria-label="Preço unitário do item ${index + 1}" data-index="${index}" value="${escapeHtml(String(item.preco || ""))}" inputmode="decimal" placeholder="0,00" ${disabled}></div></td><td class="text-end"><button class="btn btn-outline-danger btn-sm pedido-item-remove" data-index="${index}" type="button" ${disabled || pedidosUi.items.length === 1 ? "disabled" : ""} aria-label="Remover item ${index + 1}"><i class="bi bi-trash"></i></button></td></tr>`;
+        return `<tr><td class="pedido-product-cell"><label class="d-md-none small text-secondary">Produto na grade</label><input class="form-control form-control-sm pedido-item-produto" aria-label="Produto do item ${index + 1}" data-index="${index}" value="${escapeHtml(item.busca || item.produto || "")}" autocomplete="off" placeholder="Nome (3 letras) ou código" ${disabled}>${selected}${suggestions}</td><td><label class="d-md-none small text-secondary">Quantidade</label><input class="form-control form-control-sm mono pedido-item-qtd" aria-label="Quantidade do item ${index + 1}" data-index="${index}" value="${escapeHtml(String(item.quantidade || 1))}" inputmode="numeric" type="number" ${caixa ? `min="${PEDIDO_DUZIAS_POR_CAIXA}" step="${PEDIDO_DUZIAS_POR_CAIXA}" aria-describedby="pedidoCaixaAviso${index}"` : 'min="1"'} ${max} ${disabled}></td><td class="pedido-col-preco"><label class="d-md-none small text-secondary">Preço unitário</label>${pedidoTabelasPreco(item, index, disabled)}<div class="input-group input-group-sm"><span class="input-group-text">R$</span><input class="form-control mono pedido-item-preco" aria-label="Preço unitário do item ${index + 1}" data-index="${index}" value="${escapeHtml(String(item.preco || ""))}" inputmode="decimal" placeholder="0,00" ${disabled}></div></td><td class="text-end"><button class="btn btn-outline-danger btn-sm pedido-item-remove" data-index="${index}" type="button" ${disabled || pedidosUi.items.length === 1 ? "disabled" : ""} aria-label="Remover item ${index + 1}"><i class="bi bi-trash"></i></button></td></tr>`;
       }).join("");
       body.querySelectorAll(".pedido-item-produto").forEach(input => input.addEventListener("input", event => pesquisarProdutoPedido(Number(event.target.dataset.index), event.target.value, event.target)));
       body.querySelectorAll(".pedido-item-qtd").forEach(input => input.addEventListener("input", event => { pedidosUi.items[Number(event.target.dataset.index)].quantidade = Number(event.target.value || 0); }));
-      body.querySelectorAll(".pedido-item-preco").forEach(input => input.addEventListener("input", event => { pedidosUi.items[Number(event.target.dataset.index)].preco = event.target.value; }));
+      body.querySelectorAll(".pedido-item-preco").forEach(input => input.addEventListener("input", event => {
+        const index = Number(event.target.dataset.index);
+        pedidosUi.items[index].preco = event.target.value;
+        pedidosUi.items[index].tabela_preco = "livre";
+        const select = body.querySelector(`.pedido-item-tabela[data-index="${index}"]`);
+        if (select) select.value = "livre";
+      }));
+      body.querySelectorAll(".pedido-item-tabela").forEach(select => select.addEventListener("change", event => {
+        const index = Number(event.target.dataset.index);
+        const item = pedidosUi.items[index];
+        const key = event.target.value;
+        item.tabela_preco = key;
+        if (key === "livre") return;
+        const divisor = pedidoTextoBusca(item.unidade).startsWith("DZ") && pedidoTextoBusca(item.descricao).includes("600") ? 2 : 1;
+        const value = Number(item.precos_referencia?.[key]) / divisor;
+        if (!Number.isFinite(value) || value <= 0) return;
+        item.preco = value.toFixed(2).replace(".", ",");
+        const input = body.querySelector(`.pedido-item-preco[data-index="${index}"]`);
+        if (input) input.value = item.preco;
+      }));
       body.querySelectorAll(".pedido-item-remove").forEach(button => button.addEventListener("click", () => { pedidosUi.items.splice(Number(button.dataset.index), 1); renderPedidoItens(); }));
       body.querySelectorAll(".pedido-product-option").forEach(button => button.addEventListener("click", () => {
         const item = pedidosUi.items[Number(button.dataset.index)];
@@ -356,6 +393,9 @@
         item.descricao = String(product.descricao_produto || "");
         item.unidade = String(product.unidade_medida || "");
         item.saldo_disponivel = Number(product.saldo_disponivel || 0);
+        item.precos_referencia = product.precos_referencia || null;
+        item.tabela_preco = "livre";
+        item.preco = "";
         item.busca = `${item.produto} · ${item.descricao}`;
         item.suggestions = [];
         if (Number(item.quantidade || 1) > item.saldo_disponivel) item.quantidade = Math.max(1, Math.floor(item.saldo_disponivel));
@@ -381,6 +421,14 @@
       item.descricao = "";
       item.unidade = "";
       item.saldo_disponivel = undefined;
+      item.precos_referencia = null;
+      item.tabela_preco = "livre";
+      item.preco = "";
+      const priceCell = inputElement?.closest("tr")?.querySelector(".pedido-col-preco");
+      priceCell?.querySelector(".pedido-item-tabela")?.remove();
+      priceCell?.querySelector(".pedido-tabela-aviso")?.remove();
+      const priceInput = priceCell?.querySelector(".pedido-item-preco");
+      if (priceInput) priceInput.value = "";
       item.suggestions = [];
       const rowCell = inputElement?.closest(".pedido-product-cell");
       rowCell?.querySelector(".pedido-product-suggestions")?.remove();

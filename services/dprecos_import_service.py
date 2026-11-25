@@ -208,6 +208,30 @@ class DPrecosImportService:
             "active_batch_id": active_batch_id,
         }
 
+    def consultar_precos(self, codigos: list[str]) -> dict[str, dict[str, Any]]:
+        """Retorna preços por caixa da importação ativa, sem escolher entre valores conflitantes."""
+        normalized = list({normalize_numeric_code(str(code)) for code in codigos} - {""})
+        if not normalized or not self.database_url:
+            return {}
+        query = sql.SQL("SELECT codigo, asr, sub, frio, reference_date FROM {}.dprecos_latest WHERE codigo = ANY(%s)").format(sql.Identifier(self.schema))
+        with self._connect() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(query, (normalized,))
+                rows = cur.fetchall()
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            grouped.setdefault(normalize_numeric_code(str(row["codigo"])), []).append(row)
+        result = {}
+        for codigo, entries in grouped.items():
+            prices = {}
+            for field in ("asr", "sub", "frio"):
+                values = {entry[field] for entry in entries if entry[field] is not None and entry[field] > 0}
+                prices[field] = str(next(iter(values))) if len(values) == 1 else None
+            ref = entries[0].get("reference_date")
+            prices["reference_date"] = ref.isoformat() if ref else None
+            result[codigo] = prices
+        return result
+
     def _ensure_schema(self, conn: psycopg.Connection[Any]) -> None:
         with conn.cursor() as cur:
             cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(self.schema)))

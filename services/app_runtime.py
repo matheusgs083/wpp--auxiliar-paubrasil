@@ -822,6 +822,7 @@ def _build_route_dependencies(runtime: Mapping[str, Any]) -> dict[str, Any]:
         "estoque_020304_import_services": runtime["services"].estoque_020304_import_services,
         "cora_estoque_import_service": runtime["services"].cora_estoque_import_service,
         "cora_estoque_query_service": runtime["services"].cora_estoque_query_service,
+        "dprecos_import_service": runtime["services"].dprecos_import_service,
         "boletos_query_service": runtime["services"].boletos_query_service,
         "rota_financeira_query_service": _rota_financeira_query_service(runtime["services"].dclientes_query_service),
         "compras_030237_service": runtime["compras_030237_service"],

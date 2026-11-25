@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from openpyxl import Workbook
 
@@ -20,6 +21,21 @@ from bot_api.services.dprecos_import_service import (
 
 
 class DPrecosImportServiceTests(unittest.TestCase):
+    def test_consultar_precos_ignora_ausentes_e_conflitos(self):
+        service = DPrecosImportService("postgresql://example", "reports")
+        connection = MagicMock()
+        cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [
+            {"codigo": "123", "asr": Decimal("100"), "sub": Decimal("0"), "frio": Decimal("110"), "reference_date": None},
+            {"codigo": "123", "asr": Decimal("101"), "sub": Decimal("0"), "frio": Decimal("110"), "reference_date": None},
+        ]
+        service._connect = MagicMock(return_value=connection)
+        result = service.consultar_precos(["00123"])
+        self.assertIsNone(result["123"]["asr"])
+        self.assertIsNone(result["123"]["sub"])
+        self.assertEqual(result["123"]["frio"], "110")
+        self.assertEqual(cursor.execute.call_args.args[1], (["123"],))
+
     def test_parse_decimal_value_handles_brazilian_and_plain_values(self) -> None:
         self.assertEqual(_parse_decimal_value("R$ 1.234,56"), Decimal("1234.56"))
         self.assertEqual(_parse_decimal_value("53,90"), Decimal("53.90"))
