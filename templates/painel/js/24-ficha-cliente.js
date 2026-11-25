@@ -37,7 +37,7 @@
       return `<dl class="ficha-fatos">${pares.filter(([, valor]) => valor !== undefined).map(([rotulo, valor]) => `<div><dt>${escapeHtml(rotulo)}</dt><dd>${escapeHtml(String(valor === "" || valor === null ? "-" : valor))}</dd></div>`).join("")}</dl>`;
     }
 
-    async function abrirFichaBlocos(filial, cliente, { bloco = "" } = {}) {
+    async function abrirFichaBlocos(filial, cliente) {
       const painel = document.getElementById("fichaCliente");
       const corpo = document.getElementById("fichaClienteCorpo");
       if (!painel || !corpo) return;
@@ -45,7 +45,6 @@
       fichaUi.atual = { filial: String(filial), cliente: String(cliente) };
       fichaUi.blocos = {};
       fichaUi.abertos = [];
-      fichaUi.pedido = bloco;
       corpo.innerHTML = '<div class="text-secondary py-3" role="status"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Abrindo o cliente...</div>';
       bootstrap.Offcanvas.getOrCreateInstance(painel).show();
       try {
@@ -62,10 +61,12 @@
 
     function renderFichaCabecalho(c) {
       const nome = c.nome || c.razao_social || "Cliente";
+      const saudacao = nome !== "Cliente" ? `Olá, ${nome}! Tudo bem?` : "Olá! Tudo bem?";
+      const mensagem = `${saudacao}\n\nAqui é da Pau Brasil Bebidas. Estou entrando em contato para conversarmos. Fico à disposição!`;
       const titulo = document.getElementById("fichaClienteTitulo");
       if (titulo) titulo.textContent = nome;
       const acoes = [
-        c.telefone_whatsapp ? `<a class="btn btn-success btn-sm" href="https://wa.me/${encodeURIComponent(c.telefone_whatsapp)}" target="_blank" rel="noopener" aria-label="WhatsApp de ${escapeHtml(nome)}"><i class="bi bi-whatsapp me-1" aria-hidden="true"></i>WhatsApp</a>` : "",
+        c.telefone_whatsapp ? `<a class="btn btn-success btn-sm" href="https://wa.me/${encodeURIComponent(c.telefone_whatsapp)}?text=${encodeURIComponent(mensagem)}" target="_blank" rel="noopener" aria-label="WhatsApp de ${escapeHtml(nome)}"><i class="bi bi-whatsapp me-1" aria-hidden="true"></i>WhatsApp</a>` : "",
         c.telefone_discagem ? `<a class="btn btn-outline-secondary btn-sm" href="tel:${encodeURIComponent(c.telefone_discagem)}" aria-label="Ligar para ${escapeHtml(nome)}"><i class="bi bi-telephone me-1" aria-hidden="true"></i>Ligar</a>` : "",
         c.mapa_url ? `<a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(c.mapa_url)}" target="_blank" rel="noopener" aria-label="Abrir endereço de ${escapeHtml(nome)} no mapa"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>Mapa</a>` : ""
       ].join("");
@@ -111,23 +112,6 @@
       }
       const corpo = document.getElementById(`fichaBloco-${id}`);
       if (corpo && !corpo.hidden) corpo.innerHTML = renderFichaBlocoCorpo(id);
-      fichaAbrirInicial();
-    }
-
-    // Abre um bloco quando a ficha fica pronta: o pedido (ex.: botão Boleto da rota), senão
-    // Títulos se houver pendência, senão Compras, senão Cadastro.
-    function fichaAbrirInicial() {
-      if (fichaUi.abertos.length || fichaUi.inicialFeito === fichaUi.seq) return;
-      const b = fichaUi.blocos;
-      let alvo = "";
-      if (fichaUi.pedido && b[fichaUi.pedido]) alvo = fichaUi.pedido;
-      else if (!fichaUi.pedido && b.titulos) {
-        if (b.titulos.estado === "ok") alvo = "titulos";
-        else if (b.compras) alvo = b.compras.estado === "ok" ? "compras" : (b.cadastro ? "cadastro" : "");
-      }
-      if (!alvo) return;
-      fichaUi.inicialFeito = fichaUi.seq;
-      alternarFichaBloco(alvo, true);
     }
 
     function alternarFichaBloco(id, abrir) {
@@ -323,7 +307,7 @@
         const repetir = event.target.closest("[data-ficha-repetir]");
         if (repetir) {
           const id = repetir.dataset.fichaRepetir;
-          if (id === "cabecalho" && fichaUi.atual) abrirFichaBlocos(fichaUi.atual.filial, fichaUi.atual.cliente, { bloco: fichaUi.pedido || "" });
+          if (id === "cabecalho" && fichaUi.atual) abrirFichaBlocos(fichaUi.atual.filial, fichaUi.atual.cliente);
           else if (FICHA_BLOCOS.some(item => item.id === id)) carregarFichaBloco(id, fichaUi.seq);
           return;
         }

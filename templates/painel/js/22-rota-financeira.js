@@ -230,14 +230,17 @@
 
     // Mensagem pronta do WhatsApp: cumprimento, valor em aberto e o próximo passo.
     function rotaMensagemWhatsapp(item, nome) {
-      const partes = [`Olá, ${nome}! Tudo bem?`];
+      const saudacao = nome && nome !== "Cliente" ? `Olá, ${nome}! Tudo bem?` : "Olá! Tudo bem?";
+      const partes = [saudacao, "Aqui é da Pau Brasil Bebidas."];
       if (item.titulos) {
         const venceu = item.menor_dias !== null && item.menor_dias < 0;
-        const vencimento = item.vencimento_proximo ? (venceu ? `, vencido desde ${item.vencimento_proximo}` : `, com vencimento em ${item.vencimento_proximo}`) : "";
-        partes.push(`Consta em aberto ${formatMoneyText(item.total_pendente)}${vencimento}.`);
-        partes.push(item.boletos ? "Posso te enviar o boleto?" : "Como prefere fazer o pagamento?");
+        partes.push(`Estou entrando em contato sobre um saldo em aberto de ${formatMoneyText(item.total_pendente)}.`);
+        if (item.vencimento_proximo) partes.push(venceu ? `O vencimento mais antigo foi em ${item.vencimento_proximo}.` : `O próximo vencimento é em ${item.vencimento_proximo}.`);
+        partes.push(item.boletos ? "Posso te enviar o boleto para conferência?" : "Podemos conferir essa pendência?");
+        partes.push("Se o pagamento já foi feito, por favor, desconsidere e me avise. Obrigado!");
       }
-      return partes.join(" ");
+      else partes.push("Estou entrando em contato para conversarmos. Fico à disposição!");
+      return partes.join("\n\n");
     }
 
     function renderRotaPaginacao(resposta) {
@@ -283,10 +286,14 @@
       if (!form) return;
       const recarregar = () => syncRotaFinanceira({ pagina: 1 });
       form.addEventListener("submit", event => { event.preventDefault(); recarregar(); });
-      document.getElementById("rotaBusca")?.addEventListener("input", debounce(() => {
-        const texto = (document.getElementById("rotaBusca")?.value || "").trim();
-        if (!texto || texto.length >= 2) recarregar();
-      }, 450));
+      let buscaTimer;
+      document.getElementById("rotaBusca")?.addEventListener("input", () => {
+        clearTimeout(buscaTimer);
+        buscaTimer = setTimeout(() => {
+          const texto = (document.getElementById("rotaBusca")?.value || "").trim();
+          if (!texto || texto.length >= 2) recarregar();
+        }, 450);
+      });
       document.getElementById("rotaDia")?.addEventListener("change", recarregar);
       document.getElementById("rotaSetor")?.addEventListener("change", recarregar);
       document.getElementById("rotaFilial")?.addEventListener("change", () => { rotaAtualizarGerentes(); rotaAtualizarSetores(); recarregar(); });
@@ -296,11 +303,15 @@
       document.getElementById("rotaProximaBtn")?.addEventListener("click", () => syncRotaFinanceira({ pagina: (rotaUi.pagina || 1) + 1 }));
       document.getElementById("rotaMaisFiltrosBtn")?.addEventListener("click", () => rotaAlternarMaisFiltros());
       document.getElementById("rotaLimparFiltros")?.addEventListener("click", () => {
-        ["rotaFilial", "rotaGv", "rotaSetor", "rotaBusca"].forEach(id => { const campo = document.getElementById(id); if (campo) campo.value = ""; });
+        clearTimeout(buscaTimer);
+        const filialUnica = (rotaUi.opcoes?.filiais || []).length === 1 ? rotaUi.opcoes.filiais[0] : "";
+        const alterado = ["rotaGv", "rotaSetor", "rotaBusca"].some(id => Boolean(document.getElementById(id)?.value)) || (document.getElementById("rotaFilial")?.value || "") !== filialUnica || rotaUi.situacao !== "todos";
+        ["rotaGv", "rotaSetor", "rotaBusca"].forEach(id => { const campo = document.getElementById(id); if (campo) campo.value = ""; });
+        document.getElementById("rotaFilial").value = filialUnica;
         rotaAtualizarGerentes();
         rotaAtualizarSetores();
         rotaAlternarMaisFiltros(false);
-        rotaSelecionarSituacao("todos");
+        if (alterado) rotaSelecionarSituacao("todos");
       });
       document.getElementById("rotaFinanceiraPane")?.addEventListener("click", event => {
         if (event.target.closest(".rota-tentar-novamente")) { recarregar(); return; }
@@ -310,7 +321,7 @@
         if (acao) {
           const item = rotaUi.clientes[Number(acao.dataset.index)];
           if (!item) return;
-          abrirFichaBlocos(item.filial, item.cliente, { bloco: acao.dataset.acao === "boleto" ? "titulos" : "" });
+          abrirFichaBlocos(item.filial, item.cliente);
           return;
         }
         // O cliente inteiro (linha no computador, cartão no celular) abre a ficha;

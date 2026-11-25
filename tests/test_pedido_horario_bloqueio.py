@@ -36,6 +36,16 @@ class SituacaoBloqueioTest(unittest.TestCase):
         self.assertIsNone(situacao["segundos_ate_bloqueio"])
         self.assertEqual(situacao["mensagem"], "")
 
+    def test_janela_abre_e_fecha_nos_limites(self) -> None:
+        self.assertTrue(situacao_bloqueio("17:30", self._agora(7, 59), horario_abertura="08:00")["bloqueado"])
+        self.assertFalse(situacao_bloqueio("17:30", self._agora(8, 0), horario_abertura="08:00")["bloqueado"])
+        self.assertTrue(situacao_bloqueio("17:30", self._agora(17, 30), horario_abertura="08:00")["bloqueado"])
+        self.assertIn("08:00", situacao_bloqueio("17:30", self._agora(18, 0), horario_abertura="08:00")["mensagem"])
+
+    def test_janela_invertida_e_rejeitada(self) -> None:
+        with self.assertRaises(ValueError):
+            situacao_bloqueio("08:00", self._agora(10, 0), horario_abertura="17:00")
+
     def test_antes_do_horario_libera_e_conta_os_segundos(self) -> None:
         situacao = situacao_bloqueio("17:30", self._agora(17, 0))
         self.assertFalse(situacao["bloqueado"])

@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto
 from bot_api.services.filial_labels import FILIAL_LABELS
 from bot_api.services.pedido_caixa_fechada import DUZIAS_POR_CAIXA, exige_caixa_fechada, mensagem_caixa_fechada
-from bot_api.services.pedido_horario_bloqueio import normalizar_horario_bloqueio, situacao_bloqueio
+from bot_api.services.pedido_horario_bloqueio import normalizar_horario_abertura, normalizar_horario_bloqueio, situacao_bloqueio, validar_janela
 
 
 _UNIT_BY_FILIAL = {
@@ -114,6 +114,17 @@ class PedidoGerencialConfigRequest(_StrictPayload):
     max_caixas_por_produto: int = Field(ge=1, le=99_999)
     limites_por_produto: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     horario_bloqueio: str = Field(default="", max_length=5)
+    horario_abertura: str = Field(default="", max_length=5)
+
+    @field_validator("horario_abertura")
+    @classmethod
+    def abertura_valida(cls, value: str) -> str:
+        return normalizar_horario_abertura(value)
+
+    @model_validator(mode="after")
+    def janela_valida(self):
+        validar_janela(self.horario_abertura, self.horario_bloqueio)
+        return self
 
     @field_validator("horario_bloqueio")
     @classmethod
@@ -376,10 +387,11 @@ def create_admin_pedidos_router(
             max_caixas_por_produto=payload.max_caixas_por_produto,
             limites_por_produto=payload.limites_por_produto,
             horario_bloqueio=payload.horario_bloqueio,
+            horario_abertura=payload.horario_abertura,
             updated_by=_pedido_created_by(context),
         )
         record_security_event(request, channel="api", event_type="admin_pedidos_gerencial_config_update", decision="allowed", reason=f"motivos={len(config['motivos'])};limite={config['max_caixas_por_produto']};produtos={len(config['limites_por_produto'])};bloqueio={config['horario_bloqueio'] or 'sem'}")
-        record_action(request, context, "configurar_digitacao_pedidos", motivos=config["motivos"], max_caixas_por_produto=config["max_caixas_por_produto"], limites_por_produto=config["limites_por_produto"], horario_bloqueio=config["horario_bloqueio"])
+        record_action(request, context, "configurar_digitacao_pedidos", motivos=config["motivos"], max_caixas_por_produto=config["max_caixas_por_produto"], limites_por_produto=config["limites_por_produto"], horario_abertura=config.get("horario_abertura", ""), horario_bloqueio=config["horario_bloqueio"])
         return {"ok": True, **config, **_bloqueio_payload(config, context)}
 
     @router.get("/api/admin/pedidos/gerencial/auditoria")
@@ -654,7 +666,7 @@ def _bloqueio_payload(config: Mapping[str, Any], context: Mapping[str, Any]) -> 
     pedido urgente depois do horário.
     """
     return {
-        **situacao_bloqueio(str(config.get("horario_bloqueio") or "")),
+        **situacao_bloqueio(str(config.get("horario_bloqueio") or ""), horario_abertura=str(config.get("horario_abertura") or "")),
         "pode_ignorar_bloqueio": bool(context.get("is_admin")),
         "pode_bonificar": bool(context.get("is_admin")),
     }

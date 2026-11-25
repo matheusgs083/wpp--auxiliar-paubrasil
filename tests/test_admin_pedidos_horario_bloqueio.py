@@ -40,7 +40,7 @@ class FakePromaxJobs:
 
     def update_pedido_digitacao_config(self, **kwargs: Any) -> dict[str, Any]:
         self.updates.append(kwargs)
-        self.config.update(horario_bloqueio=kwargs["horario_bloqueio"], motivos=kwargs["motivos"])
+        self.config.update(horario_bloqueio=kwargs["horario_bloqueio"], horario_abertura=kwargs["horario_abertura"], motivos=kwargs["motivos"])
         return dict(self.config)
 
 
@@ -48,7 +48,7 @@ def _relogio(hora: int, minuto: int):
     agora = datetime(2026, 11, 23, hora, minuto, tzinfo=FUSO_PEDIDOS)
     return patch(
         "bot_api.routes.admin_pedidos.situacao_bloqueio",
-        side_effect=lambda horario: situacao_bloqueio(horario, agora),
+        side_effect=lambda horario, **kwargs: situacao_bloqueio(horario, agora, **kwargs),
     )
 
 
@@ -111,6 +111,27 @@ class HorarioBloqueioRoutesTest(unittest.TestCase):
         self.assertEqual(salvo.status_code, 200)
         self.assertEqual(jobs.updates[0]["horario_bloqueio"], "09:30")
         self.assertEqual(salvo.json()["horario_bloqueio"], "09:30")
+
+    def test_vendedor_bloqueado_antes_da_abertura_e_admin_mantem_excecao(self) -> None:
+        jobs = FakePromaxJobs("17:30")
+        jobs.config["horario_abertura"] = "08:00"
+        with _relogio(7, 59):
+            vendedor = _cliente(VENDEDOR, jobs).get("/api/admin/pedidos/config").json()
+            admin = _cliente(ADMIN, jobs).get("/api/admin/pedidos/config").json()
+            pedido = _cliente(VENDEDOR, jobs).post("/api/admin/pedidos/jobs", json=PEDIDO)
+        self.assertTrue(vendedor["bloqueado"])
+        self.assertEqual(vendedor["segundos_ate_alteracao"], 60)
+        self.assertIn("08:00", pedido.json()["detail"])
+        self.assertEqual(pedido.status_code, 409)
+        self.assertTrue(admin["pode_ignorar_bloqueio"])
+        jobs.enqueue_job.assert_not_called()
+
+    def test_recusa_abertura_igual_ou_posterior_ao_fechamento(self) -> None:
+        jobs = FakePromaxJobs("")
+        cliente = _cliente(ADMIN, jobs)
+        corpo = {"motivos": ["Fora de rota"], "max_caixas_por_produto": 50, "horario_abertura": "17:30", "horario_bloqueio": "17:30"}
+        self.assertEqual(cliente.put("/api/admin/pedidos/gerencial/config", json=corpo).status_code, 422)
+        self.assertFalse(jobs.updates)
 
 
 if __name__ == "__main__":

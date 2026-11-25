@@ -68,19 +68,20 @@
       const aviso = document.getElementById("pedidoBloqueioAviso");
       const texto = document.getElementById("pedidoBloqueioTexto");
       const horario = String(config?.horario_bloqueio || "");
+      const abertura = String(config?.horario_abertura || "");
       const encerrada = Boolean(config?.bloqueado);
       const podeIgnorar = Boolean(config?.pode_ignorar_bloqueio);
       pedidosUi.bloqueadoPorHorario = encerrada && !podeIgnorar;
       clearTimeout(pedidosUi.bloqueioTimer);
-      const segundos = Number(config?.segundos_ate_bloqueio);
+      const segundos = Number(config?.segundos_ate_alteracao ?? config?.segundos_ate_bloqueio);
       // Ao chegar o horário, pergunta de novo ao servidor (o relógio dele é o que vale).
-      if (horario && !encerrada && Number.isFinite(segundos) && segundos > 0) pedidosUi.bloqueioTimer = setTimeout(syncPedidoConfig, (segundos + 2) * 1000);
+      if ((horario || abertura) && Number.isFinite(segundos) && segundos > 0) pedidosUi.bloqueioTimer = setTimeout(syncPedidoConfig, (segundos + 2) * 1000);
       if (aviso && texto) {
-        aviso.hidden = !horario;
+        aviso.hidden = !horario && !abertura;
         aviso.classList.toggle("alert-warning", pedidosUi.bloqueadoPorHorario);
         aviso.classList.toggle("alert-info", !pedidosUi.bloqueadoPorHorario);
         texto.textContent = encerrada && podeIgnorar
-          ? `A digitação foi encerrada às ${horario} para os vendedores. Como administrador, você ainda pode enviar pedidos.`
+          ? `${String(config?.mensagem || "A digitação está fora do horário para vendedores.")} Como administrador, você ainda pode enviar pedidos.`
           : String(config?.mensagem || "");
       }
       syncPedidoControls();
@@ -183,7 +184,17 @@
       if (motivos) motivos.value = (config.motivos || []).join("\n");
       if (maxCaixas) maxCaixas.value = config.max_caixas_por_produto || "";
       const horarioBloqueio = document.getElementById("pedidoGerencialHorarioBloqueio");
+      if (horarioBloqueio && !document.getElementById("pedidoGerencialHorarioAbertura")) {
+        const campo = document.createElement("div");
+        campo.className = "col-12 col-md-2";
+        campo.innerHTML = '<label class="form-label small mb-1" for="pedidoGerencialHorarioAbertura">Liberar novos pedidos a partir de</label><input class="form-control mono" id="pedidoGerencialHorarioAbertura" type="time" step="60" aria-describedby="pedidoGerencialHorarioAjuda">';
+        horarioBloqueio.parentElement.before(campo);
+        const ajuda = document.getElementById("pedidoGerencialHorarioAjuda");
+        if (ajuda) ajuda.textContent = "Vendedores podem enviar pedidos a partir da abertura e antes do bloqueio. Deixe a abertura vazia para liberar desde 00:00; deixe o bloqueio vazio para não encerrar. Administradores continuam podendo enviar.";
+      }
       if (horarioBloqueio) horarioBloqueio.value = config.horario_bloqueio || "";
+      const horarioAbertura = document.getElementById("pedidoGerencialHorarioAbertura");
+      if (horarioAbertura) horarioAbertura.value = config.horario_abertura || "";
       if (meta) meta.textContent = config.updated_at ? `Atualizado por ${config.updated_by || "admin"} em ${formatDateTime(config.updated_at)}` : "Regra padrão";
       if (motivoFilter) {
         const current = motivoFilter.value;
@@ -272,12 +283,14 @@
       const motivos = (document.getElementById("pedidoGerencialMotivosTexto")?.value || "").split(/\r?\n/).map(value => value.trim()).filter(Boolean);
       const max_caixas_por_produto = Number(document.getElementById("pedidoGerencialMaxCaixas")?.value || 0);
       const horario_bloqueio = (document.getElementById("pedidoGerencialHorarioBloqueio")?.value || "").slice(0, 5);
+      const horario_abertura = (document.getElementById("pedidoGerencialHorarioAbertura")?.value || "").slice(0, 5);
+      if (horario_abertura && horario_bloqueio && horario_abertura >= horario_bloqueio) { if (status) status.textContent = "A abertura deve ser anterior ao bloqueio."; return; }
       if (horario_bloqueio === "00:00") { if (status) status.textContent = "Use um horário depois de 00:00, ou deixe vazio para não bloquear."; return; }
       if (!motivos.length || !Number.isInteger(max_caixas_por_produto) || max_caixas_por_produto < 1) { if (status) status.textContent = "Informe ao menos um motivo e um limite válido."; return; }
       if (!await askConfirmation("Salvar as regras da digitação? Elas passarão a valer para os próximos pedidos.")) return;
       if (status) status.textContent = "Salvando regras...";
       try {
-        const response = await req("/api/admin/pedidos/gerencial/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivos, max_caixas_por_produto, limites_por_produto: pedidosUi.productLimits, horario_bloqueio }) });
+        const response = await req("/api/admin/pedidos/gerencial/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivos, max_caixas_por_produto, limites_por_produto: pedidosUi.productLimits, horario_abertura, horario_bloqueio }) });
         pedidosUi.config = response; renderPedidoMotivos(response); renderPedidoBloqueio(response); renderPedidoManagerConfig(response);
         if (status) status.textContent = "Regras salvas e aplicadas aos próximos pedidos.";
       } catch (error) { if (status) status.textContent = error.message || "Não foi possível salvar as regras."; }
