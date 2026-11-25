@@ -1,4 +1,5 @@
 import sys
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,15 @@ from bot_api.services.dcondicoes_import_service import DCondicoesImportService, 
 
 
 class DCondicoesImportServiceTests(unittest.TestCase):
+    def test_fallback_apenas_quando_csv_coincide_com_o_lote_ativo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "dCondicoes.csv"
+            path.write_text("Filial;Condição de Pagto;Descrição;Taxa Mensal p/ ADF;Dias até 1° Vencimento\n3;611;BOLETO;013,63;011\n", encoding="utf-8")
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            service = DCondicoesImportService("postgresql://x", "reports")
+            linha = service._condicao_no_csv_ativo(str(path), digest, "3_611")
+            self.assertEqual((linha.taxa_mensal_adf, linha.dias_primeiro_vencimento), ("013,63", "011"))
+            self.assertIsNone(service._condicao_no_csv_ativo(str(path), "hash-diferente", "3_611"))
     def test_load_rows_reads_real_csv_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "dCondicoes.csv"

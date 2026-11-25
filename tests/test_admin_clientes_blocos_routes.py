@@ -109,7 +109,7 @@ class FakeCompras:
             raise RuntimeError("banco fora")
         return [{"data": "2026-11-06", "nota": "231577", "serie": "003", "nf_referencia": "39254", "motivo_codigo": "1", "motivo": "FALTA CAMINHAO", "responsabilidade": "LOGISTICA", "itens": 3, "qtde": 10.0, "total": 5981.6}]
 
-    def notas_cliente(self, filial: str, cliente: str) -> list[dict[str, Any]]:
+    def notas_cliente(self, filial: str, cliente: str, *, hoje: date | None = None) -> list[dict[str, Any]]:
         self.pedidos.append((filial, cliente))
         return [{"data": "2026-01-02", "nota": "1234", "serie": "003", "itens": 2, "qtde": 3, "total": 100}]
 

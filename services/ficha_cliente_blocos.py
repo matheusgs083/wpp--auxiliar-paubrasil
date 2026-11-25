@@ -244,10 +244,10 @@ def bloco_notas(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[
     if fontes.compras is None:
         return _indisponivel("notas", titulo, "03.02.37", "Notas indisponíveis agora.")
     try:
-        notas = fontes.compras.notas_cliente(cliente.filial, cliente.cliente)
+        notas = fontes.compras.notas_cliente(cliente.filial, cliente.cliente, hoje=hoje)
     except Exception:
         return _indisponivel("notas", titulo, "03.02.37", "Não foi possível carregar as notas agora.")
-    resumo = f"{len(notas)} nota{'s' if len(notas) != 1 else ''} na base importada" if notas else "Nenhuma nota na base importada"
+    resumo = f"{len(notas)} nota{'s' if len(notas) != 1 else ''} nos últimos 3 meses" if notas else "Nenhuma nota nos últimos 3 meses"
     return _bloco("notas", titulo, estado="ok" if notas else "vazio", resumo=resumo, dados={"notas_fiscais": notas}, fonte="03.02.37")
 
 

@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import unicodedata
+from threading import Lock
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -90,6 +91,8 @@ class DCondicoesImportService:
         self.database_url = database_url.strip()
         self.schema = _normalize_schema(schema)
         self.connect_timeout_seconds = max(float(connect_timeout_seconds), 1.0)
+        self._fallback_lock = Lock()
+        self._fallback_cache: dict[tuple[str, int, int, str], dict[str, DCondicoesRow]] = {}
 
     def validate_source(self, source_path: Path) -> DCondicoesValidationResult:
         path = source_path.expanduser().resolve()
@@ -143,7 +146,8 @@ class DCondicoesImportService:
             return None
         query = sql.SQL("""
             SELECT descricao, to_jsonb(s)->>'taxa_mensal_adf' AS taxa_mensal_adf,
-                   to_jsonb(s)->>'dias_primeiro_vencimento' AS dias_primeiro_vencimento
+                   to_jsonb(s)->>'dias_primeiro_vencimento' AS dias_primeiro_vencimento,
+                   source_file, file_hash
             FROM {}.dcondicoes_latest s
             WHERE filial_condicao_key = %s
             ORDER BY LENGTH(descricao), descricao, row_number
@@ -151,7 +155,37 @@ class DCondicoesImportService:
         """).format(sql.Identifier(self.schema))
         with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(query, (f"{filial}_{codigo}",))
-            return cur.fetchone()
+            resultado = cur.fetchone()
+        if resultado and (resultado.get("taxa_mensal_adf") is None or resultado.get("dias_primeiro_vencimento") is None):
+            linha = self._condicao_no_csv_ativo(resultado.get("source_file"), resultado.get("file_hash"), f"{filial}_{codigo}")
+            if linha:
+                resultado = dict(resultado)
+                resultado["taxa_mensal_adf"] = linha.taxa_mensal_adf or None
+                resultado["dias_primeiro_vencimento"] = linha.dias_primeiro_vencimento or None
+        return resultado
+
+    def _condicao_no_csv_ativo(self, source_file: str | None, digest: str | None, chave: str) -> DCondicoesRow | None:
+        """Só usa arquivo local quando for exatamente o CSV publicado no banco."""
+        if not digest:
+            return None
+        caminhos = ([Path(source_file)] if source_file else []) + [Path(__file__).resolve().parents[1] / "data" / "dCondicoes" / "dCondicoes.csv"]
+        for caminho in caminhos:
+            try:
+                info = caminho.stat()
+                chave_cache = (str(caminho), info.st_size, info.st_mtime_ns, digest)
+                with self._fallback_lock:
+                    if chave_cache not in self._fallback_cache:
+                        if _sha256(caminho) != digest:
+                            continue
+                        linhas = _load_dcondicoes_rows(caminho)
+                        por_chave: dict[str, DCondicoesRow] = {}
+                        for linha in sorted(linhas, key=lambda item: (len(item.descricao), item.descricao, item.source_row_number)):
+                            por_chave.setdefault(linha.filial_condicao_key, linha)
+                        self._fallback_cache = {chave_cache: por_chave}
+                    return self._fallback_cache[chave_cache].get(chave)
+            except (OSError, ValueError):
+                continue
+        return None
 
     def recuperar_adf_lote_ativo(self, source_path: Path) -> dict[str, Any]:
         """Restaura campos omitidos somente quando o CSV é idêntico ao lote ativo."""

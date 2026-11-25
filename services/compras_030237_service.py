@@ -478,23 +478,27 @@ class Compras030237Service:
                 linhas = cur.fetchall()
         return [devolucao_payload(linha) for linha in linhas]
 
-    def notas_cliente(self, filial: str, cliente: str) -> list[dict[str, Any]]:
-        """Notas entregues dos arquivos ativos por filial/mês, sem duplicar versões."""
+    def notas_cliente(self, filial: str, cliente: str, *, hoje: date | None = None) -> list[dict[str, Any]]:
+        """Notas entregues do mês atual e dos dois anteriores, sem duplicar versões."""
         filial_n, cliente_n = _codigo(filial), _codigo(cliente)
+        hoje = hoje or date.today()
+        competencia = f"{hoje.year:04d}-{hoje.month:02d}"
+        emissao_desde = mes_anterior(competencia, 2)
+        emissao_ate = competencia
         query = sql.SQL(f"""
             WITH linhas AS (
                 SELECT g.payload FROM {{giro}} g
                 JOIN {{cargas}} c ON c.source_key = g.source_key
                   AND c.filial = g.filial AND c.mes_emissao = g.mes_emissao
-                WHERE c.filial = %s AND {_texto_codigo('Cliente')} = %s
+                WHERE c.filial = %s AND c.mes_emissao BETWEEN %s AND %s AND {_texto_codigo('Cliente')} = %s
                 UNION ALL
                 SELECT r.payload FROM {{raw}} r
                 JOIN {{cargas}} c ON c.source_key = r.source_key
                   AND c.filial = {_texto_codigo('Filial')}
                   AND c.mes_emissao = to_char({_texto_data('Emissao')}, 'YYYY-MM')
-                WHERE c.filial = %s AND r.routine = %s AND {_texto_codigo('Cliente')} = %s
+                WHERE c.filial = %s AND c.mes_emissao BETWEEN %s AND %s AND r.routine = %s AND {_texto_codigo('Cliente')} = %s
             ), notas AS (
-                SELECT {_texto_data('Dt. Operacao')} AS data,
+                SELECT {_texto_data('Emissao')} AS data,
                        {_texto_codigo('Nota')} AS nota,
                        trim(COALESCE(payload->>'Serie', '')) AS serie,
                        {_texto_codigo('Produto')} AS produto,
@@ -513,7 +517,8 @@ class Compras030237Service:
         with self._connect() as conn:
             self.ensure_schema(conn)
             with conn.cursor() as cur:
-                cur.execute(query, (filial_n, cliente_n, filial_n, ROTINA, cliente_n))
+                cur.execute(query, (filial_n, emissao_desde, emissao_ate, cliente_n,
+                                    filial_n, emissao_desde, emissao_ate, ROTINA, cliente_n))
                 linhas = cur.fetchall()
         return [{"data": d.isoformat(), "nota": str(n), "serie": str(s or ""),
                  "itens": int(i), "qtde": float(q or 0), "total": float(t or 0), "produtos": produtos}

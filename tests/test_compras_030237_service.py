@@ -114,11 +114,11 @@ class ReconstrucaoTest(unittest.TestCase):
         cursor.fetchall.return_value = [(date(2026, 11, 6), "123", "003", 1, 2, 30, [{"produto": "1", "descricao": "Bebida"}])]
         with patch.object(servico, "_connect") as conectar, patch.object(servico, "ensure_schema"):
             conectar.return_value.__enter__.return_value = conn
-            notas = servico.notas_cliente("003", "00100")
+            notas = servico.notas_cliente("003", "00100", hoje=date(2026, 11, 25))
         query, params = cursor.execute.call_args.args
         self.assertIn('"compras_030237_cargas"', _sql(query))
         self.assertIn("c.source_key = r.source_key", _sql(query))
-        self.assertEqual(params, ("3", "100", "3", "030237", "100"))
+        self.assertEqual(params, ("3", "2026-09", "2026-11", "100", "3", "2026-09", "2026-11", "030237", "100"))
         self.assertEqual(notas[0]["produtos"][0]["descricao"], "Bebida")
 
 
