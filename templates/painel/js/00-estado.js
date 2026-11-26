@@ -328,7 +328,8 @@
 
     const DATASET_UI_OVERRIDES = {
       dsetores: { id: "dSetores", name: "Setores e Vendedores", icon: "bi-diagram-2", area: "operational", group: "Operacional", groupNote: "Tabelas operacionais de apoio: setores, preços, operações, condições, produtos, materiais e cesta." },
-      dprecos: { id: "DPrecos", name: "Tabela de Preços", icon: "bi-tags", area: "operational", group: "Operacional" },
+      dprecos: { id: "DPrecos", name: "Tabela de Preços · Paraíba", icon: "bi-tags", area: "operational", group: "Operacional" },
+      dprecos_ba: { id: "DPrecosBa", name: "Tabela de Preços · Bahia", icon: "bi-tags", area: "operational", group: "Operacional" },
       doperacoes: { id: "dOperacoes", name: "Tabela de Operações", icon: "bi-list-columns", area: "operational", group: "Operacional" },
       drevendas: { id: "dRevendas", name: "Tabela de Revendas", icon: "bi-building", area: "operational", group: "Operacional" },
       dcondicoes: { id: "dCondicoes", name: "Tabela de Condições", icon: "bi-receipt", area: "operational", group: "Operacional" },
@@ -359,7 +360,7 @@
     };
 
     const DATASET_FALLBACK_ORDER = [
-      "dsetores", "dprecos", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dgarrafeiras", "dmateriais", "produto_cestas",
+      "dsetores", "dprecos", "dprecos_ba", "doperacoes", "drevendas", "dcondicoes", "dprodutos", "dgarrafeiras", "dmateriais", "produto_cestas",
       "dclientes", "inadimplencia", "comodatos", "documentacao_pendente",
       "liga_1706_indicadores", "liga_03114902_mensal",
       "prazo_limite", "giro", "critica_rn"

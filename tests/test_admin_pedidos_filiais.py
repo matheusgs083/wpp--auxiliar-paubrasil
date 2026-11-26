@@ -24,7 +24,7 @@ def _linha(filial: str, cliente: str) -> SimpleNamespace:
     return _Linha(filial=filial, cod_pdv=cliente, nome_fantasia=f"CLIENTE {cliente}")
 
 
-def _cliente(context: dict[str, Any], dclientes: Any = None, estoque: Any = None, precos: Any = None) -> TestClient:
+def _cliente(context: dict[str, Any], dclientes: Any = None, estoque: Any = None, precos: Any = None, precos_ba: Any = None) -> TestClient:
     jobs = MagicMock()
     jobs.get_pedido_digitacao_config.return_value = {"motivos": ["Fora de rota"], "horario_bloqueio": ""}
     app = FastAPI()
@@ -36,6 +36,7 @@ def _cliente(context: dict[str, Any], dclientes: Any = None, estoque: Any = None
             inadimplencia_query_service=MagicMock(),
             cora_estoque_query_service=estoque or MagicMock(),
             dprecos_import_service=precos,
+            dprecos_ba_import_service=precos_ba,
             promax_jobs_service=jobs,
             record_security_event=lambda *_args, **_kwargs: None,
         )
@@ -59,6 +60,29 @@ class FiliaisDaCarteiraTest(unittest.TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(resposta.json()["items"][0]["precos_referencia"]["sub"], "90.00")
         self.assertEqual(client.get("/api/admin/pedidos/estoque", params={"busca": "cerveja", "filial": "1"}).status_code, 403)
+
+    def test_sugestao_utiliza_tabela_da_revenda_sem_misturar_estados(self) -> None:
+        estoque = MagicMock()
+        estoque.dashboard.side_effect = lambda **_: {"ready": True, "items": [{"codigo_produto": "123"}]}
+        pb, ba = MagicMock(), MagicMock()
+        pb.consultar_precos.return_value = {"123": {"asr": "100"}}
+        ba.consultar_precos.return_value = {"123": {"asr": "150"}}
+        client = _cliente(ADMIN, estoque=estoque, precos=pb, precos_ba=ba)
+        for filial in range(1, 9):
+            resposta = client.get("/api/admin/pedidos/estoque", params={"busca": "cerveja", "filial": str(filial)})
+            self.assertEqual(resposta.status_code, 200)
+            self.assertEqual(resposta.json()["items"][0]["precos_referencia"]["asr"], "100" if filial <= 5 else "150")
+        self.assertEqual(pb.consultar_precos.call_count, 5)
+        self.assertEqual(ba.consultar_precos.call_count, 3)
+
+    def test_bahia_sem_tabela_nao_usa_os_precos_da_paraiba(self) -> None:
+        estoque = MagicMock()
+        estoque.dashboard.return_value = {"ready": True, "items": [{"codigo_produto": "123"}]}
+        pb = MagicMock()
+        resposta = _cliente(ADMIN, estoque=estoque, precos=pb).get("/api/admin/pedidos/estoque", params={"busca": "cerveja", "filial": "6"})
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotIn("precos_referencia", resposta.json()["items"][0])
+        pb.consultar_precos.assert_not_called()
 
     def test_falha_na_tabela_nao_impede_busca_de_estoque(self) -> None:
         estoque = MagicMock()

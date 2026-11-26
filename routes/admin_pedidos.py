@@ -161,6 +161,7 @@ def create_admin_pedidos_router(
     record_admin_panel_action: Callable[..., None] | None = None,
     pedido_liberacoes_service: Any | None = None,
     dprecos_import_service: Any | None = None,
+    dprecos_ba_import_service: Any | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -278,9 +279,10 @@ def create_admin_pedidos_router(
             raise HTTPException(status_code=503, detail="Não foi possível consultar a grade de estoque.") from exc
         # A consulta de preços é complementar: uma falha não deve impedir a grade.
         items = result.get("items") or []
-        if dprecos_import_service is not None and items:
+        tabela_estado = dprecos_import_service if filial in {"1", "2", "3", "4", "5"} else dprecos_ba_import_service if filial in {"6", "7", "8"} else None
+        if tabela_estado is not None and items:
             try:
-                precos = dprecos_import_service.consultar_precos([str(item.get("codigo_produto") or "") for item in items])
+                precos = tabela_estado.consultar_precos([str(item.get("codigo_produto") or "") for item in items])
                 for item in items:
                     codigo = str(item.get("codigo_produto") or "").strip().lstrip("0") or "0"
                     item["precos_referencia"] = precos.get(codigo)

@@ -105,7 +105,12 @@ class DPrecosRow:
 
 
 class DPrecosImportService:
-    def __init__(self, database_url: str, schema: str, connect_timeout_seconds: float = 3.0) -> None:
+    def __init__(self, database_url: str, schema: str, connect_timeout_seconds: float = 3.0, *, estado: str = "PB") -> None:
+        if estado not in {"PB", "BA"}:
+            raise ValueError("Estado da tabela de precos invalido.")
+        self.estado = estado
+        self.dataset_name = "dprecos" if estado == "PB" else "dprecos_ba"
+        self.view_name = "dprecos_latest" if estado == "PB" else "dprecos_ba_latest"
         self.database_url = database_url.strip()
         self.schema = _normalize_schema(schema)
         self.connect_timeout_seconds = max(float(connect_timeout_seconds), 1.0)
@@ -130,7 +135,7 @@ class DPrecosImportService:
             errors.append("Nao encontrei linhas validas na tabela de precos.")
 
         return DPrecosValidationResult(
-            dataset_name="dprecos",
+            dataset_name=self.dataset_name,
             source_path=str(path),
             ok=not errors,
             total_rows=len(rows),
@@ -173,9 +178,9 @@ class DPrecosImportService:
             self._ensure_schema(conn)
             batch_id = self._insert_batch(conn, str(path), batch_date, source_hash, len(rows))
             self._insert_snapshot_rows(conn, rows, batch_id)
-            activate_import_batch(conn, self.schema, "dprecos", batch_id)
+            activate_import_batch(conn, self.schema, self.dataset_name, batch_id)
             self._create_latest_view(conn)
-            prune_import_batches(conn, self.schema, "dprecos", keep_last=3)
+            prune_import_batches(conn, self.schema, self.dataset_name, keep_last=3)
             conn.commit()
 
         result = summary.to_dict()
@@ -197,14 +202,14 @@ class DPrecosImportService:
 
         with self._connect() as conn:
             self._ensure_schema(conn)
-            active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "dprecos", activate_if_missing=True)
+            active_batch_id = resolve_effective_import_batch_id(conn, self.schema, self.dataset_name, activate_if_missing=True)
             self._create_latest_view(conn)
             conn.commit()
 
         return {
             "ok": True,
             "schema": self.schema,
-            "view": f"{self.schema}.dprecos_latest",
+            "view": f"{self.schema}.{self.view_name}",
             "active_batch_id": active_batch_id,
         }
 
@@ -213,7 +218,7 @@ class DPrecosImportService:
         normalized = list({normalize_numeric_code(str(code)) for code in codigos} - {""})
         if not normalized or not self.database_url:
             return {}
-        query = sql.SQL("SELECT codigo, asr, sub, frio, reference_date FROM {}.dprecos_latest WHERE codigo = ANY(%s)").format(sql.Identifier(self.schema))
+        query = sql.SQL("SELECT codigo, asr, sub, frio, reference_date FROM {}.{} WHERE codigo = ANY(%s)").format(sql.Identifier(self.schema), sql.Identifier(self.view_name))
         with self._connect() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(query, (normalized,))
@@ -298,12 +303,12 @@ class DPrecosImportService:
         query = sql.SQL(
             """
             INSERT INTO {}.import_batches (dataset_name, source_file, file_hash, reference_date, total_rows)
-            VALUES ('dprecos', %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id
             """
         ).format(sql.Identifier(self.schema))
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(query, (source_file, file_hash, reference_date, total_rows))
+            cur.execute(query, (self.dataset_name, source_file, file_hash, reference_date, total_rows))
             row = cur.fetchone()
         return int(row["id"])
 
@@ -349,11 +354,11 @@ class DPrecosImportService:
             cur.executemany(query, params)
 
     def _create_latest_view(self, conn: psycopg.Connection[Any]) -> None:
-        active_batch_id = resolve_effective_import_batch_id(conn, self.schema, "dprecos", activate_if_missing=True)
+        active_batch_id = resolve_effective_import_batch_id(conn, self.schema, self.dataset_name, activate_if_missing=True)
         where_clause = sql.SQL("s.batch_id = {}").format(sql.Literal(active_batch_id)) if active_batch_id is not None else sql.SQL("FALSE")
         query = sql.SQL(
             """
-            CREATE OR REPLACE VIEW {}.dprecos_latest AS
+            CREATE OR REPLACE VIEW {}.{} AS
             SELECT
                 s.batch_id,
                 s.row_number,
@@ -376,6 +381,7 @@ class DPrecosImportService:
             """
         ).format(
             sql.Identifier(self.schema),
+            sql.Identifier(self.view_name),
             sql.Identifier(self.schema),
             sql.Identifier(self.schema),
             where_clause,

@@ -68,6 +68,7 @@ class AppServices:
     cora_estoque_query_service: CoraEstoqueQueryService
     dsetores_import_service: DSetoresImportService
     dprecos_import_service: DPrecosImportService
+    dprecos_ba_import_service: DPrecosImportService
     doperacoes_import_service: DOperacoesImportService
     drevendas_import_service: DRevendasImportService
     dcondicoes_import_service: DCondicoesImportService
@@ -198,6 +199,12 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
         connect_timeout_seconds=settings.access_database_timeout_seconds,
+    )
+    dprecos_ba_import_service = DPrecosImportService(
+        database_url=settings.reports_database_url,
+        schema=settings.reports_db_schema,
+        connect_timeout_seconds=settings.access_database_timeout_seconds,
+        estado="BA",
     )
     doperacoes_import_service = DOperacoesImportService(
         database_url=settings.reports_database_url,
@@ -406,6 +413,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         cora_estoque_query_service=cora_estoque_query_service,
         dsetores_import_service=dsetores_import_service,
         dprecos_import_service=dprecos_import_service,
+        dprecos_ba_import_service=dprecos_ba_import_service,
         doperacoes_import_service=doperacoes_import_service,
         drevendas_import_service=drevendas_import_service,
         dcondicoes_import_service=dcondicoes_import_service,

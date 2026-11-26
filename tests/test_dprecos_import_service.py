@@ -21,6 +21,30 @@ from bot_api.services.dprecos_import_service import (
 
 
 class DPrecosImportServiceTests(unittest.TestCase):
+    def test_cadastro_do_painel_tem_duas_fontes_independentes(self):
+        from bot_api.services.admin_import_config import build_admin_import_datasets
+        services = MagicMock()
+        datasets = build_admin_import_datasets(project_root=Path("."), services=services, filial_labels={"1": "Sousa", "6": "Brumado"})
+        self.assertIs(datasets["dprecos"]["service"], services.dprecos_import_service)
+        self.assertIs(datasets["dprecos_ba"]["service"], services.dprecos_ba_import_service)
+        self.assertNotEqual(datasets["dprecos"]["default_path"], datasets["dprecos_ba"]["default_path"])
+
+    def test_tabelas_possuem_lotes_e_views_independentes(self):
+        pb = DPrecosImportService("postgresql://example", "reports")
+        ba = DPrecosImportService("postgresql://example", "reports", estado="BA")
+        self.assertEqual((pb.dataset_name, pb.view_name), ("dprecos", "dprecos_latest"))
+        self.assertEqual((ba.dataset_name, ba.view_name), ("dprecos_ba", "dprecos_ba_latest"))
+        conn = MagicMock()
+        cur = conn.cursor.return_value.__enter__.return_value
+        cur.fetchone.return_value = {"id": 2}
+        ba._insert_batch(conn, "bahia.csv", None, "hash", 2)
+        self.assertEqual(cur.execute.call_args.args[1][0], "dprecos_ba")
+        ba._connect = MagicMock(return_value=conn)
+        query_cur = conn.__enter__.return_value.cursor.return_value.__enter__.return_value
+        query_cur.fetchall.return_value = []
+        ba.consultar_precos(["123"])
+        self.assertIn("dprecos_ba_latest", str(query_cur.execute.call_args.args[0]))
+
     def test_consultar_precos_ignora_ausentes_e_conflitos(self):
         service = DPrecosImportService("postgresql://example", "reports")
         connection = MagicMock()

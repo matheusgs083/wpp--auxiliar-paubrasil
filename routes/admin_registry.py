@@ -258,6 +258,7 @@ def _register_admin_pedidos_routes(app: FastAPI, *, deps: dict[str, Any]) -> Non
             record_admin_panel_action=deps["record_admin_panel_action"],
             pedido_liberacoes_service=deps.get("pedido_liberacoes_service"),
             dprecos_import_service=deps.get("dprecos_import_service"),
+            dprecos_ba_import_service=deps.get("dprecos_ba_import_service"),
         )
     )
     if deps.get("pedido_liberacoes_service") is None:

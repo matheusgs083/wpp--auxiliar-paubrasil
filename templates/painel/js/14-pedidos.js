@@ -450,8 +450,8 @@
         try {
           const result = await req(`/api/admin/pedidos/estoque?filial=${encodeURIComponent(filial)}&busca=${encodeURIComponent(busca)}`);
           if (!result.ready) throw new Error("A grade desta filial ainda não foi atualizada.");
-          if (!pedidosUi.items[index] || pedidosUi.items[index].busca !== busca) return;
-          pedidosUi.items[index].suggestions = result.items || [];
+          if (pedidosUi.items[index] !== item || item.busca.trim() !== busca || (document.getElementById("pedidoFilial")?.value || "") !== filial) return;
+          item.suggestions = result.items || [];
           renderPedidoItens(index);
         } catch (error) {
           pedidosSetStatus(error.message || "Não foi possível consultar a grade.", "err");
@@ -656,7 +656,11 @@
       document.getElementById("pedidoEnviarBtn")?.addEventListener("click", enviarPedido);
       document.getElementById("pedidoOperacao")?.addEventListener("change", aplicarPedidoOperacao);
       document.getElementById("pedidoFilaAtualizarBtn")?.addEventListener("click", () => syncPedidoQueue());
-      document.getElementById("pedidoFilial")?.addEventListener("change", () => clearPedidoClient("A filial foi alterada. Pesquise novamente o cliente."));
+      document.getElementById("pedidoFilial")?.addEventListener("change", () => {
+        clearTimeoutsPedidoStock();
+        pedidosUi.items = [{ produto: "", quantidade: 1 }];
+        clearPedidoClient("A filial foi alterada. Pesquise novamente o cliente.");
+      });
       document.querySelectorAll(".pedido-subtab").forEach(button => button.addEventListener("click", () => setPedidoSubtab(button.dataset.pedidoSubtab || "digitacao")));
       document.getElementById("pedidoGerencialAtualizarBtn")?.addEventListener("click", () => syncPedidoManager());
       document.getElementById("pedidoGerencialSalvarBtn")?.addEventListener("click", salvarPedidoManagerConfig);
