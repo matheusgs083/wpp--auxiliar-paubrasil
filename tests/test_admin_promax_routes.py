@@ -434,6 +434,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
         is_admin: bool = True,
         context_override: dict[str, Any] | None = None,
         catalog_value: Any | None = None,
+        coordenadas_service: Any | None = None,
     ) -> tuple[
         TestClient,
         FakePromaxService,
@@ -504,6 +505,7 @@ class AdminPromaxRoutesTests(unittest.TestCase):
                 comodatos_import_service=comodatos_import_service,
                 dclientes_import_service=dclientes_import_service,
                 documentacao_pendente_import_service=documentacao_import_service,
+                coordenadas_012012_service=coordenadas_service,
                 critica_operacao_import_services={"3": critica_import_service},
                 liga_entrega_report_store=liga_entrega_report_store,
                 after_critica_operacao_import=after_critica_import,
@@ -1308,6 +1310,19 @@ class AdminPromaxRoutesTests(unittest.TestCase):
             [name for name, _args, _kwargs in service.calls],
             ["append_job_log", "append_job_log"],
         )
+
+    def test_worker_importa_012012_com_token_e_lease(self) -> None:
+        from unittest.mock import MagicMock
+        importer = MagicMock()
+        importer.import_files.return_value = {"rows": 1, "filiais": ["3"]}
+        client, service, _, _ = self.make_client(coordenadas_service=importer)
+        payload = {"worker_id": "worker-1", "job_id": "job-1", "lease_token": "lease-token", "files": [{"filename": "012012_relatorio_400_2210003.csv", "file_base64": base64.b64encode(b"00001;A;B;C;D;E;7,0- / 37,0-;A").decode("ascii")}]}
+        self.assertEqual(client.post("/api/internal/promax/coordenadas-012012/import", json=payload).status_code, 401)
+        response = client.post("/api/internal/promax/coordenadas-012012/import", headers=self.worker_headers, json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["result"]["filiais"], ["3"])
+        self.assertEqual(importer.import_files.call_count, 1)
+        self.assertEqual([name for name, _, _ in service.calls], ["append_job_log", "append_job_log"])
 
     def test_internal_worker_imports_031702_documentacao_csvs_as_batch(self) -> None:
         client, service, _events, _auth_calls = self.make_client()

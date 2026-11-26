@@ -25,6 +25,7 @@ from bot_api.services.dclientes_import_service import DClientesImportService
 from bot_api.services.dclientes_query_service import DClientesQueryService
 from bot_api.services.dcondicoes_import_service import DCondicoesImportService
 from bot_api.services.dgarrafeiras_import_service import DGarrafeirasImportService
+from bot_api.services.coordenadas_012012_service import Coordenadas012012Service
 from bot_api.services.documentacao_pendente_import_service import DocumentacaoPendenteImportService
 from bot_api.services.documentacao_pendente_query_service import DocumentacaoPendenteQueryService
 from bot_api.services.dmateriais_import_service import DMateriaisImportService
@@ -88,6 +89,7 @@ class AppServices:
     critica_operacao_import_services: dict[str, CriticaOperacaoImportService]
     critica_operacao_admin_service: CriticaOperacaoImportService
     documentacao_pendente_import_service: DocumentacaoPendenteImportService
+    coordenadas_012012_service: Coordenadas012012Service
     prazo_limite_import_service: PrazoLimiteImportService
     recolha_request_service: RecolhaRequestService
     conferencia_service: ConferenciaService
@@ -316,6 +318,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         for filial_code in sorted(filial_labels, key=int)
     }
     critica_operacao_admin_service = critica_operacao_import_services[sorted(filial_labels, key=int)[0]]
+    coordenadas_012012_service = Coordenadas012012Service(settings.reports_database_url, settings.reports_db_schema, settings.access_database_timeout_seconds)
     documentacao_pendente_import_service = DocumentacaoPendenteImportService(
         database_url=settings.reports_database_url,
         schema=settings.reports_db_schema,
@@ -424,6 +427,7 @@ def build_app_services(settings: Any, *, project_root: Path, logger: logging.Log
         critica_operacao_import_services=critica_operacao_import_services,
         critica_operacao_admin_service=critica_operacao_admin_service,
         documentacao_pendente_import_service=documentacao_pendente_import_service,
+        coordenadas_012012_service=coordenadas_012012_service,
         prazo_limite_import_service=prazo_limite_import_service,
         recolha_request_service=recolha_request_service,
         conferencia_service=conferencia_service,

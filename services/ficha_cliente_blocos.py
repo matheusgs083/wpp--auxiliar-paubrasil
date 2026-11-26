@@ -75,6 +75,7 @@ class Fontes:
     giro_vasilhame: Any | None = None
     giro_equipamentos: Any | None = None
     condicoes: Any | None = None
+    coordenadas: Any | None = None
 
 
 def montar_bloco(nome: str, cliente: ClienteAutorizado, fontes: Fontes, *, hoje: date) -> dict[str, Any]:
@@ -89,10 +90,18 @@ def cabecalho(cliente: ClienteAutorizado, fontes: Fontes, payload_cliente: dict[
     endereco = ", ".join(
         parte for parte in (cadastro.get("endereco"), cadastro.get("bairro"), cadastro.get("cidade_uf") or payload_cliente.get("cidade"), cadastro.get("cep")) if parte
     )
+    coordenadas = None
+    if fontes.coordenadas is not None:
+        try:
+            coordenadas = fontes.coordenadas.buscar(cliente.filial, cliente.cliente)
+        except Exception:
+            coordenadas = None
+    consulta_mapa = f"{coordenadas['latitude']},{coordenadas['longitude']}" if coordenadas else (endereco if cadastro.get("endereco") else "")
     return {
         **payload_cliente,
         "endereco_completo": endereco,
-        "mapa_url": f"https://www.google.com/maps/search/?api=1&query={quote_plus(endereco)}" if cadastro.get("endereco") else "",
+        "coordenadas": coordenadas,
+        "mapa_url": f"https://www.google.com/maps/search/?api=1&query={quote_plus(consulta_mapa)}" if consulta_mapa else "",
         "blocos": list(BLOCOS),
     }
 

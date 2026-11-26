@@ -1394,6 +1394,8 @@
       setPanelTabVisible("estoqueTab", Boolean(state.panel && state.panel.canEstoque));
       const estoqueImportCard = document.getElementById("estoqueImportCard");
       if (estoqueImportCard) estoqueImportCard.style.display = state.panel && state.panel.isAdmin ? "" : "none";
+      const importar012012Card = document.getElementById("importar012012Card");
+      if (importar012012Card) importar012012Card.style.display = state.panel && state.panel.isAdmin ? "" : "none";
       const importar030237Card = document.getElementById("importar030237Card");
       if (importar030237Card) importar030237Card.style.display = state.panel && state.panel.isAdmin ? "" : "none";
       setPanelTabVisible("armazemTab", Boolean(state.panel && state.panel.canArmazem));

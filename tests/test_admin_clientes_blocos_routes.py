@@ -117,7 +117,7 @@ class FakeCompras:
         return "2026-11-20T08:00:00"
 
 
-def _app(context: dict[str, Any] | None, *, compras: Any = None, inadimplencia: Any = None, boletos: Any = None) -> TestClient:
+def _app(context: dict[str, Any] | None, *, compras: Any = None, inadimplencia: Any = None, boletos: Any = None, coordenadas: Any = None) -> TestClient:
     def auth(**_kwargs: Any) -> dict[str, Any]:
         if context is None:
             raise HTTPException(status_code=401, detail="Sessão expirada.")
@@ -140,6 +140,7 @@ def _app(context: dict[str, Any] | None, *, compras: Any = None, inadimplencia: 
         giro_vasilhame_service=FakeGiroVasilhame(),
         giro_equipamentos_service=FakeGiroEquipamentos(),
         documentacao_pendente_query_service=FakeDocumentos(),
+        coordenadas_012012_service=coordenadas,
         compras_030237_service=compras or FakeCompras(),
         hoje=lambda: HOJE,
     ))
@@ -168,6 +169,16 @@ class EscopoDosBlocosTest(unittest.TestCase):
         cliente = _app(GV_5)
         self.assertEqual(_bloco(cliente, "300", "titulos").status_code, 200)
         self.assertEqual(_bloco(cliente, "100", "titulos").status_code, 200)
+
+    def test_rota_financeira_abre_mapa_pelas_coordenadas_do_cliente(self) -> None:
+        from unittest.mock import Mock
+        coordenadas = Mock()
+        coordenadas.buscar.return_value = {"latitude": "-7.014465", "longitude": "-37.286665"}
+        resposta = _app(SO_ROTA, coordenadas=coordenadas).get("/api/admin/clientes/3/100/cabecalho")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("query=-7.014465%2C-37.286665", resposta.json()["cliente"]["mapa_url"])
+        coordenadas.buscar.assert_called_once_with("3", "100")
+        self.assertEqual(_app(SO_ROTA, coordenadas=coordenadas).get("/api/admin/clientes/3/200/cabecalho").status_code, 403)
 
     def test_quem_so_tem_rota_financeira_abre_os_blocos(self) -> None:
         self.assertEqual(_bloco(_app(SO_ROTA), "100", "compras").status_code, 200)

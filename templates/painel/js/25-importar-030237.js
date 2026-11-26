@@ -73,4 +73,42 @@
 
     function setupImportar030237() {
       document.getElementById("importar030237Btn")?.addEventListener("click", importar030237);
+      document.getElementById("importar012012Btn")?.addEventListener("click", importar012012);
+    }
+
+    async function importar012012() {
+      const input = document.getElementById("importar012012Arquivos");
+      const botao = document.getElementById("importar012012Btn");
+      const status = document.getElementById("importar012012Status");
+      const lista = document.getElementById("importar012012Lista");
+      const arquivos = [...(input?.files || [])];
+      if (!arquivos.length) { if (status) status.textContent = "Selecione pelo menos um CSV da 01.20.12."; return; }
+      if (botao?.disabled) return;
+      if (botao) botao.disabled = true;
+      lista?.replaceChildren();
+      let importados = 0;
+      try {
+        for (const [indice, arquivo] of arquivos.entries()) {
+          if (status) status.textContent = `Importando ${indice + 1} de ${arquivos.length}: ${arquivo.name}...`;
+          const item = document.createElement("li");
+          item.textContent = `${arquivo.name}: importando...`;
+          lista?.appendChild(item);
+          try {
+            const data = new FormData();
+            data.append("arquivo", arquivo);
+            const resposta = await req("/api/admin/promax/012012/importar", { method: "POST", body: data, timeoutMs: 600000 });
+            const resultado = resposta.result || {};
+            item.textContent = `${arquivo.name}: ${Number(resultado.rows || 0).toLocaleString("pt-BR")} clientes, ${Number(resultado.com_coordenadas || 0).toLocaleString("pt-BR")} com coordenadas.`;
+            item.className = "text-success";
+            importados++;
+          } catch (erro) {
+            item.textContent = `${arquivo.name}: ${erro.message || "falha ao importar"}`;
+            item.className = "text-danger";
+          }
+        }
+      } finally {
+        if (botao) botao.disabled = false;
+      }
+      if (status) status.textContent = importados === arquivos.length ? `Importação concluída: ${importados} arquivo(s).` : `Importados ${importados} de ${arquivos.length} arquivos. Confira os erros abaixo.`;
+      if (importados === arquivos.length && input) input.value = "";
     }

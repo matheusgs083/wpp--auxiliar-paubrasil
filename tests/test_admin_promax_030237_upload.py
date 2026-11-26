@@ -28,7 +28,7 @@ class FakeCompras030237:
         return {"arquivos": 1, "ignorados": 0, "rows": 2, "meses": ["2026-11"], "resumo": {"ok": True}}
 
 
-def _cliente(compras: Any, *, is_admin: bool = True) -> tuple[TestClient, list[dict[str, Any]]]:
+def _cliente(compras: Any, *, is_admin: bool = True, coordenadas: Any = None) -> tuple[TestClient, list[dict[str, Any]]]:
     acoes: list[dict[str, Any]] = []
 
     def autenticar(**_kwargs: Any) -> dict[str, Any]:
@@ -41,6 +41,7 @@ def _cliente(compras: Any, *, is_admin: bool = True) -> tuple[TestClient, list[d
             catalog={},
             worker_token="token",
             compras_030237_service=compras,
+            coordenadas_012012_service=coordenadas,
             require_admin_panel_auth=autenticar,
             require_admin_panel_feature=lambda _context, _feature: None,
             record_security_event=lambda _request, **_kwargs: None,
@@ -52,6 +53,34 @@ def _cliente(compras: Any, *, is_admin: bool = True) -> tuple[TestClient, list[d
 
 def _enviar(cliente: TestClient, nome: str = "0111.csv", conteudo: bytes = b"Emissao;Produto\n01/11/2026;123\n"):
     return cliente.post("/api/admin/promax/030237/importar", files={"arquivo": (nome, conteudo, "text/csv")})
+
+
+class Importar012012PeloPainelTest(unittest.TestCase):
+    def test_admin_importa_e_registra_arquivo_por_revenda(self) -> None:
+        from unittest.mock import Mock
+        service = Mock()
+        recebido = {}
+        def importar(paths):
+            recebido["nome"] = paths[0].name
+            recebido["conteudo"] = paths[0].read_bytes()
+            return {"filiais": ["3"], "rows": 2, "com_coordenadas": 1}
+        service.import_files.side_effect = importar
+        cliente, acoes = _cliente(None, coordenadas=service)
+        resposta = cliente.post("/api/admin/promax/012012/importar", files={"arquivo": ("012012_relatorio_400_2210003.csv", b"dados", "text/csv")})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(recebido, {"nome": "012012_relatorio_400_2210003.csv", "conteudo": b"dados"})
+        self.assertEqual(resposta.json()["result"]["filiais"], ["3"])
+        self.assertEqual(acoes[0]["action"], "importar_012012_coordenadas")
+
+    def test_acesso_e_arquivo_invalidos_sao_recusados(self) -> None:
+        from unittest.mock import Mock
+        service = Mock()
+        cliente, _ = _cliente(None, is_admin=False, coordenadas=service)
+        self.assertEqual(cliente.post("/api/admin/promax/012012/importar", files={"arquivo": ("x.csv", b"x")}).status_code, 403)
+        cliente, _ = _cliente(None, coordenadas=service)
+        self.assertEqual(cliente.post("/api/admin/promax/012012/importar", files={"arquivo": ("x.xlsx", b"x")}).status_code, 422)
+        self.assertEqual(cliente.post("/api/admin/promax/012012/importar", files={"arquivo": ("x.csv", b"")}).status_code, 422)
+        service.import_files.assert_not_called()
 
 
 class Importar030237PeloPainelTest(unittest.TestCase):

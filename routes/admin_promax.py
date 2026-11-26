@@ -992,6 +992,7 @@ def create_admin_promax_router(
     dclientes_import_service: Any | None = None,
     dmateriais_import_service: Any | None = None,
     documentacao_pendente_import_service: Any | None = None,
+    coordenadas_012012_service: Any | None = None,
     drevendas_import_service: Any | None = None,
     critica_operacao_import_services: Mapping[str, Any] | None = None,
     liga_entrega_report_store: Any | None = None,
@@ -2808,6 +2809,57 @@ def create_admin_promax_router(
             ),
             data={"event": "promax_0112_auto_import_success", "result": result},
         )
+        return {"ok": True, "result": result}
+
+    @router.post("/api/admin/promax/012012/importar")
+    async def api_admin_promax_importar_012012(
+        request: Request,
+        arquivo: UploadFile = File(...),
+        context: dict[str, Any] = Depends(require_promax_context),
+    ) -> dict[str, Any]:
+        if coordenadas_012012_service is None:
+            raise HTTPException(status_code=503, detail="Importador da 01.20.12 indisponivel.")
+        nome = FilePath(str(arquivo.filename or "")).name.strip()
+        if not nome.lower().endswith(".csv"):
+            raise HTTPException(status_code=422, detail="Envie o CSV da 01.20.12.")
+        conteudo = await arquivo.read()
+        if not conteudo.strip():
+            raise HTTPException(status_code=422, detail=f"Arquivo CSV vazio: {nome}.")
+        with tempfile.TemporaryDirectory(prefix="promax_012012_manual_") as temp_dir:
+            path = FilePath(temp_dir) / nome
+            path.write_bytes(conteudo)
+            try:
+                result = await run_in_threadpool(coordenadas_012012_service.import_files, [path])
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except RuntimeError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+        record_admin_event(request, "admin_promax_012012_import", reason=f"rows={result.get('rows', 0)}")
+        record_panel_action(request, context, action="importar_012012_coordenadas", target_type="arquivo", target_id=nome, metadata=result)
+        return {"ok": True, "arquivo": nome, "result": result}
+
+    @router.post("/api/internal/promax/coordenadas-012012/import")
+    def api_internal_promax_import_coordenadas(payload: PromaxInadimplenciaImportRequest, _worker_auth: None = Depends(require_worker_auth)) -> dict[str, Any]:
+        if coordenadas_012012_service is None:
+            raise HTTPException(status_code=503, detail="Importador 012012 indisponivel.")
+        lease_token = resolve_job_lease_token(job_id=payload.job_id, worker_id=payload.worker_id, provided_lease_token=payload.lease_token)
+        # O log valida a posse do job antes de gravar dados.
+        service.append_job_log(job_id=payload.job_id, worker_id=payload.worker_id, lease_token=lease_token, level="info", message="Importando coordenadas 012012.", data={"event": "promax_012012_import_start"})
+        with tempfile.TemporaryDirectory(prefix="promax_012012_") as temp_dir:
+            paths = []
+            for item in payload.files:
+                try:
+                    data = base64.b64decode(item.file_base64.encode("ascii"), validate=True)
+                except (UnicodeEncodeError, binascii.Error) as exc:
+                    raise HTTPException(status_code=400, detail="CSV em base64 invalido.") from exc
+                path = FilePath(temp_dir) / item.filename
+                path.write_bytes(data)
+                paths.append(path)
+            try:
+                result = coordenadas_012012_service.import_files(paths)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        service.append_job_log(job_id=payload.job_id, worker_id=payload.worker_id, lease_token=lease_token, level="info", message=f"Coordenadas 012012 importadas: {result['rows']} clientes.", data={"event": "promax_012012_import_success", "result": result})
         return {"ok": True, "result": result}
 
     @router.post("/api/internal/promax/documentacao/import")

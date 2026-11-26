@@ -26,6 +26,7 @@ DEFAULT_PROMAX_CATALOG: dict[str, Any] = {
             "name": "Bot Zap",
             "description": "Relatorios consumidos pelos fluxos do bot de WhatsApp.",
             "routines": [
+                {"id": "012012_BOT", "name": "Rotina 012012 clientes (relatório 400)"},
                 {"id": "120601_BOT", "name": "Rotina 120601 Bot"},
                 {"id": "020220_BOT", "name": "Rotina 020220 Bot"},
                 {"id": "030206_BOT", "name": "Rotina 030206 Bot"},
