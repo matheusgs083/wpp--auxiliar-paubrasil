@@ -184,6 +184,9 @@
       const motivoFilter = document.getElementById("pedidoGerencialMotivo");
       if (motivos) motivos.value = (config.motivos || []).join("\n");
       if (maxCaixas) maxCaixas.value = config.max_caixas_por_produto || "";
+      const liberarTodos = document.getElementById("pedidoLiberarTodosInadimplentes");
+      if (liberarTodos) liberarTodos.checked = Boolean(config.liberar_todos_inadimplentes);
+      if (pedidoBloqueadosUi.dados) renderPedidoBloqueados(pedidoBloqueadosUi.dados);
       const horarioBloqueio = document.getElementById("pedidoGerencialHorarioBloqueio");
       if (horarioBloqueio && !document.getElementById("pedidoGerencialHorarioAbertura")) {
         const campo = document.createElement("div");
@@ -284,6 +287,7 @@
       const motivos = (document.getElementById("pedidoGerencialMotivosTexto")?.value || "").split(/\r?\n/).map(value => value.trim()).filter(Boolean);
       const max_caixas_por_produto = Number(document.getElementById("pedidoGerencialMaxCaixas")?.value || 0);
       const horario_bloqueio = (document.getElementById("pedidoGerencialHorarioBloqueio")?.value || "").slice(0, 5);
+      const liberar_todos_inadimplentes = Boolean(document.getElementById("pedidoLiberarTodosInadimplentes")?.checked);
       const horario_abertura = (document.getElementById("pedidoGerencialHorarioAbertura")?.value || "").slice(0, 5);
       if (horario_abertura && horario_bloqueio && horario_abertura >= horario_bloqueio) { if (status) status.textContent = "A abertura deve ser anterior ao bloqueio."; return; }
       if (horario_bloqueio === "00:00") { if (status) status.textContent = "Use um horário depois de 00:00, ou deixe vazio para não bloquear."; return; }
@@ -291,7 +295,7 @@
       if (!await askConfirmation("Salvar as regras da digitação? Elas passarão a valer para os próximos pedidos.")) return;
       if (status) status.textContent = "Salvando regras...";
       try {
-        const response = await req("/api/admin/pedidos/gerencial/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivos, max_caixas_por_produto, limites_por_produto: pedidosUi.productLimits, horario_abertura, horario_bloqueio }) });
+        const response = await req("/api/admin/pedidos/gerencial/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivos, max_caixas_por_produto, limites_por_produto: pedidosUi.productLimits, horario_abertura, horario_bloqueio, liberar_todos_inadimplentes }) });
         pedidosUi.config = response; renderPedidoMotivos(response); renderPedidoBloqueio(response); renderPedidoManagerConfig(response);
         if (status) status.textContent = "Regras salvas e aplicadas aos próximos pedidos.";
       } catch (error) { if (status) status.textContent = error.message || "Não foi possível salvar as regras."; }
@@ -476,7 +480,8 @@
       const inad = client.inadimplencia || {};
       // Cliente com título em aberto pode ter sido liberado pelo administrador (gerencial).
       const liberacao = inad.bloqueado && inad.liberacao ? inad.liberacao : null;
-      const blocked = Boolean(inad.bloqueado) && !liberacao;
+      const liberacaoGeral = Boolean(inad.bloqueado && inad.liberacao_geral);
+      const blocked = Boolean(inad.bloqueado) && !liberacao && !liberacaoGeral;
       const facts = [
         ["NB", client.cliente], ["Filial", client.filial], ["Cidade", client.cidade || "-"], ["Setor", client.vendedor || "-"],
         ["Telefone", client.telefone || "-"], ["Visita", diasVisitaTexto(client.dia_visita) || "-"], ["Condição", client.cond_pagto || "Não informada"], ["Status", client.status || "-"],
@@ -485,7 +490,7 @@
       const titles = Array.isArray(inad.titulos) ? inad.titulos.slice(0, 5) : [];
       selected.className = "pedido-client-card";
       selected.dataset.state = blocked ? "blocked" : "ready";
-      selected.innerHTML = `<div class="pedido-client-head"><div class="pedido-client-title"><h3>${escapeHtml(client.nome || client.razao_social || "Cliente")}</h3><p>${escapeHtml(client.razao_social || "")}</p></div><span class="pedido-eligibility ${blocked ? "blocked" : "ready"}"><i class="bi ${blocked ? "bi-slash-circle" : "bi-check2-circle"}"></i>${blocked ? "Bloqueado · títulos em aberto" : liberacao ? "Liberado pelo administrador" : "Liberado para digitação"}</span></div><div class="pedido-client-facts">${facts.map(([label, value]) => `<div class="pedido-client-fact"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(String(value))}</span></div>`).join("")}</div>${blocked ? `<div class="pedido-block-reason"><i class="bi bi-shield-exclamation me-1"></i>Este cliente tem ${escapeHtml(String(inad.quantidade_titulos || titles.length))} título(s) em aberto. A digitação está bloqueada.<ul>${titles.map(title => `<li>NF ${escapeHtml(title.nota_fiscal || "-")} · vence ${escapeHtml(title.vencimento || "-")} · ${escapeHtml(title.valor_pendente || "-")}${title.dias ? ` · ${escapeHtml(title.dias)}` : ""}</li>`).join("")}</ul></div>` : ""}${liberacao ? `<div class="pedido-liberacao-aviso"><i class="bi bi-unlock me-1" aria-hidden="true"></i>Tem ${escapeHtml(String(inad.quantidade_titulos || titles.length))} título(s) em aberto, mas foi liberado por ${escapeHtml(liberacao.liberado_por || "administrador")} até ${escapeHtml(dataBrPedidoLiberacao(liberacao.valida_ate))}. Motivo: ${escapeHtml(liberacao.motivo || "-")}</div>` : ""}`;
+      selected.innerHTML = `<div class="pedido-client-head"><div class="pedido-client-title"><h3>${escapeHtml(client.nome || client.razao_social || "Cliente")}</h3><p>${escapeHtml(client.razao_social || "")}</p></div><span class="pedido-eligibility ${blocked ? "blocked" : "ready"}"><i class="bi ${blocked ? "bi-slash-circle" : "bi-check2-circle"}"></i>${blocked ? "Bloqueado · títulos em aberto" : liberacaoGeral ? "Liberado pela regra geral" : liberacao ? "Liberado pelo administrador" : "Liberado para digitação"}</span></div><div class="pedido-client-facts">${facts.map(([label, value]) => `<div class="pedido-client-fact"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(String(value))}</span></div>`).join("")}</div>${blocked ? `<div class="pedido-block-reason"><i class="bi bi-shield-exclamation me-1"></i>Este cliente tem ${escapeHtml(String(inad.quantidade_titulos || titles.length))} título(s) em aberto. A digitação está bloqueada.<ul>${titles.map(title => `<li>NF ${escapeHtml(title.nota_fiscal || "-")} · vence ${escapeHtml(title.vencimento || "-")} · ${escapeHtml(title.valor_pendente || "-")}${title.dias ? ` · ${escapeHtml(title.dias)}` : ""}</li>`).join("")}</ul></div>` : ""}${liberacaoGeral ? `<div class="pedido-liberacao-aviso"><i class="bi bi-unlock me-1" aria-hidden="true"></i>Cliente com títulos em aberto liberado pela regra geral de pedidos.</div>` : ""}${liberacao && !liberacaoGeral ? `<div class="pedido-liberacao-aviso"><i class="bi bi-unlock me-1" aria-hidden="true"></i>Tem ${escapeHtml(String(inad.quantidade_titulos || titles.length))} título(s) em aberto, mas foi liberado por ${escapeHtml(liberacao.liberado_por || "administrador")} até ${escapeHtml(dataBrPedidoLiberacao(liberacao.valida_ate))}. Motivo: ${escapeHtml(liberacao.motivo || "-")}</div>` : ""}`;
     }
 
     function clearPedidoClient(message = "Selecione um cliente para ver o cadastro e os títulos em aberto.") {

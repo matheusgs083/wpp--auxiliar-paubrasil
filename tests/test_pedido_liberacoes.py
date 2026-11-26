@@ -144,6 +144,24 @@ class PedidoDoClienteLiberadoTest(unittest.TestCase):
         ))
         return TestClient(app), jobs
 
+    def test_liberacao_geral_vale_no_detalhe_e_e_revalidada_no_envio(self) -> None:
+        with tempfile.TemporaryDirectory() as pasta:
+            servico = _servico(pasta, _Relogio(datetime.now(FUSO)))
+            cliente, jobs = self._app(servico)
+            config = jobs.get_pedido_digitacao_config.return_value
+            pedido = {"filial": "3", "cliente": "100", "motivo_digitacao": "Fora de rota", "itens": [{"produto": "1001", "quantidade": 1, "preco": "10,00"}]}
+            self.assertEqual(cliente.post("/api/admin/pedidos/jobs", json=pedido).status_code, 409)
+            config["liberar_todos_inadimplentes"] = True
+            detalhe = cliente.get("/api/admin/pedidos/clientes/3/100").json()["cliente"]
+            self.assertTrue(detalhe["pedido_liberado"])
+            self.assertTrue(detalhe["inadimplencia"]["liberacao_geral"])
+            self.assertEqual(cliente.post("/api/admin/pedidos/jobs", json=pedido).status_code, 202)
+            enviado = jobs.enqueue_job.call_args.kwargs["payload"]["digitacao"]["pedidos"][0]
+            self.assertEqual(enviado["liberacao_inadimplencia"], "Liberação geral")
+            config["liberar_todos_inadimplentes"] = False
+            self.assertEqual(cliente.post("/api/admin/pedidos/jobs", json=pedido).status_code, 409)
+            self.assertFalse(cliente.get("/api/admin/pedidos/clientes/3/100").json()["cliente"]["pedido_liberado"])
+
     def test_vendedor_digita_para_cliente_liberado_e_nao_para_bloqueado(self) -> None:
         with tempfile.TemporaryDirectory() as pasta:
             servico = _servico(pasta, _Relogio(datetime.now(FUSO)))

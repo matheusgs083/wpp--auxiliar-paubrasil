@@ -1282,7 +1282,7 @@ class PromaxJobsService:
             self._ensure_pedido_digitacao_config(conn)
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
-                    sql.SQL("SELECT motivos, max_caixas_por_produto, limites_por_produto, horario_abertura, horario_bloqueio, updated_by, updated_at FROM {schema}.{table} WHERE id = TRUE").format(
+                    sql.SQL("SELECT motivos, max_caixas_por_produto, limites_por_produto, horario_abertura, horario_bloqueio, liberar_todos_inadimplentes, updated_by, updated_at FROM {schema}.{table} WHERE id = TRUE").format(
                         schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)
                     )
                 )
@@ -1295,6 +1295,7 @@ class PromaxJobsService:
             "limites_por_produto": _pedido_product_limits(limites),
             "horario_bloqueio": str(row.get("horario_bloqueio") or "") if row else "",
             "horario_abertura": str(row.get("horario_abertura") or "") if row else "",
+            "liberar_todos_inadimplentes": bool(row.get("liberar_todos_inadimplentes")) if row else False,
             "updated_by": str(row.get("updated_by") or "") if row else "",
             "updated_at": _iso(row.get("updated_at")) if row else None,
         }
@@ -1307,6 +1308,7 @@ class PromaxJobsService:
         limites_por_produto: Sequence[Mapping[str, Any]] = (),
         horario_bloqueio: str = "",
         horario_abertura: str = "",
+        liberar_todos_inadimplentes: bool | None = None,
         updated_by: str,
     ) -> dict[str, Any]:
         cleaned_motivos = list(dict.fromkeys(str(item).strip() for item in motivos if str(item).strip()))
@@ -1326,20 +1328,21 @@ class PromaxJobsService:
                 cur.execute(
                     sql.SQL(
                         """
-                        INSERT INTO {schema}.{table} (id, motivos, max_caixas_por_produto, limites_por_produto, horario_abertura, horario_bloqueio, updated_by, updated_at)
-                        VALUES (TRUE, %s, %s, %s, %s, %s, %s, NOW())
+                        INSERT INTO {schema}.{table} (id, motivos, max_caixas_por_produto, limites_por_produto, horario_abertura, horario_bloqueio, updated_by, liberar_todos_inadimplentes, updated_at)
+                        VALUES (TRUE, %s, %s, %s, %s, %s, %s, COALESCE(%s, FALSE), NOW())
                         ON CONFLICT (id) DO UPDATE SET
                             motivos = EXCLUDED.motivos,
                             max_caixas_por_produto = EXCLUDED.max_caixas_por_produto,
                             limites_por_produto = EXCLUDED.limites_por_produto,
                             horario_abertura = EXCLUDED.horario_abertura,
                             horario_bloqueio = EXCLUDED.horario_bloqueio,
+                            liberar_todos_inadimplentes = COALESCE(%s, {table}.liberar_todos_inadimplentes),
                             updated_by = EXCLUDED.updated_by,
                             updated_at = NOW()
-                        RETURNING motivos, max_caixas_por_produto, limites_por_produto, horario_abertura, horario_bloqueio, updated_by, updated_at
+                        RETURNING motivos, max_caixas_por_produto, limites_por_produto, horario_abertura, horario_bloqueio, liberar_todos_inadimplentes, updated_by, updated_at
                         """
                     ).format(schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)),
-                    (Jsonb(cleaned_motivos), limit, Jsonb(cleaned_limits), cleaned_abertura, cleaned_horario, str(updated_by or "").strip()),
+                    (Jsonb(cleaned_motivos), limit, Jsonb(cleaned_limits), cleaned_abertura, cleaned_horario, str(updated_by or "").strip(), liberar_todos_inadimplentes, liberar_todos_inadimplentes),
                 )
                 row = cur.fetchone()
             conn.commit()
@@ -1349,6 +1352,7 @@ class PromaxJobsService:
             "limites_por_produto": _pedido_product_limits(row.get("limites_por_produto") if isinstance(row.get("limites_por_produto"), Mapping) else {}),
             "horario_bloqueio": str(row.get("horario_bloqueio") or ""),
             "horario_abertura": str(row.get("horario_abertura") or ""),
+            "liberar_todos_inadimplentes": bool(row.get("liberar_todos_inadimplentes")),
             "updated_by": str(row.get("updated_by") or ""),
             "updated_at": _iso(row.get("updated_at")),
         }
@@ -1381,6 +1385,7 @@ class PromaxJobsService:
                 )
             )
             cur.execute(sql.SQL("ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS horario_abertura TEXT NOT NULL DEFAULT ''").format(schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)))
+            cur.execute(sql.SQL("ALTER TABLE {schema}.{table} ADD COLUMN IF NOT EXISTS liberar_todos_inadimplentes BOOLEAN NOT NULL DEFAULT FALSE").format(schema=sql.Identifier(self.schema), table=sql.Identifier(PEDIDO_DIGITACAO_CONFIG_TABLE)))
             cur.execute(
                 sql.SQL(
                     "INSERT INTO {schema}.{table} (id) VALUES (TRUE) ON CONFLICT (id) DO NOTHING"

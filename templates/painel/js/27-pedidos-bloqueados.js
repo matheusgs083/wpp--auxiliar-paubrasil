@@ -31,6 +31,7 @@
     }
 
     function pedidoBloqueadoAcao(item) {
+      if (pedidosUi.config?.liberar_todos_inadimplentes) return '<span class="pedido-liberado-tag"><i class="bi bi-unlock" aria-hidden="true"></i>Liberação geral</span>';
       if (item.liberacao) {
         return `<span class="pedido-liberado-tag"><i class="bi bi-unlock" aria-hidden="true"></i>Liberado até ${escapeHtml(pedidoBloqueadosDataBr(item.liberacao.valida_ate))}</span>`;
       }
@@ -38,13 +39,14 @@
     }
 
     function renderPedidoBloqueados(dados) {
+      pedidoBloqueadosUi.dados = dados;
       const tabela = document.getElementById("pedidoBloqueadosTabela");
       const meta = document.getElementById("pedidoBloqueadosMeta");
       const clientes = Array.isArray(dados.clientes) ? dados.clientes : [];
       pedidoBloqueadosUi.pagina = Number(dados.pagina || 1);
       pedidoBloqueadosUi.paginas = Number(dados.paginas || 1);
       if (Array.isArray(dados.dias_permitidos) && dados.dias_permitidos.length) pedidoBloqueadosUi.dias = dados.dias_permitidos;
-      if (meta) meta.textContent = `${formatStockNumber(dados.total || 0)} bloqueado(s)`;
+      if (meta) meta.textContent = `${formatStockNumber(dados.total || 0)} com títulos`;
       if (tabela) {
         tabela.innerHTML = clientes.length
           ? clientes.map(item => `<tr><td><strong>${escapeHtml(item.nome || "-")}</strong><span>NB ${escapeHtml(item.cliente)} · ${escapeHtml(item.filial_nome || `Filial ${item.filial}`)}</span></td><td class="text-end mono">${escapeHtml(String(item.titulos))}</td><td class="text-end mono">${escapeHtml(pedidoBloqueadosValor(item.total_pendente))}</td><td class="text-end">${pedidoBloqueadoAcao(item)}</td></tr>`).join("")

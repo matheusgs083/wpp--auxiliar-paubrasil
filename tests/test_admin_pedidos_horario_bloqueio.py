@@ -69,6 +69,15 @@ def _cliente(context: dict[str, Any], jobs: FakePromaxJobs) -> TestClient:
 
 
 class HorarioBloqueioRoutesTest(unittest.TestCase):
+    def test_somente_admin_altera_a_liberacao_geral(self) -> None:
+        jobs = FakePromaxJobs("")
+        corpo = {"motivos": ["Fora de rota"], "max_caixas_por_produto": 50, "liberar_todos_inadimplentes": True}
+        self.assertEqual(_cliente(VENDEDOR, jobs).put("/api/admin/pedidos/gerencial/config", json=corpo).status_code, 403)
+        self.assertEqual(jobs.updates, [])
+        self.assertEqual(_cliente(ADMIN, jobs).put("/api/admin/pedidos/gerencial/config", json={**corpo, "liberar_todos_inadimplentes": "true"}).status_code, 422)
+        self.assertEqual(_cliente(ADMIN, jobs).put("/api/admin/pedidos/gerencial/config", json=corpo).status_code, 200)
+        self.assertIs(jobs.updates[-1]["liberar_todos_inadimplentes"], True)
+
     def test_vendedor_nao_envia_pedido_depois_do_horario(self) -> None:
         jobs = FakePromaxJobs("17:30")
         with _relogio(18, 0):

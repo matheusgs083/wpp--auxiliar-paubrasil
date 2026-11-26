@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from bot_api.services.clientes_escopo import EscopoClientes, escopo_do_contexto
 from bot_api.services.filial_labels import FILIAL_LABELS
@@ -115,6 +115,7 @@ class PedidoGerencialConfigRequest(_StrictPayload):
     limites_por_produto: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     horario_bloqueio: str = Field(default="", max_length=5)
     horario_abertura: str = Field(default="", max_length=5)
+    liberar_todos_inadimplentes: StrictBool | None = None
 
     @field_validator("horario_abertura")
     @classmethod
@@ -242,8 +243,9 @@ def create_admin_pedidos_router(
         )
         payload = _client_payload(cliente_registro)
         inadimplencia["liberacao"] = liberacao_do_cliente(filial, cliente) if inadimplencia["bloqueado"] else None
+        inadimplencia["liberacao_geral"] = bool(inadimplencia["bloqueado"] and promax_jobs_service.get_pedido_digitacao_config().get("liberar_todos_inadimplentes", False))
         payload["inadimplencia"] = inadimplencia
-        payload["pedido_liberado"] = not bool(inadimplencia["bloqueado"]) or bool(inadimplencia["liberacao"])
+        payload["pedido_liberado"] = not bool(inadimplencia["bloqueado"]) or bool(inadimplencia["liberacao"]) or inadimplencia["liberacao_geral"]
         record_security_event(
             request,
             channel="api",
@@ -399,10 +401,11 @@ def create_admin_pedidos_router(
             limites_por_produto=payload.limites_por_produto,
             horario_bloqueio=payload.horario_bloqueio,
             horario_abertura=payload.horario_abertura,
+            liberar_todos_inadimplentes=payload.liberar_todos_inadimplentes,
             updated_by=_pedido_created_by(context),
         )
         record_security_event(request, channel="api", event_type="admin_pedidos_gerencial_config_update", decision="allowed", reason=f"motivos={len(config['motivos'])};limite={config['max_caixas_por_produto']};produtos={len(config['limites_por_produto'])};bloqueio={config['horario_bloqueio'] or 'sem'}")
-        record_action(request, context, "configurar_digitacao_pedidos", motivos=config["motivos"], max_caixas_por_produto=config["max_caixas_por_produto"], limites_por_produto=config["limites_por_produto"], horario_abertura=config.get("horario_abertura", ""), horario_bloqueio=config["horario_bloqueio"])
+        record_action(request, context, "configurar_digitacao_pedidos", motivos=config["motivos"], max_caixas_por_produto=config["max_caixas_por_produto"], limites_por_produto=config["limites_por_produto"], horario_abertura=config.get("horario_abertura", ""), horario_bloqueio=config["horario_bloqueio"], liberar_todos_inadimplentes=config.get("liberar_todos_inadimplentes", False))
         return {"ok": True, **config, **_bloqueio_payload(config, context)}
 
     @router.get("/api/admin/pedidos/gerencial/auditoria")
@@ -577,7 +580,8 @@ def create_admin_pedidos_router(
             escopo=escopo,
         )
         liberacao = liberacao_do_cliente(filial, payload.cliente) if inadimplencia["bloqueado"] else None
-        if inadimplencia["bloqueado"] and not liberacao:
+        liberacao_geral = bool(inadimplencia["bloqueado"] and config.get("liberar_todos_inadimplentes", False))
+        if inadimplencia["bloqueado"] and not liberacao and not liberacao_geral:
             raise HTTPException(
                 status_code=409,
                 detail=(
@@ -654,7 +658,7 @@ def create_admin_pedidos_router(
             "motivo_digitacao": payload.motivo_digitacao,
             "operacao": payload.operacao,
             # Quem liberou o cliente bloqueado na 12.06.01, para a auditoria do pedido.
-            "liberacao_inadimplencia": liberacao["liberado_por"] if liberacao else "",
+            "liberacao_inadimplencia": "Liberação geral" if liberacao_geral else (liberacao["liberado_por"] if liberacao else ""),
             "itens": [{"produto": item.produto, "quantidade": item.quantidade, "preco": item.preco} for item in payload.itens],
         }
         job = promax_jobs_service.enqueue_job(
