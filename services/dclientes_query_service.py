@@ -377,6 +377,7 @@ class DClientesQueryService:
         allowed_sectors: list[str] | None = None,
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 5,
+        filial: str | None = None,
     ) -> list[DClienteRecord]:
         normalized_query = _normalize_search_text(query_text)
         if not normalized_query:
@@ -391,6 +392,9 @@ class DClientesQueryService:
             ),
         ]
         params: list[Any] = [pattern, pattern]
+        if filial:
+            filters.append(sql.SQL("{} = %s").format(_code_field_sql("filial")))
+            params.append(_normalize_filial(filial))
         self._apply_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
         params.extend([prefix, prefix, max(1, min(limit, 10)), prefix, prefix])
         base_query = sql.SQL(
@@ -448,6 +452,7 @@ class DClientesQueryService:
         allowed_sectors: list[str] | None = None,
         allowed_gv_vdes: list[str] | None = None,
         limit: int = 20,
+        filial: str | None = None,
     ) -> list[DClienteRecord]:
         normalized_document = _normalize_document(document)
         if not normalized_document:
@@ -457,6 +462,9 @@ class DClientesQueryService:
             sql.SQL("REGEXP_REPLACE(COALESCE(documento, ''), '[^0-9]', '', 'g') = %s"),
         ]
         params: list[Any] = [normalized_document]
+        if filial:
+            filters.append(sql.SQL("{} = %s").format(_code_field_sql("filial")))
+            params.append(_normalize_filial(filial))
         self._apply_access_filter(filters, params, allowed_sectors, allowed_gv_vdes)
         params.append(max(1, min(limit, 50)))
         base_query = sql.SQL(

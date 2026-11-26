@@ -1,10 +1,4 @@
-"""Aba Clientes do painel: ficha do cliente com cadastro, 12.06.01, 02.02.20 e 03.02.06.
-
-Toda leitura passa pelo escopo do usuário logado (ver ``EscopoClientes``):
-o navegador só informa filial/NB/busca; quem decide o que pode ser visto é o
-servidor. Cliente fora do escopo responde 403 com a mesma mensagem de cliente
-inexistente, para não revelar a existência de clientes de outra carteira.
-"""
+"""Pesquisa e ficha de clientes; acesso pela aba Clientes ou pela Rota Financeira."""
 
 from __future__ import annotations
 
@@ -85,11 +79,13 @@ def create_admin_clientes_router(
         context = require_admin_panel_auth(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
         try:
             require_admin_panel_feature(context, FEATURE_CLIENTES)
+            # A aba Clientes permite consultar qualquer carteira, inclusive a ficha.
+            return context, EscopoClientes(irrestrito=True)
         except HTTPException:
             if not aceita_rota_financeira:
                 raise
             require_admin_panel_feature(context, FEATURE_ROTA_FINANCEIRA)
-        return context, escopo_do_contexto(context)
+            return context, escopo_do_contexto(context)
 
     def registrar_acao(request: Request, context: Mapping[str, Any], acao: str, **metadata: Any) -> None:
         if record_admin_panel_action:
@@ -130,13 +126,13 @@ def create_admin_clientes_router(
         try:
             # CPF/CNPJ (11 ou 14 dígitos, com ou sem pontuação). NB nunca chega a esse tamanho.
             if len(digitos) in (11, 14) and not re.search(r"[A-Za-zÀ-ÿ]", texto):
-                rows = dclientes_query_service.search_by_document(digitos, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=LIMITE_RESULTADOS)
+                rows = dclientes_query_service.search_by_document(digitos, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=LIMITE_RESULTADOS, filial=filial_code or None)
             elif texto.isdigit():
                 if not filial_code:
                     raise HTTPException(status_code=422, detail="Para buscar pelo NB, escolha a filial.")
                 rows = dclientes_query_service.search_by_registration(filial_code, texto, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes)
             else:
-                rows = dclientes_query_service.search_by_fantasia(texto, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=LIMITE_RESULTADOS)
+                rows = dclientes_query_service.search_by_fantasia(texto, allowed_sectors=escopo.allowed_sectors, allowed_gv_vdes=escopo.allowed_gv_vdes, limit=LIMITE_RESULTADOS, filial=filial_code or None)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except RuntimeError as exc:

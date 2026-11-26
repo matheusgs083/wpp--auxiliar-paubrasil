@@ -5,15 +5,15 @@
               <div>
                 <div class="pedido-step mb-2"><i class="bi bi-person-vcard" aria-hidden="true"></i> Rota financeira</div>
                 <h2 class="h5 fw-bold mb-1">Clientes e Rota Financeira</h2>
-                <div class="form-text">Cadastro, títulos em aberto, boletos e comodatos. Você só vê os clientes da sua carteira.</div>
+                <div class="form-text">Consulte clientes de todas as operações: cadastro, títulos, boletos e comodatos.</div>
               </div>
               <div class="d-flex flex-wrap gap-2 align-items-center">
-                <span class="pill" id="clientesEscopo">Carregando carteira...</span>
+                <span class="pill" id="clientesEscopo">Todas as operações</span>
                 <button class="btn btn-outline-primary btn-sm" id="clientesAtualizarBtn" type="button"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Atualizar</button>
               </div>
             </div>
             <form class="clientes-busca" id="clientesBuscaForm" role="search" autocomplete="off">
-              <div><label class="form-label small fw-semibold mb-1" for="clientesFilial">Filial</label><select class="form-select" id="clientesFilial"><option value="">Todas da carteira</option><option value="1">Sousa</option><option value="2">Itaporanga</option><option value="3">Patos</option><option value="4">Sumé</option><option value="5">Guarabira</option><option value="6">Brumado</option><option value="7">Barra</option><option value="8">Caculé</option></select></div>
+              <div><label class="form-label small fw-semibold mb-1" for="clientesFilial">Filial</label><select class="form-select" id="clientesFilial"><option value="">Todas as filiais</option><option value="1">Sousa</option><option value="2">Itaporanga</option><option value="3">Patos</option><option value="4">Sumé</option><option value="5">Guarabira</option><option value="6">Brumado</option><option value="7">Barra</option><option value="8">Caculé</option></select></div>
               <div><label class="form-label small fw-semibold mb-1" for="clientesBusca">Cliente</label><div class="input-group"><input class="form-control" id="clientesBusca" inputmode="search" minlength="2" maxlength="120" placeholder="NB, nome fantasia, razão social ou CPF/CNPJ" aria-describedby="clientesBuscaAjuda"><button class="btn btn-primary" id="clientesBuscarBtn" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Buscar</button></div></div>
             </form>
             <div class="form-text" id="clientesBuscaAjuda">Digite pelo menos 2 caracteres. Para buscar pelo NB, escolha a filial.</div>

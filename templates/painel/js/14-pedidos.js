@@ -330,13 +330,17 @@
       return /\b600\s*(ML|M\b|\b)/.test(texto) && !/ONE\s*WAY|\bPET\b|\bLATA\b|\bLT\b|C\/\s*\d+|\bCAIXA\b|\bCX\b/.test(texto);
     }
 
+    function pedidoDivisorPreco(item) {
+      return pedidoCaixaFechada(item) ? PEDIDO_DUZIAS_POR_CAIXA : 1;
+    }
+
     function pedidoTabelasPreco(item, index, disabled) {
       if (!item.produto) return "";
       const precos = item.precos_referencia || {};
       const unidade = pedidoTextoBusca(item.unidade);
-      // A DPrecos guarda valores por caixa. Em 600 ml, a grade em DZ usa meia caixa.
-      const porUnidade = /^(UN|UND|UNID|UNIDADE)$/.test(unidade);
-      const divisor = unidade.startsWith("DZ") && pedidoTextoBusca(item.descricao).includes("600") ? 2 : 1;
+      // A DPrecos traz preço por caixa; o 600 retornável é digitado em dúzias.
+      const divisor = pedidoDivisorPreco(item);
+      const porUnidade = divisor === 1 && /^(UN|UND|UNID|UNIDADE)$/.test(unidade);
       const options = [["asr", "ASR"], ["sub", "SUB"], ["frio", "Frio"]].map(([key, label]) => {
         const value = Number(precos[key]);
         if (!Number.isFinite(value) || value <= 0) return `<option disabled>${label} · indisponível</option>`;
@@ -377,7 +381,7 @@
         const key = event.target.value;
         item.tabela_preco = key;
         if (key === "livre") return;
-        const divisor = pedidoTextoBusca(item.unidade).startsWith("DZ") && pedidoTextoBusca(item.descricao).includes("600") ? 2 : 1;
+        const divisor = pedidoDivisorPreco(item);
         const value = Number(item.precos_referencia?.[key]) / divisor;
         if (!Number.isFinite(value) || value <= 0) return;
         item.preco = value.toFixed(2).replace(".", ",");

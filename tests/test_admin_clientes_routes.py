@@ -55,12 +55,12 @@ class FakeDClientes:
         item = CLIENTES.get(str(cod_pdv))
         return [item] if item and item.filial == str(filial) and _no_escopo(item, allowed_sectors, allowed_gv_vdes) else []
 
-    def search_by_fantasia(self, query_text: str, allowed_sectors: list[str] | None = None, allowed_gv_vdes: list[str] | None = None, limit: int = 5) -> list[Any]:
+    def search_by_fantasia(self, query_text: str, allowed_sectors: list[str] | None = None, allowed_gv_vdes: list[str] | None = None, limit: int = 5, filial: str | None = None) -> list[Any]:
         self.chamadas.append(("nome", allowed_sectors))
-        return [c for c in CLIENTES.values() if query_text.upper() in c.nome_fantasia and _no_escopo(c, allowed_sectors, allowed_gv_vdes)][:limit]
+        return [c for c in CLIENTES.values() if (query_text.upper() in c.nome_fantasia or query_text.upper() in c.razao_social) and (not filial or c.filial == filial) and _no_escopo(c, allowed_sectors, allowed_gv_vdes)][:limit]
 
-    def search_by_document(self, document: str, allowed_sectors: list[str] | None = None, allowed_gv_vdes: list[str] | None = None, limit: int = 20) -> list[Any]:
-        return []
+    def search_by_document(self, document: str, allowed_sectors: list[str] | None = None, allowed_gv_vdes: list[str] | None = None, limit: int = 20, filial: str | None = None) -> list[Any]:
+        return [c for c in CLIENTES.values() if document in ("12345678000190", "12345678901") and (not filial or c.filial == filial) and _no_escopo(c, allowed_sectors, allowed_gv_vdes)][:limit]
 
     def get_payip_profile_by_registration(self, filial: str, cod_pdv: str) -> Any:
         return SimpleNamespace(documento="12345678000190", email="a@b.com", endereco="Rua A", numero="10", complemento="", bairro="Centro", cidade="Patos", uf="PB", cep="58700000")
@@ -130,58 +130,28 @@ def _app(context: dict[str, Any] | None, *, inadimplencia: Any = None, boletos: 
 
 
 class ClientesEscopoTest(unittest.TestCase):
-    def test_vendedor_so_encontra_cliente_do_proprio_setor(self) -> None:
-        response = _app(VENDEDOR_107).get("/api/admin/clientes", params={"busca": "mercado"})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual([c["cliente"] for c in response.json()["clientes"]], ["100"])
+    def test_busca_livre_entre_setores_filiais_e_sem_carteira(self) -> None:
+        for context in (VENDEDOR_107, GV_4, {**VENDEDOR_107, "seller_scopes": ()}):
+            response = _app(context).get("/api/admin/clientes", params={"busca": "mercado"})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(sorted(c["cliente"] for c in response.json()["clientes"]), ["100", "200", "300", "400"])
 
-    def test_gv_so_encontra_clientes_dos_setores_do_gv(self) -> None:
-        response = _app(GV_4).get("/api/admin/clientes", params={"busca": "mercado"})
-        self.assertEqual(sorted(c["cliente"] for c in response.json()["clientes"]), ["100", "200"])
+    def test_busca_por_fantasia_razao_documento_e_nb(self) -> None:
+        client = _app(VENDEDOR_107)
+        for busca in ("MERCADO DO SETOR 108", "SETOR 108 LTDA"):
+            self.assertEqual(client.get("/api/admin/clientes", params={"busca": busca}).json()["clientes"][0]["cliente"], "200")
+        for documento in ("12345678000190", "12.345.678/0001-90", "12345678901", "123.456.789-01"):
+            resposta = client.get("/api/admin/clientes", params={"busca": documento, "filial": "4"})
+            self.assertEqual([c["cliente"] for c in resposta.json()["clientes"]], ["400"])
+        resposta = client.get("/api/admin/clientes", params={"busca": "200", "filial": "3"})
+        self.assertEqual(resposta.json()["clientes"][0]["cliente"], "200")
+        self.assertEqual(client.get("/api/admin/clientes", params={"busca": "200"}).status_code, 422)
 
-    def test_usuario_gv_ve_todos_os_clientes_do_gv(self) -> None:
-        gerente = {**VENDEDOR_107, "seller_scopes": (), "gv_scopes": ("3-5",)}
-        response = _app(gerente).get("/api/admin/clientes", params={"busca": "mercado"})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual([c["cliente"] for c in response.json()["clientes"]], ["300"])
-        self.assertEqual(_app(gerente).get("/api/admin/clientes/3/100").status_code, 403)
-        ficha = _app(gerente).get("/api/admin/clientes/3/300")
-        self.assertEqual(ficha.status_code, 200)
-
-    def test_usuario_de_operacoes_especificas(self) -> None:
-        so_sume = {**VENDEDOR_107, "seller_scopes": (), "filiais": ("4",)}
-        response = _app(so_sume).get("/api/admin/clientes", params={"busca": "mercado"})
-        self.assertEqual([c["cliente"] for c in response.json()["clientes"]], ["400"])
-        self.assertEqual(_app(so_sume).get("/api/admin/clientes/3/100").status_code, 403)
-
-    def test_usuario_com_todas_as_operacoes(self) -> None:
-        todas = {**VENDEDOR_107, "seller_scopes": (), "filiais": ("*",)}
-        response = _app(todas).get("/api/admin/clientes", params={"busca": "mercado"})
-        self.assertEqual(sorted(c["cliente"] for c in response.json()["clientes"]), ["100", "200", "300", "400"])
-
-    def test_vendedor_com_operacao_continua_preso_ao_setor(self) -> None:
-        vendedor = {**VENDEDOR_107, "filiais": ("3",)}
-        response = _app(vendedor).get("/api/admin/clientes", params={"busca": "mercado"})
-        self.assertEqual([c["cliente"] for c in response.json()["clientes"]], ["100"])
-
-    def test_carteira_vazia_nao_vira_acesso_total(self) -> None:
-        sem_carteira = {**VENDEDOR_107, "seller_scopes": ()}
-        response = _app(sem_carteira).get("/api/admin/clientes", params={"busca": "mercado"})
-        self.assertEqual(response.status_code, 403)
-
-    def test_cliente_fora_do_escopo_nao_retorna_detalhes(self) -> None:
-        response = _app(VENDEDOR_107).get("/api/admin/clientes/3/200")
-        self.assertEqual(response.status_code, 403)
-        self.assertNotIn("SETOR 108", response.text)
-        inexistente = _app(VENDEDOR_107).get("/api/admin/clientes/3/999")
-        self.assertEqual(inexistente.status_code, 403)
-        self.assertEqual(inexistente.json()["detail"], response.json()["detail"])
-
-    def test_cliente_fora_do_escopo_nao_abre_boleto(self) -> None:
-        boletos = FakeBoletos()
-        response = _app(VENDEDOR_107, boletos=boletos).get("/api/admin/clientes/3/200/boletos/09123456/pdf")
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(boletos.include_pdf, [])
+    def test_ficha_e_boleto_de_outro_setor(self) -> None:
+        cliente = _app(VENDEDOR_107)
+        self.assertEqual(cliente.get("/api/admin/clientes/3/200").status_code, 200)
+        self.assertEqual(cliente.get("/api/admin/clientes/3/200/boletos/09123456/pdf").status_code, 200)
+        self.assertEqual(cliente.get("/api/admin/clientes/3/999").status_code, 403)
 
     def test_cliente_no_escopo_abre_boleto_pdf(self) -> None:
         response = _app(VENDEDOR_107).get("/api/admin/clientes/3/100/boletos/09123456/pdf")

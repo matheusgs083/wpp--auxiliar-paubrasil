@@ -1,4 +1,4 @@
-    // Aba Clientes: pesquisa na carteira autorizada; a ficha abre em blocos (24-ficha-cliente.js).
+    // Aba Clientes: pesquisa em todas as carteiras; a ficha abre em blocos (24-ficha-cliente.js).
     // O servidor aplica o escopo; aqui só se mostra o que ele devolveu.
 
     const CLIENTES_SITUACAO = {
@@ -33,8 +33,7 @@
       const alvo = document.getElementById("clientesEscopo");
       if (!alvo) return;
       if (texto) { alvo.textContent = texto; return; }
-      const panel = state.panel || {};
-      alvo.textContent = panel.isAdmin ? "Acesso administrativo" : (panel.sellerScopes || []).length ? `Carteira: ${(panel.sellerScopes || []).join(", ")}` : "Carteira não configurada";
+      alvo.textContent = "Todas as operações";
     }
 
     async function buscarClientes({ automatico = false } = {}) {
@@ -51,7 +50,7 @@
       }
       const sequencia = ++clientesUi.seq;
       if (botao) { botao.disabled = true; botao.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Buscando...'; }
-      clientesSetStatus("Pesquisando na sua carteira...");
+      clientesSetStatus("Pesquisando clientes...");
       const params = new URLSearchParams({ busca });
       if (filial) params.set("filial", filial);
       const filtros = clientesFiltrosAtivos();
@@ -65,7 +64,7 @@
         const limite = Number(response.limite || 10);
         clientesSetStatus(clientesUi.rows.length
           ? `${clientesUi.rows.length} cliente(s) encontrado(s)${clientesUi.rows.length >= limite ? ` · mostrando os ${limite} primeiros, refine a busca` : ""}.`
-          : "Nenhum cliente encontrado na sua carteira com esses critérios.");
+          : "Nenhum cliente encontrado com esses critérios.");
       } catch (error) {
         if (sequencia !== clientesUi.seq) return;
         clientesUi.rows = [];

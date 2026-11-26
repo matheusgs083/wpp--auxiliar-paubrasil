@@ -158,26 +158,22 @@ class EscopoDosBlocosTest(unittest.TestCase):
             self.assertEqual(resposta.status_code, 200, bloco)
             self.assertEqual(resposta.json()["bloco"], bloco)
 
-    def test_cliente_fora_do_escopo_nao_devolve_bloco_nem_cabecalho(self) -> None:
-        compras = FakeCompras()
-        cliente = _app(VENDEDOR_107, compras=compras)
-        self.assertEqual(cliente.get("/api/admin/clientes/3/200/cabecalho").status_code, 403)
+    def test_cliente_de_outro_setor_abre_cabecalho_e_blocos(self) -> None:
+        cliente = _app(VENDEDOR_107)
+        self.assertEqual(cliente.get("/api/admin/clientes/3/200/cabecalho").status_code, 200)
         for bloco in BLOCOS:
-            resposta = _bloco(cliente, "200", bloco)
-            self.assertEqual(resposta.status_code, 403, bloco)
-            self.assertNotIn("dados", resposta.json())
-        self.assertEqual(compras.pedidos, [])
+            self.assertEqual(_bloco(cliente, "200", bloco).status_code, 200, bloco)
 
-    def test_gv_ve_os_blocos_do_cliente_do_gv(self) -> None:
+    def test_gv_pesquisa_clientes_de_outros_gvs(self) -> None:
         cliente = _app(GV_5)
         self.assertEqual(_bloco(cliente, "300", "titulos").status_code, 200)
-        self.assertEqual(_bloco(cliente, "100", "titulos").status_code, 403)
+        self.assertEqual(_bloco(cliente, "100", "titulos").status_code, 200)
 
     def test_quem_so_tem_rota_financeira_abre_os_blocos(self) -> None:
         self.assertEqual(_bloco(_app(SO_ROTA), "100", "compras").status_code, 200)
 
     def test_pdf_do_boleto_exige_escopo(self) -> None:
-        self.assertEqual(_app(VENDEDOR_107).get("/api/admin/clientes/3/200/boletos/09123456/pdf").status_code, 403)
+        self.assertEqual(_app(VENDEDOR_107).get("/api/admin/clientes/3/200/boletos/09123456/pdf").status_code, 200)
         self.assertEqual(_app(VENDEDOR_107).get("/api/admin/clientes/3/100/boletos/09123456/pdf").status_code, 200)
 
     def test_bloco_desconhecido(self) -> None:
