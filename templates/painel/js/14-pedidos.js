@@ -50,7 +50,7 @@
         pedidosUi.items = [{ produto: "", quantidade: 1 }];
         await selectPedidoClient({ filial: pedido.filial, cliente: pedido.cliente });
         if (!pedidosUi.client) return;
-        pedidosUi.items = (pedido.itens || []).map(item => ({ produto: item.produto, busca: `${item.produto}${item.descricao ? ` · ${item.descricao}` : ""}`, descricao: item.descricao, unidade: item.unidade, quantidade: item.quantidade, preco: item.preco, tabela_preco: "livre" }));
+        pedidosUi.items = (pedido.itens || []).map(item => ({ produto: item.produto, busca: `${item.produto}${item.descricao ? ` · ${item.descricao}` : ""}`, descricao: item.descricao, unidade: item.unidade, quantidade: item.quantidade, preco: item.preco, precos_referencia: item.precos_referencia || null, tabela_preco: "livre" }));
         const motivo = document.getElementById("pedidoMotivo");
         if (motivo) motivo.value = pedido.motivo_digitacao || "";
         const condicao = document.getElementById("pedidoCondicao");
@@ -60,7 +60,8 @@
         if (operacao && (pedido.operacao !== "2" || state.panel?.isAdmin)) { operacao.value = pedido.operacao; aplicarPedidoOperacao(); }
         pedidosUi.refazendo = true;
         renderPedidoItens();
-        pedidosSetStatus(condicaoAusente ? "Confira a condição de pagamento: a opção anterior não está disponível." : "Pedido carregado para edição. Confira se o Promax já o gerou antes de enviar novamente.", condicaoAusente ? "err" : "");
+        const avisoPrecos = resposta.precos_indisponiveis ? " As sugestões de preço estão indisponíveis; o valor anterior foi mantido." : "";
+        pedidosSetStatus((condicaoAusente ? "Confira a condição de pagamento: a opção anterior não está disponível." : "Pedido carregado para edição. Confira se o Promax já o gerou antes de enviar novamente.") + avisoPrecos, condicaoAusente ? "err" : "");
         document.getElementById("pedidoItensCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (error) { pedidosSetStatus(error.message || "Não foi possível carregar o pedido.", "err"); }
       finally { if (button) button.disabled = false; }

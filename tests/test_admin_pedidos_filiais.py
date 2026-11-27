@@ -81,7 +81,8 @@ class FiliaisDaCarteiraTest(unittest.TestCase):
         pb = MagicMock()
         resposta = _cliente(ADMIN, estoque=estoque, precos=pb).get("/api/admin/pedidos/estoque", params={"busca": "cerveja", "filial": "6"})
         self.assertEqual(resposta.status_code, 200)
-        self.assertNotIn("precos_referencia", resposta.json()["items"][0])
+        self.assertIsNone(resposta.json()["items"][0]["precos_referencia"])
+        self.assertTrue(resposta.json()["precos_indisponiveis"])
         pb.consultar_precos.assert_not_called()
 
     def test_falha_na_tabela_nao_impede_busca_de_estoque(self) -> None:

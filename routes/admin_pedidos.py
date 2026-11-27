@@ -174,6 +174,15 @@ def create_admin_pedidos_router(
         except ValueError:
             return None
 
+    def precos_da_filial(filial: str, codigos: list[str]) -> tuple[dict[str, Any], bool]:
+        tabela = dprecos_import_service if filial in {"1", "2", "3", "4", "5"} else dprecos_ba_import_service if filial in {"6", "7", "8"} else None
+        if tabela is None:
+            return {}, True
+        try:
+            return tabela.consultar_precos(codigos), False
+        except Exception:
+            return {}, True
+
     def context_for_pedidos(request: Request, authorization: str | None, x_api_token: str | None, x_admin_token: str | None) -> dict[str, Any]:
         context = require_admin_panel_auth(request=request, authorization=authorization, x_api_token=x_api_token, x_admin_token=x_admin_token)
         require_admin_panel_feature(context, "pedidos")
@@ -279,14 +288,12 @@ def create_admin_pedidos_router(
             raise HTTPException(status_code=503, detail="Não foi possível consultar a grade de estoque.") from exc
         # A consulta de preços é complementar: uma falha não deve impedir a grade.
         items = result.get("items") or []
-        tabela_estado = dprecos_import_service if filial in {"1", "2", "3", "4", "5"} else dprecos_ba_import_service if filial in {"6", "7", "8"} else None
-        if tabela_estado is not None and items:
-            try:
-                precos = tabela_estado.consultar_precos([str(item.get("codigo_produto") or "") for item in items])
-                for item in items:
-                    codigo = str(item.get("codigo_produto") or "").strip().lstrip("0") or "0"
-                    item["precos_referencia"] = precos.get(codigo)
-            except Exception:
+        if items:
+            precos, indisponiveis = precos_da_filial(filial, [str(item.get("codigo_produto") or "") for item in items])
+            for item in items:
+                codigo = str(item.get("codigo_produto") or "").strip().lstrip("0") or "0"
+                item["precos_referencia"] = precos.get(codigo)
+            if indisponiveis:
                 result["precos_indisponiveis"] = True
         record_security_event(
             request,
@@ -573,11 +580,13 @@ def create_admin_pedidos_router(
         except RuntimeError:
             grade = {}
         produtos = grade.get("produtos") if isinstance(grade.get("produtos"), Mapping) else {}
+        precos, precos_indisponiveis = precos_da_filial(filial, [item["produto"] for item in limpos])
         for item in limpos:
             info = produtos.get(item["produto"]) or {}
-            item.update(descricao=str(info.get("descricao") or ""), unidade=str(info.get("unidade") or ""))
+            codigo = item["produto"].strip().lstrip("0") or "0"
+            item.update(descricao=str(info.get("descricao") or ""), unidade=str(info.get("unidade") or ""), precos_referencia=precos.get(codigo))
         record_security_event(request, channel="api", event_type="admin_pedidos_refazer", decision="allowed", reason=f"job={job_id};filial={filial}")
-        return {"ok": True, "pedido": {"filial": filial, "cliente": str(original.get("cliente") or ""), "motivo_digitacao": str(original.get("motivo_digitacao") or ""), "cond_pagto": str(original.get("cond_pagto") or ""), "operacao": str(original.get("operacao") or "1"), "itens": limpos}}
+        return {"ok": True, "precos_indisponiveis": precos_indisponiveis, "pedido": {"filial": filial, "cliente": str(original.get("cliente") or ""), "motivo_digitacao": str(original.get("motivo_digitacao") or ""), "cond_pagto": str(original.get("cond_pagto") or ""), "operacao": str(original.get("operacao") or "1"), "itens": limpos}}
 
     @router.post("/api/admin/pedidos/jobs", status_code=202)
     def criar_pedido(
