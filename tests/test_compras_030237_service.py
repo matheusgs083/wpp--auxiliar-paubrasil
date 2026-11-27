@@ -86,6 +86,22 @@ class ReconstrucaoTest(unittest.TestCase):
         self.assertTrue(all(params[-2:] == (["3"], ["3"]) for params in deletes))
         self.assertTrue(all("filial = ANY" in _sql(c) for c, _ in comandos if _sql(c).strip().startswith("DELETE")))
 
+    def test_reenvio_do_mesmo_arquivo_completa_operacao_sem_duplicar(self) -> None:
+        servico = Compras030237Service("postgresql://x")
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchone.side_effect = [(1,), (1,)]
+        conteudo = b"Filial;Cliente;Produto;Operacao .;Emissao\n3;100;1;0000000002;01/11/2026\n"
+        with patch.object(servico, "_connect") as conectar, patch.object(servico, "ensure_schema"), patch.object(servico, "rebuild") as rebuild:
+            conectar.return_value.__enter__.return_value = conn
+            resultado = servico.importar_arquivos_giro({"patos.csv": conteudo})
+        self.assertEqual(resultado["ignorados"], 1)
+        self.assertEqual(resultado["arquivos"], 0)
+        copia = cursor.copy.return_value.__enter__.return_value
+        copia.write_row.assert_called_once_with((1, "0000000002"))
+        self.assertTrue(any("jsonb_set" in _sql(call.args[0]) for call in cursor.execute.call_args_list if call.args))
+        rebuild.assert_not_called()
+
     def test_linha_gravada_leva_mes_e_filial(self) -> None:
         registros = linhas_para_gravar("giro|x", "0111.csv", [{"Filial": "003", "Emissao": "05/11/2026", "Produto": "1"}])
         self.assertEqual(registros[0][:5], ("giro|x", "0111.csv", 1, "2026-11", "3"))
@@ -111,15 +127,40 @@ class ReconstrucaoTest(unittest.TestCase):
         servico = Compras030237Service("postgresql://x")
         conn = MagicMock()
         cursor = conn.cursor.return_value.__enter__.return_value
-        cursor.fetchall.return_value = [(date(2026, 11, 6), "123", "003", 1, 2, 30, [{"produto": "1", "descricao": "Bebida"}])]
-        with patch.object(servico, "_connect") as conectar, patch.object(servico, "ensure_schema"):
+        cursor.fetchall.side_effect = [[(date(2026, 11, 6), "123", "003", 1, 2, 30, ["1"], [{"produto": "1", "descricao": "Bebida"}])], [("1", "Venda")]]
+        cursor.fetchone.return_value = ("reports.doperacoes_latest",)
+        with patch.object(servico, "_connect") as conectar, patch.object(servico, "ensure_schema"), patch.object(servico, "_iniciar_indices_notas"):
             conectar.return_value.__enter__.return_value = conn
             notas = servico.notas_cliente("003", "00100", hoje=date(2026, 11, 25))
-        query, params = cursor.execute.call_args.args
+        query, params = cursor.execute.call_args_list[0].args
         self.assertIn('"compras_030237_cargas"', _sql(query))
         self.assertIn("c.source_key = r.source_key", _sql(query))
         self.assertEqual(params, ("3", "2026-09", "2026-11", "100", "3", "2026-09", "2026-11", "030237", "100"))
         self.assertEqual(notas[0]["produtos"][0]["descricao"], "Bebida")
+        self.assertEqual(notas[0]["operacoes"], [{"codigo": "1", "nome": "Venda"}])
+
+
+    def test_notas_preservam_codigo_quando_doperacoes_nao_esta_disponivel(self) -> None:
+        servico = Compras030237Service("postgresql://x")
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [(date(2026, 11, 6), "123", "003", 1, 2, 30, ["1"], [])]
+        cursor.fetchone.return_value = (None,)
+        with patch.object(servico, "_connect") as conectar, patch.object(servico, "ensure_schema"), patch.object(servico, "_iniciar_indices_notas"):
+            conectar.return_value.__enter__.return_value = conn
+            notas = servico.notas_cliente("3", "100", hoje=date(2026, 11, 25))
+        self.assertEqual(notas[0]["operacoes"], [{"codigo": "1", "nome": ""}])
+
+    def test_historico_antigo_sem_operacao_nao_inventa_codigo(self) -> None:
+        servico = Compras030237Service("postgresql://x")
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [(date(2026, 11, 6), "123", "003", 1, 2, 30, None, [])]
+        with patch.object(servico, "_connect") as conectar, patch.object(servico, "ensure_schema"), patch.object(servico, "_iniciar_indices_notas"):
+            conectar.return_value.__enter__.return_value = conn
+            notas = servico.notas_cliente("3", "100", hoje=date(2026, 11, 25))
+        self.assertEqual(notas[0]["operacoes"], [])
+        self.assertEqual(cursor.execute.call_count, 1)
 
 
 class DevolucaoTest(unittest.TestCase):
@@ -141,7 +182,8 @@ class DevolucaoTest(unittest.TestCase):
         self.assertNotIn("Placa", payload)
 
     def test_historico_preserva_total_do_item(self) -> None:
-        payload = _payload_historico("030237", {"Produto": "37450", "Qtde": "10", "Total": "389,00"})
+        payload = _payload_historico("030237", {"Produto": "37450", "Qtde": "10", "Total": "389,00", "Operacao .": "0000000001"})
+        self.assertEqual(payload["Operacao ."], "0000000001")
         self.assertEqual(payload["Total"], "389,00")
         self.assertEqual(payload["Qtde"], "10")
 

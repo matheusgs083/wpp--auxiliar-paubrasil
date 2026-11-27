@@ -21,7 +21,9 @@ import csv
 import hashlib
 import io
 import json
+import logging
 import re
+from threading import Lock, Thread
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Mapping
@@ -101,6 +103,9 @@ class Compras030237Service:
         self.schema = str(schema or "reports")
         self.connect_timeout_seconds = max(float(connect_timeout_seconds or 3), 1.0)
         self._schema_ready = False
+        self._notas_index_lock = Lock()
+        self._notas_index_building = False
+        self._notas_indexes_ready = False
 
     def _connect(self) -> psycopg.Connection[Any]:
         return psycopg.connect(self.database_url, connect_timeout=int(self.connect_timeout_seconds))
@@ -230,6 +235,21 @@ class Compras030237Service:
                     cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (source_key,))
                     cur.execute(sql.SQL("SELECT 1 FROM {} WHERE source_key = %s LIMIT 1").format(self._t(TABELA_GIRO)), (source_key,))
                     if cur.fetchone():
+                        # Arquivos históricos podem ter sido importados antes de o
+                        # código de operação ser preservado. Reenvio complementa
+                        # o payload sem duplicar nem refazer os resumos.
+                        cur.execute(sql.SQL("SELECT 1 FROM {} WHERE source_key = %s AND NOT (payload ? 'Operacao .') LIMIT 1").format(self._t(TABELA_GIRO)), (source_key,))
+                        if cur.fetchone():
+                            linhas_antigas = ler_csv_030237(conteudo)
+                            operacoes = [(i, str(linha.get("Operacao .") or "").strip()) for i, linha in enumerate(linhas_antigas, 1)]
+                            operacoes = [(i, op) for i, op in operacoes if op]
+                            if operacoes:
+                                cur.execute("CREATE TEMP TABLE IF NOT EXISTS tmp_030237_operacoes (row_number integer, operacao text) ON COMMIT DROP")
+                                cur.execute("TRUNCATE tmp_030237_operacoes")
+                                with cur.copy("COPY tmp_030237_operacoes (row_number, operacao) FROM STDIN") as copia:
+                                    for registro in operacoes:
+                                        copia.write_row(registro)
+                                cur.execute(sql.SQL("UPDATE {} AS g SET payload = jsonb_set(g.payload, '{{Operacao .}}', to_jsonb(t.operacao), true) FROM tmp_030237_operacoes t WHERE g.source_key = %s AND g.row_number = t.row_number AND NOT (g.payload ? 'Operacao .')").format(self._t(TABELA_GIRO)), (source_key,))
                         continue
                     linhas = ler_csv_030237(conteudo)
                     if not linhas:
@@ -357,6 +377,7 @@ class Compras030237Service:
                        {_texto_codigo('Nota')} AS nota,
                        trim(COALESCE(payload->>'Serie', '')) AS serie,
                        {_texto_codigo('Produto')} AS produto,
+                       NULLIF({_texto_codigo('Operacao .')}, '0') AS operacao,
                        trim(COALESCE(payload->>'Descricao', '')) AS descricao,
                        lower(trim(COALESCE(payload->>'Unidade', ''))) AS unidade,
                        {_texto_num('Qtde')} AS qtde,
@@ -478,6 +499,28 @@ class Compras030237Service:
                 linhas = cur.fetchall()
         return [devolucao_payload(linha) for linha in linhas]
 
+    def _iniciar_indices_notas(self) -> None:
+        """Cria índices em segundo plano, sem bloquear a abertura da ficha nem escritas."""
+        with self._notas_index_lock:
+            if self._notas_indexes_ready or self._notas_index_building:
+                return
+            self._notas_index_building = True
+        def construir() -> None:
+            try:
+                with self._connect() as conn:
+                    conn.autocommit = True
+                    with conn.cursor() as cur:
+                        for tabela in (TABELA_GIRO, "liga_entrega_raw_rows"):
+                            cur.execute(sql.SQL("CREATE INDEX CONCURRENTLY IF NOT EXISTS {} ON {} (source_key, (COALESCE(NULLIF(ltrim(trim(payload->>'Cliente'), '0'), ''), '0'))) ").format(
+                                sql.Identifier(f"{tabela}_nota_cliente_v1_idx"), self._t(tabela)))
+                self._notas_indexes_ready = True
+            except Exception:
+                logging.getLogger(__name__).exception("Não foi possível criar índices da consulta de notas fiscais")
+            finally:
+                with self._notas_index_lock:
+                    self._notas_index_building = False
+        Thread(target=construir, name="indices-notas-030237", daemon=True).start()
+
     def notas_cliente(self, filial: str, cliente: str, *, hoje: date | None = None) -> list[dict[str, Any]]:
         """Notas entregues do mês atual e dos dois anteriores, sem duplicar versões."""
         filial_n, cliente_n = _codigo(filial), _codigo(cliente)
@@ -508,6 +551,7 @@ class Compras030237Service:
                 FROM linhas WHERE upper(trim(COALESCE(payload->>'Status', ''))) IN ('A', 'E')
             )
             SELECT data, nota, serie, count(*), sum(qtde), sum(total),
+                   array_agg(DISTINCT operacao) FILTER (WHERE operacao IS NOT NULL),
                    jsonb_agg(jsonb_build_object('produto', produto, 'descricao', descricao,
                        'unidade', unidade, 'qtde', qtde, 'total', total)
                        ORDER BY produto, descricao)
@@ -516,13 +560,22 @@ class Compras030237Service:
         """).format(giro=self._t(TABELA_GIRO), cargas=self._t("compras_030237_cargas"), raw=self._t("liga_entrega_raw_rows"))
         with self._connect() as conn:
             self.ensure_schema(conn)
+            self._iniciar_indices_notas()
             with conn.cursor() as cur:
                 cur.execute(query, (filial_n, emissao_desde, emissao_ate, cliente_n,
                                     filial_n, emissao_desde, emissao_ate, ROTINA, cliente_n))
                 linhas = cur.fetchall()
+                codigos = sorted({codigo for linha in linhas for codigo in (linha[6] or [])})
+                nomes = {}
+                if codigos:
+                    cur.execute("SELECT to_regclass(%s)", (f"{self.schema}.doperacoes_latest",))
+                    if (cur.fetchone() or (None,))[0]:
+                        cur.execute(sql.SQL("SELECT codigo, min(nome_operacao) FROM {} WHERE codigo = ANY(%s) GROUP BY codigo").format(self._t("doperacoes_latest")), (codigos,))
+                        nomes = {str(codigo): str(nome or "").strip() for codigo, nome in cur.fetchall()}
         return [{"data": d.isoformat(), "nota": str(n), "serie": str(s or ""),
-                 "itens": int(i), "qtde": float(q or 0), "total": float(t or 0), "produtos": produtos}
-                for d, n, s, i, q, t, produtos in linhas]
+                 "itens": int(i), "qtde": float(q or 0), "total": float(t or 0), "produtos": produtos,
+                 "operacoes": [{"codigo": codigo, "nome": nomes.get(codigo, "")} for codigo in (operacoes or [])]}
+                for d, n, s, i, q, t, operacoes, produtos in linhas]
 
     def atualizado_em(self, filial: str) -> Any:
         with self._connect() as conn:

@@ -18,7 +18,7 @@ from psycopg import sql
 # entrega e o item, para cada reenvio do acumulado não ocupar centenas de MB.
 COLUNAS_HISTORICO = {
     "030237": (
-        "Empresa", "Filial", "Motorista", "ajudante-1", "ajudante-2", "Dt. Operacao", "Emissao",
+        "Empresa", "Filial", "Operacao .", "Motorista", "ajudante-1", "ajudante-2", "Dt. Operacao", "Emissao",
         "Nota", "Serie", "Status", "Cliente", "Produto", "Unidade", "Qtde", "Total", "Mapa",
         # Devoluções (status D) da ficha do cliente: motivo e nota de origem.
         "Mot. Cancelamento", "NF Referencia", "Data NF Referencia",
