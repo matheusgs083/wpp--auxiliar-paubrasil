@@ -32,8 +32,38 @@
         const detail = String(job.detail || "").trim();
         const message = detail || String(job.message || "Aguardando execução.");
         const caption = isFailure ? (detail ? "Motivo da recusa" : "Resultado da digitação") : "Resultado da digitação";
-        return `<article class="pedido-queue-row"><span class="pedido-queue-status" data-status="${escapeHtml(status.key)}">${escapeHtml(status.label)}</span><div class="pedido-queue-main"><strong>Pedido do NB ${escapeHtml(job.cliente || "-")}</strong><span>${job.motivo_digitacao ? `Motivo: ${escapeHtml(job.motivo_digitacao)}` : "Motivo não informado"}</span></div><span class="pedido-queue-message${isFailure ? " is-error" : ""}"><small>${escapeHtml(caption)}</small>${escapeHtml(message)}</span><time class="pedido-queue-time" datetime="${escapeHtml(String(time || ""))}">${time ? escapeHtml(formatDateTime(time)) : "—"}</time></article>`;
+        return `<article class="pedido-queue-row"><span class="pedido-queue-status" data-status="${escapeHtml(status.key)}">${escapeHtml(status.label)}</span><div class="pedido-queue-main"><strong>Pedido do NB ${escapeHtml(job.cliente || "-")}</strong><span>${job.motivo_digitacao ? `Motivo: ${escapeHtml(job.motivo_digitacao)}` : "Motivo não informado"}</span></div><span class="pedido-queue-message${isFailure ? " is-error" : ""}"><small>${escapeHtml(caption)}</small>${escapeHtml(message)}</span><time class="pedido-queue-time" datetime="${escapeHtml(String(time || ""))}">${time ? escapeHtml(formatDateTime(time)) : "—"}</time>${job.pode_refazer ? `<button class="btn btn-outline-primary btn-sm pedido-refazer" type="button" data-job="${escapeHtml(job.id)}"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Refazer e editar</button>` : ""}</article>`;
       }).join("");
+      target.querySelectorAll(".pedido-refazer").forEach(button => button.addEventListener("click", () => refazerPedido(button.dataset.job, button)));
+    }
+
+    async function refazerPedido(jobId, button) {
+      if (pedidosUi.items.some(item => item.produto) && !await askConfirmation("Carregar o pedido com erro? Os itens que estão sendo digitados agora serão substituídos.")) return;
+      if (button) button.disabled = true;
+      try {
+        const resposta = await req(`/api/admin/pedidos/jobs/${encodeURIComponent(jobId)}/refazer`);
+        const pedido = resposta.pedido;
+        const filial = document.getElementById("pedidoFilial");
+        if (!filial || ![...filial.options].some(option => option.value === pedido.filial)) throw new Error("A filial deste pedido não está disponível na sua carteira.");
+        filial.value = pedido.filial;
+        clearTimeoutsPedidoStock();
+        pedidosUi.items = [{ produto: "", quantidade: 1 }];
+        await selectPedidoClient({ filial: pedido.filial, cliente: pedido.cliente });
+        if (!pedidosUi.client) return;
+        pedidosUi.items = (pedido.itens || []).map(item => ({ produto: item.produto, busca: `${item.produto}${item.descricao ? ` · ${item.descricao}` : ""}`, descricao: item.descricao, unidade: item.unidade, quantidade: item.quantidade, preco: item.preco, tabela_preco: "livre" }));
+        const motivo = document.getElementById("pedidoMotivo");
+        if (motivo) motivo.value = pedido.motivo_digitacao || "";
+        const condicao = document.getElementById("pedidoCondicao");
+        if (condicao) condicao.value = pedido.cond_pagto || "";
+        const condicaoAusente = Boolean(pedido.cond_pagto && condicao && condicao.value !== pedido.cond_pagto);
+        const operacao = document.getElementById("pedidoOperacao");
+        if (operacao && (pedido.operacao !== "2" || state.panel?.isAdmin)) { operacao.value = pedido.operacao; aplicarPedidoOperacao(); }
+        pedidosUi.refazendo = true;
+        renderPedidoItens();
+        pedidosSetStatus(condicaoAusente ? "Confira a condição de pagamento: a opção anterior não está disponível." : "Pedido carregado para edição. Confira se o Promax já o gerou antes de enviar novamente.", condicaoAusente ? "err" : "");
+        document.getElementById("pedidoItensCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) { pedidosSetStatus(error.message || "Não foi possível carregar o pedido.", "err"); }
+      finally { if (button) button.disabled = false; }
     }
 
     async function syncPedidoQueue({ silent = false } = {}) {
@@ -356,6 +386,24 @@
       return `<label class="visually-hidden" for="pedidoTabela${index}">Tabela de preço do item ${index + 1}</label><select id="pedidoTabela${index}" class="form-select form-select-sm pedido-item-tabela mb-1" data-index="${index}" ${disabled}><option value="livre">Preço livre</option>${options}</select>${aviso}`;
     }
 
+    function atualizarTotalPedido() {
+      const alvo = document.getElementById("pedidoTotalProdutos");
+      if (!alvo) return;
+      if (pedidoBonificacao()) { alvo.textContent = "Conforme tabela do Promax"; return; }
+      let centavos = 0;
+      let incompleto = false;
+      for (const item of pedidosUi.items) {
+        if (!item.produto) continue;
+        let preco = String(item.preco || "").trim().replace(/\s|R\$/g, "");
+        if (preco.includes(",") && preco.includes(".")) preco = preco.lastIndexOf(",") > preco.lastIndexOf(".") ? preco.replace(/\./g, "").replace(",", ".") : preco.replace(/,/g, "");
+        else preco = preco.replace(",", ".");
+        const valor = Number(preco), quantidade = Number(item.quantidade);
+        if (!preco || !Number.isFinite(valor) || valor <= 0 || !Number.isInteger(quantidade) || quantidade < 1) { incompleto = true; continue; }
+        centavos += Math.round(valor * 100) * quantidade;
+      }
+      alvo.textContent = `${formatPedidoMoney(centavos / 100)}${incompleto ? " · parcial" : ""}`;
+    }
+
     function renderPedidoItens(focusProductIndex = null) {
       const body = document.getElementById("pedidoItensBody");
       if (!body) return;
@@ -371,13 +419,14 @@
         return `<tr><td class="pedido-product-cell"><label class="d-md-none small text-secondary">Produto na grade</label><input class="form-control form-control-sm pedido-item-produto" aria-label="Produto do item ${index + 1}" data-index="${index}" value="${escapeHtml(item.busca || item.produto || "")}" autocomplete="off" placeholder="Nome (3 letras) ou código" ${disabled}>${selected}${suggestions}</td><td><label class="d-md-none small text-secondary">Quantidade</label><input class="form-control form-control-sm mono pedido-item-qtd" aria-label="Quantidade do item ${index + 1}" data-index="${index}" value="${escapeHtml(String(item.quantidade || 1))}" inputmode="numeric" type="number" ${caixa ? `min="${PEDIDO_DUZIAS_POR_CAIXA}" step="${PEDIDO_DUZIAS_POR_CAIXA}" aria-describedby="pedidoCaixaAviso${index}"` : 'min="1"'} ${max} ${disabled}></td><td class="pedido-col-preco"><label class="d-md-none small text-secondary">Preço unitário</label>${pedidoTabelasPreco(item, index, disabled)}<div class="input-group input-group-sm"><span class="input-group-text">R$</span><input class="form-control mono pedido-item-preco" aria-label="Preço unitário do item ${index + 1}" data-index="${index}" value="${escapeHtml(String(item.preco || ""))}" inputmode="decimal" placeholder="0,00" ${disabled}></div></td><td class="text-end"><button class="btn btn-outline-danger btn-sm pedido-item-remove" data-index="${index}" type="button" ${disabled || pedidosUi.items.length === 1 ? "disabled" : ""} aria-label="Remover item ${index + 1}"><i class="bi bi-trash"></i></button></td></tr>`;
       }).join("");
       body.querySelectorAll(".pedido-item-produto").forEach(input => input.addEventListener("input", event => pesquisarProdutoPedido(Number(event.target.dataset.index), event.target.value, event.target)));
-      body.querySelectorAll(".pedido-item-qtd").forEach(input => input.addEventListener("input", event => { pedidosUi.items[Number(event.target.dataset.index)].quantidade = Number(event.target.value || 0); }));
+      body.querySelectorAll(".pedido-item-qtd").forEach(input => input.addEventListener("input", event => { pedidosUi.items[Number(event.target.dataset.index)].quantidade = Number(event.target.value || 0); atualizarTotalPedido(); }));
       body.querySelectorAll(".pedido-item-preco").forEach(input => input.addEventListener("input", event => {
         const index = Number(event.target.dataset.index);
         pedidosUi.items[index].preco = event.target.value;
         pedidosUi.items[index].tabela_preco = "livre";
         const select = body.querySelector(`.pedido-item-tabela[data-index="${index}"]`);
         if (select) select.value = "livre";
+        atualizarTotalPedido();
       }));
       body.querySelectorAll(".pedido-item-tabela").forEach(select => select.addEventListener("change", event => {
         const index = Number(event.target.dataset.index);
@@ -391,6 +440,7 @@
         item.preco = value.toFixed(2).replace(".", ",");
         const input = body.querySelector(`.pedido-item-preco[data-index="${index}"]`);
         if (input) input.value = item.preco;
+        atualizarTotalPedido();
       }));
       body.querySelectorAll(".pedido-item-remove").forEach(button => button.addEventListener("click", () => { pedidosUi.items.splice(Number(button.dataset.index), 1); renderPedidoItens(); }));
       body.querySelectorAll(".pedido-product-option").forEach(button => button.addEventListener("click", () => {
@@ -412,6 +462,7 @@
         renderPedidoItens();
       }));
       syncPedidoControls();
+      atualizarTotalPedido();
       if (Number.isInteger(focusProductIndex)) {
         const input = body.querySelector(`.pedido-item-produto[data-index="${focusProductIndex}"]`);
         if (input && !input.disabled) {
@@ -437,6 +488,7 @@
       priceCell?.querySelector(".pedido-tabela-aviso")?.remove();
       const priceInput = priceCell?.querySelector(".pedido-item-preco");
       if (priceInput) priceInput.value = "";
+      atualizarTotalPedido();
       item.suggestions = [];
       const rowCell = inputElement?.closest(".pedido-product-cell");
       rowCell?.querySelector(".pedido-product-suggestions")?.remove();
@@ -619,13 +671,15 @@
       if (foraDaCaixa) { pedidosSetStatus(`${foraDaCaixa.descricao || foraDaCaixa.produto}: o 600 só sai em caixa fechada. Digite um número par de dúzias (1 caixa = ${PEDIDO_DUZIAS_POR_CAIXA} dz).`, "err"); return; }
       if (!motivo) { pedidosSetStatus("Selecione o motivo da digitação.", "err"); return; }
       if (!bonificacao && itens.some(item => !item.preco)) { pedidosSetStatus("Informe o preço unitário de cada item.", "err"); return; }
-      if (!await askConfirmation(`Enviar ${bonificacao ? "bonificação" : "pedido"} para ${pedidosUi.client.nome || pedidosUi.client.razao_social}?`)) return;
+      const avisoReenvio = pedidosUi.refazendo ? " Confira se o Promax já gerou o pedido anterior para evitar duplicidade." : "";
+      if (!await askConfirmation(`Enviar ${bonificacao ? "bonificação" : "pedido"} para ${pedidosUi.client.nome || pedidosUi.client.razao_social}?${avisoReenvio}`)) return;
       pedidosSetStatus("Validando e enviando para a fila...");
       try {
         const result = await req("/api/admin/pedidos/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filial, cliente: pedidosUi.client.cliente, itens, cond_pagto: condPagto, motivo_digitacao: motivo, operacao }) });
         const cliente = pedidosUi.client.cliente;
         clearTimeoutsPedidoStock();
         pedidosUi.items = [{ produto: "", quantidade: 1 }];
+        pedidosUi.refazendo = false;
         const busca = document.getElementById("pedidoClienteBusca"); if (busca) busca.value = "";
         const resultados = document.getElementById("pedidoClienteResultadosWrap"); if (resultados) resultados.hidden = true;
         const resultadoBody = document.getElementById("pedidoClienteResultados"); if (resultadoBody) resultadoBody.innerHTML = "";
@@ -654,11 +708,12 @@
       document.getElementById("pedidoClienteBuscarBtn")?.addEventListener("click", buscarPedidoCliente);
       document.getElementById("pedidoClienteBusca")?.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); buscarPedidoCliente(); } });
       document.getElementById("pedidoEnviarBtn")?.addEventListener("click", enviarPedido);
-      document.getElementById("pedidoOperacao")?.addEventListener("change", aplicarPedidoOperacao);
+      document.getElementById("pedidoOperacao")?.addEventListener("change", () => { aplicarPedidoOperacao(); atualizarTotalPedido(); });
       document.getElementById("pedidoFilaAtualizarBtn")?.addEventListener("click", () => syncPedidoQueue());
       document.getElementById("pedidoFilial")?.addEventListener("change", () => {
         clearTimeoutsPedidoStock();
         pedidosUi.items = [{ produto: "", quantidade: 1 }];
+        pedidosUi.refazendo = false;
         clearPedidoClient("A filial foi alterada. Pesquise novamente o cliente.");
       });
       document.querySelectorAll(".pedido-subtab").forEach(button => button.addEventListener("click", () => setPedidoSubtab(button.dataset.pedidoSubtab || "digitacao")));

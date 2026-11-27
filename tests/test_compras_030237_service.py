@@ -182,6 +182,23 @@ class DevolucaoTest(unittest.TestCase):
         self.assertEqual(payload["Descricao"], "CERVEJA")
         self.assertNotIn("Placa", payload)
 
+    def test_reenvio_liga_completa_operacao_na_mesma_linha(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from bot_api.services.liga_entrega_raw_sql_import_service import LigaEntregaRawSqlImportService
+        servico = LigaEntregaRawSqlImportService(database_url="postgresql://x")
+        conn = MagicMock()
+        cur = conn.cursor.return_value.__enter__.return_value
+        cur.fetchone.side_effect = [(1,), (1,)]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "dados.csv"
+            path.write_text("Cliente;Nota;Operacao .\n100;123;0000000001\n", encoding="utf8")
+            importado, total = servico._import_file(conn, "030237", {}, {"path": str(path)})
+        self.assertFalse(importado)
+        self.assertEqual(total, 0)
+        cur.copy.return_value.__enter__.return_value.write_row.assert_called_once_with((1, "0000000001"))
+        self.assertTrue(any("jsonb_set" in _sql(chamada.args[0]) for chamada in cur.execute.call_args_list if chamada.args))
+
     def test_historico_preserva_total_do_item(self) -> None:
         payload = _payload_historico("030237", {"Produto": "37450", "Qtde": "10", "Total": "389,00", "Operacao .": "0000000001"})
         self.assertEqual(payload["Operacao ."], "0000000001")

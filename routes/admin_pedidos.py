@@ -528,6 +528,7 @@ def create_admin_pedidos_router(
                 "finished_at": job.get("finished_at"),
                 "message": str(result.get("message") or job.get("error") or job.get("failure_reason") or "Aguardando execução."),
                 "detail": detail,
+                "pode_refazer": _pedido_pode_refazer(job, pedido),
             })
             if len(jobs) >= limit:
                 break
@@ -539,6 +540,44 @@ def create_admin_pedidos_router(
             reason=f"created_by={created_by};total={len(jobs)}",
         )
         return {"ok": True, "jobs": jobs, "total": len(jobs)}
+
+    @router.get("/api/admin/pedidos/jobs/{job_id}/refazer")
+    def obter_pedido_para_refazer(
+        request: Request, job_id: str,
+        authorization: str | None = Header(default=None),
+        x_api_token: str | None = Header(default=None),
+        x_admin_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        context = context_for_pedidos(request, authorization, x_api_token, x_admin_token)
+        try:
+            job = promax_jobs_service.get_job(job_id)
+        except (ValueError, LookupError) as exc:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.") from exc
+        if not isinstance(job, Mapping) or job.get("job_type") != "digitacao_030104" or str(job.get("created_by") or "") != _pedido_created_by(context):
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+        payload = job.get("payload") if isinstance(job.get("payload"), Mapping) else {}
+        digitacao = payload.get("digitacao") if isinstance(payload.get("digitacao"), Mapping) else {}
+        pedidos = digitacao.get("pedidos") if isinstance(digitacao.get("pedidos"), list) else []
+        if len(pedidos) != 1 or not isinstance(pedidos[0], Mapping) or not _pedido_pode_refazer(job, pedidos[0]):
+            raise HTTPException(status_code=409, detail="Este pedido não está disponível para refazer.")
+        original = pedidos[0]
+        unidade = str(digitacao.get("unidade") or payload.get("unidade") or "")
+        filial = next((f for f, u in _UNIT_BY_FILIAL.items() if u == unidade), "")
+        if not filial:
+            raise HTTPException(status_code=422, detail="Filial do pedido não identificada.")
+        _load_authorized_client(dclientes_query_service, filial=filial, cliente=str(original.get("cliente") or ""), escopo=escopo_do_contexto(context))
+        itens = original.get("itens") if isinstance(original.get("itens"), list) else []
+        limpos = [{"produto": str(item.get("produto") or ""), "quantidade": int(item.get("quantidade") or 0), "preco": str(item.get("preco") or "")} for item in itens if isinstance(item, Mapping)]
+        try:
+            grade = cora_estoque_query_service.availability(filial=filial, products=limpos)
+        except RuntimeError:
+            grade = {}
+        produtos = grade.get("produtos") if isinstance(grade.get("produtos"), Mapping) else {}
+        for item in limpos:
+            info = produtos.get(item["produto"]) or {}
+            item.update(descricao=str(info.get("descricao") or ""), unidade=str(info.get("unidade") or ""))
+        record_security_event(request, channel="api", event_type="admin_pedidos_refazer", decision="allowed", reason=f"job={job_id};filial={filial}")
+        return {"ok": True, "pedido": {"filial": filial, "cliente": str(original.get("cliente") or ""), "motivo_digitacao": str(original.get("motivo_digitacao") or ""), "cond_pagto": str(original.get("cond_pagto") or ""), "operacao": str(original.get("operacao") or "1"), "itens": limpos}}
 
     @router.post("/api/admin/pedidos/jobs", status_code=202)
     def criar_pedido(
@@ -691,6 +730,16 @@ def _bloqueio_payload(config: Mapping[str, Any], context: Mapping[str, Any]) -> 
 
 def _pedido_created_by(context: Mapping[str, Any]) -> str:
     return str(context.get("username") or context.get("user_id") or "painel")
+
+
+def _pedido_pode_refazer(job: Mapping[str, Any], pedido: Mapping[str, Any]) -> bool:
+    if str(job.get("status") or "").lower() not in {"failed", "partial_success"}:
+        return False
+    result = job.get("result") if isinstance(job.get("result"), Mapping) else {}
+    metadata = result.get("metadata") if isinstance(result.get("metadata"), Mapping) else {}
+    entries = metadata.get("pedidos") if isinstance(metadata.get("pedidos"), list) else []
+    ref = str(pedido.get("ref") or "")
+    return not any(isinstance(item, Mapping) and (not ref or str(item.get("ref") or "") == ref) and (str(item.get("status") or "").lower() == "salvo" or bool(item.get("pedido"))) for item in entries)
 
 
 def _pedido_execution_detail(result: Mapping[str, Any], pedido: Mapping[str, Any]) -> str:

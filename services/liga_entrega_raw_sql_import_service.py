@@ -362,6 +362,21 @@ class LigaEntregaRawSqlImportService:
                 (source_key,),
             )
             if cur.fetchone():
+                if routine == "030237":
+                    # A carga antiga preservava os itens, mas descartava a operação.
+                    # O mesmo arquivo (identificado por caminho, tamanho e data) pode
+                    # completar os registros originais sem inserir novas notas.
+                    cur.execute(sql.SQL("SELECT 1 FROM {}.liga_entrega_raw_rows WHERE source_key = %s AND NOT (payload ? 'Operacao .') LIMIT 1").format(sql.Identifier(self.schema)), (source_key,))
+                    if cur.fetchone():
+                        linhas = self._read_rows(path)
+                        operacoes = ((i, str(row.get("Operacao .") or "").strip()) for i, row in enumerate(linhas, start=1))
+                        cur.execute("CREATE TEMP TABLE IF NOT EXISTS tmp_liga_030237_operacoes (row_number integer, operacao text) ON COMMIT DROP")
+                        cur.execute("TRUNCATE tmp_liga_030237_operacoes")
+                        with cur.copy("COPY tmp_liga_030237_operacoes (row_number, operacao) FROM STDIN") as copia:
+                            for numero, operacao in operacoes:
+                                if operacao:
+                                    copia.write_row((numero, operacao))
+                        cur.execute(sql.SQL("UPDATE {}.liga_entrega_raw_rows AS r SET payload = jsonb_set(r.payload, '{{Operacao .}}', to_jsonb(t.operacao), true) FROM tmp_liga_030237_operacoes t WHERE r.source_key = %s AND r.row_number = t.row_number AND NOT (r.payload ? 'Operacao .')").format(sql.Identifier(self.schema)), (source_key,))
                 return False, 0
         rows = [_payload_historico(routine, row) for row in self._read_rows(path)]
         if not rows:
