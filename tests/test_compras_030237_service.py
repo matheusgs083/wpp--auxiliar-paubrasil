@@ -134,6 +134,7 @@ class ReconstrucaoTest(unittest.TestCase):
             notas = servico.notas_cliente("003", "00100", hoje=date(2026, 11, 25))
         query, params = cursor.execute.call_args_list[0].args
         self.assertIn('"compras_030237_cargas"', _sql(query))
+        self.assertIn("AS operacao", _sql(query))
         self.assertIn("c.source_key = r.source_key", _sql(query))
         self.assertEqual(params, ("3", "2026-09", "2026-11", "100", "3", "2026-09", "2026-11", "030237", "100"))
         self.assertEqual(notas[0]["produtos"][0]["descricao"], "Bebida")

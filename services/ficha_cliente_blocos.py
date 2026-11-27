@@ -12,6 +12,7 @@ outros blocos continuam respondendo.
 from __future__ import annotations
 
 from collections.abc import Callable
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -255,6 +256,7 @@ def bloco_notas(cliente: ClienteAutorizado, fontes: Fontes, hoje: date) -> dict[
     try:
         notas = fontes.compras.notas_cliente(cliente.filial, cliente.cliente, hoje=hoje)
     except Exception:
+        logging.getLogger(__name__).exception("Falha ao consultar o bloco de notas fiscais")
         return _indisponivel("notas", titulo, "03.02.37", "Não foi possível carregar as notas agora.")
     resumo = f"{len(notas)} nota{'s' if len(notas) != 1 else ''} nos últimos 3 meses" if notas else "Nenhuma nota nos últimos 3 meses"
     return _bloco("notas", titulo, estado="ok" if notas else "vazio", resumo=resumo, dados={"notas_fiscais": notas}, fonte="03.02.37")

@@ -377,7 +377,6 @@ class Compras030237Service:
                        {_texto_codigo('Nota')} AS nota,
                        trim(COALESCE(payload->>'Serie', '')) AS serie,
                        {_texto_codigo('Produto')} AS produto,
-                       NULLIF({_texto_codigo('Operacao .')}, '0') AS operacao,
                        trim(COALESCE(payload->>'Descricao', '')) AS descricao,
                        lower(trim(COALESCE(payload->>'Unidade', ''))) AS unidade,
                        {_texto_num('Qtde')} AS qtde,
@@ -545,6 +544,7 @@ class Compras030237Service:
                        {_texto_codigo('Nota')} AS nota,
                        trim(COALESCE(payload->>'Serie', '')) AS serie,
                        {_texto_codigo('Produto')} AS produto,
+                       NULLIF({_texto_codigo('Operacao .')}, '0') AS operacao,
                        trim(COALESCE(payload->>'Descricao', '')) AS descricao,
                        trim(COALESCE(payload->>'Unidade', '')) AS unidade,
                        {_texto_num('Qtde')} AS qtde, {_texto_num('Total')} AS total
